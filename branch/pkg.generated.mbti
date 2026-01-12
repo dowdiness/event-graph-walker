@@ -1,0 +1,49 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/branch"
+
+import(
+  "dowdiness/event-graph-walker/causal_graph"
+  "dowdiness/event-graph-walker/fugue"
+  "dowdiness/event-graph-walker/oplog"
+)
+
+// Values
+pub fn merge(@fugue.FugueTree, @oplog.OpLog, Array[Int], Array[Int]) -> Unit
+
+pub fn merge_remote_ops(@fugue.FugueTree, @oplog.OpLog, Array[@oplog.Op]) -> Unit
+
+// Errors
+
+// Types and methods
+pub struct Branch {
+  frontier : Array[Int]
+  tree : @fugue.FugueTree
+  oplog : @oplog.OpLog
+}
+pub fn Branch::advance(Self, Array[Int]) -> Self
+pub fn Branch::advance_to_version_vector(Self, @causal_graph.VersionVector) -> Self
+pub fn Branch::at_frontier(Self, Array[Int]) -> Bool
+pub fn Branch::at_version_vector(Self, @causal_graph.VersionVector) -> Bool
+pub fn Branch::checkout(@oplog.OpLog, Array[Int]) -> Self
+pub fn Branch::checkout_version_vector(@oplog.OpLog, @causal_graph.VersionVector) -> Self
+pub fn Branch::from_tree_and_oplog(@fugue.FugueTree, @oplog.OpLog) -> Self
+pub fn Branch::get_frontier(Self) -> Array[Int]
+pub fn Branch::get_version_vector(Self) -> @causal_graph.VersionVector
+pub fn Branch::merge_remote_ops(Self, Array[@oplog.Op]) -> Self
+pub fn Branch::new(@oplog.OpLog) -> Self
+pub fn Branch::to_text(Self) -> String
+pub fn Branch::visible_count(Self) -> Int
+pub impl Show for Branch
+
+pub struct MergeContext {
+  tree : @fugue.FugueTree
+  oplog : @oplog.OpLog
+}
+pub fn MergeContext::apply_operations(Self, Array[Int]) -> Unit
+pub fn MergeContext::new(@fugue.FugueTree, @oplog.OpLog) -> Self
+pub fn MergeContext::retreat_operations(Self, Array[Int]) -> Unit
+
+// Type aliases
+
+// Traits
+
