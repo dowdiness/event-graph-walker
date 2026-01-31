@@ -71,40 +71,7 @@ pub fn Version::empty() -> Version {
   { frontier: @causal_graph.Frontier::from_array([]) }
 }
 
-///| Represents a local edit operation (insert or delete).
-
 ///|
+/// Represents a local edit operation (insert or delete).
 /// Returned from TextDoc::insert() and TextDoc::delete().
-pub(all) struct Change {
-  priv op : @oplog.Op
-} derive(Show)
-
-///|
-/// Create a Change from an internal Op (for advanced use).
-pub fn Change::from_op(op : @oplog.Op) -> Change {
-  { op, }
-}
-
-///|
-/// Convert to internal Op (for advanced use/serialization).
-pub fn Change::to_op(self : Change) -> @oplog.Op {
-  self.op
-}
-
-///|
-/// Check if this change is an insert operation.
-pub fn Change::is_insert(self : Change) -> Bool {
-  self.op.is_insert()
-}
-
-///|
-/// Check if this change is a delete operation.
-pub fn Change::is_delete(self : Change) -> Bool {
-  self.op.is_delete()
-}
-
-///|
-/// Get the inserted text, if this is an insert operation.
-pub fn Change::get_text(self : Change) -> String? {
-  self.op.get_insert_text()
-}
+pub type Change = @core.Change

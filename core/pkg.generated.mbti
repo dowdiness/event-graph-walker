@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/core"
+
+import {
+  "dowdiness/event-graph-walker/causal_graph",
+  "dowdiness/event-graph-walker/oplog",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Change {
+  // private fields
+}
+pub fn Change::agent(Self) -> String
+pub fn Change::from_op(@oplog.Op) -> Self
+pub fn Change::get_text(Self) -> String?
+pub fn Change::is_delete(Self) -> Bool
+pub fn Change::is_insert(Self) -> Bool
+pub fn[R : RawToLv] Change::target_lv(Self, R) -> Int?
+pub fn Change::to_op(Self) -> @oplog.Op
+pub impl Show for Change
+
+// Type aliases
+
+// Traits
+pub(open) trait RawToLv {
+  raw_to_lv(Self, @causal_graph.RawVersion) -> Int?
+}
+

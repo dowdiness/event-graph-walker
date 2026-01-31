@@ -4,6 +4,7 @@ package "dowdiness/event-graph-walker/text"
 import {
   "dowdiness/event-graph-walker/branch",
   "dowdiness/event-graph-walker/causal_graph",
+  "dowdiness/event-graph-walker/core",
   "dowdiness/event-graph-walker/document",
   "dowdiness/event-graph-walker/oplog",
   "dowdiness/event-graph-walker/rle",
@@ -27,16 +28,6 @@ pub fn TextError::is_retryable(Self) -> Bool
 pub fn TextError::message(Self) -> String
 
 // Types and methods
-pub(all) struct Change {
-  // private fields
-}
-pub fn Change::from_op(@oplog.Op) -> Self
-pub fn Change::get_text(Self) -> String?
-pub fn Change::is_delete(Self) -> Bool
-pub fn Change::is_insert(Self) -> Bool
-pub fn Change::to_op(Self) -> @oplog.Op
-pub impl Show for Change
-
 pub(all) struct Pos {
   // private fields
 }
@@ -83,10 +74,10 @@ pub(all) struct TextDoc {
   // private fields
 }
 pub fn TextDoc::checkout(Self, Version) -> TextView raise TextError
-pub fn TextDoc::delete(Self, Pos) -> Change raise TextError
+pub fn TextDoc::delete(Self, Pos) -> @core.Change raise TextError
 pub fn TextDoc::from_document(@document.Document) -> Self
 pub fn TextDoc::inner_document(Self) -> @document.Document
-pub fn TextDoc::insert(Self, Pos, String) -> Change raise TextError
+pub fn TextDoc::insert(Self, Pos, String) -> @core.Change raise TextError
 pub fn TextDoc::is_empty(Self) -> Bool
 pub fn TextDoc::len(Self) -> Int
 pub fn TextDoc::new(String) -> Self
@@ -134,6 +125,7 @@ pub impl Eq for Version
 pub impl Show for Version
 
 // Type aliases
+pub using @core {type Change}
 
 // Traits
 
