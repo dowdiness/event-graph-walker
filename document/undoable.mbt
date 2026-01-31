@@ -6,6 +6,6 @@
 ///|
 pub(open) trait Undoable {
   lv_to_position(Self, Int) -> Int?
-  undelete_lv(Self, Int) -> Unit raise DocumentError
-  delete_lv(Self, Int) -> Unit raise DocumentError
+  undelete_lv(Self, Int) -> @oplog.Op raise DocumentError
+  delete_lv(Self, Int) -> @oplog.Op raise DocumentError
 }

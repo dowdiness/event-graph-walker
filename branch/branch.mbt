@@ -285,5 +285,12 @@ fn apply_operation_to_tree(
           e => raise BranchError::Fugue(e)
         }
       }
+    @oplog.Undelete =>
+      if origin_left != -1 {
+        // Revive a previously deleted item
+        tree.undelete(origin_left) catch {
+          e => raise BranchError::Fugue(e)
+        }
+      }
   }
 }

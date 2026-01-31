@@ -28,6 +28,7 @@ pub struct Document {
 }
 pub fn Document::apply_remote(Self, @oplog.Op) -> Unit raise DocumentError
 pub fn Document::delete(Self, Int) -> @oplog.Op raise DocumentError
+pub fn Document::delete_by_lv(Self, Int) -> @oplog.Op raise DocumentError
 pub fn Document::get_frontier(Self) -> @causal_graph.Frontier
 pub fn Document::get_frontier_array(Self) -> Array[Int]
 pub fn Document::get_frontier_raw(Self) -> Array[@causal_graph.RawVersion] raise DocumentError
@@ -35,6 +36,7 @@ pub fn Document::insert(Self, Int, String) -> @oplog.Op raise DocumentError
 pub fn Document::merge_remote(Self, Array[@oplog.Op], Array[@causal_graph.RawVersion]) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self
 pub fn Document::to_text(Self) -> String
+pub fn Document::undelete(Self, Int) -> @oplog.Op raise DocumentError
 pub impl @core.RawToLv for Document
 pub impl Show for Document
 
@@ -43,7 +45,7 @@ pub impl Show for Document
 // Traits
 pub(open) trait Undoable {
   lv_to_position(Self, Int) -> Int?
-  undelete_lv(Self, Int) -> Unit raise DocumentError
-  delete_lv(Self, Int) -> Unit raise DocumentError
+  undelete_lv(Self, Int) -> @oplog.Op raise DocumentError
+  delete_lv(Self, Int) -> @oplog.Op raise DocumentError
 }
 

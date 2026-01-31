@@ -44,12 +44,18 @@ pub fn Change::get_text(self : Change) -> String? {
 pub fn[R : RawToLv] Change::target_lv(self : Change, resolver : R) -> Int? {
   match self.op.content {
     Insert(_) => Some(self.op.lv)
-    Delete =>
+    Delete | Undelete =>
       match self.op.origin_left {
         None => None
         Some(raw) => resolver.raw_to_lv(raw)
       }
   }
+}
+
+///|
+/// Check if this change is an undelete operation.
+pub fn Change::is_undelete(self : Change) -> Bool {
+  self.op.is_undelete()
 }
 
 ///|

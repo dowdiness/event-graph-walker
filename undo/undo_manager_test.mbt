@@ -167,10 +167,65 @@ test "undo delete then redo delete" {
 }
 
 ///|
-test "undo returns empty ops in phase 1" {
+test "undo-insert generates Delete op" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   let ops = mgr.undo(doc)
-  inspect(ops.length(), content="0")
+  inspect(ops.length(), content="1")
+  inspect(ops[0].is_delete(), content="true")
+  inspect(doc.text(), content="")
+}
+
+///|
+test "undo-delete generates Undelete op" {
+  let doc = @text.TextDoc::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  doc.delete_and_record(@text.Pos::at(0), mgr, timestamp_ms=2000)
+  inspect(doc.text(), content="")
+  let ops = mgr.undo(doc)
+  inspect(ops.length(), content="1")
+  inspect(ops[0].is_undelete(), content="true")
+  inspect(doc.text(), content="H")
+}
+
+///|
+test "redo generates ops" {
+  let doc = @text.TextDoc::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+  let ops = mgr.redo(doc)
+  inspect(ops.length(), content="1")
+  inspect(ops[0].is_undelete(), content="true")
+  inspect(doc.text(), content="H")
+}
+
+///|
+test "undo ops can be applied to peer" {
+  let doc_a = @text.TextDoc::new("alice")
+  let doc_b = @text.TextDoc::new("bob")
+  let mgr = @undo.UndoManager::new("alice")
+  // Alice inserts "H", sync to Bob
+  let insert_change = doc_a.insert(@text.Pos::at(0), "H")
+  let insert_msg = @text.SyncMessage::new(
+    [insert_change.to_op()],
+    doc_a.sync().export_all().get_heads(),
+  )
+  doc_b.sync().apply(insert_msg)
+  inspect(doc_b.text(), content="H")
+  // Record the insert for undo tracking
+  mgr.record_insert(0, "alice", 1000, content=Some("H"))
+  // Alice undoes, gets Delete op
+  let undo_ops = mgr.undo(doc_a)
+  inspect(doc_a.text(), content="")
+  // Send undo ops to Bob via sync
+  let undo_msg = @text.SyncMessage::new(
+    undo_ops,
+    doc_a.sync().export_all().get_heads(),
+  )
+  doc_b.sync().apply(undo_msg)
+  inspect(doc_b.text(), content="")
 }

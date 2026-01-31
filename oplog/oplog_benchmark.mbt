@@ -221,7 +221,7 @@ test "oplog - walk_filtered (inserts only)" (b : @bench.T) {
     let result = oplog.walk_filtered(frontier, fn(op) {
       match op.content {
         Insert(_) => true
-        Delete => false
+        Delete | Undelete => false
       }
     })
     b.keep(result)

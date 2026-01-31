@@ -95,6 +95,38 @@ pub fn OpLog::delete(self : OpLog, origin_left : Int) -> Op raise OpLogError {
 }
 
 ///|
+/// Create and add an undelete operation
+pub fn OpLog::undelete(self : OpLog, origin_left : Int) -> Op raise OpLogError {
+  let parents = self.graph.get_frontier().0
+  let parents_raw : Array[@causal_graph.RawVersion] = []
+  for lv in parents {
+    match self.graph.lv_to_raw(lv) {
+      Some(raw) => parents_raw.push(raw)
+      None => raise OpLogError::MissingLocalVersion(lv~)
+    }
+  }
+  let lv = self.graph.add_version(parents, self.agent_id) catch {
+    error => raise OpLogError::CausalGraphError(error~)
+  }
+
+  // Get the seq for this operation from the graph
+  let seq = match self.graph.lv_to_raw(lv) {
+    Some(raw) => raw.seq
+    None => 0 // Shouldn't happen, but fallback to 0
+  }
+  let origin_left_raw = self.raw_from_lv(origin_left)
+  let op = Op::new_undelete(
+    lv,
+    parents_raw,
+    self.agent_id,
+    seq,
+    origin_left_raw,
+  )
+  self.add_op(op)
+  op
+}
+
+///|
 /// Get operation by LV
 pub fn OpLog::get_op(self : OpLog, lv : Int) -> Op? {
   if lv >= 0 && lv < self.operations.length() {
@@ -229,7 +261,7 @@ fn OpLog::try_apply_remote(
     Some(lv) => lv
     None => return (true, None)
   }
-  if op.content is Delete && op.origin_left is None {
+  if (op.content is Delete || op.content is Undelete) && op.origin_left is None {
     raise OpLogError::MissingOrigin
   }
   let local_lv = self.graph.add_version_with_seq(
@@ -252,6 +284,8 @@ fn OpLog::try_apply_remote(
       )
     Delete =>
       Op::new_delete(local_lv, op.parents, op.agent, op.seq, op.origin_left)
+    Undelete =>
+      Op::new_undelete(local_lv, op.parents, op.agent, op.seq, op.origin_left)
   }
   self.add_op(local_op)
   (false, Some(local_op))

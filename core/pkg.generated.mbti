@@ -19,6 +19,7 @@ pub fn Change::from_op(@oplog.Op) -> Self
 pub fn Change::get_text(Self) -> String?
 pub fn Change::is_delete(Self) -> Bool
 pub fn Change::is_insert(Self) -> Bool
+pub fn Change::is_undelete(Self) -> Bool
 pub fn[R : RawToLv] Change::target_lv(Self, R) -> Int?
 pub fn Change::to_op(Self) -> @oplog.Op
 pub impl Show for Change

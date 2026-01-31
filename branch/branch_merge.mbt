@@ -84,6 +84,18 @@ pub fn MergeContext::apply_operations(
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
+          @oplog.Undelete =>
+            match op.origin_left {
+              None => ()
+              Some(raw) =>
+                match self.oplog.graph.raw_to_lv(raw) {
+                  Some(mapped) =>
+                    self.tree.undelete(mapped) catch {
+                      e => raise BranchError::Fugue(e)
+                    }
+                  None => raise BranchError::MissingOrigin(raw~)
+                }
+            }
         }
       None => raise BranchError::MissingOp(lv~)
     }

@@ -9,7 +9,7 @@ Add an LV-based UndoManager as a **separate `undo/` package** in `event-graph-wa
 - **Separate package** — `event-graph-walker/undo/` as a plugin that imports `document/` + `oplog/` only. TextDoc adds a small `Undoable` impl, no direct access to `FugueTree` from undo.
 - **LV-based tracking** — Operations tracked by **target element LV** (the inserted/deleted item's ID), not cursor position or operation LV
 - **Tombstone revival** — Undoing a delete revives the tombstone (`deleted = false`). Character reappears at its exact original position even after concurrent edits.
-- **Fully local for Phase 1** — Undo/redo are strictly local UI operations. No ops are synced to peers. Undo-insert marks the item as deleted locally (no Delete op generated). Undo-delete revives the tombstone locally. Phase 2 adds `OpContent::Undelete` for synced undo.
+- **Global undo (Phase 2 implemented)** — Undo/redo generate real ops that sync to peers. Undo-insert creates a `Delete` op, undo-delete creates an `Undelete` op. Both are added to the oplog and can be synced via `SyncSession`.
 
 ## Package Structure
 
@@ -70,8 +70,8 @@ Minimal host API needed by UndoManager. Uses MoonBit trait method signatures (no
 ///  Mutating methods take `Self` (MoonBit structs are reference types).
 pub(open) trait Undoable {
   lv_to_position(Self, Int) -> Int?
-  undelete_lv(Self, Int) -> Unit raise DocumentError
-  delete_lv(Self, Int) -> Unit raise DocumentError  // Phase 1: local delete by LV, no op returned
+  undelete_lv(Self, Int) -> @oplog.Op raise DocumentError
+  delete_lv(Self, Int) -> @oplog.Op raise DocumentError
 }
 ```
 
@@ -186,15 +186,15 @@ pub impl @document.Undoable for TextDoc with lv_to_position(self, lv) {
 
 ///|
 pub impl @document.Undoable for TextDoc with undelete_lv(self, lv) {
-  self.inner.tree.undelete(lv) catch {
-    e => raise @document.DocumentError::Fugue(e)
+  self.inner.undelete(lv) catch {
+    e => raise e
   }
 }
 
 ///|
 pub impl @document.Undoable for TextDoc with delete_lv(self, lv) {
-  self.inner.tree.delete(lv) catch {
-    e => raise @document.DocumentError::Fugue(e)
+  self.inner.delete_by_lv(lv) catch {
+    e => raise e
   }
 }
 ```
@@ -330,24 +330,26 @@ pub fn TextDoc::delete_and_record(
 already resolves origins per-character in its internal loop (document.mbt:97-138).
 The per-character approach just makes each LV accessible for recording.
 
-**Undo algorithm (Phase 1 — fully local):**
+**Undo algorithm (Phase 2 — global sync):**
 
 ```
 undo[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op]:
   group = undo_stack.pop()
   suppress tracking (use guard/defer to ensure restore on error)
-  synced_ops = []        // ops to sync to peers (empty in Phase 1, populated in Phase 2)
+  synced_ops = []        // ops to sync to peers
   redo_items = []
   for item in group.items (reverse order):
     try:
       if item.op_type == Insert:
         pos = doc.lv_to_position(item.target_lv)
         if pos != None:
-          doc.delete_lv(item.target_lv)   # local delete, no op generated (Phase 1)
+          op = doc.delete_lv(item.target_lv)   # creates Delete op via Document::delete_by_lv
+          synced_ops.push(op)
           redo_items.push({ target_lv: item.target_lv, op_type: Insert, content: item.content })
         // If pos == None, item already deleted by remote — skip, don't push to redo
       if item.op_type == Delete:
-        doc.undelete_lv(item.target_lv)   # local tombstone revival, no op generated (Phase 1)
+        op = doc.undelete_lv(item.target_lv)   # creates Undelete op via Document::undelete
+        synced_ops.push(op)
         redo_items.push({ target_lv: item.target_lv, op_type: Delete, content: item.content })
     catch MissingItem:
       // Item was GC'd or compacted — skip silently, don't push to redo
@@ -355,20 +357,20 @@ undo[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op]:
   if redo_items.length() > 0:
     redo_stack.push(reversed redo_items)
   resume tracking
-  return synced_ops      // Phase 1: always empty. Phase 2: populated by delete_lv/undelete_lv.
+  return synced_ops      // Delete/Undelete ops to sync with peers
 ```
 
  **Error handling:** Per-item try/catch ensures one bad item doesn't corrupt the entire group. Missing items (due to GC/compaction) are skipped silently. Only successfully applied items are pushed to redo.
 Match missing items as `DocumentError::Fugue(FugueError::MissingItem(_))` since `Undoable` methods raise `DocumentError`.
 
-**Redo is the mirror image:** Insert items → `doc.undelete_lv(target_lv)`, Delete items → `doc.delete_lv(target_lv)`. Both are local mutations. Only push to undo stack if action succeeded. Returns `Array[@oplog.Op]` (empty in Phase 1, populated in Phase 2).
+**Redo is the mirror image:** Insert items → `doc.undelete_lv(target_lv)` (returns `Undelete` op), Delete items → `doc.delete_lv(target_lv)` (returns `Delete` op). Both generate ops to sync. Only push to undo stack if action succeeded.
 
-**Phase 1 limitations:**
-1. Undo/redo are not persisted (lost on reload) and not visible to peers
-2. **Intent drift risk:** Local-only undo mutates tree without oplog entries. Subsequent synced edits use `position_to_lv` from the locally-mutated tree, which peers don't share. This can cause anchoring differences. Mitigations:
-   - Document this as expected Phase 1 behavior
-   - Phase 2 eliminates this by always producing ops
-   - Alternative: Block synced edits until undo state is "committed" (complex)
+**Syncing undo ops:** The returned `Array[@oplog.Op]` should be sent to peers via `SyncSession`. Example:
+```moonbit
+let undo_ops = mgr.undo(doc)!
+let msg = @text.SyncMessage::new(undo_ops, doc.sync().export_all().get_heads())
+// Send msg to peers
+```
 
 **File:** `event-graph-walker/undo/undo_manager.mbt` (NEW)
 
@@ -416,10 +418,11 @@ mgr.set_tracking(false)
 doc.sync().apply(remote_message)!
 mgr.set_tracking(true)
 
-// Undo — returns ops to sync (empty in Phase 1, populated in Phase 2)
-let _synced_ops = mgr.undo(doc)!
-// Phase 1: synced_ops is empty, document updated locally only
-// Phase 2: synced_ops contains Delete/Undelete ops to send to peers
+// Undo — returns Delete/Undelete ops to sync with peers
+let undo_ops = mgr.undo(doc)!
+// Send ops to peers via SyncSession
+let msg = @text.SyncMessage::new(undo_ops, doc.sync().export_all().get_heads())
+// peer.sync().apply(msg)!
 ```
 
 ## Edge Cases
@@ -432,7 +435,7 @@ let _synced_ops = mgr.undo(doc)!
 | Double undo/redo | Stacks transfer correctly. Tracking suppressed during undo/redo. |
 | Error during undo/redo | Per-item try/catch skips bad items; guard/defer restores `tracking_enabled` |
 | Item GC'd/compacted | `MissingItem` caught, item skipped, redo stack only gets successful items |
-| Synced edit after local undo | **Intent drift possible** — peers have different tree state. Document as Phase 1 limitation. |
+| Synced edit after undo | No intent drift — undo ops are synced to peers, all replicas converge. |
 
 ## File Summary
 
@@ -451,9 +454,9 @@ let _synced_ops = mgr.undo(doc)!
 | `event-graph-walker/text/undo_helpers.mbt` | Create | ~40 (insert_and_record, delete_and_record) |
 | `event-graph-walker/text/moon.pkg.json` | Modify | +1 (add undo import) |
 
-## Implementation Status (as of 2026-01-31)
+## Implementation Status (as of 2026-02-01)
 
-**Phase 1 (local-only undo/redo):**
+**Phase 1 (local-only undo/redo):** ✅ Complete
 - ✅ `core/` package added (`Change`, `RawToLv`)
 - ✅ `document/undoable.mbt` trait added
 - ✅ `Document` implements `@core.RawToLv`
@@ -464,27 +467,30 @@ let _synced_ops = mgr.undo(doc)!
 - ✅ Time grouping uses **time since last edit** (continuous typing stays one group)
 - ✅ Tests updated/added for grouping, redo, agent filtering, etc.
 
-**Phase 2 (synced undo/redo):**
-- ⏳ Not started (see steps below)
+**Phase 2 (synced undo/redo):** ✅ Complete
+- ✅ `OpContent::Undelete` variant added to `oplog/operation.mbt`
+- ✅ `Op::new_undelete`, `Op::is_undelete`, `Op::get_delete_target` added
+- ✅ `Document::undelete`, `Document::delete_by_lv` added (return ops)
+- ✅ `Document::apply_remote` handles `Undelete` ops
+- ✅ `Undoable` trait methods return `@oplog.Op` (not `Unit`)
+- ✅ `UndoManager.undo()`/`redo()` collect and return synced ops
+- ✅ `branch/` handles `Undelete` in apply and merge
+- ✅ Tests: `undo-insert generates Delete op`, `undo-delete generates Undelete op`, `undo ops can be applied to peer`
 
-## Phase 2: Global Undo with `OpContent::Undelete`
+### Phase 2 Implementation Summary
 
-Phase 2 makes undo/redo visible to peers by generating real ops (`Delete` for undo-insert, `Undelete` for undo-delete), eliminating Phase 1's local-only limitation and intent drift risk.
-
-### Implementation Steps
-
-| Step | File | Difficulty | Work |
-|------|------|------------|------|
-| 1. Add `Undelete(Int)` variant | `oplog/operation.mbt` | Easy | +1 line to enum |
-| 2. Add `Op::new_undelete` constructor | `oplog/operation.mbt` | Easy | +10 lines |
-| 3. Add `Op::is_undelete`, `Op::get_undelete_target` | `oplog/operation.mbt` | Easy | +15 lines |
-| 4. Handle in `Document::apply` | `document/document.mbt` | Medium | Match `Undelete(target_lv)` → `tree.undelete(target_lv)` |
-| 5. Handle in `apply_remote` | `document/document.mbt` | Medium | Same as local apply |
-| 6. **Conflict resolution** | `fugue/tree.mbt` | **Hard** | Concurrent Delete + Undelete? Pick semantics (see below) |
-| 7. Handle in branch merge | `document/merge.mbt` | **Hard** | Undelete in version graph traversal |
-| 8. Serialize/deserialize | `oplog/operation.mbt` | Easy | Already derived `FromJson, ToJson` |
-| 9. Update `UndoManager.undo()` | `undo/undo_manager.mbt` | Medium | Return `Undelete` op instead of local mutation |
-| 10. Property tests | `undo/undo_manager_test.mbt` | Medium | Delete↔Undelete interleaving |
+| Step | File | Status |
+|------|------|--------|
+| 1. Add `Undelete` variant | `oplog/operation.mbt` | ✅ |
+| 2. Add `Op::new_undelete` | `oplog/operation.mbt` | ✅ |
+| 3. Add `Op::is_undelete`, `Op::get_delete_target` | `oplog/operation.mbt` | ✅ |
+| 4. `Document::undelete`, `Document::delete_by_lv` | `document/document.mbt` | ✅ |
+| 5. Handle in `apply_remote` | `document/document.mbt` | ✅ |
+| 6. Handle in branch apply/merge | `branch/branch.mbt`, `branch/branch_merge.mbt` | ✅ |
+| 7. Serialize/deserialize | `oplog/operation.mbt` | ✅ (derived) |
+| 8. Update `UndoManager.undo()`/`redo()` | `undo/undo_manager.mbt` | ✅ |
+| 9. Update `Undoable` trait | `document/undoable.mbt` | ✅ |
+| 10. Sync integration tests | `undo/undo_manager_test.mbt` | ✅ |
 
 ### Conflict Resolution Semantics
 

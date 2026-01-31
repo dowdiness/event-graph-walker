@@ -184,6 +184,38 @@ pub fn Document::delete(
 }
 
 ///|
+/// Create and apply an undelete operation for a specific LV
+/// Used by undo to revive a deleted item and create a syncable op
+pub fn Document::undelete(
+  self : Document,
+  target_lv : Int,
+) -> @oplog.Op raise DocumentError {
+  let op = self.oplog.undelete(target_lv) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  self.tree.undelete(target_lv) catch {
+    e => raise DocumentError::Fugue(e)
+  }
+  op
+}
+
+///|
+/// Create and apply a delete operation for a specific LV
+/// Used by undo to delete a specific item and create a syncable op
+pub fn Document::delete_by_lv(
+  self : Document,
+  target_lv : Int,
+) -> @oplog.Op raise DocumentError {
+  let op = self.oplog.delete(target_lv) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  self.tree.delete(target_lv) catch {
+    e => raise DocumentError::Fugue(e)
+  }
+  op
+}
+
+///|
 /// Apply a remote operation to this document
 pub fn Document::apply_remote(
   self : Document,
@@ -231,6 +263,12 @@ pub fn Document::apply_remote(
       @oplog.Delete =>
         if origin_left != -1 {
           self.tree.delete(origin_left) catch {
+            e => raise DocumentError::Fugue(e)
+          }
+        }
+      @oplog.Undelete =>
+        if origin_left != -1 {
+          self.tree.undelete(origin_left) catch {
             e => raise DocumentError::Fugue(e)
           }
         }

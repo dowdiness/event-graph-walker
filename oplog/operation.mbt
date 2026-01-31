@@ -5,6 +5,7 @@
 pub enum OpContent {
   Insert(String) // Insert text
   Delete // Delete character
+  Undelete // Undelete (revive) a previously deleted character
 } derive(Eq, Show, FromJson, ToJson)
 
 ///|
@@ -46,11 +47,31 @@ pub fn Op::new_delete(
 }
 
 ///|
+/// Create a new undelete operation
+pub fn Op::new_undelete(
+  lv : Int,
+  parents : Array[@causal_graph.RawVersion],
+  agent : String,
+  seq : Int,
+  origin_left : @causal_graph.RawVersion?,
+) -> Op {
+  {
+    lv,
+    parents,
+    agent,
+    seq,
+    content: Undelete,
+    origin_left,
+    origin_right: None,
+  }
+}
+
+///|
 /// Check if operation is an insert
 pub fn Op::is_insert(self : Op) -> Bool {
   match self.content {
     Insert(_) => true
-    Delete => false
+    Delete | Undelete => false
   }
 }
 
@@ -58,8 +79,26 @@ pub fn Op::is_insert(self : Op) -> Bool {
 /// Check if operation is a delete
 pub fn Op::is_delete(self : Op) -> Bool {
   match self.content {
-    Insert(_) => false
+    Insert(_) | Undelete => false
     Delete => true
+  }
+}
+
+///|
+/// Check if operation is an undelete
+pub fn Op::is_undelete(self : Op) -> Bool {
+  match self.content {
+    Insert(_) | Delete => false
+    Undelete => true
+  }
+}
+
+///|
+/// Get the target LV for delete/undelete operations (from origin_left)
+pub fn Op::get_delete_target(self : Op) -> @causal_graph.RawVersion? {
+  match self.content {
+    Delete | Undelete => self.origin_left
+    Insert(_) => None
   }
 }
 
@@ -68,6 +107,6 @@ pub fn Op::is_delete(self : Op) -> Bool {
 pub fn Op::get_insert_text(self : Op) -> String? {
   match self.content {
     Insert(text) => Some(text)
-    Delete => None
+    Delete | Undelete => None
   }
 }

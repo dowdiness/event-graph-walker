@@ -281,6 +281,8 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
               )
             @oplog.Delete =>
               try! tree2.delete(resolve_origin(oplog, op.origin_left))
+            @oplog.Undelete =>
+              try! tree2.undelete(resolve_origin(oplog, op.origin_left))
           }
         None => ()
       }

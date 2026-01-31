@@ -92,7 +92,7 @@ fn UndoManager::record_item(
 
 ///|
 /// Pop undo group, apply inverses locally, push to redo.
-/// Returns ops to sync (empty in Phase 1, populated in Phase 2).
+/// Returns ops to sync with peers (Delete/Undelete ops from the oplog).
 pub fn[D : @document.Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
@@ -111,7 +111,8 @@ pub fn[D : @document.Undoable] UndoManager::undo(
           let pos = doc.lv_to_position(item.target_lv)
           match pos {
             Some(_) => {
-              doc.delete_lv(item.target_lv)
+              let op = doc.delete_lv(item.target_lv)
+              synced_ops.push(op)
               redo_items.push({
                 target_lv: item.target_lv,
                 op_type: Insert,
@@ -122,7 +123,8 @@ pub fn[D : @document.Undoable] UndoManager::undo(
           }
         }
         Delete => {
-          doc.undelete_lv(item.target_lv)
+          let op = doc.undelete_lv(item.target_lv)
+          synced_ops.push(op)
           redo_items.push({
             target_lv: item.target_lv,
             op_type: Delete,
@@ -148,7 +150,7 @@ pub fn[D : @document.Undoable] UndoManager::undo(
 
 ///|
 /// Pop redo group, apply inverses locally, push to undo.
-/// Returns ops to sync (empty in Phase 1, populated in Phase 2).
+/// Returns ops to sync with peers (Delete/Undelete ops from the oplog).
 pub fn[D : @document.Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
@@ -164,7 +166,8 @@ pub fn[D : @document.Undoable] UndoManager::redo(
     try {
       match item.op_type {
         Insert => {
-          doc.undelete_lv(item.target_lv)
+          let op = doc.undelete_lv(item.target_lv)
+          synced_ops.push(op)
           undo_items.push({
             target_lv: item.target_lv,
             op_type: Insert,
@@ -175,7 +178,8 @@ pub fn[D : @document.Undoable] UndoManager::redo(
           let pos = doc.lv_to_position(item.target_lv)
           match pos {
             Some(_) => {
-              doc.delete_lv(item.target_lv)
+              let op = doc.delete_lv(item.target_lv)
+              synced_ops.push(op)
               undo_items.push({
                 target_lv: item.target_lv,
                 op_type: Delete,
