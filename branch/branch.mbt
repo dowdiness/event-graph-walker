@@ -272,7 +272,7 @@ fn apply_operation_to_tree(
       // Get Lamport timestamp and agent from causal graph
       let (timestamp, agent) = match oplog.graph[op.lv] {
         Some(entry) => (entry.timestamp, entry.agent)
-        None => (0, "unknown") // Fallback
+        None => raise BranchError::MissingOp(lv=op.lv)
       }
 
       // Insert into tree with FugueMax algorithm

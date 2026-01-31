@@ -129,7 +129,10 @@ pub fn Document::insert(
     // Get Lamport timestamp and agent from causal graph for proper ordering
     let (timestamp, agent) = match self.oplog.graph[op.lv] {
       Some(entry) => (entry.timestamp, entry.agent)
-      None => (0, "unknown") // Fallback for root operations
+      None =>
+        raise DocumentError::OpLog(
+          @oplog.OpLogError::MissingLocalVersion(lv=op.lv),
+        )
     }
 
     // Apply to tree
@@ -249,7 +252,10 @@ pub fn Document::apply_remote(
         // Get Lamport timestamp and agent from causal graph for proper ordering
         let (timestamp, agent) = match self.oplog.graph[applied.lv] {
           Some(entry) => (entry.timestamp, entry.agent)
-          None => (0, "unknown") // Fallback
+          None =>
+            raise DocumentError::OpLog(
+              @oplog.OpLogError::MissingLocalVersion(lv=applied.lv),
+            )
         }
         self.tree.insert(
           applied.lv,
