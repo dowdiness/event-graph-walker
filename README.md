@@ -3,6 +3,8 @@
 - [Repository](https://github.com/dowdiness/event-graph-walker)
 - Used as a git submodule in [dowdiness/crdt](https://github.com/dowdiness/crdt)
 
+> **Warning:** This project is a work in progress and the API is not stable. Do not use in production.
+
 A MoonBit implementation of the **eg-walker** CRDT algorithm with **FugueMax** sequence CRDT for collaborative editing.
 
 ## Overview
