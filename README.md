@@ -2,6 +2,7 @@
 
 - [Repository](https://github.com/dowdiness/event-graph-walker)
 - Used as a git submodule in [dowdiness/crdt](https://github.com/dowdiness/crdt)
+- [Demo App](https://lambda-editor.koji-ishimoto.workers.dev/) as Collaborative Editor
 
 > **Warning:** This project is a work in progress and the API is not stable. Do not use in production.
 
@@ -162,7 +163,7 @@ pub struct VersionVector {
 Three-phase merge for concurrent edits:
 
 1. **Retreat** - Remove operations from current frontier not in target
-2. **Advance** - Apply new operations up to target frontier  
+2. **Advance** - Apply new operations up to target frontier
 3. **Apply** - Final state at target frontier
 
 ```moonbit
