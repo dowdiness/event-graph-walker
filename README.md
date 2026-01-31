@@ -1,5 +1,8 @@
 # Event Graph Walker
 
+- [Repository](https://github.com/dowdiness/event-graph-walker)
+- Used as a git submodule in [dowdiness/crdt](https://github.com/dowdiness/crdt)
+
 A MoonBit implementation of the **eg-walker** CRDT algorithm with **FugueMax** sequence CRDT for collaborative editing.
 
 ## Overview
@@ -401,7 +404,7 @@ The module includes:
 - **Version vectors** - O(m) where m = number of agents
 - **Branch advance** - O(k) where k = new operations
 
-See [PERFORMANCE_ANALYSIS.md](../PERFORMANCE_ANALYSIS.md) for detailed benchmarks.
+See the performance documentation in the [crdt monorepo](https://github.com/dowdiness/crdt/tree/main/docs/performance) for detailed benchmarks.
 
 ## Integration
 
