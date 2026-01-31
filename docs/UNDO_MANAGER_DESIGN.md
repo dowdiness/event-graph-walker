@@ -131,7 +131,19 @@ pub fn FugueTree::lv_to_position(self : FugueTree, id : Int) -> Int? {
 
 **File:** `event-graph-walker/fugue/tree.mbt` (after line 121)
 
-### Step 3: `core/change.mbt` — Move `Change` + add safe `target_lv`
+### Step 3a: `core/traits.mbt` — NEW: `RawToLv` trait
+
+```moonbit
+///| Trait for resolving RawVersion (agent, seq) to LV.
+///  Implemented by Document (has access to oplog graph).
+pub(open) trait RawToLv {
+  raw_to_lv(Self, @causal_graph.RawVersion) -> Int?
+}
+```
+
+**File:** `event-graph-walker/core/traits.mbt` (NEW)
+
+### Step 3b: `core/change.mbt` — Move `Change` + add safe `target_lv`
 
 ```moonbit
 ///|
@@ -139,13 +151,14 @@ pub fn FugueTree::lv_to_position(self : FugueTree, id : Int) -> Int? {
 /// For Insert: the inserted item's LV (same as op.lv).
 /// For Delete: must look up the deleted item's LV from the RawVersion via oplog.
 /// This requires access to the document's oplog graph.
-pub fn Change::target_lv(self : Change, resolver : @core.RawToLv) -> Int? {
+pub fn[R : RawToLv] Change::target_lv(self : Change, resolver : R) -> Int? {
   match self.op.content {
     Insert(_) => Some(self.op.lv)
-    Delete => {
-      // origin_left is RawVersion (agent, seq), map via resolver
-      self.op.origin_left.and_then(raw => resolver.raw_to_lv(raw))
-    }
+    Delete =>
+      match self.op.origin_left {
+        None => None
+        Some(raw) => resolver.raw_to_lv(raw)
+      }
   }
 }
 
@@ -240,8 +253,8 @@ pub struct UndoManager {
 | `new` | `(agent_id, capture_timeout_ms?: Int) -> UndoManager` | Constructor, default timeout 500ms |
 | `record_insert` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record insert. `target_lv` is the inserted item's LV. Filters by agent (only records if agent matches `self.agent_id`). Groups by time window. Clears redo stack. |
 | `record_delete` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record delete. `target_lv` is the deleted item's LV (the tombstone). Filters by agent (only records if agent matches `self.agent_id`). Groups by time window. Clears redo stack. |
-| `undo` | `[D : @document.Undoable](self, doc: D) -> Unit raise DocumentError` | Pop undo group, apply inverses locally, push to redo (only if action succeeded). No ops returned (Phase 1 is fully local). |
-| `redo` | `[D : @document.Undoable](self, doc: D) -> Unit raise DocumentError` | Pop redo group, apply inverses locally, push to undo (only if action succeeded). No ops returned (Phase 1 is fully local). |
+| `undo` | `[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op] raise @document.DocumentError` | Pop undo group, apply inverses locally, push to redo. Returns ops to sync (empty in Phase 1, populated in Phase 2). |
+| `redo` | `[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op] raise @document.DocumentError` | Pop redo group, apply inverses locally, push to undo. Returns ops to sync (empty in Phase 1, populated in Phase 2). |
 | `set_tracking` | `(enabled: Bool) -> Unit` | Suppress/resume tracking |
 | `is_tracking` | `() -> Bool` | Query tracking state |
 | `can_undo` | `() -> Bool` | Undo stack non-empty |
@@ -250,33 +263,90 @@ pub struct UndoManager {
 
 The text integration layer (which sees `Change` and doc internals) is responsible for extracting the correct `target_lv` and calling `record_insert`/`record_delete`. This keeps `undo/` generic.
 
-**Multi-char insert handling:** `TextDoc::insert("Hello")` internally generates 5 separate ops (one per char), but returns a single `Change` for the last op. To track all chars:
-- Option A: Change `TextDoc::insert` to return `Array[Change]` (all ops)
-- Option B: Add `TextDoc::insert_and_record(pos, text, mgr)` helper that records each op as it's created
-- **Recommended:** Option B — avoids API change, keeps recording atomic with insertion
+**Multi-char insert handling:** `TextDoc::insert("Hello")` internally generates 5 separate ops (one per char), but returns a single `Change` for the last op. To track all chars, the integration helper inserts one character at a time and records each LV individually.
 
 Convenience methods (`insert_and_record`, `delete_and_record`) are not on
 UndoManager itself because they require TextDoc-specific methods (`insert`,
-`delete`) that are outside the `Undoable` trait. These belong in `text/` or an
-integration package that imports both `text/` and `undo/`.
+`delete`) that are outside the `Undoable` trait. These live in `text/` (which
+imports both `text/` types and `undo/`).
+
+**`text/undo_helpers.mbt`** — NEW: Integration helpers
+
+```moonbit
+///|
+/// Insert text and record each character's LV for undo tracking.
+/// Each character is inserted individually so its LV is captured.
+/// Time grouping in UndoManager batches them into a single undo group.
+pub fn TextDoc::insert_and_record(
+  self : TextDoc,
+  pos : Pos,
+  text : String,
+  mgr : @undo.UndoManager,
+  timestamp_ms~ : Int,
+) -> Unit raise TextError {
+  let doc = self.inner_document()
+  for i = 0; i < text.length(); i = i + 1 {
+    let ch = text[i:i + 1].to_string() catch { _ => continue }
+    let change = self.insert(Pos::at(pos.value() + i), ch)!
+    match change.target_lv(doc) {
+      Some(lv) => mgr.record_insert(lv, change.agent(), timestamp_ms, content=ch)
+      None => ()  // unreachable for local inserts
+    }
+  }
+}
+
+///|
+/// Delete a character and record its target LV for undo tracking.
+/// Looks up the deleted item's content before deletion for redo display.
+pub fn TextDoc::delete_and_record(
+  self : TextDoc,
+  pos : Pos,
+  mgr : @undo.UndoManager,
+  timestamp_ms~ : Int,
+) -> Unit raise TextError {
+  let doc = self.inner_document()
+  // Look up content before deleting (pos is already 0-based visible position)
+  let items = self.inner.tree.get_visible_items()
+  let content = if pos.value() < items.length() {
+    Some(items[pos.value()].1.content)
+  } else {
+    None
+  }
+  let change = self.delete(pos)!
+  match change.target_lv(doc) {
+    Some(lv) => mgr.record_delete(lv, change.agent(), timestamp_ms, content~)
+    None => ()
+  }
+}
+```
+
+**File:** `event-graph-walker/text/undo_helpers.mbt` (NEW)
+
+**Requires** `text/moon.pkg.json` to add `undo` to imports.
+
+**Note:** Per-character insertion via `TextDoc::insert` is equivalent to
+`Document::insert("Hello")` in terms of origin tracking — `Document::insert`
+already resolves origins per-character in its internal loop (document.mbt:97-138).
+The per-character approach just makes each LV accessible for recording.
 
 **Undo algorithm (Phase 1 — fully local):**
 
 ```
-undo[D : @document.Undoable](self, doc: D) -> Unit:
+undo[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op]:
   group = undo_stack.pop()
   suppress tracking (use guard/defer to ensure restore on error)
+  synced_ops = []        // ops to sync to peers (empty in Phase 1, populated in Phase 2)
   redo_items = []
   for item in group.items (reverse order):
     try:
       if item.op_type == Insert:
         pos = doc.lv_to_position(item.target_lv)
         if pos != None:
-          doc.delete_lv(item.target_lv)   # local delete, no op generated
+          doc.delete_lv(item.target_lv)   # local delete, no op generated (Phase 1)
           redo_items.push({ target_lv: item.target_lv, op_type: Insert, content: item.content })
         // If pos == None, item already deleted by remote — skip, don't push to redo
       if item.op_type == Delete:
-        doc.undelete_lv(item.target_lv)   # local tombstone revival, no op generated
+        doc.undelete_lv(item.target_lv)   # local tombstone revival, no op generated (Phase 1)
         redo_items.push({ target_lv: item.target_lv, op_type: Delete, content: item.content })
     catch MissingItem:
       // Item was GC'd or compacted — skip silently, don't push to redo
@@ -284,12 +354,13 @@ undo[D : @document.Undoable](self, doc: D) -> Unit:
   if redo_items.length() > 0:
     redo_stack.push(reversed redo_items)
   resume tracking
+  return synced_ops      // Phase 1: always empty. Phase 2: populated by delete_lv/undelete_lv.
 ```
 
  **Error handling:** Per-item try/catch ensures one bad item doesn't corrupt the entire group. Missing items (due to GC/compaction) are skipped silently. Only successfully applied items are pushed to redo.
 Match missing items as `DocumentError::Fugue(FugueError::MissingItem(_))` since `Undoable` methods raise `DocumentError`.
 
-**Redo is the mirror image:** Insert items → `doc.undelete_lv(target_lv)`, Delete items → `doc.delete_lv(target_lv)`. Both are local mutations. Only push to undo stack if action succeeded.
+**Redo is the mirror image:** Insert items → `doc.undelete_lv(target_lv)`, Delete items → `doc.delete_lv(target_lv)`. Both are local mutations. Only push to undo stack if action succeeded. Returns `Array[@oplog.Op]` (empty in Phase 1, populated in Phase 2).
 
 **Phase 1 limitations:**
 1. Undo/redo are not persisted (lost on reload) and not visible to peers
@@ -330,19 +401,23 @@ git diff *.mbti  # verify API changes: fugue/ gets undelete+lv_to_position, core
 
 ```moonbit
 let doc = @text.TextDoc::new("alice")
-let mgr = @undo.UndoManager::new("alice") // Doc type inferred as TextDoc
+let mgr = @undo.UndoManager::new("alice")
 
-// Insert with tracking — use helper that records all char ops
+// Insert with tracking — helper records each char's LV
 doc.insert_and_record(@text.Pos::at(0), "Hello", mgr, timestamp_ms=1000)!
+
+// Delete with tracking — helper looks up content before deleting
+doc.delete_and_record(@text.Pos::at(4), mgr, timestamp_ms=2000)!
 
 // Remote op — suppress tracking
 mgr.set_tracking(false)
 doc.sync().apply(remote_message)!
 mgr.set_tracking(true)
 
-// Undo — fully local in Phase 1, no ops returned
-mgr.undo(doc)!
-// Document state updated locally; peers do not see the undo
+// Undo — returns ops to sync (empty in Phase 1, populated in Phase 2)
+let _synced_ops = mgr.undo(doc)!
+// Phase 1: synced_ops is empty, document updated locally only
+// Phase 2: synced_ops contains Delete/Undelete ops to send to peers
 ```
 
 ## Edge Cases
@@ -351,7 +426,7 @@ mgr.undo(doc)!
 |----------|----------|
 | Undo insert already deleted by remote | `lv_to_position` → `None` → skip, don't push to redo (already gone) |
 | Undo delete of concurrently deleted item | `undelete` revives it — local user's intent wins |
-| Multi-char insert | Use `insert_and_record` helper to record each char's LV. Time grouping batches them. |
+| Multi-char insert | `insert_and_record` inserts per-char, records each LV. Time grouping batches them into one undo group. |
 | Double undo/redo | Stacks transfer correctly. Tracking suppressed during undo/redo. |
 | Error during undo/redo | Per-item try/catch skips bad items; guard/defer restores `tracking_enabled` |
 | Item GC'd/compacted | `MissingItem` caught, item skipped, redo stack only gets successful items |
@@ -371,11 +446,12 @@ mgr.undo(doc)!
 | `event-graph-walker/core/change.mbt` | Create | ~40 |
 | `event-graph-walker/core/traits.mbt` | Create | ~8 |
 | `event-graph-walker/text/types.mbt` | Modify | +? (remove Change, re-export @core.Change + Undoable impl) |
-| `event-graph-walker/undo/moon.pkg.json` | Modify | +2 / -2 |
+| `event-graph-walker/text/undo_helpers.mbt` | Create | ~40 (insert_and_record, delete_and_record) |
+| `event-graph-walker/text/moon.pkg.json` | Modify | +1 (add undo import) |
 
 ## Phase 2: Global Undo with `OpContent::Undelete`
 
-Phase 2 adds synced undo-of-delete, eliminating the Phase 1 asymmetry where undo-insert syncs but undo-delete doesn't.
+Phase 2 makes undo/redo visible to peers by generating real ops (`Delete` for undo-insert, `Undelete` for undo-delete), eliminating Phase 1's local-only limitation and intent drift risk.
 
 ### Implementation Steps
 
@@ -415,17 +491,32 @@ pub enum OpContent {
 } derive(Eq, Show, FromJson, ToJson)
 ```
 
-### Updated `UndoManager.undo()` Return Value
+### `UndoManager.undo()` Return Value — No API Break
 
-After Phase 2, undo returns synced ops for **both** insert and delete undos:
+The return type `Array[@oplog.Op]` is established in Phase 1 (always empty). Phase 2 populates it — no signature change needed. The `Undoable` trait changes: `undelete_lv` returns `@oplog.Op` instead of `Unit`, and `delete_lv` also returns `@oplog.Op`.
+
+```moonbit
+///| Phase 2 Undoable trait (updated signatures)
+pub(open) trait Undoable {
+  lv_to_position(Self, Int) -> Int?
+  undelete_lv(Self, Int) -> @oplog.Op raise DocumentError  // was Unit
+  delete_lv(Self, Int) -> @oplog.Op raise DocumentError    // was Unit
+}
+```
+
+Undo algorithm collects ops from both branches:
 
 ```
-undo[D : @document.Undoable](doc: D) -> Array[@oplog.Op]:
+undo[D : Undoable](doc: D) -> Array[Op]:
   ...
+  if item.op_type == Insert:
+    op = doc.delete_lv(item.target_lv)    // now returns synced Delete op
+    synced_ops.push(op)
   if item.op_type == Delete:
-    op = doc.undelete_lv(item.target_lv)  // Now returns Op, not Unit
+    op = doc.undelete_lv(item.target_lv)  // now returns synced Undelete op
     synced_ops.push(op)
   ...
+  return synced_ops
 ```
 
 ### Effort Estimate
