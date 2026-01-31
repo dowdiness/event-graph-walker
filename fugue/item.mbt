@@ -76,6 +76,12 @@ fn Item::mark_deleted(self : Item) -> Item {
 }
 
 ///|
+/// Mark item as visible (revive tombstone)
+fn Item::mark_visible(self : Item) -> Item {
+  { ..self, deleted: false }
+}
+
+///|
 /// Check if item is visible (not deleted)
 fn Item::is_visible(self : Item) -> Bool {
   not(self.deleted)

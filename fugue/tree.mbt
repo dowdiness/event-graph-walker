@@ -121,6 +121,33 @@ pub fn FugueTree::delete(self : FugueTree, id : Int) -> Unit raise FugueError {
 }
 
 ///|
+/// Undelete an item (revive tombstone). Idempotent for already-visible items.
+pub fn FugueTree::undelete(self : FugueTree, id : Int) -> Unit raise FugueError {
+  match self[id] {
+    Some(item) =>
+      if item.deleted {
+        let visible_item = item.mark_visible()
+        self.items = self.items.add(id, visible_item)
+      }
+    None => raise FugueError::MissingItem(id~)
+  }
+}
+
+///|
+/// Find visible position of an item by LV.
+/// Returns None if deleted or missing.
+pub fn FugueTree::lv_to_position(self : FugueTree, id : Int) -> Int? {
+  let visible = self.get_visible_items()
+  for i = 0; i < visible.length(); i = i + 1 {
+    let (lv, _) = visible[i]
+    if lv == id {
+      return Some(i)
+    }
+  }
+  None
+}
+
+///|
 /// Add item to tree
 fn FugueTree::add_item(self : FugueTree, item : Item) -> Unit {
   self.items = self.items.add(item.id, item)

@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/undo"
+
+import {
+  "dowdiness/event-graph-walker/document",
+  "dowdiness/event-graph-walker/oplog",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct UndoGroup {
+  items : Array[UndoItem]
+  timestamp : Int
+}
+pub impl Show for UndoGroup
+
+pub struct UndoItem {
+  target_lv : Int
+  op_type : UndoOpType
+  content : String?
+}
+pub impl Show for UndoItem
+
+pub struct UndoManager {
+  agent_id : String
+  mut undo_stack : Array[UndoGroup]
+  mut redo_stack : Array[UndoGroup]
+  capture_timeout_ms : Int
+  mut last_change_ms : Int
+  mut tracking_enabled : Bool
+}
+pub fn UndoManager::can_redo(Self) -> Bool
+pub fn UndoManager::can_undo(Self) -> Bool
+pub fn UndoManager::clear(Self) -> Unit
+pub fn UndoManager::is_tracking(Self) -> Bool
+pub fn UndoManager::new(String, capture_timeout_ms? : Int) -> Self
+pub fn UndoManager::record_delete(Self, Int, String, Int, content? : String?) -> Unit
+pub fn UndoManager::record_insert(Self, Int, String, Int, content? : String?) -> Unit
+pub fn[D : @document.Undoable] UndoManager::redo(Self, D) -> Array[@oplog.Op] raise @document.DocumentError
+pub fn UndoManager::set_tracking(Self, Bool) -> Unit
+pub fn[D : @document.Undoable] UndoManager::undo(Self, D) -> Array[@oplog.Op] raise @document.DocumentError
+pub impl Show for UndoManager
+
+pub enum UndoOpType {
+  Insert
+  Delete
+}
+pub impl Eq for UndoOpType
+pub impl Show for UndoOpType
+
+// Type aliases
+
+// Traits
+

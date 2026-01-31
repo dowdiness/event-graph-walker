@@ -251,8 +251,8 @@ pub struct UndoManager {
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `new` | `(agent_id, capture_timeout_ms?: Int) -> UndoManager` | Constructor, default timeout 500ms |
-| `record_insert` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record insert. `target_lv` is the inserted item's LV. Filters by agent (only records if agent matches `self.agent_id`). Groups by time window. Clears redo stack. |
-| `record_delete` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record delete. `target_lv` is the deleted item's LV (the tombstone). Filters by agent (only records if agent matches `self.agent_id`). Groups by time window. Clears redo stack. |
+| `record_insert` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record insert. `target_lv` is the inserted item's LV. Filters by agent (only records if agent matches `self.agent_id`). Groups by inactivity (time since last edit). Clears redo stack. |
+| `record_delete` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record delete. `target_lv` is the deleted item's LV (the tombstone). Filters by agent (only records if agent matches `self.agent_id`). Groups by inactivity (time since last edit). Clears redo stack. |
 | `undo` | `[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op] raise @document.DocumentError` | Pop undo group, apply inverses locally, push to redo. Returns ops to sync (empty in Phase 1, populated in Phase 2). |
 | `redo` | `[D : @document.Undoable](self, doc: D) -> Array[@oplog.Op] raise @document.DocumentError` | Pop redo group, apply inverses locally, push to undo. Returns ops to sync (empty in Phase 1, populated in Phase 2). |
 | `set_tracking` | `(enabled: Bool) -> Unit` | Suppress/resume tracking |
@@ -276,7 +276,8 @@ imports both `text/` types and `undo/`).
 ///|
 /// Insert text and record each character's LV for undo tracking.
 /// Each character is inserted individually so its LV is captured.
-/// Time grouping in UndoManager batches them into a single undo group.
+/// Time grouping in UndoManager batches them into a single undo group
+/// based on time since the last edit.
 pub fn TextDoc::insert_and_record(
   self : TextDoc,
   pos : Pos,
@@ -379,10 +380,11 @@ Match missing items as `DocumentError::Fugue(FugueError::MissingItem(_))` since 
 4. Redo cleared on new edit: insert "H", undo, insert "X" → redo empty
 5. Time grouping: insert "abc" within 500ms, undo once → all removed
 6. Time grouping split: insert "a" at t=0, "b" at t=1000, undo → only "b" removed
-7. Per-agent filtering: agent A inserts and calls `record_insert`, agent B's remote ops arrive via `doc.sync().apply()` (not recorded), undo only affects A's ops
-8. Suppress tracking: disable tracking, insert, verify undo stack empty
-9. Concurrent resilience: A inserts "abc", B inserts "XY" between a/b (remote), A undoes → correct text
-10. Undo of already-deleted item: item deleted by remote peer → `lv_to_position` returns `None` → no-op
+7. Time grouping continuous typing: edits spaced <500ms apart for >500ms total → one group
+8. Per-agent filtering: agent A inserts and calls `record_insert`, agent B's remote ops arrive via `doc.sync().apply()` (not recorded), undo only affects A's ops
+9. Suppress tracking: disable tracking, insert, verify undo stack empty
+10. Concurrent resilience: A inserts "abc", B inserts "XY" between a/b (remote), A undoes → correct text
+11. Undo of already-deleted item: item deleted by remote peer → `lv_to_position` returns `None` → no-op
 
 **File:** `event-graph-walker/undo/undo_manager_test.mbt` (NEW)
 
@@ -448,6 +450,22 @@ let _synced_ops = mgr.undo(doc)!
 | `event-graph-walker/text/types.mbt` | Modify | +? (remove Change, re-export @core.Change + Undoable impl) |
 | `event-graph-walker/text/undo_helpers.mbt` | Create | ~40 (insert_and_record, delete_and_record) |
 | `event-graph-walker/text/moon.pkg.json` | Modify | +1 (add undo import) |
+
+## Implementation Status (as of 2026-01-31)
+
+**Phase 1 (local-only undo/redo):**
+- ✅ `core/` package added (`Change`, `RawToLv`)
+- ✅ `document/undoable.mbt` trait added
+- ✅ `Document` implements `@core.RawToLv`
+- ✅ `fugue` tombstone revive + LV lookup (`mark_visible`, `undelete`, `lv_to_position`)
+- ✅ `text` implements `Undoable` for `TextDoc`
+- ✅ `text/undo_helpers.mbt` with `insert_and_record` + `delete_and_record`
+- ✅ `undo` package (`types.mbt`, `undo_manager.mbt`, `undo_manager_test.mbt`)
+- ✅ Time grouping uses **time since last edit** (continuous typing stays one group)
+- ✅ Tests updated/added for grouping, redo, agent filtering, etc.
+
+**Phase 2 (synced undo/redo):**
+- ⏳ Not started (see steps below)
 
 ## Phase 2: Global Undo with `OpContent::Undelete`
 

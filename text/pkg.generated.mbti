@@ -8,6 +8,7 @@ import {
   "dowdiness/event-graph-walker/document",
   "dowdiness/event-graph-walker/oplog",
   "dowdiness/event-graph-walker/rle",
+  "dowdiness/event-graph-walker/undo",
 }
 
 // Values
@@ -75,15 +76,18 @@ pub(all) struct TextDoc {
 }
 pub fn TextDoc::checkout(Self, Version) -> TextView raise TextError
 pub fn TextDoc::delete(Self, Pos) -> @core.Change raise TextError
+pub fn TextDoc::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextDoc::from_document(@document.Document) -> Self
 pub fn TextDoc::inner_document(Self) -> @document.Document
 pub fn TextDoc::insert(Self, Pos, String) -> @core.Change raise TextError
+pub fn TextDoc::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextDoc::is_empty(Self) -> Bool
 pub fn TextDoc::len(Self) -> Int
 pub fn TextDoc::new(String) -> Self
 pub fn TextDoc::sync(Self) -> SyncSession
 pub fn TextDoc::text(Self) -> String
 pub fn TextDoc::version(Self) -> Version
+pub impl @document.Undoable for TextDoc
 pub impl Show for TextDoc
 
 pub struct TextSpan {
