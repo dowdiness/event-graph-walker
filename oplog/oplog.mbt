@@ -51,7 +51,7 @@ pub fn OpLog::insert(
   // Get the seq for this operation from the graph
   let seq = match self.graph.lv_to_raw(lv) {
     Some(raw) => raw.seq
-    None => 0 // Shouldn't happen, but fallback to 0
+    None => raise OpLogError::MissingLocalVersion(lv~)
   }
   let origin_left_raw = self.raw_from_lv(origin_left)
   let origin_right_raw = self.raw_from_lv(origin_right)
@@ -86,7 +86,7 @@ pub fn OpLog::delete(self : OpLog, origin_left : Int) -> Op raise OpLogError {
   // Get the seq for this operation from the graph
   let seq = match self.graph.lv_to_raw(lv) {
     Some(raw) => raw.seq
-    None => 0 // Shouldn't happen, but fallback to 0
+    None => raise OpLogError::MissingLocalVersion(lv~)
   }
   let origin_left_raw = self.raw_from_lv(origin_left)
   let op = Op::new_delete(lv, parents_raw, self.agent_id, seq, origin_left_raw)
@@ -112,7 +112,7 @@ pub fn OpLog::undelete(self : OpLog, origin_left : Int) -> Op raise OpLogError {
   // Get the seq for this operation from the graph
   let seq = match self.graph.lv_to_raw(lv) {
     Some(raw) => raw.seq
-    None => 0 // Shouldn't happen, but fallback to 0
+    None => raise OpLogError::MissingLocalVersion(lv~)
   }
   let origin_left_raw = self.raw_from_lv(origin_left)
   let op = Op::new_undelete(
