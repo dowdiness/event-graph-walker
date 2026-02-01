@@ -11,11 +11,10 @@ pub fn TextDoc::insert_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
-  let doc = self.inner_document()
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_string() catch { _ => continue }
     let change = self.insert(Pos::at(pos.value() + i), ch)
-    match change.target_lv(doc) {
+    match change.target_lv(self.inner) {
       Some(lv) =>
         mgr.record_insert(lv, change.agent(), timestamp_ms, content=Some(ch))
       None => ()
@@ -32,15 +31,14 @@ pub fn TextDoc::delete_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
-  let doc = self.inner_document()
-  let items = self.inner.tree.get_visible_items()
+  let items = self.inner.get_visible_items()
   let content : String? = if pos.value() < items.length() {
     Some(items[pos.value()].1.content)
   } else {
     None
   }
   let change = self.delete(pos)
-  match change.target_lv(doc) {
+  match change.target_lv(self.inner) {
     Some(lv) => mgr.record_delete(lv, change.agent(), timestamp_ms, content~)
     None => ()
   }

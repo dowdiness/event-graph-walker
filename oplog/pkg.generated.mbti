@@ -3,7 +3,7 @@ package "dowdiness/event-graph-walker/oplog"
 
 import {
   "dowdiness/event-graph-walker/causal_graph",
-  "moonbitlang/core/json",
+  "dowdiness/event-graph-walker/core",
 }
 
 // Values
@@ -12,64 +12,33 @@ import {
 pub(all) suberror OpLogError {
   MissingLocalVersion(lv~ : Int)
   MissingOrigin
-  MissingRemoteParent(raw~ : @causal_graph.RawVersion)
-  MissingRemoteFrontier(raw~ : @causal_graph.RawVersion)
+  MissingRemoteParent(raw~ : @core.RawVersion)
+  MissingRemoteFrontier(raw~ : @core.RawVersion)
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
 }
 
 // Types and methods
-pub struct Op {
-  lv : Int
-  parents : Array[@causal_graph.RawVersion]
-  agent : String
-  seq : Int
-  content : OpContent
-  origin_left : @causal_graph.RawVersion?
-  origin_right : @causal_graph.RawVersion?
-}
-pub fn Op::get_delete_target(Self) -> @causal_graph.RawVersion?
-pub fn Op::get_insert_text(Self) -> String?
-pub fn Op::is_delete(Self) -> Bool
-pub fn Op::is_insert(Self) -> Bool
-pub fn Op::is_undelete(Self) -> Bool
-pub fn Op::new_delete(Int, Array[@causal_graph.RawVersion], String, Int, @causal_graph.RawVersion?) -> Self
-pub fn Op::new_insert(Int, Array[@causal_graph.RawVersion], String, Int, String, @causal_graph.RawVersion?, @causal_graph.RawVersion?) -> Self
-pub fn Op::new_undelete(Int, Array[@causal_graph.RawVersion], String, Int, @causal_graph.RawVersion?) -> Self
-pub impl Show for Op
-pub impl ToJson for Op
-pub impl @json.FromJson for Op
-
-pub enum OpContent {
-  Insert(String)
-  Delete
-  Undelete
-}
-pub impl Eq for OpContent
-pub impl Show for OpContent
-pub impl ToJson for OpContent
-pub impl @json.FromJson for OpContent
-
 pub struct OpLog {
-  mut operations : Array[Op]
-  mut pending : Array[Op]
+  mut operations : Array[@core.Op]
+  mut pending : Array[@core.Op]
   graph : @causal_graph.CausalGraph
   agent_id : String
 }
-pub fn OpLog::apply_remote(Self, Op) -> Array[Op] raise OpLogError
-pub fn OpLog::delete(Self, Int) -> Op raise OpLogError
-pub fn OpLog::diff_and_collect(Self, @causal_graph.Frontier, @causal_graph.Frontier) -> (Array[Op], Array[Op])
-pub fn OpLog::get_all_ops(Self) -> Array[Op]
-pub fn OpLog::get_frontier(Self) -> @causal_graph.Frontier
-pub fn OpLog::get_frontier_raw(Self) -> Array[@causal_graph.RawVersion] raise OpLogError
-pub fn OpLog::get_op(Self, Int) -> Op?
-pub fn OpLog::get_ops(Self, Array[Int]) -> Array[Op]
-pub fn OpLog::insert(Self, String, Int, Int) -> Op raise OpLogError
+pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
+pub fn OpLog::delete(Self, Int) -> @core.Op raise OpLogError
+pub fn OpLog::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
+pub fn OpLog::get_all_ops(Self) -> Array[@core.Op]
+pub fn OpLog::get_frontier(Self) -> @core.Frontier
+pub fn OpLog::get_frontier_raw(Self) -> Array[@core.RawVersion] raise OpLogError
+pub fn OpLog::get_op(Self, Int) -> @core.Op?
+pub fn OpLog::get_ops(Self, Array[Int]) -> Array[@core.Op]
+pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::new(String) -> Self
 pub fn OpLog::op_count(Self) -> Int
-pub fn OpLog::undelete(Self, Int) -> Op raise OpLogError
-pub fn OpLog::validate_remote_batch(Self, Array[Op], Array[@causal_graph.RawVersion]) -> Unit raise OpLogError
-pub fn OpLog::walk_and_collect(Self, @causal_graph.Frontier) -> Array[Op]
-pub fn OpLog::walk_filtered(Self, @causal_graph.Frontier, (Op) -> Bool) -> Array[Op]
+pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
+pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
+pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]
+pub fn OpLog::walk_filtered(Self, @core.Frontier, (@core.Op) -> Bool) -> Array[@core.Op]
 pub impl Show for OpLog
 
 // Type aliases

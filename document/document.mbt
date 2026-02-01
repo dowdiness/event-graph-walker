@@ -7,8 +7,8 @@
 ///|
 /// Provides position-based operations (insert/delete at cursor position)
 pub struct Document {
-  tree : @fugue.FugueTree
-  oplog : @oplog.OpLog
+  priv tree : @fugue.FugueTree
+  priv oplog : @oplog.OpLog
   agent_id : String
 } derive(Show)
 
@@ -28,7 +28,7 @@ pub fn Document::to_text(self : Document) -> String {
 
 ///|
 /// Get the current frontier
-pub fn Document::get_frontier(self : Document) -> @causal_graph.Frontier {
+pub fn Document::get_frontier(self : Document) -> @core.Frontier {
   self.oplog.get_frontier()
 }
 
@@ -42,7 +42,7 @@ pub fn Document::get_frontier_array(self : Document) -> Array[Int] {
 /// Get frontier as RawVersions for network sync
 pub fn Document::get_frontier_raw(
   self : Document,
-) -> Array[@causal_graph.RawVersion] raise DocumentError {
+) -> Array[@core.RawVersion] raise DocumentError {
   self.oplog.get_frontier_raw() catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -88,10 +88,10 @@ pub fn Document::insert(
   self : Document,
   position : Int,
   text : String,
-) -> @oplog.Op raise DocumentError {
+) -> @core.Op raise DocumentError {
   // Insert each character one by one
   let mut current_pos = position
-  let mut last_op : @oplog.Op? = None
+  let mut last_op : @core.Op? = None
 
   // Iterate through each character in the string
   for i = 0; i < text.length(); i = i + 1 {
@@ -162,7 +162,7 @@ pub fn Document::insert(
 pub fn Document::delete(
   self : Document,
   position : Int,
-) -> @oplog.Op raise DocumentError {
+) -> @core.Op raise DocumentError {
   if position < 0 {
     raise DocumentError::InvalidPosition(pos=position)
   }
@@ -192,7 +192,7 @@ pub fn Document::delete(
 pub fn Document::undelete(
   self : Document,
   target_lv : Int,
-) -> @oplog.Op raise DocumentError {
+) -> @core.Op raise DocumentError {
   let op = self.oplog.undelete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -208,7 +208,7 @@ pub fn Document::undelete(
 pub fn Document::delete_by_lv(
   self : Document,
   target_lv : Int,
-) -> @oplog.Op raise DocumentError {
+) -> @core.Op raise DocumentError {
   let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -222,7 +222,7 @@ pub fn Document::delete_by_lv(
 /// Apply a remote operation to this document
 pub fn Document::apply_remote(
   self : Document,
-  op : @oplog.Op,
+  op : @core.Op,
 ) -> Unit raise DocumentError {
   // Add to oplog (buffering if parents are missing)
   let applied_ops = self.oplog.apply_remote(op) catch {
@@ -248,7 +248,7 @@ pub fn Document::apply_remote(
         }
     }
     match applied.content {
-      @oplog.Insert(text) => {
+      @core.Insert(text) => {
         // Get Lamport timestamp and agent from causal graph for proper ordering
         let (timestamp, agent) = match self.oplog.graph[applied.lv] {
           Some(entry) => (entry.timestamp, entry.agent)
@@ -266,13 +266,13 @@ pub fn Document::apply_remote(
           agent,
         )
       }
-      @oplog.Delete =>
+      @core.Delete =>
         if origin_left != -1 {
           self.tree.delete(origin_left) catch {
             e => raise DocumentError::Fugue(e)
           }
         }
-      @oplog.Undelete =>
+      @core.Undelete =>
         if origin_left != -1 {
           self.tree.undelete(origin_left) catch {
             e => raise DocumentError::Fugue(e)
@@ -286,8 +286,8 @@ pub fn Document::apply_remote(
 /// Merge remote operations into this document
 pub fn Document::merge_remote(
   self : Document,
-  remote_ops : Array[@oplog.Op],
-  remote_frontier : Array[@causal_graph.RawVersion],
+  remote_ops : Array[@core.Op],
+  remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
@@ -296,4 +296,53 @@ pub fn Document::merge_remote(
   @branch.merge_remote_ops(self.tree, self.oplog, remote_ops) catch {
     e => raise DocumentError::Branch(e)
   }
+}
+
+///|
+/// Get the number of visible characters in the document.
+/// Delegates to the internal FugueTree.
+pub fn Document::visible_count(self : Document) -> Int {
+  self.tree.visible_count()
+}
+
+///|
+/// Get all operations from the oplog.
+pub fn Document::get_all_ops(self : Document) -> Array[@core.Op] {
+  self.oplog.get_all_ops()
+}
+
+///|
+/// Compute the diff between two frontiers and collect operations.
+/// Returns (retreat_ops, advance_ops).
+pub fn Document::diff_and_collect(
+  self : Document,
+  from : @core.Frontier,
+  to : @core.Frontier,
+) -> (Array[@core.Op], Array[@core.Op]) {
+  self.oplog.diff_and_collect(from, to)
+}
+
+///|
+/// Checkout a branch at the given frontier.
+pub fn Document::checkout_branch(
+  self : Document,
+  frontier : @core.Frontier,
+) -> @branch.Branch raise DocumentError {
+  @branch.Branch::checkout(self.oplog, frontier) catch {
+    e => raise DocumentError::Branch(e)
+  }
+}
+
+///|
+/// Get visible items from the tree.
+pub fn Document::get_visible_items(
+  self : Document,
+) -> Array[(Int, @fugue.Item)] {
+  self.tree.get_visible_items()
+}
+
+///|
+/// Map a local version to its visible position in the document.
+pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
+  self.tree.lv_to_position(lv)
 }

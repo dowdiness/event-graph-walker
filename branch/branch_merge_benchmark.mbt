@@ -2,7 +2,7 @@
 // Run with: moon bench --package branch --release
 
 ///|
-fn resolve_origin(oplog : @oplog.OpLog, raw : @causal_graph.RawVersion?) -> Int {
+fn resolve_origin(oplog : @oplog.OpLog, raw : @core.RawVersion?) -> Int {
   match raw {
     None => -1
     Some(rv) =>
@@ -186,7 +186,7 @@ test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
 
     // Agent A: 50 inserts
     let mut prev_a = -1
-    let ops_a : Array[@oplog.Op] = []
+    let ops_a : Array[@core.Op] = []
     for i = 0; i < 50; i = i + 1 {
       let op = try! oplog_a.insert("a", prev_a, -1)
       tree_a.insert(
@@ -207,10 +207,7 @@ test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
     // Agent B: 25 deletes of A's characters
     let ops_from_b = []
     for i = 0; i < 25; i = i + 1 {
-      let raw = @causal_graph.RawVersion::new(
-        ops_a[i * 2].agent,
-        ops_a[i * 2].seq,
-      )
+      let raw = @core.RawVersion::new(ops_a[i * 2].agent, ops_a[i * 2].seq)
       let target_lv = match oplog_b.graph.raw_to_lv(raw) {
         Some(lv) => lv
         None => continue
@@ -270,7 +267,7 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
       match oplog.get_op(i) {
         Some(op) =>
           match op.content {
-            @oplog.Insert(text) =>
+            @core.Insert(text) =>
               tree2.insert(
                 op.lv,
                 text,
@@ -279,9 +276,9 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
                 i,
                 "agent_a",
               )
-            @oplog.Delete =>
+            @core.Delete =>
               try! tree2.delete(resolve_origin(oplog, op.origin_left))
-            @oplog.Undelete =>
+            @core.Undelete =>
               try! tree2.undelete(resolve_origin(oplog, op.origin_left))
           }
         None => ()

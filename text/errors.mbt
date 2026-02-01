@@ -5,6 +5,8 @@
 pub(all) enum SyncFailure {
   MissingDependency(hint~ : String)
   MalformedMessage(detail~ : String)
+  Timeout(detail~ : String)
+  Cancelled(detail~ : String)
 } derive(Show)
 
 ///|
@@ -26,6 +28,8 @@ pub fn TextError::message(self : TextError) -> String {
       "Sync failed: missing dependency - \{hint}"
     SyncFailed(MalformedMessage(detail~)) =>
       "Sync failed: malformed message - \{detail}"
+    SyncFailed(Timeout(detail~)) => "Sync timed out: \{detail}"
+    SyncFailed(Cancelled(detail~)) => "Sync cancelled: \{detail}"
     VersionNotFound => "Version not found in document history"
     Internal(detail~) => "Internal error: \{detail}"
   }
@@ -41,6 +45,9 @@ pub fn TextError::help(self : TextError) -> String {
       "Sync more operations from the peer and retry"
     SyncFailed(MalformedMessage(_)) =>
       "Discard this message and consider isolating the peer"
+    SyncFailed(Timeout(_)) =>
+      "Check network connectivity and retry the sync operation"
+    SyncFailed(Cancelled(_)) => "The operation was cancelled. Retry if needed."
     VersionNotFound => "The version may not be synced yet. Try syncing first."
     Internal(_) => "Please report this bug with the debug output"
   }
@@ -65,6 +72,8 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
     InvalidPosition(_) => false
     SyncFailed(MissingDependency(_)) => true
     SyncFailed(MalformedMessage(_)) => false
+    SyncFailed(Timeout(_)) => true
+    SyncFailed(Cancelled(_)) => false
     VersionNotFound => true
     Internal(_) => false
   }
@@ -108,7 +117,16 @@ pub fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
         SyncFailure::MissingDependency(hint="missing frontier: \{raw}"),
       )
     CausalGraphError(error~) =>
-      TextError::Internal(detail="causal graph error: \{error}")
+      match error {
+        @causal_graph.CausalGraphError::MissingParent(lv~) =>
+          TextError::SyncFailed(
+            SyncFailure::MissingDependency(
+              hint="causal graph: missing parent at lv=\{lv}",
+            ),
+          )
+        @causal_graph.CausalGraphError::MissingEntry(lv~) =>
+          TextError::Internal(detail="causal graph: missing entry at lv=\{lv}")
+      }
   }
 }
 

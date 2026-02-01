@@ -11,8 +11,8 @@
 /// Array of operations in topological (causal) order
 pub fn OpLog::walk_and_collect(
   self : OpLog,
-  frontier : @causal_graph.Frontier,
-) -> Array[Op] {
+  frontier : @core.Frontier,
+) -> Array[@core.Op] {
   // Use the causal graph walker
   self.get_ops(self.graph.walk_from_frontier(frontier))
 }
@@ -22,9 +22,9 @@ pub fn OpLog::walk_and_collect(
 /// Useful for replaying only specific types of operations
 pub fn OpLog::walk_filtered(
   self : OpLog,
-  frontier : @causal_graph.Frontier,
-  predicate : (Op) -> Bool,
-) -> Array[Op] {
+  frontier : @core.Frontier,
+  predicate : (@core.Op) -> Bool,
+) -> Array[@core.Op] {
   self.walk_and_collect(frontier).filter(predicate)
 }
 
@@ -38,9 +38,9 @@ pub fn OpLog::walk_filtered(
 /// advance_ops are in forward order (for redo)
 pub fn OpLog::diff_and_collect(
   self : OpLog,
-  from_frontier : @causal_graph.Frontier,
-  to_frontier : @causal_graph.Frontier,
-) -> (Array[Op], Array[Op]) {
+  from_frontier : @core.Frontier,
+  to_frontier : @core.Frontier,
+) -> (Array[@core.Op], Array[@core.Op]) {
   // Use the causal graph diff
   let (retreat_lvs, advance_lvs) = self.graph.diff_frontiers_lvs(
     from_frontier, to_frontier,

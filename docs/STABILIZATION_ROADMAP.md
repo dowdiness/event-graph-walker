@@ -57,6 +57,6 @@ For a stable v1.0, focus on Phases 1–3. Phases 4–5 are optimizations and int
 
 1. ~~**Seal the public API surface**~~ — Done. Breaking changes get harder after v1.0
 2. ~~**Fill property test gaps for undo-redo**~~ — Done. Core roundtrip and sync convergence properties tested
-3. **Validate network sync in a real browser environment**
+3. **Validate network sync in a real browser environment** — Remaining
 
 The core algorithm implementation and test coverage are already production-quality.

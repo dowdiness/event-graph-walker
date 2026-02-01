@@ -3,7 +3,7 @@
 
 ///|
 pub impl @document.Undoable for TextDoc with lv_to_position(self, lv) {
-  self.inner.tree.lv_to_position(lv)
+  self.inner.lv_to_position(lv)
 }
 
 ///|

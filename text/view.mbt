@@ -30,12 +30,6 @@ pub fn TextView::len(self : TextView) -> Int {
 }
 
 ///|
-/// Access the underlying Branch for advanced operations
-pub fn TextView::inner_branch(self : TextView) -> @branch.Branch {
-  self.branch
-}
-
-///|
 /// Returns an RLE view of the text content.
 /// Useful for efficient text iteration and range operations.
 ///

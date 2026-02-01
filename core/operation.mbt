@@ -12,24 +12,24 @@ pub enum OpContent {
 /// Operation structure with causal and FugueMax metadata
 pub struct Op {
   lv : Int // Local version when this op was created
-  parents : Array[@causal_graph.RawVersion] // Causal dependencies (frontier)
+  parents : Array[RawVersion] // Causal dependencies (frontier)
   agent : String // Agent that created this operation
   seq : Int // Sequence number for this agent
   content : OpContent // Operation content
-  origin_left : @causal_graph.RawVersion? // FugueMax: item to the left
-  origin_right : @causal_graph.RawVersion? // FugueMax: item to the right
+  origin_left : RawVersion? // FugueMax: item to the left
+  origin_right : RawVersion? // FugueMax: item to the right
 } derive(Show, FromJson, ToJson)
 
 ///|
 /// Create a new insert operation
 pub fn Op::new_insert(
   lv : Int,
-  parents : Array[@causal_graph.RawVersion],
+  parents : Array[RawVersion],
   agent : String,
   seq : Int,
   text : String,
-  origin_left : @causal_graph.RawVersion?,
-  origin_right : @causal_graph.RawVersion?,
+  origin_left : RawVersion?,
+  origin_right : RawVersion?,
 ) -> Op {
   { lv, parents, agent, seq, content: Insert(text), origin_left, origin_right }
 }
@@ -38,10 +38,10 @@ pub fn Op::new_insert(
 /// Create a new delete operation
 pub fn Op::new_delete(
   lv : Int,
-  parents : Array[@causal_graph.RawVersion],
+  parents : Array[RawVersion],
   agent : String,
   seq : Int,
-  origin_left : @causal_graph.RawVersion?,
+  origin_left : RawVersion?,
 ) -> Op {
   { lv, parents, agent, seq, content: Delete, origin_left, origin_right: None }
 }
@@ -50,10 +50,10 @@ pub fn Op::new_delete(
 /// Create a new undelete operation
 pub fn Op::new_undelete(
   lv : Int,
-  parents : Array[@causal_graph.RawVersion],
+  parents : Array[RawVersion],
   agent : String,
   seq : Int,
-  origin_left : @causal_graph.RawVersion?,
+  origin_left : RawVersion?,
 ) -> Op {
   {
     lv,
@@ -95,7 +95,7 @@ pub fn Op::is_undelete(self : Op) -> Bool {
 
 ///|
 /// Get the target LV for delete/undelete operations (from origin_left)
-pub fn Op::get_delete_target(self : Op) -> @causal_graph.RawVersion? {
+pub fn Op::get_delete_target(self : Op) -> RawVersion? {
   match self.content {
     Delete | Undelete => self.origin_left
     Insert(_) => None

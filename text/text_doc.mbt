@@ -22,7 +22,7 @@ pub fn TextDoc::text(self : TextDoc) -> String {
 /// Get the current text length (number of visible characters).
 /// This is O(1) as it uses cached count, not string reconstruction.
 pub fn TextDoc::len(self : TextDoc) -> Int {
-  self.inner.tree.visible_count()
+  self.inner.visible_count()
 }
 
 ///|
@@ -86,20 +86,65 @@ pub fn TextDoc::checkout(
   version : Version,
 ) -> TextView raise TextError {
   try {
-    let branch = @branch.Branch::checkout(
-      self.inner.oplog,
-      version.to_frontier(),
-    )
+    let branch = self.inner.checkout_branch(version.to_frontier())
     TextView::from_branch(branch)
   } catch {
-    err => raise TextError::from_branch_error(err)
+    err => raise TextError::from_document_error(err, self.len())
   }
 }
 
 ///|
-/// Access the underlying Document for advanced operations
-pub fn TextDoc::inner_document(self : TextDoc) -> @document.Document {
-  self.inner
+/// Apply a remote operation to this document.
+/// Use this when receiving individual operations from a peer
+/// outside the SyncSession workflow.
+pub fn TextDoc::apply_remote(
+  self : TextDoc,
+  op : @core.Op,
+) -> Unit raise TextError {
+  self.inner.apply_remote(op) catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
+}
+
+///|
+/// Merge remote operations into this document.
+pub fn TextDoc::merge_remote(
+  self : TextDoc,
+  remote_ops : Array[@core.Op],
+  remote_frontier : Array[@core.RawVersion],
+) -> Unit raise TextError {
+  self.inner.merge_remote(remote_ops, remote_frontier) catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
+}
+
+///|
+/// Get frontier as RawVersions for network sync.
+pub fn TextDoc::get_frontier_raw(
+  self : TextDoc,
+) -> Array[@core.RawVersion] raise TextError {
+  self.inner.get_frontier_raw() catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
+}
+
+///|
+/// Get all operations from the oplog.
+pub fn TextDoc::get_all_ops(self : TextDoc) -> Array[@core.Op] {
+  self.inner.get_all_ops()
+}
+
+///|
+/// Get the version vector at the current frontier.
+pub fn TextDoc::get_version_vector(
+  self : TextDoc,
+) -> @causal_graph.VersionVector raise TextError {
+  try {
+    let branch = self.inner.checkout_branch(self.inner.get_frontier())
+    branch.get_version_vector()
+  } catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
 }
 
 ///|

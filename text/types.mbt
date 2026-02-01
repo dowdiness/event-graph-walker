@@ -50,25 +50,25 @@ pub fn Range::from_ints(start : Int, end : Int) -> Range {
 ///|
 /// Used for sync operations and historical checkouts.
 pub(all) struct Version {
-  priv frontier : @causal_graph.Frontier
+  priv frontier : @core.Frontier
 } derive(Show, Eq)
 
 ///|
 /// Create a Version from an internal Frontier (for advanced use).
-pub fn Version::from_frontier(frontier : @causal_graph.Frontier) -> Version {
+pub fn Version::from_frontier(frontier : @core.Frontier) -> Version {
   { frontier, }
 }
 
 ///|
 /// Convert to internal Frontier (for advanced use).
-pub fn Version::to_frontier(self : Version) -> @causal_graph.Frontier {
+pub fn Version::to_frontier(self : Version) -> @core.Frontier {
   self.frontier
 }
 
 ///|
 /// Create an empty version (represents initial state before any edits).
 pub fn Version::empty() -> Version {
-  { frontier: @causal_graph.Frontier::from_array([]) }
+  { frontier: @core.Frontier::from_array([]) }
 }
 
 ///|

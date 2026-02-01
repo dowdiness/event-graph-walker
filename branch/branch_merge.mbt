@@ -39,7 +39,7 @@ pub fn MergeContext::apply_operations(
     match self.oplog.get_op(lv) {
       Some(op) =>
         match op.content {
-          @oplog.Insert(text) => {
+          @core.Insert(text) => {
             let origin_left = match op.origin_left {
               None => -1
               Some(raw) =>
@@ -72,7 +72,7 @@ pub fn MergeContext::apply_operations(
               agent,
             )
           }
-          @oplog.Delete =>
+          @core.Delete =>
             match op.origin_left {
               None => ()
               Some(raw) =>
@@ -84,7 +84,7 @@ pub fn MergeContext::apply_operations(
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
-          @oplog.Undelete =>
+          @core.Undelete =>
             match op.origin_left {
               None => ()
               Some(raw) =>
@@ -136,8 +136,8 @@ pub fn MergeContext::retreat_operations(
 pub fn merge(
   tree : @fugue.FugueTree,
   oplog : @oplog.OpLog,
-  current_frontier : @causal_graph.Frontier,
-  target_frontier : @causal_graph.Frontier,
+  current_frontier : @core.Frontier,
+  target_frontier : @core.Frontier,
 ) -> Unit raise BranchError {
   // Calculate retreat and advance sets
   let (retreat_ops, advance_ops) = oplog.graph.graph_diff(
@@ -166,7 +166,7 @@ pub fn merge(
 pub fn merge_remote_ops(
   tree : @fugue.FugueTree,
   oplog : @oplog.OpLog,
-  remote_ops : Array[@oplog.Op],
+  remote_ops : Array[@core.Op],
 ) -> Unit raise BranchError {
   // Create a Branch representing the current state
   let branch = Branch::from_tree_and_oplog(tree, oplog)

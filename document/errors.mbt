@@ -5,7 +5,7 @@ pub(all) suberror DocumentError {
   /// Invalid cursor position for operation
   InvalidPosition(pos~ : Int)
   /// RawVersion could not be resolved to local version
-  MissingOrigin(raw~ : @causal_graph.RawVersion)
+  MissingOrigin(raw~ : @core.RawVersion)
   /// Wrapped error from oplog operations
   OpLog(@oplog.OpLogError)
   /// Wrapped error from fugue tree operations

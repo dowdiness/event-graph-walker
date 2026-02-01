@@ -10,9 +10,9 @@ pub(all) suberror OpLogError {
   /// which carry the RawVersion and indicate missing graph entries.
   MissingOrigin
   /// Remote op refers to a parent not present locally or in the batch.
-  MissingRemoteParent(raw~ : @causal_graph.RawVersion)
+  MissingRemoteParent(raw~ : @core.RawVersion)
   /// Remote frontier references an op not present locally or in the batch.
-  MissingRemoteFrontier(raw~ : @causal_graph.RawVersion)
+  MissingRemoteFrontier(raw~ : @core.RawVersion)
   /// A causal graph error occurred during operation creation or application
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
 }
