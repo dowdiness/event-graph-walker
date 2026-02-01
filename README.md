@@ -297,8 +297,8 @@ let text = doc.to_text()  // "ello"
 ### Network Collaboration (Low-Level)
 
 ```moonbit
-// Get version vector for sending to peer
-let vv = doc.oplog.graph.get_version_vector()
+// Get frontier for sending to peer
+let frontier = doc.get_frontier_raw()
 
 // Apply remote operation
 let remote_op = ...  // From peer
@@ -308,22 +308,25 @@ doc.apply_remote(remote_op)
 let remote_ops = [...]  // From peer
 let remote_frontier = [...]  // RawVersions from peer
 doc.merge_remote(remote_ops, remote_frontier)
+
+// Get all operations for export
+let all_ops = doc.get_all_ops()
+
+// Diff between frontiers
+let (retreat, advance) = doc.diff_and_collect(old_frontier, new_frontier)
 ```
 
 ### Snapshotting/Branching (Low-Level)
 
 ```moonbit
 // Get current frontier
-let frontier = doc.oplog.get_frontier()
-
-// Create snapshot at current state
-let branch = @branch.Branch::from_tree_and_oplog(doc.tree, doc.oplog)
+let frontier = doc.get_frontier()
 
 // Checkout state at previous frontier
-let old_branch = @branch.Branch::checkout(doc.oplog, previous_frontier)
+let old_branch = doc.checkout_branch(previous_frontier)
 
 // Advance to new frontier
-let new_branch = branch.advance(target_frontier)
+let new_branch = old_branch.advance(target_frontier)
 ```
 
 ---
@@ -352,9 +355,6 @@ let new_doc = @text.TextDoc::from_document(old_doc)
 
 // Use new API
 new_doc.insert(@text.Pos::at(0), "Hello")
-
-// Access old API when needed
-let inner = new_doc.inner_document()
 ```
 
 **Key Benefits of TextDoc:**
