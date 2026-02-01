@@ -64,7 +64,7 @@ pub fn SyncSession::export_all(
   self : SyncSession,
 ) -> SyncMessage raise TextError {
   let inner = self.doc.inner
-  let ops = inner.oplog.get_all_ops()
+  let ops = inner.get_all_ops()
   try {
     let heads = inner.get_frontier_raw()
     SyncMessage::{ ops, heads }
@@ -82,7 +82,7 @@ pub fn SyncSession::export_since(
   let inner = self.doc.inner
   let peer_frontier = peer_version.to_frontier()
   let current_frontier = inner.get_frontier()
-  let (_, advance_ops) = inner.oplog.diff_and_collect(
+  let (_, advance_ops) = inner.diff_and_collect(
     peer_frontier, current_frontier,
   )
   try {

@@ -181,7 +181,7 @@ in `text/` because it accesses TextDoc private fields.
 ///  Lives in text/ package where TextDoc's private fields are accessible.
 ///|
 pub impl @document.Undoable for TextDoc with lv_to_position(self, lv) {
-  self.inner.tree.lv_to_position(lv)
+  self.inner.lv_to_position(lv)
 }
 
 ///|
@@ -285,7 +285,7 @@ pub fn TextDoc::insert_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
-  let doc = self.inner_document()
+  let doc = self.inner
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_string() catch { _ => continue }
     let change = self.insert(Pos::at(pos.value() + i), ch)!
@@ -305,9 +305,9 @@ pub fn TextDoc::delete_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
-  let doc = self.inner_document()
+  let doc = self.inner
   // Look up content before deleting (pos is already 0-based visible position)
-  let items = self.inner.tree.get_visible_items()
+  let items = self.inner.get_visible_items()
   let content = if pos.value() < items.length() {
     Some(items[pos.value()].1.content)
   } else {

@@ -65,9 +65,8 @@ pub impl @qc.Shrink for RealOps with shrink(self) {
 ///|
 /// Apply a real operation to a document, returning success.
 fn apply_op(doc : @text.TextDoc, op : @oplog.Op) -> Bool {
-  let inner = doc.inner_document()
   try {
-    inner.apply_remote(op)
+    doc.apply_remote(op)
     true
   } catch {
     _ => false
@@ -357,4 +356,158 @@ fn prop_export_since_current_is_empty(ops : RealOps) -> Bool {
 ///|
 test "property: export_since current version is empty" {
   @qc.quick_check_fn(prop_export_since_current_is_empty)
+}
+
+///|
+/// Property: Undo-redo roundtrip preserves text.
+/// For any sequence of inserts, undo then redo should restore the original text.
+fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
+  let clamped = if size < 0 { 0 } else if size > 20 { 20 } else { size }
+  let doc = @text.TextDoc::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  // Insert characters one by one
+  for i = 0; i < clamped; i = i + 1 {
+    let ch = Char::from_int('a'.to_int() + (i % 26)).to_string()
+    try {
+      doc.insert_and_record(
+        @text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000,
+      )
+    } catch {
+      _ => return true
+    }
+  }
+  let text_before = doc.text()
+  // Undo all groups
+  let mut undo_count = 0
+  while mgr.can_undo() {
+    try {
+      let _ = mgr.undo(doc)
+    } catch {
+      _ => return true
+    }
+    undo_count = undo_count + 1
+  }
+  // After full undo, document should be empty
+  if doc.text() != "" {
+    return false
+  }
+  // Redo all groups
+  let mut redo_count = 0
+  while mgr.can_redo() {
+    try {
+      let _ = mgr.redo(doc)
+    } catch {
+      _ => return true
+    }
+    redo_count = redo_count + 1
+  }
+  // After full redo, text should match original
+  doc.text() == text_before && undo_count == redo_count
+}
+
+///|
+test "property: undo-redo roundtrip preserves text (insert)" {
+  @qc.quick_check_fn(prop_undo_redo_roundtrip_insert)
+}
+
+///|
+/// Property: Undo-redo roundtrip for mixed insert/delete operations.
+/// After undo followed by redo, the document state should be restored.
+fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
+  let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
+  let doc = @text.TextDoc::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  // Insert some text first
+  try {
+    doc.insert_and_record(
+      @text.Pos::at(0), "hello", mgr, timestamp_ms=0,
+    )
+  } catch {
+    _ => return true
+  }
+  // Delete some characters (each in its own time group)
+  for i = 0; i < clamped && doc.len() > 0; i = i + 1 {
+    let pos = i % doc.len()
+    try {
+      doc.delete_and_record(
+        @text.Pos::at(pos), mgr, timestamp_ms=(i + 1) * 1000,
+      )
+    } catch {
+      _ => return true
+    }
+  }
+  let text_after_edits = doc.text()
+  // Undo the deletes
+  let mut undo_count = 0
+  while mgr.can_undo() && undo_count < clamped {
+    try {
+      let _ = mgr.undo(doc)
+    } catch {
+      _ => return true
+    }
+    undo_count = undo_count + 1
+  }
+  // Redo to restore
+  let mut redo_count = 0
+  while mgr.can_redo() && redo_count < undo_count {
+    try {
+      let _ = mgr.redo(doc)
+    } catch {
+      _ => return true
+    }
+    redo_count = redo_count + 1
+  }
+  // Text should match what we had after the edits
+  doc.text() == text_after_edits
+}
+
+///|
+test "property: undo-redo roundtrip preserves text (mixed)" {
+  @qc.quick_check_fn(prop_undo_redo_roundtrip_mixed)
+}
+
+///|
+/// Property: Undo operations can be synced to a peer and produce convergent state.
+/// This verifies that undo-generated ops (Delete/Undelete) are valid sync ops.
+fn prop_undo_ops_sync_to_peer(size : Int) -> Bool {
+  let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
+  let doc_a = @text.TextDoc::new("alice")
+  let doc_b = @text.TextDoc::new("bob")
+  let mgr = @undo.UndoManager::new("alice")
+  // Alice inserts text with recording
+  for i = 0; i < clamped; i = i + 1 {
+    let ch = Char::from_int('a'.to_int() + (i % 26)).to_string()
+    try {
+      doc_a.insert_and_record(
+        @text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000,
+      )
+    } catch {
+      _ => return true
+    }
+  }
+  // Sync initial state to Bob
+  let msg1 = doc_a.sync().export_all() catch { _ => return true }
+  doc_b.sync().apply(msg1) catch { _ => return true }
+  if doc_a.text() != doc_b.text() {
+    return false
+  }
+  // Alice undoes
+  if mgr.can_undo() {
+    let _ = try {
+      mgr.undo(doc_a)
+    } catch {
+      _ => return true
+    }
+    // Sync undo to Bob
+    let msg2 = doc_a.sync().export_all() catch { _ => return true }
+    doc_b.sync().apply(msg2) catch { _ => return true }
+    // Both should converge
+    return doc_a.text() == doc_b.text()
+  }
+  true
+}
+
+///|
+test "property: undo ops sync to peer and converge" {
+  @qc.quick_check_fn(prop_undo_ops_sync_to_peer)
 }

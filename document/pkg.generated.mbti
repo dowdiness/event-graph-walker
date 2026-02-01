@@ -22,21 +22,26 @@ pub(all) suberror DocumentError {
 
 // Types and methods
 pub struct Document {
-  tree : @fugue.FugueTree
-  oplog : @oplog.OpLog
+  // private fields
   agent_id : String
 }
 pub fn Document::apply_remote(Self, @oplog.Op) -> Unit raise DocumentError
+pub fn Document::checkout_branch(Self, @causal_graph.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::delete(Self, Int) -> @oplog.Op raise DocumentError
 pub fn Document::delete_by_lv(Self, Int) -> @oplog.Op raise DocumentError
+pub fn Document::diff_and_collect(Self, @causal_graph.Frontier, @causal_graph.Frontier) -> (Array[@oplog.Op], Array[@oplog.Op])
+pub fn Document::get_all_ops(Self) -> Array[@oplog.Op]
 pub fn Document::get_frontier(Self) -> @causal_graph.Frontier
 pub fn Document::get_frontier_array(Self) -> Array[Int]
 pub fn Document::get_frontier_raw(Self) -> Array[@causal_graph.RawVersion] raise DocumentError
+pub fn Document::get_visible_items(Self) -> Array[(Int, @fugue.Item)]
 pub fn Document::insert(Self, Int, String) -> @oplog.Op raise DocumentError
+pub fn Document::lv_to_position(Self, Int) -> Int?
 pub fn Document::merge_remote(Self, Array[@oplog.Op], Array[@causal_graph.RawVersion]) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self
 pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @oplog.Op raise DocumentError
+pub fn Document::visible_count(Self) -> Int
 pub impl @core.RawToLv for Document
 pub impl Show for Document
 
