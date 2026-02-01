@@ -303,6 +303,9 @@ let text = doc.to_text()  // "ello"
 ### Network Collaboration (Low-Level)
 
 ```moonbit
+// Get frontier for sending to peer
+let frontier = doc.get_frontier_raw()
+
 // Apply remote operation
 let remote_op = ...  // From peer
 doc.apply_remote(remote_op)
@@ -329,7 +332,7 @@ let frontier = doc.get_frontier()
 let old_branch = doc.checkout_branch(previous_frontier)
 
 // Advance to new frontier
-let new_branch = branch.advance(target_frontier)
+let new_branch = old_branch.advance(target_frontier)
 ```
 
 ---

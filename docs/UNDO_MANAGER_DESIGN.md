@@ -305,7 +305,6 @@ pub fn TextDoc::delete_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
-  let doc = self.inner
   // Look up content before deleting (pos is already 0-based visible position)
   let items = self.inner.get_visible_items()
   let content = if pos.value() < items.length() {
@@ -314,7 +313,7 @@ pub fn TextDoc::delete_and_record(
     None
   }
   let change = self.delete(pos)!
-  match change.target_lv(doc) {
+  match change.target_lv(self.inner) {
     Some(lv) => mgr.record_delete(lv, change.agent(), timestamp_ms, content~)
     None => ()
   }
