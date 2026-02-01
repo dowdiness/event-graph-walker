@@ -7,7 +7,7 @@
 /// Generated operations for property testing (real TextDoc edits).
 pub(all) struct RealOps {
   agent : String
-  ops : Array[@oplog.Op]
+  ops : Array[@core.Op]
 } derive(Show)
 
 ///|
@@ -20,7 +20,7 @@ pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
   let agent_id = random_state.split().next_uint64().to_int().abs()
   let agent = "gen-\{agent_id}"
   let doc = @text.TextDoc::new(agent)
-  let ops : Array[@oplog.Op] = []
+  let ops : Array[@core.Op] = []
   for i = 0; i < size; i = i + 1 {
     let len = doc.len()
     let is_insert = if len == 0 {
@@ -64,7 +64,7 @@ pub impl @qc.Shrink for RealOps with shrink(self) {
 
 ///|
 /// Apply a real operation to a document, returning success.
-fn apply_op(doc : @text.TextDoc, op : @oplog.Op) -> Bool {
+fn apply_op(doc : @text.TextDoc, op : @core.Op) -> Bool {
   try {
     doc.apply_remote(op)
     true
@@ -75,7 +75,7 @@ fn apply_op(doc : @text.TextDoc, op : @oplog.Op) -> Bool {
 
 ///|
 /// Apply a sequence of operations to a document
-fn apply_ops(doc : @text.TextDoc, ops : Array[@oplog.Op]) -> Unit {
+fn apply_ops(doc : @text.TextDoc, ops : Array[@core.Op]) -> Unit {
   for op in ops {
     let _ = apply_op(doc, op)
 
@@ -367,12 +367,8 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   let mgr = @undo.UndoManager::new("alice")
   // Insert characters one by one
   for i = 0; i < clamped; i = i + 1 {
-    let ch = Char::from_int('a'.to_int() + (i % 26)).to_string()
-    try {
-      doc.insert_and_record(
-        @text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000,
-      )
-    } catch {
+    let ch = Int::unsafe_to_char('a'.to_int() + i % 26).to_string()
+    doc.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000) catch {
       _ => return true
     }
   }
@@ -382,6 +378,7 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   while mgr.can_undo() {
     try {
       let _ = mgr.undo(doc)
+
     } catch {
       _ => return true
     }
@@ -396,6 +393,7 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   while mgr.can_redo() {
     try {
       let _ = mgr.redo(doc)
+
     } catch {
       _ => return true
     }
@@ -418,21 +416,13 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   // Insert some text first
-  try {
-    doc.insert_and_record(
-      @text.Pos::at(0), "hello", mgr, timestamp_ms=0,
-    )
-  } catch {
+  doc.insert_and_record(@text.Pos::at(0), "hello", mgr, timestamp_ms=0) catch {
     _ => return true
   }
   // Delete some characters (each in its own time group)
   for i = 0; i < clamped && doc.len() > 0; i = i + 1 {
     let pos = i % doc.len()
-    try {
-      doc.delete_and_record(
-        @text.Pos::at(pos), mgr, timestamp_ms=(i + 1) * 1000,
-      )
-    } catch {
+    doc.delete_and_record(@text.Pos::at(pos), mgr, timestamp_ms=(i + 1) * 1000) catch {
       _ => return true
     }
   }
@@ -442,6 +432,7 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   while mgr.can_undo() && undo_count < clamped {
     try {
       let _ = mgr.undo(doc)
+
     } catch {
       _ => return true
     }
@@ -452,6 +443,7 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   while mgr.can_redo() && redo_count < undo_count {
     try {
       let _ = mgr.redo(doc)
+
     } catch {
       _ => return true
     }
@@ -476,31 +468,27 @@ fn prop_undo_ops_sync_to_peer(size : Int) -> Bool {
   let mgr = @undo.UndoManager::new("alice")
   // Alice inserts text with recording
   for i = 0; i < clamped; i = i + 1 {
-    let ch = Char::from_int('a'.to_int() + (i % 26)).to_string()
-    try {
-      doc_a.insert_and_record(
-        @text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000,
-      )
-    } catch {
+    let ch = Int::unsafe_to_char('a'.to_int() + i % 26).to_string()
+    doc_a.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000) catch {
       _ => return true
     }
   }
   // Sync initial state to Bob
   let msg1 = doc_a.sync().export_all() catch { _ => return true }
-  doc_b.sync().apply(msg1) catch { _ => return true }
+  doc_b.sync().apply(msg1) catch {
+    _ => return true
+  }
   if doc_a.text() != doc_b.text() {
     return false
   }
   // Alice undoes
   if mgr.can_undo() {
-    let _ = try {
-      mgr.undo(doc_a)
-    } catch {
-      _ => return true
-    }
+    let _ = mgr.undo(doc_a) catch { _ => return true }
     // Sync undo to Bob
     let msg2 = doc_a.sync().export_all() catch { _ => return true }
-    doc_b.sync().apply(msg2) catch { _ => return true }
+    doc_b.sync().apply(msg2) catch {
+      _ => return true
+    }
     // Both should converge
     return doc_a.text() == doc_b.text()
   }

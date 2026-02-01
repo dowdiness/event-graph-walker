@@ -47,8 +47,7 @@ pub fn TextError::help(self : TextError) -> String {
       "Discard this message and consider isolating the peer"
     SyncFailed(Timeout(_)) =>
       "Check network connectivity and retry the sync operation"
-    SyncFailed(Cancelled(_)) =>
-      "The operation was cancelled. Retry if needed."
+    SyncFailed(Cancelled(_)) => "The operation was cancelled. Retry if needed."
     VersionNotFound => "The version may not be synced yet. Try syncing first."
     Internal(_) => "Please report this bug with the debug output"
   }
@@ -126,9 +125,7 @@ pub fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
             ),
           )
         @causal_graph.CausalGraphError::MissingEntry(lv~) =>
-          TextError::Internal(
-            detail="causal graph: missing entry at lv=\{lv}",
-          )
+          TextError::Internal(detail="causal graph: missing entry at lv=\{lv}")
       }
   }
 }

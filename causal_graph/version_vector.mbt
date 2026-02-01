@@ -389,7 +389,7 @@ pub fn VersionVector::concurrent(
 ///
 pub fn VersionVector::from_frontier(
   graph : CausalGraph,
-  frontier : Frontier,
+  frontier : @core.Frontier,
 ) -> VersionVector {
   // For each agent, find the maximum sequence number in the frontier
   let agent_max_seq = {}
@@ -416,17 +416,17 @@ pub fn VersionVector::from_frontier(
 pub fn VersionVector::to_frontier(
   self : VersionVector,
   graph : CausalGraph,
-) -> Frontier {
+) -> @core.Frontier {
   let result = []
 
   // For each agent in version vector, find the LV for that (agent, seq)
   self.0.each((agent, seq) => {
-    let raw_version = RawVersion::new(agent, seq)
+    let raw_version = @core.RawVersion::new(agent, seq)
     if graph.raw_to_lv(raw_version) is Some(lv) {
       result.push(lv)
     }
   })
-  Frontier::from_array(result)
+  @core.Frontier::from_array(result)
 }
 
 ///|

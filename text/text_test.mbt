@@ -170,7 +170,10 @@ test "SyncFailure::Timeout is retryable" {
     SyncFailure::Timeout(detail="operation timed out after 30s"),
   )
   inspect(err.is_retryable(), content="true")
-  inspect(err.message(), content="Sync timed out: operation timed out after 30s")
+  inspect(
+    err.message(),
+    content="Sync timed out: operation timed out after 30s",
+  )
 }
 
 ///|

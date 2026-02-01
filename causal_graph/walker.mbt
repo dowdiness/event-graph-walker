@@ -15,7 +15,7 @@
 /// Array of LVs (local versions) in topological order, from oldest to newest
 pub fn CausalGraph::walk_from_frontier(
   self : CausalGraph,
-  frontier : Frontier,
+  frontier : @core.Frontier,
 ) -> Array[Int] {
   // Get all versions reachable from frontier
   let reachable = collect_reachable_versions(self, frontier.0)
@@ -180,8 +180,8 @@ fn topological_sort(
 ///       advance_lvs are in topological order (for redo)
 pub fn CausalGraph::diff_frontiers_lvs(
   self : CausalGraph,
-  from_frontier : Frontier,
-  to_frontier : Frontier,
+  from_frontier : @core.Frontier,
+  to_frontier : @core.Frontier,
 ) -> (Array[Int], Array[Int]) {
   // Use existing graph_diff to get the sets
   let (retreat_set, advance_set) = self.graph_diff(from_frontier, to_frontier)

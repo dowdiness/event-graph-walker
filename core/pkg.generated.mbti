@@ -2,8 +2,7 @@
 package "dowdiness/event-graph-walker/core"
 
 import {
-  "dowdiness/event-graph-walker/causal_graph",
-  "dowdiness/event-graph-walker/oplog",
+  "moonbitlang/core/json",
 }
 
 // Values
@@ -15,19 +14,83 @@ pub(all) struct Change {
   // private fields
 }
 pub fn Change::agent(Self) -> String
-pub fn Change::from_op(@oplog.Op) -> Self
+pub fn Change::from_op(Op) -> Self
 pub fn Change::get_text(Self) -> String?
 pub fn Change::is_delete(Self) -> Bool
 pub fn Change::is_insert(Self) -> Bool
 pub fn Change::is_undelete(Self) -> Bool
 pub fn[R : RawToLv] Change::target_lv(Self, R) -> Int?
-pub fn Change::to_op(Self) -> @oplog.Op
+pub fn Change::to_op(Self) -> Op
 pub impl Show for Change
 
+pub(all) struct Frontier(Array[Int])
+pub fn Frontier::from_array(Array[Int]) -> Self
+#deprecated
+pub fn Frontier::inner(Self) -> Array[Int]
+pub impl Eq for Frontier
+pub impl Show for Frontier
+pub impl ToJson for Frontier
+pub impl @json.FromJson for Frontier
+
+pub(all) struct GraphEntry {
+  parents : Array[Int]
+  agent : String
+  seq : Int
+  timestamp : Int
+}
+pub impl Show for GraphEntry
+
+pub struct Op {
+  lv : Int
+  parents : Array[RawVersion]
+  agent : String
+  seq : Int
+  content : OpContent
+  origin_left : RawVersion?
+  origin_right : RawVersion?
+}
+pub fn Op::get_delete_target(Self) -> RawVersion?
+pub fn Op::get_insert_text(Self) -> String?
+pub fn Op::is_delete(Self) -> Bool
+pub fn Op::is_insert(Self) -> Bool
+pub fn Op::is_undelete(Self) -> Bool
+pub fn Op::new_delete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
+pub fn Op::new_insert(Int, Array[RawVersion], String, Int, String, RawVersion?, RawVersion?) -> Self
+pub fn Op::new_undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
+pub impl Show for Op
+pub impl ToJson for Op
+pub impl @json.FromJson for Op
+
+pub enum OpContent {
+  Insert(String)
+  Delete
+  Undelete
+}
+pub impl Eq for OpContent
+pub impl Show for OpContent
+pub impl ToJson for OpContent
+pub impl @json.FromJson for OpContent
+
+pub struct RawVersion {
+  agent : String
+  seq : Int
+}
+pub fn RawVersion::new(String, Int) -> Self
+pub fn RawVersion::to_string(Self) -> String
+pub impl Compare for RawVersion
+pub impl Eq for RawVersion
+pub impl Hash for RawVersion
+pub impl Show for RawVersion
+pub impl ToJson for RawVersion
+pub impl @json.FromJson for RawVersion
+
 // Type aliases
+pub type AgentId = String
+
+pub type LV = Int
 
 // Traits
 pub(open) trait RawToLv {
-  raw_to_lv(Self, @causal_graph.RawVersion) -> Int?
+  raw_to_lv(Self, RawVersion) -> Int?
 }
 

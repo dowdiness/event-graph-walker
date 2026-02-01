@@ -1,6 +1,6 @@
 ///|
 /// Tests for merge module
-fn resolve_origin(oplog : @oplog.OpLog, raw : @causal_graph.RawVersion?) -> Int {
+fn resolve_origin(oplog : @oplog.OpLog, raw : @core.RawVersion?) -> Int {
   match raw {
     None => -1
     Some(rv) =>
@@ -12,8 +12,8 @@ fn resolve_origin(oplog : @oplog.OpLog, raw : @causal_graph.RawVersion?) -> Int 
 }
 
 ///|
-fn resolve_op_lv(oplog : @oplog.OpLog, op : @oplog.Op) -> Int? {
-  let raw = @causal_graph.RawVersion::new(op.agent, op.seq)
+fn resolve_op_lv(oplog : @oplog.OpLog, op : @core.Op) -> Int? {
+  let raw = @core.RawVersion::new(op.agent, op.seq)
   oplog.graph.raw_to_lv(raw)
 }
 

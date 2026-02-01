@@ -1,29 +1,10 @@
 ///|
-/// CausalGraph implementation
-pub(all) struct Frontier(Array[Int]) derive(Eq, Show, ToJson, FromJson)
-
-///|
-/// Create a frontier from an array of LVs
-pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
-  Frontier(values)
-}
-
-///|
-/// Graph entry storing causal information for an operation
-pub struct GraphEntry {
-  parents : Array[Int] // Causal dependencies (LVs)
-  agent : String // Agent that created this operation
-  seq : Int // Sequence number for this agent
-  timestamp : Int // Lamport timestamp for total ordering
-} derive(Show)
-
-///|
 /// CausalGraph - tracks operation dependencies and causal ordering
 pub struct CausalGraph {
-  mut entries : @immut/hashmap.HashMap[Int, GraphEntry]
-  mut version_map : @immut/hashmap.HashMap[RawVersion, Int]
+  mut entries : @immut/hashmap.HashMap[Int, @core.GraphEntry]
+  mut version_map : @immut/hashmap.HashMap[@core.RawVersion, Int]
   mut next_lv : Int
-  mut frontier : Frontier
+  mut frontier : @core.Frontier
   mut agent_seqs : @immut/hashmap.HashMap[String, Int]
 } derive(Show)
 
@@ -34,30 +15,39 @@ pub fn CausalGraph::new() -> CausalGraph {
     entries: @immut/hashmap.new(),
     version_map: @immut/hashmap.new(),
     next_lv: 0,
-    frontier: Frontier::from_array([]),
+    frontier: @core.Frontier::from_array([]),
     agent_seqs: @immut/hashmap.new(),
   }
 }
 
 ///|
 /// Convert LV to RawVersion
-pub fn CausalGraph::lv_to_raw(self : CausalGraph, lv : Int) -> RawVersion? {
+pub fn CausalGraph::lv_to_raw(
+  self : CausalGraph,
+  lv : Int,
+) -> @core.RawVersion? {
   match self.entries.get(lv) {
-    Some(entry) => Some(RawVersion::new(entry.agent, entry.seq))
+    Some(entry) => Some(@core.RawVersion::new(entry.agent, entry.seq))
     None => None
   }
 }
 
 ///|
 /// Convert RawVersion to LV
-pub fn CausalGraph::raw_to_lv(self : CausalGraph, raw : RawVersion) -> Int? {
+pub fn CausalGraph::raw_to_lv(
+  self : CausalGraph,
+  raw : @core.RawVersion,
+) -> Int? {
   self.version_map.get(raw)
 }
 
 ///|
 /// Get graph entry by LV
 #alias("_[_]")
-pub fn CausalGraph::get_entry(self : CausalGraph, lv : Int) -> GraphEntry? {
+pub fn CausalGraph::get_entry(
+  self : CausalGraph,
+  lv : Int,
+) -> @core.GraphEntry? {
   self.entries.get(lv)
 }
 
@@ -92,11 +82,11 @@ pub fn CausalGraph::add_version(
 
   // Create entry
   let lv = self.next_lv
-  let entry = { parents, agent, seq, timestamp }
+  let entry = @core.GraphEntry::{ parents, agent, seq, timestamp }
 
   // Update graph
   self.entries = self.entries.add(lv, entry)
-  self.version_map = self.version_map.add(RawVersion::new(agent, seq), lv)
+  self.version_map = self.version_map.add(@core.RawVersion::new(agent, seq), lv)
   self.next_lv = lv + 1
   self.agent_seqs = self.agent_seqs.add(agent, seq)
 
@@ -131,11 +121,11 @@ pub fn CausalGraph::add_version_with_seq(
 
   // Create entry
   let lv = self.next_lv
-  let entry = { parents, agent, seq, timestamp }
+  let entry = @core.GraphEntry::{ parents, agent, seq, timestamp }
 
   // Update graph
   self.entries = self.entries.add(lv, entry)
-  self.version_map = self.version_map.add(RawVersion::new(agent, seq), lv)
+  self.version_map = self.version_map.add(@core.RawVersion::new(agent, seq), lv)
   self.next_lv = lv + 1
   let current_seq = self.agent_seqs.get(agent).unwrap_or(-1)
   let next_seq = if seq > current_seq { seq } else { current_seq }
@@ -159,13 +149,13 @@ fn CausalGraph::update_frontier(
 
   // Add new version
   frontier.push(new_lv)
-  self.frontier = Frontier::from_array(frontier)
+  self.frontier = @core.Frontier::from_array(frontier)
 }
 
 ///|
 /// Get current frontier
-pub fn CausalGraph::get_frontier(self : CausalGraph) -> Frontier {
-  Frontier::from_array(self.frontier.0.copy())
+pub fn CausalGraph::get_frontier(self : CausalGraph) -> @core.Frontier {
+  @core.Frontier::from_array(self.frontier.0.copy())
 }
 
 ///|
@@ -217,7 +207,7 @@ pub fn CausalGraph::is_ancestor(
 /// Get all versions reachable from given frontiers (transitive closure)
 fn CausalGraph::transitive_closure(
   self : CausalGraph,
-  frontiers : Frontier,
+  frontiers : @core.Frontier,
 ) -> @immut/hashset.HashSet[Int] {
   let mut result : @immut/hashset.HashSet[Int] = @immut/hashset.new()
   let queue = @queue.from_array(frontiers.0)
@@ -246,8 +236,8 @@ fn CausalGraph::transitive_closure(
 /// Calculate diff between two frontiers for retreat/advance
 pub fn CausalGraph::graph_diff(
   self : CausalGraph,
-  from : Frontier,
-  to : Frontier,
+  from : @core.Frontier,
+  to : @core.Frontier,
 ) -> (Array[Int], Array[Int]) {
   let from_set = self.transitive_closure(from)
   let to_set = self.transitive_closure(to)

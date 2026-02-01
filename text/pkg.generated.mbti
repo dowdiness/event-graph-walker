@@ -57,10 +57,10 @@ pub impl Show for SyncFailure
 pub(all) struct SyncMessage {
   // private fields
 }
-pub fn SyncMessage::get_heads(Self) -> Array[@causal_graph.RawVersion]
-pub fn SyncMessage::get_ops(Self) -> Array[@oplog.Op]
+pub fn SyncMessage::get_heads(Self) -> Array[@core.RawVersion]
+pub fn SyncMessage::get_ops(Self) -> Array[@core.Op]
 pub fn SyncMessage::is_empty(Self) -> Bool
-pub fn SyncMessage::new(Array[@oplog.Op], Array[@causal_graph.RawVersion]) -> Self
+pub fn SyncMessage::new(Array[@core.Op], Array[@core.RawVersion]) -> Self
 pub fn SyncMessage::op_count(Self) -> Int
 pub impl Show for SyncMessage
 
@@ -76,15 +76,19 @@ pub fn SyncSession::new(TextDoc) -> Self
 pub(all) struct TextDoc {
   // private fields
 }
-pub fn TextDoc::apply_remote(Self, @oplog.Op) -> Unit raise TextError
+pub fn TextDoc::apply_remote(Self, @core.Op) -> Unit raise TextError
 pub fn TextDoc::checkout(Self, Version) -> TextView raise TextError
 pub fn TextDoc::delete(Self, Pos) -> @core.Change raise TextError
 pub fn TextDoc::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextDoc::from_document(@document.Document) -> Self
+pub fn TextDoc::get_all_ops(Self) -> Array[@core.Op]
+pub fn TextDoc::get_frontier_raw(Self) -> Array[@core.RawVersion] raise TextError
+pub fn TextDoc::get_version_vector(Self) -> @causal_graph.VersionVector raise TextError
 pub fn TextDoc::insert(Self, Pos, String) -> @core.Change raise TextError
 pub fn TextDoc::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextDoc::is_empty(Self) -> Bool
 pub fn TextDoc::len(Self) -> Int
+pub fn TextDoc::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise TextError
 pub fn TextDoc::new(String) -> Self
 pub fn TextDoc::sync(Self) -> SyncSession
 pub fn TextDoc::text(Self) -> String
@@ -124,8 +128,8 @@ pub(all) struct Version {
   // private fields
 }
 pub fn Version::empty() -> Self
-pub fn Version::from_frontier(@causal_graph.Frontier) -> Self
-pub fn Version::to_frontier(Self) -> @causal_graph.Frontier
+pub fn Version::from_frontier(@core.Frontier) -> Self
+pub fn Version::to_frontier(Self) -> @core.Frontier
 pub impl Eq for Version
 pub impl Show for Version
 

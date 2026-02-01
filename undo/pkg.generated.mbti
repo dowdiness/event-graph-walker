@@ -2,8 +2,8 @@
 package "dowdiness/event-graph-walker/undo"
 
 import {
+  "dowdiness/event-graph-walker/core",
   "dowdiness/event-graph-walker/document",
-  "dowdiness/event-graph-walker/oplog",
 }
 
 // Values
@@ -39,9 +39,9 @@ pub fn UndoManager::is_tracking(Self) -> Bool
 pub fn UndoManager::new(String, capture_timeout_ms? : Int) -> Self
 pub fn UndoManager::record_delete(Self, Int, String, Int, content? : String?) -> Unit
 pub fn UndoManager::record_insert(Self, Int, String, Int, content? : String?) -> Unit
-pub fn[D : @document.Undoable] UndoManager::redo(Self, D) -> Array[@oplog.Op] raise @document.DocumentError
+pub fn[D : @document.Undoable] UndoManager::redo(Self, D) -> Array[@core.Op] raise @document.DocumentError
 pub fn UndoManager::set_tracking(Self, Bool) -> Unit
-pub fn[D : @document.Undoable] UndoManager::undo(Self, D) -> Array[@oplog.Op] raise @document.DocumentError
+pub fn[D : @document.Undoable] UndoManager::undo(Self, D) -> Array[@core.Op] raise @document.DocumentError
 pub impl Show for UndoManager
 
 pub enum UndoOpType {

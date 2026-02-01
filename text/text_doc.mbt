@@ -99,9 +99,50 @@ pub fn TextDoc::checkout(
 /// outside the SyncSession workflow.
 pub fn TextDoc::apply_remote(
   self : TextDoc,
-  op : @oplog.Op,
+  op : @core.Op,
 ) -> Unit raise TextError {
   self.inner.apply_remote(op) catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
+}
+
+///|
+/// Merge remote operations into this document.
+pub fn TextDoc::merge_remote(
+  self : TextDoc,
+  remote_ops : Array[@core.Op],
+  remote_frontier : Array[@core.RawVersion],
+) -> Unit raise TextError {
+  self.inner.merge_remote(remote_ops, remote_frontier) catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
+}
+
+///|
+/// Get frontier as RawVersions for network sync.
+pub fn TextDoc::get_frontier_raw(
+  self : TextDoc,
+) -> Array[@core.RawVersion] raise TextError {
+  self.inner.get_frontier_raw() catch {
+    err => raise TextError::from_document_error(err, self.len())
+  }
+}
+
+///|
+/// Get all operations from the oplog.
+pub fn TextDoc::get_all_ops(self : TextDoc) -> Array[@core.Op] {
+  self.inner.get_all_ops()
+}
+
+///|
+/// Get the version vector at the current frontier.
+pub fn TextDoc::get_version_vector(
+  self : TextDoc,
+) -> @causal_graph.VersionVector raise TextError {
+  try {
+    let branch = self.inner.checkout_branch(self.inner.get_frontier())
+    branch.get_version_vector()
+  } catch {
     err => raise TextError::from_document_error(err, self.len())
   }
 }

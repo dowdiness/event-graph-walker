@@ -4,18 +4,18 @@
 /// Represents a local edit operation (insert or delete).
 /// Returned from TextDoc::insert() and TextDoc::delete().
 pub(all) struct Change {
-  priv op : @oplog.Op
+  priv op : Op
 } derive(Show)
 
 ///|
 /// Create a Change from an internal Op (for advanced use).
-pub fn Change::from_op(op : @oplog.Op) -> Change {
+pub fn Change::from_op(op : Op) -> Change {
   { op, }
 }
 
 ///|
 /// Convert to internal Op (for advanced use/serialization).
-pub fn Change::to_op(self : Change) -> @oplog.Op {
+pub fn Change::to_op(self : Change) -> Op {
   self.op
 }
 

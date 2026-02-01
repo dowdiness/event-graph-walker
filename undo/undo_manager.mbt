@@ -96,12 +96,12 @@ fn UndoManager::record_item(
 pub fn[D : @document.Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
-) -> Array[@oplog.Op] raise @document.DocumentError {
+) -> Array[@core.Op] raise @document.DocumentError {
   guard self.undo_stack.length() > 0
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
-  let synced_ops : Array[@oplog.Op] = []
+  let synced_ops : Array[@core.Op] = []
   let redo_items : Array[UndoItem] = []
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
@@ -154,12 +154,12 @@ pub fn[D : @document.Undoable] UndoManager::undo(
 pub fn[D : @document.Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
-) -> Array[@oplog.Op] raise @document.DocumentError {
+) -> Array[@core.Op] raise @document.DocumentError {
   guard self.redo_stack.length() > 0
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
-  let synced_ops : Array[@oplog.Op] = []
+  let synced_ops : Array[@core.Op] = []
   let undo_items : Array[UndoItem] = []
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]

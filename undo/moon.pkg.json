@@ -1,8 +1,8 @@
 {
   "is_main": false,
   "import": [
-    "dowdiness/event-graph-walker/document",
-    "dowdiness/event-graph-walker/oplog"
+    "dowdiness/event-graph-walker/core",
+    "dowdiness/event-graph-walker/document"
   ],
   "test-import": [
     "dowdiness/event-graph-walker/text",

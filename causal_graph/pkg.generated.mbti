@@ -2,6 +2,7 @@
 package "dowdiness/event-graph-walker/causal_graph"
 
 import {
+  "dowdiness/event-graph-walker/core",
   "moonbitlang/core/immut/hashmap",
   "moonbitlang/core/json",
   "moonbitlang/core/quickcheck/splitmix",
@@ -18,60 +19,30 @@ pub impl Show for CausalGraphError
 
 // Types and methods
 pub struct CausalGraph {
-  mut entries : @hashmap.HashMap[Int, GraphEntry]
-  mut version_map : @hashmap.HashMap[RawVersion, Int]
+  mut entries : @hashmap.HashMap[Int, @core.GraphEntry]
+  mut version_map : @hashmap.HashMap[@core.RawVersion, Int]
   mut next_lv : Int
-  mut frontier : Frontier
+  mut frontier : @core.Frontier
   mut agent_seqs : @hashmap.HashMap[String, Int]
 }
 pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
 pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
-pub fn CausalGraph::diff_frontiers_lvs(Self, Frontier, Frontier) -> (Array[Int], Array[Int])
+pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (Array[Int], Array[Int])
 #alias("_[_]")
-pub fn CausalGraph::get_entry(Self, Int) -> GraphEntry?
-pub fn CausalGraph::get_frontier(Self) -> Frontier
-pub fn CausalGraph::graph_diff(Self, Frontier, Frontier) -> (Array[Int], Array[Int])
+pub fn CausalGraph::get_entry(Self, Int) -> @core.GraphEntry?
+pub fn CausalGraph::get_frontier(Self) -> @core.Frontier
+pub fn CausalGraph::graph_diff(Self, @core.Frontier, @core.Frontier) -> (Array[Int], Array[Int])
 pub fn CausalGraph::is_ancestor(Self, Int, Int) -> Bool
-pub fn CausalGraph::lv_to_raw(Self, Int) -> RawVersion?
+pub fn CausalGraph::lv_to_raw(Self, Int) -> @core.RawVersion?
 pub fn CausalGraph::new() -> Self
-pub fn CausalGraph::raw_to_lv(Self, RawVersion) -> Int?
-pub fn CausalGraph::walk_from_frontier(Self, Frontier) -> Array[Int]
+pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
+pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> Array[Int]
 pub impl Show for CausalGraph
-
-pub(all) struct Frontier(Array[Int])
-pub fn Frontier::from_array(Array[Int]) -> Self
-#deprecated
-pub fn Frontier::inner(Self) -> Array[Int]
-pub impl Eq for Frontier
-pub impl Show for Frontier
-pub impl ToJson for Frontier
-pub impl @json.FromJson for Frontier
-
-pub struct GraphEntry {
-  parents : Array[Int]
-  agent : String
-  seq : Int
-  timestamp : Int
-}
-pub impl Show for GraphEntry
-
-pub struct RawVersion {
-  agent : String
-  seq : Int
-}
-pub fn RawVersion::new(String, Int) -> Self
-pub fn RawVersion::to_string(Self) -> String
-pub impl Compare for RawVersion
-pub impl Eq for RawVersion
-pub impl Hash for RawVersion
-pub impl Show for RawVersion
-pub impl ToJson for RawVersion
-pub impl @json.FromJson for RawVersion
 
 pub struct VersionVector(Map[String, Int])
 pub fn VersionVector::agents(Self) -> Array[String]
 pub fn VersionVector::concurrent(Self, Self) -> Bool
-pub fn VersionVector::from_frontier(CausalGraph, Frontier) -> Self
+pub fn VersionVector::from_frontier(CausalGraph, @core.Frontier) -> Self
 pub fn VersionVector::includes(Self, String, Int) -> Bool
 pub fn VersionVector::increment(Self, String) -> Self
 #deprecated
@@ -79,7 +50,7 @@ pub fn VersionVector::inner(Self) -> Map[String, Int]
 pub fn VersionVector::merge(Self, Self) -> Self
 pub fn VersionVector::new() -> Self
 pub fn VersionVector::set(Self, String, Int) -> Self
-pub fn VersionVector::to_frontier(Self, CausalGraph) -> Frontier
+pub fn VersionVector::to_frontier(Self, CausalGraph) -> @core.Frontier
 pub impl Compare for VersionVector
 pub impl Default for VersionVector
 pub impl Eq for VersionVector
@@ -90,9 +61,6 @@ pub impl @moonbitlang/core/quickcheck.Arbitrary for VersionVector
 pub impl @moonbitlang/quickcheck.Shrink for VersionVector
 
 // Type aliases
-pub type AgentId = String
-
-pub type LV = Int
 
 // Traits
 

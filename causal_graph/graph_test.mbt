@@ -39,7 +39,7 @@ test "lv to raw version conversion" {
 test "raw to lv version conversion" {
   let graph = CausalGraph::new()
   ignore(try! graph.add_version([], "agent1"))
-  let raw = RawVersion::new("agent1", 0)
+  let raw = @core.RawVersion::new("agent1", 0)
   match graph.raw_to_lv(raw) {
     Some(lv_result) => inspect(lv_result, content="0")
     None => fail("Expected Some(LV)")
@@ -73,8 +73,8 @@ test "graph_diff with no overlap" {
   let lv1 = try! graph.add_version([lv0], "agent1")
   let lv2 = try! graph.add_version([lv0], "agent2") // Branch from lv0
   let (retreat, advance) = graph.graph_diff(
-    Frontier::from_array([lv1]),
-    Frontier::from_array([lv2]),
+    @core.Frontier::from_array([lv1]),
+    @core.Frontier::from_array([lv2]),
   )
 
   // lv1 should be in retreat (not reachable from lv2)

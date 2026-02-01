@@ -14,7 +14,7 @@
 /// This is a snapshot of the document that can be efficiently
 /// advanced forward by applying new operations.
 pub struct Branch {
-  frontier : @causal_graph.Frontier // Version frontier this branch represents
+  frontier : @core.Frontier // Version frontier this branch represents
   tree : @fugue.FugueTree // CRDT tree state at this frontier
   oplog : @oplog.OpLog // Reference to the operation log
 } derive(Show)
@@ -23,7 +23,7 @@ pub struct Branch {
 /// Create a new empty branch
 pub fn Branch::new(oplog : @oplog.OpLog) -> Branch {
   {
-    frontier: @causal_graph.Frontier::from_array([]),
+    frontier: @core.Frontier::from_array([]),
     tree: @fugue.FugueTree::new(),
     oplog,
   }
@@ -54,7 +54,7 @@ pub fn Branch::from_tree_and_oplog(
 /// A Branch representing the document state at the frontier
 pub fn Branch::checkout(
   oplog : @oplog.OpLog,
-  frontier : @causal_graph.Frontier,
+  frontier : @core.Frontier,
 ) -> Branch raise BranchError {
   // Create empty tree
   let tree = @fugue.FugueTree::new()
@@ -68,11 +68,7 @@ pub fn Branch::checkout(
   }
 
   // Return branch with reconstructed state
-  {
-    frontier: @causal_graph.Frontier::from_array(frontier.0.copy()),
-    tree,
-    oplog,
-  }
+  { frontier: @core.Frontier::from_array(frontier.0.copy()), tree, oplog }
 }
 
 ///|
@@ -88,7 +84,7 @@ pub fn Branch::checkout(
 /// A new Branch at the target frontier
 pub fn Branch::advance(
   self : Branch,
-  target_frontier : @causal_graph.Frontier,
+  target_frontier : @core.Frontier,
 ) -> Branch raise BranchError {
   // Calculate what operations to apply
   let (retreat_ops, advance_ops) = self.oplog.diff_and_collect(
@@ -109,7 +105,7 @@ pub fn Branch::advance(
       apply_operation_to_tree(tree, op, self.oplog)
     }
     {
-      frontier: @causal_graph.Frontier::from_array(target_frontier.0.copy()),
+      frontier: @core.Frontier::from_array(target_frontier.0.copy()),
       tree,
       oplog: self.oplog,
     }
@@ -124,8 +120,8 @@ pub fn Branch::to_text(self : Branch) -> String {
 
 ///|
 /// Get the frontier of this branch
-pub fn Branch::get_frontier(self : Branch) -> @causal_graph.Frontier {
-  @causal_graph.Frontier::from_array(self.frontier.0.copy())
+pub fn Branch::get_frontier(self : Branch) -> @core.Frontier {
+  @core.Frontier::from_array(self.frontier.0.copy())
 }
 
 ///|
@@ -142,10 +138,7 @@ pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree {
 
 ///|
 /// Check if this branch is at the given frontier
-pub fn Branch::at_frontier(
-  self : Branch,
-  frontier : @causal_graph.Frontier,
-) -> Bool {
+pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
   if self.frontier.0.length() != frontier.0.length() {
     return false
   }
@@ -223,7 +216,7 @@ pub fn Branch::checkout_version_vector(
 /// A new Branch with the merged state
 pub fn Branch::merge_remote_ops(
   self : Branch,
-  remote_ops : Array[@oplog.Op],
+  remote_ops : Array[@core.Op],
 ) -> Branch raise BranchError {
   // Add remote operations to oplog (buffering if parents are missing)
   for remote_op in remote_ops {
@@ -248,7 +241,7 @@ pub fn Branch::merge_remote_ops(
 /// operation to the tree, handling the FugueMax integration.
 fn apply_operation_to_tree(
   tree : @fugue.FugueTree,
-  op : @oplog.Op,
+  op : @core.Op,
   oplog : @oplog.OpLog,
 ) -> Unit raise BranchError {
   let origin_left = match op.origin_left {
@@ -268,7 +261,7 @@ fn apply_operation_to_tree(
       }
   }
   match op.content {
-    @oplog.Insert(text) => {
+    @core.Insert(text) => {
       // Get Lamport timestamp and agent from causal graph
       let (timestamp, agent) = match oplog.graph[op.lv] {
         Some(entry) => (entry.timestamp, entry.agent)
@@ -278,14 +271,14 @@ fn apply_operation_to_tree(
       // Insert into tree with FugueMax algorithm
       tree.insert(op.lv, text, origin_left, origin_right, timestamp, agent)
     }
-    @oplog.Delete =>
+    @core.Delete =>
       if origin_left != -1 {
         // Mark item as deleted
         tree.delete(origin_left) catch {
           e => raise BranchError::Fugue(e)
         }
       }
-    @oplog.Undelete =>
+    @core.Undelete =>
       if origin_left != -1 {
         // Revive a previously deleted item
         tree.undelete(origin_left) catch {

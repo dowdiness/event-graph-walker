@@ -5,30 +5,28 @@
 ///|
 /// This is an opaque container - use accessor methods to inspect contents.
 pub(all) struct SyncMessage {
-  priv ops : Array[@oplog.Op]
-  priv heads : Array[@causal_graph.RawVersion]
+  priv ops : Array[@core.Op]
+  priv heads : Array[@core.RawVersion]
 } derive(Show)
 
 ///|
 /// Create a SyncMessage from internal types (for advanced use/deserialization).
 pub fn SyncMessage::new(
-  ops : Array[@oplog.Op],
-  heads : Array[@causal_graph.RawVersion],
+  ops : Array[@core.Op],
+  heads : Array[@core.RawVersion],
 ) -> SyncMessage {
   { ops, heads }
 }
 
 ///|
 /// Get the operations in this message (for advanced use/serialization).
-pub fn SyncMessage::get_ops(self : SyncMessage) -> Array[@oplog.Op] {
+pub fn SyncMessage::get_ops(self : SyncMessage) -> Array[@core.Op] {
   self.ops
 }
 
 ///|
 /// Get the heads (version frontier) in this message (for advanced use/serialization).
-pub fn SyncMessage::get_heads(
-  self : SyncMessage,
-) -> Array[@causal_graph.RawVersion] {
+pub fn SyncMessage::get_heads(self : SyncMessage) -> Array[@core.RawVersion] {
   self.heads
 }
 
@@ -82,9 +80,7 @@ pub fn SyncSession::export_since(
   let inner = self.doc.inner
   let peer_frontier = peer_version.to_frontier()
   let current_frontier = inner.get_frontier()
-  let (_, advance_ops) = inner.diff_and_collect(
-    peer_frontier, current_frontier,
-  )
+  let (_, advance_ops) = inner.diff_and_collect(peer_frontier, current_frontier)
   try {
     let heads = inner.get_frontier_raw()
     SyncMessage::{ ops: advance_ops, heads }
