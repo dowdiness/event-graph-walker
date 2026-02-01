@@ -4,7 +4,7 @@
 - Used as a git submodule in [dowdiness/crdt](https://github.com/dowdiness/crdt)
 - [Demo App](https://lambda-editor.koji-ishimoto.workers.dev/) as Collaborative Editor
 
-> **Warning:** This project is a work in progress and the API is not stable. Do not use in production.
+> **Note:** This project is approaching v1.0 stability. The public API surface has been hardened — see `docs/STABILIZATION_ROADMAP.md` for remaining work.
 
 A MoonBit implementation of the **eg-walker** CRDT algorithm with **FugueMax** sequence CRDT for collaborative editing.
 
@@ -51,13 +51,13 @@ event-graph-walker/
 ### Key Data Structures
 
 #### Document
-The high-level API for collaborative editing. Manages text operations with position-based (cursor) API.
+The high-level API for collaborative editing. Manages text operations with position-based (cursor) API. Internal fields (`tree`, `oplog`) are encapsulated; use public methods instead.
 
 ```moonbit
 pub struct Document {
-  tree: @fugue.FugueTree      // CRDT tree state
-  oplog: @oplog.OpLog         // Operation log
-  agent_id: String            // Unique peer identifier
+  priv tree: @fugue.FugueTree  // CRDT tree state (encapsulated)
+  priv oplog: @oplog.OpLog     // Operation log (encapsulated)
+  agent_id: String             // Unique peer identifier
 }
 ```
 
@@ -67,6 +67,12 @@ pub struct Document {
 - `apply_remote(op)` - Apply operations from remote peers
 - `merge_remote(ops, frontier)` - Merge multiple remote operations (frontier uses RawVersions)
 - `to_text()` - Get current document text
+- `visible_count()` - Get visible character count
+- `get_all_ops()` - Get all operations from the oplog
+- `diff_and_collect(from, to)` - Compute diff between two frontiers
+- `checkout_branch(frontier)` - Checkout a branch at a given frontier
+- `get_visible_items()` - Get visible items from the tree
+- `lv_to_position(lv)` - Map local version to visible position
 - `get_frontier()` - Get local LVs for internal operations
 - `get_frontier_raw()` - Get RawVersions for network sync
 
@@ -253,22 +259,22 @@ try {
 }
 ```
 
-### Advanced Access
+### Applying Remote Operations
 
-For power users who need direct access to internals:
+For applying individual remote operations outside the sync workflow:
 
 ```moonbit
-let doc = @text.TextDoc::new("alice")
-doc.insert(@text.Pos::at(0), "Hello")
+let doc1 = @text.TextDoc::new("alice")
+let doc2 = @text.TextDoc::new("bob")
 
-// Access underlying Document
-let inner = doc.inner_document()
-let oplog = inner.oplog
-let frontier = inner.get_frontier()
+doc1.insert(@text.Pos::at(0), "Hello")
 
-// Access underlying Branch from a view
-let view = doc.checkout(doc.version())
-let branch = view.inner_branch()
+// Export and apply individual ops
+let msg = doc1.sync().export_all()
+for op in msg.get_ops() {
+  doc2.apply_remote(op)
+}
+println(doc2.text())  // "Hello"
 ```
 
 ---
@@ -297,8 +303,8 @@ let text = doc.to_text()  // "ello"
 ### Network Collaboration (Low-Level)
 
 ```moonbit
-// Get version vector for sending to peer
-let vv = doc.oplog.graph.get_version_vector()
+// Get frontier for sending to peer
+let frontier = doc.get_frontier_raw()
 
 // Apply remote operation
 let remote_op = ...  // From peer
@@ -308,22 +314,25 @@ doc.apply_remote(remote_op)
 let remote_ops = [...]  // From peer
 let remote_frontier = [...]  // RawVersions from peer
 doc.merge_remote(remote_ops, remote_frontier)
+
+// Get all operations for export
+let all_ops = doc.get_all_ops()
+
+// Diff between frontiers
+let (retreat, advance) = doc.diff_and_collect(old_frontier, new_frontier)
 ```
 
 ### Snapshotting/Branching (Low-Level)
 
 ```moonbit
 // Get current frontier
-let frontier = doc.oplog.get_frontier()
-
-// Create snapshot at current state
-let branch = @branch.Branch::from_tree_and_oplog(doc.tree, doc.oplog)
+let frontier = doc.get_frontier()
 
 // Checkout state at previous frontier
-let old_branch = @branch.Branch::checkout(doc.oplog, previous_frontier)
+let old_branch = doc.checkout_branch(previous_frontier)
 
 // Advance to new frontier
-let new_branch = branch.advance(target_frontier)
+let new_branch = old_branch.advance(target_frontier)
 ```
 
 ---
@@ -352,9 +361,6 @@ let new_doc = @text.TextDoc::from_document(old_doc)
 
 // Use new API
 new_doc.insert(@text.Pos::at(0), "Hello")
-
-// Access old API when needed
-let inner = new_doc.inner_document()
 ```
 
 **Key Benefits of TextDoc:**
@@ -363,7 +369,7 @@ let inner = new_doc.inner_document()
 2. **Cleaner sync** - `SyncMessage` bundles ops and heads together
 3. **Better errors** - `TextError` provides `message()`, `help()`, `is_retryable()`
 4. **Historical views** - `checkout()` returns read-only `TextView`
-5. **Escape hatch** - `inner_document()`/`inner_branch()` gives full access when needed
+5. **Encapsulated internals** - Document fields are private, accessed via delegate methods
 
 **Remote ops:** When applying remote operations, buffer ops whose parents
 are missing until all parent RawVersions are present, then map RawVersion

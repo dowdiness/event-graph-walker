@@ -7,8 +7,8 @@
 ///|
 /// Provides position-based operations (insert/delete at cursor position)
 pub struct Document {
-  tree : @fugue.FugueTree
-  oplog : @oplog.OpLog
+  priv tree : @fugue.FugueTree
+  priv oplog : @oplog.OpLog
   agent_id : String
 } derive(Show)
 
@@ -296,4 +296,53 @@ pub fn Document::merge_remote(
   @branch.merge_remote_ops(self.tree, self.oplog, remote_ops) catch {
     e => raise DocumentError::Branch(e)
   }
+}
+
+///|
+/// Get the number of visible characters in the document.
+/// Delegates to the internal FugueTree.
+pub fn Document::visible_count(self : Document) -> Int {
+  self.tree.visible_count()
+}
+
+///|
+/// Get all operations from the oplog.
+pub fn Document::get_all_ops(self : Document) -> Array[@oplog.Op] {
+  self.oplog.get_all_ops()
+}
+
+///|
+/// Compute the diff between two frontiers and collect operations.
+/// Returns (retreat_ops, advance_ops).
+pub fn Document::diff_and_collect(
+  self : Document,
+  from : @causal_graph.Frontier,
+  to : @causal_graph.Frontier,
+) -> (Array[@oplog.Op], Array[@oplog.Op]) {
+  self.oplog.diff_and_collect(from, to)
+}
+
+///|
+/// Checkout a branch at the given frontier.
+pub fn Document::checkout_branch(
+  self : Document,
+  frontier : @causal_graph.Frontier,
+) -> @branch.Branch raise DocumentError {
+  @branch.Branch::checkout(self.oplog, frontier) catch {
+    e => raise DocumentError::Branch(e)
+  }
+}
+
+///|
+/// Get visible items from the tree.
+pub fn Document::get_visible_items(
+  self : Document,
+) -> Array[(Int, @fugue.Item)] {
+  self.tree.get_visible_items()
+}
+
+///|
+/// Map a local version to its visible position in the document.
+pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
+  self.tree.lv_to_position(lv)
 }

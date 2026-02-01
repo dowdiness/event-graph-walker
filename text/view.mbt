@@ -30,8 +30,8 @@ pub fn TextView::len(self : TextView) -> Int {
 }
 
 ///|
-/// Access the underlying Branch for advanced operations
-pub fn TextView::inner_branch(self : TextView) -> @branch.Branch {
+/// Access the underlying Branch (package-internal only)
+fn TextView::inner_branch(self : TextView) -> @branch.Branch {
   self.branch
 }
 
