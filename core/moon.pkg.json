@@ -1,6 +1,7 @@
 {
   "is_main": false,
   "import": [
-    "moonbitlang/core/json"
+    "moonbitlang/core/json",
+    "moonbitlang/core/hashset"
   ]
 }

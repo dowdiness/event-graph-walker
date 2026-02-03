@@ -31,7 +31,7 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| Frontier allows duplicates | `core/graph_types.mbt:7` | `Frontier` is `Array[Int]` with no uniqueness guarantee. Add invariant check or document requirement. |
+| ~~Frontier allows duplicates~~ | `core/graph_types.mbt:7` | ✅ Fixed: Added `from_array_dedup()` constructor and `has_duplicates()` validation. Documented uniqueness invariant. |
 | Inconsistent doc formatting | Multiple files | Mix of `///|` and `//` comment styles. Standardize on `///|` for public APIs. |
 
 ## Phase 2: Test Coverage Gaps (Partially Complete)
@@ -44,7 +44,7 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 | Network reconnection/sync recovery | Remaining — `NETWORK_SYNC.md` TODO |
 | Cascading error propagation in mid-merge | Remaining — Not tested anywhere |
 | Empty version vector operations | Remaining — No test for all operations on empty `VersionVector::new()` |
-| Frontier with duplicates | Remaining — No validation that `Frontier` arrays are unique |
+| ~~Frontier with duplicates~~ | ✅ Added `has_duplicates()` validation and `from_array_dedup()` constructor with tests |
 | Undelete idempotency | Remaining — `FugueTree::undelete` silently succeeds on visible items; needs explicit test |
 
 Property tests are the highest priority — they protect the core CRDT invariants (convergence, commutativity, idempotence) under undo/redo.
