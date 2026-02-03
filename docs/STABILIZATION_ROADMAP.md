@@ -71,7 +71,7 @@ From `OPTIMIZATION_ROADMAP.md` and `EG_WALKER_IMPLEMENTATION.md`:
 
 | Issue | Location | Severity | Description |
 |-------|----------|----------|-------------|
-| ~~O(n²) frontier comparison~~ | `branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses HashSet for O(n) comparison instead of O(n²) nested `.contains()`. |
+| ~~O(n²) frontier comparison~~ | `branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses sorted array comparison O(n log n) instead of O(n²) nested `.contains()`. Preserves element multiplicity. |
 | Unnecessary array copies | `branch.mbt:71,108,124`, `oplog.mbt:159` | Medium | `frontier.0.copy()` and `operations.copy()` in hot paths. Use in-place sort or return iterators. |
 | O(n) position mapping | `document/document.mbt:59-79` | Medium | `position_to_lv()` does full tree traversal via `get_visible_items()` on every insert/delete. Cache position→LV mappings. |
 | Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` | Low | Already mitigated by lazy `prefix: PrefixSums?` cache, but worth monitoring. |
@@ -96,7 +96,7 @@ For a stable v1.0, focus on Phases 1–3. Phases 4–5 are optimizations and int
 1. ~~**Seal the public API surface**~~ — Done. Breaking changes get harder after v1.0
 2. ~~**Fill property test gaps for undo-redo**~~ — Done. Core roundtrip and sync convergence properties tested
 3. ~~**Address Phase 1.5 high-priority issues**~~ — Done. Duplicate operation detection added; error handling verified consistent
-4. ~~**Fix O(n²) frontier comparison**~~ — Done. Uses HashSet for O(n) comparison
+4. ~~**Fix O(n²) frontier comparison**~~ — Done. Uses sorted comparison O(n log n) with multiplicity preservation
 5. **Validate network sync in a real browser environment** — Remaining
 
 The core algorithm implementation and test coverage are already production-quality. The Phase 1.5 issues are correctness/robustness improvements that should be addressed before declaring v1.0 stable.
