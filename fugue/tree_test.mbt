@@ -275,3 +275,74 @@ test "fugue property - non-interleaving" {
   inspect(text.contains("XYX"), content="false") // No interleaving
   inspect(text.contains("YXY"), content="false") // No interleaving
 }
+
+// =============================================================================
+// Gap 5: Undelete Idempotency Tests
+// =============================================================================
+
+///|
+/// Test: undelete is idempotent on visible items
+/// Calling undelete multiple times on a visible item should not change state
+test "undelete is idempotent on visible items" {
+  let tree = FugueTree::new()
+  tree.insert(0, "A", -1, -1, 0, "agent0")
+  inspect(tree.to_text(), content="A")
+
+  // Item is visible, undelete should be a no-op
+  try! tree.undelete(0)
+  inspect(tree.to_text(), content="A")
+  inspect(tree.visible_count(), content="1")
+
+  // Call undelete again - still idempotent
+  try! tree.undelete(0)
+  inspect(tree.to_text(), content="A")
+  inspect(tree.visible_count(), content="1")
+
+  // Third call - still no change
+  try! tree.undelete(0)
+  inspect(tree.to_text(), content="A")
+  inspect(tree.visible_count(), content="1")
+}
+
+///|
+/// Test: undelete after delete restores item; second undelete is no-op
+test "undelete after delete changes state" {
+  let tree = FugueTree::new()
+  tree.insert(0, "A", -1, -1, 0, "agent0")
+  tree.insert(1, "B", 0, -1, 1, "agent0")
+  tree.insert(2, "C", 1, -1, 2, "agent0")
+  inspect(tree.to_text(), content="ABC")
+
+  // Delete B
+  try! tree.delete(1)
+  inspect(tree.to_text(), content="AC")
+
+  // Undelete B - restores visibility
+  try! tree.undelete(1)
+  inspect(tree.to_text(), content="ABC")
+
+  // Second undelete is idempotent - no change
+  try! tree.undelete(1)
+  inspect(tree.to_text(), content="ABC")
+  inspect(tree.visible_count(), content="3")
+}
+
+///|
+/// Test: undelete on missing item raises MissingItem error
+test "undelete on missing item raises MissingItem" {
+  let tree = FugueTree::new()
+  tree.insert(0, "A", -1, -1, 0, "agent0")
+
+  // Try to undelete a non-existent item
+  let result : Result[Unit, FugueError] = try {
+    tree.undelete(999)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+
+  match result {
+    Err(MissingItem(id~)) => inspect(id, content="999")
+    Ok(_) => fail("Expected MissingItem error")
+  }
+}

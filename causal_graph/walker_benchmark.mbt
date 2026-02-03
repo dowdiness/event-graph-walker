@@ -186,3 +186,45 @@ test "walker - large history (10000 ops)" (b : @bench.T) {
     b.keep(result)
   })
 }
+
+// =============================================================================
+// Gap 2: Large Document Stress Tests (100k+ ops)
+// =============================================================================
+
+///|
+/// Benchmark: Walk a linear history (100000 operations) - single agent
+test "walker - linear history (100000 ops)" (b : @bench.T) {
+  let graph = CausalGraph::new()
+  let mut prev = -1
+  for i = 0; i < 100000; i = i + 1 {
+    let parents = if prev == -1 { [] } else { [prev] }
+    prev = try! graph.add_version(parents, "agent_a")
+  }
+  let frontier = @core.Frontier::from_array([prev])
+  b.bench(fn() {
+    let result = graph.walk_from_frontier(frontier)
+    b.keep(result)
+  })
+}
+
+///|
+/// Benchmark: Walk with concurrent branches (100000 ops, 5 agents)
+/// Each agent contributes 20000 operations
+test "walker - concurrent branches (100000 ops, 5 agents)" (b : @bench.T) {
+  let graph = CausalGraph::new()
+  let agents = ["agent_a", "agent_b", "agent_c", "agent_d", "agent_e"]
+  let frontiers = []
+  for agent in agents {
+    let mut prev = -1
+    for i = 0; i < 20000; i = i + 1 {
+      let parents = if prev == -1 { [] } else { [prev] }
+      prev = try! graph.add_version(parents, agent)
+    }
+    frontiers.push(prev)
+  }
+  let frontier = @core.Frontier::from_array(frontiers)
+  b.bench(fn() {
+    let result = graph.walk_from_frontier(frontier)
+    b.keep(result)
+  })
+}
