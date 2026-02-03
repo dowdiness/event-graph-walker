@@ -260,3 +260,113 @@ test "version vector json stringify" {
   inspect(json_str.contains("bob"), content="true")
   inspect(json_str.contains("charlie"), content="true")
 }
+
+// =============================================================================
+// Empty VersionVector operations
+// =============================================================================
+
+///|
+test "empty version vector - comparison with itself" {
+  let empty = VersionVector::new()
+  inspect(empty == empty, content="true")
+  inspect(empty <= empty, content="true")
+  inspect(empty.compare(empty), content="0")
+}
+
+///|
+test "empty version vector - comparison with non-empty" {
+  let empty = VersionVector::new()
+  let non_empty = VersionVector::new().set("alice", 5)
+  // Empty is <= any other (has no agents that could be greater)
+  inspect(empty <= non_empty, content="true")
+  // Non-empty is NOT <= empty (has agents empty doesn't have)
+  inspect(non_empty <= empty, content="false")
+  inspect(empty.compare(non_empty), content="-1")
+  inspect(non_empty.compare(empty), content="1")
+}
+
+///|
+test "empty version vector - concurrent check" {
+  let empty = VersionVector::new()
+  let non_empty = VersionVector::new().set("alice", 5)
+  // Empty is not concurrent with itself (empty <= empty)
+  inspect(empty.concurrent(empty), content="false")
+  // Empty is not concurrent with non-empty (empty <= non_empty)
+  inspect(empty.concurrent(non_empty), content="false")
+}
+
+///|
+test "empty version vector - merge with empty" {
+  let empty1 = VersionVector::new()
+  let empty2 = VersionVector::new()
+  let merged = empty1.merge(empty2)
+  inspect(merged.0.is_empty(), content="true")
+}
+
+///|
+test "empty version vector - merge with non-empty" {
+  let empty = VersionVector::new()
+  let non_empty = VersionVector::new().set("alice", 5).set("bob", 3)
+  let merged = empty.merge(non_empty)
+  inspect(merged.0.get("alice"), content="Some(5)")
+  inspect(merged.0.get("bob"), content="Some(3)")
+  // Merge is symmetric
+  let merged2 = non_empty.merge(empty)
+  inspect(merged2.0.get("alice"), content="Some(5)")
+  inspect(merged2.0.get("bob"), content="Some(3)")
+}
+
+///|
+test "empty version vector - agents list" {
+  let empty = VersionVector::new()
+  inspect(empty.agents().length(), content="0")
+}
+
+///|
+test "empty version vector - includes check" {
+  let empty = VersionVector::new()
+  // Empty vector includes nothing
+  inspect(empty.includes("alice", 0), content="false")
+  inspect(empty.includes("alice", 1), content="false")
+  inspect(empty.includes("nonexistent", 0), content="false")
+}
+
+///|
+test "empty version vector - increment creates new agent" {
+  let empty = VersionVector::new()
+  let incremented = empty.increment("alice")
+  inspect(incremented.0.get("alice"), content="Some(0)")
+  inspect(incremented.0.length(), content="1")
+}
+
+///|
+test "empty version vector - set creates new agent" {
+  let empty = VersionVector::new()
+  let updated = empty.set("alice", 42)
+  inspect(updated.0.get("alice"), content="Some(42)")
+}
+
+///|
+test "empty version vector - to_frontier on empty graph" {
+  let graph = CausalGraph::new()
+  let empty = VersionVector::new()
+  let frontier = empty.to_frontier(graph)
+  inspect(frontier.0.length(), content="0")
+}
+
+///|
+test "empty version vector - from_frontier with empty frontier" {
+  let graph = CausalGraph::new()
+  let empty_frontier = @core.Frontier::from_array([])
+  let vv = VersionVector::from_frontier(graph, empty_frontier)
+  inspect(vv.0.is_empty(), content="true")
+}
+
+///|
+test "empty version vector - json roundtrip" {
+  let empty = VersionVector::new()
+  let json = empty.to_json()
+  let parsed : VersionVector = @json.from_json(json)
+  inspect(parsed.0.is_empty(), content="true")
+  inspect(empty == parsed, content="true")
+}

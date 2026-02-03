@@ -43,7 +43,7 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 | Large document stress tests (100k+ ops) | Remaining — Benchmarks currently cap at 10k |
 | Network reconnection/sync recovery | Remaining — `NETWORK_SYNC.md` TODO |
 | Cascading error propagation in mid-merge | Remaining — Not tested anywhere |
-| Empty version vector operations | Remaining — No test for all operations on empty `VersionVector::new()` |
+| ~~Empty version vector operations~~ | ✅ Added 12 tests covering comparison, merge, concurrent, includes, agents, increment, set, to_frontier, from_frontier, and JSON roundtrip on empty VersionVector |
 | ~~Frontier with duplicates~~ | ✅ Added `has_duplicates()` validation and `from_array_dedup()` constructor with tests |
 | Undelete idempotency | Remaining — `FugueTree::undelete` silently succeeds on visible items; needs explicit test |
 
