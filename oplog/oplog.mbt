@@ -188,7 +188,8 @@ pub fn OpLog::get_frontier_raw(
 }
 
 ///|
-/// Validate that a remote batch is closed w.r.t. parents and frontier
+/// Validate that a remote batch is closed w.r.t. parents and frontier.
+/// Also checks for duplicate operations within the batch.
 pub fn OpLog::validate_remote_batch(
   self : OpLog,
   remote_ops : Array[@core.Op],
@@ -197,6 +198,10 @@ pub fn OpLog::validate_remote_batch(
   let mut batch : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.new()
   for op in remote_ops {
     let raw = @core.RawVersion::new(op.agent, op.seq)
+    // Check for duplicates within the batch
+    if batch.contains(raw) {
+      raise OpLogError::DuplicateOperation(raw~)
+    }
     batch = batch.add(raw)
   }
   for op in remote_ops {
