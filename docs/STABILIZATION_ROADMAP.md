@@ -1,6 +1,6 @@
 # Roadmap to v1.0 Stable
 
-The library has all core algorithms implemented, 329+ tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
+The library has all core algorithms implemented, 318 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
 
 ## Phase 1: Error Handling & API Hardening ✅
 
@@ -32,22 +32,22 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 | Issue | Location | Description |
 |-------|----------|-------------|
 | ~~Frontier allows duplicates~~ | `core/graph_types.mbt:7` | ✅ Fixed: Added `from_array_dedup()` constructor and `has_duplicates()` validation. Documented uniqueness invariant. |
-| Inconsistent doc formatting | Multiple files | Mix of `///|` and `//` comment styles. Standardize on `///|` for public APIs. |
+| ~~Inconsistent doc formatting~~ | Multiple files | ✅ Fixed: Standardized on `///|` for module headers and public APIs. |
 
-## Phase 2: Test Coverage Gaps (Partially Complete)
+## Phase 2: Test Coverage Gaps ✅
 
 | Gap | Status |
 |-----|--------|
-| Undo-redo roundtrip property tests | ✅ Added: `prop_undo_redo_roundtrip_insert`, `prop_undo_redo_roundtrip_mixed`, `prop_undo_ops_sync_to_peer` |
-| Concurrent undo/redo with network sync | Remaining — `UNDO_MANAGER_DESIGN.md` Phase 3 |
-| Large document stress tests (100k+ ops) | Remaining — Benchmarks currently cap at 10k |
-| Network reconnection/sync recovery | Remaining — `NETWORK_SYNC.md` TODO |
-| Cascading error propagation in mid-merge | Remaining — Not tested anywhere |
+| ~~Undo-redo roundtrip property tests~~ | ✅ Added: `prop_undo_redo_roundtrip_insert`, `prop_undo_redo_roundtrip_mixed`, `prop_undo_ops_sync_to_peer` |
+| ~~Concurrent undo/redo with network sync~~ | ✅ Added 5 tests: concurrent undo while peer inserts, concurrent undelete (add-wins), three-agent concurrent undos, undo ops sync to peer, redo after peer sync |
+| ~~Large document stress tests (100k+ ops)~~ | ✅ Added 4 benchmarks: walker linear 100k ops, walker concurrent 100k ops (5 agents), oplog sequential typing 100k chars, oplog diff_and_collect 100k ops |
+| ~~Network reconnection/sync recovery~~ | ✅ Added 5 tests: peer reconnects after divergence, partial operation log, stale version vector, network partition reunion (3 peers), bidirectional delta after disconnect |
+| ~~Cascading error propagation in mid-merge~~ | ✅ Added 4 tests: missing op during apply, apply operations succeeds for valid ops, state unchanged after failure, retreat with missing item |
 | ~~Empty version vector operations~~ | ✅ Added 12 tests covering comparison, merge, concurrent, includes, agents, increment, set, to_frontier, from_frontier, and JSON roundtrip on empty VersionVector |
 | ~~Frontier with duplicates~~ | ✅ Added `has_duplicates()` validation and `from_array_dedup()` constructor with tests |
-| Undelete idempotency | Remaining — `FugueTree::undelete` silently succeeds on visible items; needs explicit test |
+| ~~Undelete idempotency~~ | ✅ Added 3 tests: undelete idempotent on visible items, undelete after delete changes state, undelete on missing item raises MissingItem |
 
-Property tests are the highest priority — they protect the core CRDT invariants (convergence, commutativity, idempotence) under undo/redo.
+All Phase 2 test coverage gaps have been addressed. Property tests protect the core CRDT invariants (convergence, commutativity, idempotence) under undo/redo.
 
 ## Phase 3: Network Production Readiness
 
@@ -97,6 +97,7 @@ For a stable v1.0, focus on Phases 1–3. Phases 4–5 are optimizations and int
 2. ~~**Fill property test gaps for undo-redo**~~ — Done. Core roundtrip and sync convergence properties tested
 3. ~~**Address Phase 1.5 high-priority issues**~~ — Done. Duplicate operation detection added; error handling verified consistent
 4. ~~**Fix O(n²) frontier comparison**~~ — Done. Uses sorted comparison O(n log n) with multiplicity preservation
-5. **Validate network sync in a real browser environment** — Remaining
+5. ~~**Fill Phase 2 test coverage gaps**~~ — Done. All 8 gaps addressed with 33 new tests and 4 benchmarks
+6. **Validate network sync in a real browser environment** — Remaining
 
-The core algorithm implementation and test coverage are already production-quality. The Phase 1.5 issues are correctness/robustness improvements that should be addressed before declaring v1.0 stable.
+The core algorithm implementation and test coverage are production-quality. Next priority is Phase 3 (browser testing) and Phase 4 (performance optimizations).
