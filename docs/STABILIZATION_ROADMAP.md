@@ -8,6 +8,32 @@ The library has all core algorithms implemented, 329+ tests (including property 
 - ~~**Seal internal APIs**~~ — `TextDoc::inner_document()` and `TextView::inner_branch()` removed from public API. `Document.tree` and `Document.oplog` are now `priv`. Public delegate methods added (`visible_count`, `get_all_ops`, `diff_and_collect`, `checkout_branch`, `get_visible_items`, `lv_to_position`). New `TextDoc::apply_remote()` method provides clean remote op application.
 - ~~**Add timeout/cancellation errors**~~ — `SyncFailure::Timeout` and `SyncFailure::Cancelled` variants added with proper `message()`, `help()`, and `is_retryable()` support.
 
+## Phase 1.5: Code Quality & Correctness Issues
+
+Issues identified during codebase analysis that should be addressed before v1.0:
+
+### High Priority
+
+| Issue | Location | Description |
+|-------|----------|-------------|
+| Missing remote batch validation | `oplog/oplog.mbt:192-216` | `validate_remote_batch()` doesn't check for duplicate operations or DAG cycles. Add HashSet-based duplicate detection. |
+| Inconsistent error handling in origin mapping | `branch/branch_merge.mbt:100` | `origin_left` silently maps to `-1` on missing version, but `origin_right` raises `MissingOrigin`. Should be consistent. |
+
+### Medium Priority
+
+| Issue | Location | Description |
+|-------|----------|-------------|
+| Undocumented private functions | `walker.mbt:30,81`, `tree.mbt:152,159,213`, `runs.mbt:88,109` | Key algorithms lack `///|` doc comments explaining invariants and complexity. |
+| Unclear delete operation semantics | `core/operation.mbt:39-47` | `Op::new_delete()` takes `origin_left` but purpose isn't documented. Add doc comment explaining it's the tombstone ID. |
+| Asymmetric sync API | `text/sync.mbt` | Has `export_since()` but no matching `import_filtered()`. Document intended usage pattern or add matching method. |
+
+### Low Priority
+
+| Issue | Location | Description |
+|-------|----------|-------------|
+| Frontier allows duplicates | `core/graph_types.mbt:7` | `Frontier` is `Array[Int]` with no uniqueness guarantee. Add invariant check or document requirement. |
+| Inconsistent doc formatting | Multiple files | Mix of `///|` and `//` comment styles. Standardize on `///|` for public APIs. |
+
 ## Phase 2: Test Coverage Gaps (Partially Complete)
 
 | Gap | Status |
@@ -17,6 +43,9 @@ The library has all core algorithms implemented, 329+ tests (including property 
 | Large document stress tests (100k+ ops) | Remaining — Benchmarks currently cap at 10k |
 | Network reconnection/sync recovery | Remaining — `NETWORK_SYNC.md` TODO |
 | Cascading error propagation in mid-merge | Remaining — Not tested anywhere |
+| Empty version vector operations | Remaining — No test for all operations on empty `VersionVector::new()` |
+| Frontier with duplicates | Remaining — No validation that `Frontier` arrays are unique |
+| Undelete idempotency | Remaining — `FugueTree::undelete` silently succeeds on visible items; needs explicit test |
 
 Property tests are the highest priority — they protect the core CRDT invariants (convergence, commutativity, idempotence) under undo/redo.
 
@@ -38,6 +67,15 @@ From `OPTIMIZATION_ROADMAP.md` and `EG_WALKER_IMPLEMENTATION.md`:
 3. **Lazy loading** — avoid loading entire operation history for large docs
 4. **Delta encoding for checkout** — item 17 in `EG_WALKER_IMPLEMENTATION.md:371`
 
+### Specific Performance Issues Identified
+
+| Issue | Location | Severity | Description |
+|-------|----------|----------|-------------|
+| O(n²) frontier comparison | `branch/branch.mbt:141-158` | High | `at_frontier()` uses nested loops with `.contains()`. Convert to sorted comparison or HashSet for O(n). |
+| Unnecessary array copies | `branch.mbt:71,108,124`, `oplog.mbt:159` | Medium | `frontier.0.copy()` and `operations.copy()` in hot paths. Use in-place sort or return iterators. |
+| O(n) position mapping | `document/document.mbt:59-79` | Medium | `position_to_lv()` does full tree traversal via `get_visible_items()` on every insert/delete. Cache position→LV mappings. |
+| Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` | Low | Already mitigated by lazy `prefix: PrefixSums?` cache, but worth monitoring. |
+
 ## Phase 5: Ecosystem Integration
 
 1. **TypeScript/FFI bindings** — README mentions MoonBit FFI but no examples or docs exist
@@ -57,6 +95,8 @@ For a stable v1.0, focus on Phases 1–3. Phases 4–5 are optimizations and int
 
 1. ~~**Seal the public API surface**~~ — Done. Breaking changes get harder after v1.0
 2. ~~**Fill property test gaps for undo-redo**~~ — Done. Core roundtrip and sync convergence properties tested
-3. **Validate network sync in a real browser environment** — Remaining
+3. **Address Phase 1.5 high-priority issues** — Remaining (remote batch validation, error handling consistency)
+4. **Fix O(n²) frontier comparison** — Remaining (Phase 4 performance, but impacts correctness at scale)
+5. **Validate network sync in a real browser environment** — Remaining
 
-The core algorithm implementation and test coverage are already production-quality.
+The core algorithm implementation and test coverage are already production-quality. The Phase 1.5 issues are correctness/robustness improvements that should be addressed before declaring v1.0 stable.
