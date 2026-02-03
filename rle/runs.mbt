@@ -86,7 +86,16 @@ pub fn[T : HasCausalLength] Runs::visible_len(self : Runs[T]) -> Int {
 }
 
 ///|
-/// Append element, merging with last run if possible
+/// Append an element to the runs, merging with the last run if possible.
+///
+/// This is the primary insertion method for RLE-compressed sequences. If the
+/// new element is contiguous with the last run (determined by `can_merge`),
+/// they are combined into a single run. Otherwise, a new run is created.
+///
+/// **Complexity**: O(1) amortized. Merge check and append are constant time,
+/// with occasional O(k) normalization where k = number of cascading merges.
+///
+/// **Invariant**: After append, no two adjacent runs are mergeable.
 pub fn[T : Mergeable + HasCausalLength] Runs::append(
   self : Runs[T],
   elem : T,
@@ -108,7 +117,16 @@ pub fn[T : Mergeable + HasCausalLength] Runs::append(
 }
 
 ///|
-/// Cascade merging leftward after append
+/// Cascade merging leftward after append to maintain RLE invariants.
+///
+/// After merging the last two runs, the resulting run may now be mergeable
+/// with its predecessor. This function iteratively merges backward until
+/// no more merges are possible.
+///
+/// **Complexity**: O(k) where k = number of consecutive mergeable runs.
+/// In practice, k is typically 1-2 for well-distributed insertions.
+///
+/// **Invariant**: After normalization, no two adjacent runs satisfy `can_merge`.
 fn[T : Mergeable] Runs::normalize_tail(self : Runs[T]) -> Unit {
   while self.0.length() >= 2 {
     let last = self.0.length() - 1

@@ -23,9 +23,9 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| Undocumented private functions | `walker.mbt:30,81`, `tree.mbt:152,159,213`, `runs.mbt:88,109` | Key algorithms lack `///|` doc comments explaining invariants and complexity. |
-| Unclear delete operation semantics | `core/operation.mbt:39-47` | `Op::new_delete()` takes `origin_left` but purpose isn't documented. Add doc comment explaining it's the tombstone ID. |
-| Asymmetric sync API | `text/sync.mbt` | Has `export_since()` but no matching `import_filtered()`. Document intended usage pattern or add matching method. |
+| ~~Undocumented private functions~~ | `walker.mbt:30,81`, `tree.mbt:152,159,213`, `runs.mbt:88,109` | ✅ Fixed: Added `///|` doc comments with invariants and complexity analysis. |
+| ~~Unclear delete operation semantics~~ | `core/operation.mbt:39-47` | ✅ Fixed: Added doc comment explaining `origin_left` is the tombstone ID. |
+| ~~Asymmetric sync API~~ | `text/sync.mbt` | ✅ Fixed: Added module-level documentation explaining the sender-side filtering pattern. |
 
 ### Low Priority
 
