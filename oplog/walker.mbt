@@ -1,5 +1,5 @@
-// OpLog-specific walker functions
-// Wraps the generic causal graph walker with operation collection
+///| OpLog-specific walker functions
+/// Wraps the generic causal graph walker with operation collection
 
 ///|
 /// Walk the operation log from a frontier, collecting operations in causal order

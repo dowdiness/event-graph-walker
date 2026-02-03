@@ -1,5 +1,5 @@
-// Event Graph Walker - Core eg-walker algorithm
-// Traverses the causal graph in topological order to replay operations
+///| Event Graph Walker - Core eg-walker algorithm
+/// Traverses the causal graph in topological order to replay operations
 
 ///|
 /// Walk the event graph from a frontier, collecting all reachable operations

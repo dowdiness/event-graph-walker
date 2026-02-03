@@ -1,6 +1,6 @@
 ///| FugueMax tree implementation
-//  maximal non-interleaving list
-// https://arxiv.org/abs/2305.00583
+/// Maximal non-interleaving list CRDT
+/// https://arxiv.org/abs/2305.00583
 
 ///|
 /// FugueTree - maintains ordered sequence with CRDT properties
