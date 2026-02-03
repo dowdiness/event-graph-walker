@@ -138,21 +138,19 @@ pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree {
 
 ///|
 /// Check if this branch is at the given frontier.
-/// Uses HashSet for O(n) comparison instead of O(n²) nested contains().
+/// Compares sorted copies so element multiplicity is preserved.
 pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
   if self.frontier.0.length() != frontier.0.length() {
     return false
   }
 
-  // Build HashSet for O(n) lookup instead of O(n²) with nested contains()
-  let mut set : @immut/hashset.HashSet[Int] = @immut/hashset.new()
-  for lv in self.frontier.0 {
-    set = set.add(lv)
-  }
+  let lhs = self.frontier.0.copy()
+  let rhs = frontier.0.copy()
+  lhs.sort()
+  rhs.sort()
 
-  // Check all elements in frontier are in set - O(n) total
-  for lv in frontier.0 {
-    if not(set.contains(lv)) {
+  for i = 0; i < lhs.length(); i = i + 1 {
+    if lhs[i] != rhs[i] {
       return false
     }
   }

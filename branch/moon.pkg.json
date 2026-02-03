@@ -5,7 +5,6 @@
     "dowdiness/event-graph-walker/causal_graph",
     "dowdiness/event-graph-walker/oplog",
     "dowdiness/event-graph-walker/fugue",
-    "moonbitlang/core/bench",
-    { "path": "moonbitlang/core/immut/hashset", "alias": "immut/hashset" }
+    "moonbitlang/core/bench"
   ]
 }

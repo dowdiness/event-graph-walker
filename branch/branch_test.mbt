@@ -120,6 +120,24 @@ test "at_frontier check" {
 }
 
 ///|
+test "at_frontier preserves multiplicity" {
+  let remote_a = @oplog.OpLog::new("agent-a")
+  let remote_b = @oplog.OpLog::new("agent-b")
+  let op_a = try! remote_a.insert("A", -1, -1)
+  let op_b = try! remote_b.insert("B", -1, -1)
+
+  let oplog = @oplog.OpLog::new("agent-1")
+  ignore(try! oplog.apply_remote(op_a))
+  ignore(try! oplog.apply_remote(op_b))
+
+  let frontier = oplog.get_frontier()
+  let branch = try! Branch::checkout(oplog, frontier)
+  inspect(frontier.0.length(), content="2")
+  inspect(branch.at_frontier(frontier), content="true")
+  inspect(branch.at_frontier([frontier.0[0], frontier.0[0]]), content="false")
+}
+
+///|
 test "concurrent inserts converge" {
   // Agent 1 creates operations
   let oplog1 = @oplog.OpLog::new("agent-1")
