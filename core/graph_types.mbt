@@ -34,6 +34,10 @@ pub fn Frontier::from_array_dedup(values : Array[Int]) -> Frontier {
 ///|
 /// Check if this frontier contains duplicate elements (violates invariant).
 pub fn Frontier::has_duplicates(self : Frontier) -> Bool {
+  // Short-circuit: 0 or 1 elements can never have duplicates
+  if self.0.length() <= 1 {
+    return false
+  }
   let seen : @hashset.HashSet[Int] = @hashset.new()
   for v in self.0 {
     if seen.contains(v) {

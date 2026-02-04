@@ -255,7 +255,7 @@ test "concurrent undo while peer inserts" {
   // Alice's undo (generates Delete op)
   let undo_ops = mgr_a.undo(doc_a)
   inspect(doc_a.text(), content="")
-  inspect(undo_ops.length() > 0, content="true")
+  inspect(undo_ops.length(), content="1")
 
   // Bob inserts "B" after "A" concurrently (doesn't know about undo yet)
   let _ = doc_b.insert(@text.Pos::at(1), "B")
@@ -270,6 +270,8 @@ test "concurrent undo while peer inserts" {
 
   // Both should converge to the same state
   inspect(doc_a.text() == doc_b.text(), content="true")
+  // Alice's "A" was undone, only Bob's "B" remains
+  inspect(doc_a.text(), content="B")
 }
 
 ///|
@@ -312,6 +314,8 @@ test "concurrent undelete while peer operations (add-wins)" {
   inspect(text_a == text_b, content="true")
   // At minimum, Bob's "Y" should be present since it's a new insert
   inspect(text_a.contains("Y"), content="true")
+  // Alice's undelete should also restore "X" (add-wins)
+  inspect(text_a.contains("X"), content="true")
 }
 
 ///|

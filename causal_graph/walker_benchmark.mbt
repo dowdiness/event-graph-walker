@@ -213,10 +213,11 @@ test "walker - linear history (100000 ops)" (b : @bench.T) {
 test "walker - concurrent branches (100000 ops, 5 agents)" (b : @bench.T) {
   let graph = CausalGraph::new()
   let agents = ["agent_a", "agent_b", "agent_c", "agent_d", "agent_e"]
+  let ops_per_agent = 20000
   let frontiers = []
   for agent in agents {
     let mut prev = -1
-    for i = 0; i < 20000; i = i + 1 {
+    for i = 0; i < ops_per_agent; i = i + 1 {
       let parents = if prev == -1 { [] } else { [prev] }
       prev = try! graph.add_version(parents, agent)
     }

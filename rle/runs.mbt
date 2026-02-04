@@ -304,16 +304,28 @@ pub fn[T : Sliceable + HasCausalLength + Mergeable] Runs::split(
     let run_len = T::causal_len(item)
     let item_end = cur + run_len
     if item_end <= pos {
-      guard left.append(item) is Ok(_)
+      match left.append(item) {
+        Err(e) => return Err(e)
+        Ok(_) => ()
+      }
     } else if cur >= pos {
-      guard right.append(item) is Ok(_)
+      match right.append(item) {
+        Err(e) => return Err(e)
+        Ok(_) => ()
+      }
     } else {
       let offset = pos - cur
       if offset > 0 {
-        guard left.append(T::slice(item, start=0, end=offset)) is Ok(_)
+        match left.append(T::slice(item, start=0, end=offset)) {
+          Err(e) => return Err(e)
+          Ok(_) => ()
+        }
       }
       if offset < run_len {
-        guard right.append(T::slice(item, start=offset, end=run_len)) is Ok(_)
+        match right.append(T::slice(item, start=offset, end=run_len)) {
+          Err(e) => return Err(e)
+          Ok(_) => ()
+        }
       }
     }
     cur = item_end
