@@ -94,7 +94,7 @@ match children.get(current) {
 | 10,000 ops | 28ms (target: <500ms) ✅ |
 | 100,000 ops | ~280ms (estimated) ✅ |
 | Linear scaling | O(n + edges) ✅ |
-| Tests | 329/329 passing ✅ |
+| Tests | 319/319 passing ✅ |
 | Memory | Stable ✅ |
 
 ### Recommendation

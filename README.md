@@ -92,7 +92,6 @@ pub struct OpLog {
 
 **Methods:**
 - `get_all_ops()` - Returns a defensive copy of all operations (safe for external use)
-- `ops_ref()` - Returns operations without copying (internal/read-only use; callers must not mutate)
 
 **Note:** Operations should carry globally stable IDs (RawVersion) for
 parents and FugueMax anchors; OpLog maps those IDs to local LVs on receipt.

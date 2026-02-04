@@ -162,7 +162,7 @@ pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
 ///|
 /// Get all operations without copying (for internal/read-only use)
 /// Callers must not mutate the returned array.
-pub fn OpLog::ops_ref(self : OpLog) -> Array[@core.Op] {
+fn OpLog::ops_ref(self : OpLog) -> Array[@core.Op] {
   self.operations
 }
 
