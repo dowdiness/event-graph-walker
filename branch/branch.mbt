@@ -68,6 +68,7 @@ pub fn Branch::checkout(
   }
 
   // Return branch with reconstructed state
+  // Defensive copy to prevent aliasing with caller-owned array
   { frontier: @core.Frontier::from_array(frontier.0.copy()), tree, oplog }
 }
 
@@ -104,6 +105,7 @@ pub fn Branch::advance(
     for op in advance_ops {
       apply_operation_to_tree(tree, op, self.oplog)
     }
+    // Defensive copy to prevent aliasing with caller-owned array
     {
       frontier: @core.Frontier::from_array(target_frontier.0.copy()),
       tree,
@@ -119,9 +121,16 @@ pub fn Branch::to_text(self : Branch) -> String {
 }
 
 ///|
-/// Get the frontier of this branch
+/// Get the frontier of this branch (returns a copy for safety)
 pub fn Branch::get_frontier(self : Branch) -> @core.Frontier {
   @core.Frontier::from_array(self.frontier.0.copy())
+}
+
+///|
+/// Get the frontier of this branch without copying (for internal/read-only use)
+/// Callers must not mutate the returned frontier's internal array.
+pub fn Branch::frontier_ref(self : Branch) -> @core.Frontier {
+  self.frontier
 }
 
 ///|
@@ -138,7 +147,7 @@ pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree {
 
 ///|
 /// Check if this branch is at the given frontier.
-/// Compares sorted copies so element multiplicity is preserved.
+/// Compares as unordered sets (sorted copies) so element multiplicity is preserved.
 pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
   if self.frontier.0.length() != frontier.0.length() {
     return false

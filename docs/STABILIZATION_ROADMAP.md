@@ -1,6 +1,6 @@
 # Roadmap to v1.0 Stable
 
-The library has all core algorithms implemented, 318 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
+The library has all core algorithms implemented, 319 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
 
 ## Phase 1: Error Handling & API Hardening ✅
 
@@ -72,8 +72,8 @@ From `OPTIMIZATION_ROADMAP.md` and `EG_WALKER_IMPLEMENTATION.md`:
 | Issue | Location | Severity | Description |
 |-------|----------|----------|-------------|
 | ~~O(n²) frontier comparison~~ | `branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses sorted array comparison O(n log n) instead of O(n²) nested `.contains()`. Preserves element multiplicity. |
-| Unnecessary array copies | `branch.mbt:71,108,124`, `oplog.mbt:159` | Medium | `frontier.0.copy()` and `operations.copy()` in hot paths. Use in-place sort or return iterators. |
-| O(n) position mapping | `document/document.mbt:59-79` | Medium | `position_to_lv()` does full tree traversal via `get_visible_items()` on every insert/delete. Cache position→LV mappings. |
+| ~~Unnecessary array copies~~ | `branch.mbt:71,108,124`, `oplog.mbt:159` | Medium | ✅ Fixed: Added `frontier_ref()` and `ops_ref()` methods for internal/read-only access without copying. Public methods still return defensive copies for safety. |
+| ~~O(n) position mapping~~ | `document/document.mbt:59-79` | Medium | ✅ Fixed: Added lazy `position_cache: Array[(Int, @fugue.Item)]?` that caches visible items. Invalidated on any modification. First access is O(n), subsequent lookups O(1). |
 | Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` | Low | Already mitigated by lazy `prefix: PrefixSums?` cache, but worth monitoring. |
 
 ## Phase 5: Ecosystem Integration
