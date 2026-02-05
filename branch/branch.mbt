@@ -152,12 +152,10 @@ pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
   if self.frontier.0.length() != frontier.0.length() {
     return false
   }
-
   let lhs = self.frontier.0.copy()
   let rhs = frontier.0.copy()
   lhs.sort()
   rhs.sort()
-
   for i = 0; i < lhs.length(); i = i + 1 {
     if lhs[i] != rhs[i] {
       return false

@@ -125,11 +125,9 @@ test "at_frontier preserves multiplicity" {
   let remote_b = @oplog.OpLog::new("agent-b")
   let op_a = try! remote_a.insert("A", -1, -1)
   let op_b = try! remote_b.insert("B", -1, -1)
-
   let oplog = @oplog.OpLog::new("agent-1")
   ignore(try! oplog.apply_remote(op_a))
   ignore(try! oplog.apply_remote(op_b))
-
   let frontier = oplog.get_frontier()
   let branch = try! Branch::checkout(oplog, frontier)
   inspect(frontier.0.length(), content="2")

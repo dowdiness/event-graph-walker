@@ -1,19 +1,35 @@
 ///| Sync operations for TextDoc.
+
 ///|
+
 ///| ## Usage Pattern
+
 ///|
+
 ///| The sync API is asymmetric by design:
+
 ///| - **Export**: Use `export_all()` for initial sync, `export_since(peer_version)` for deltas
+
 ///| - **Import**: Use `apply(message)` for all incoming messages
+
 ///|
+
 ///| There is no `import_filtered()` because filtering happens on the **sender** side
+
 ///| via `export_since()`. The receiver always applies the full message - the sender
+
 ///| is responsible for sending only the operations the receiver needs.
+
 ///|
+
 ///| ```
+
 ///| // Peer A sends to Peer B
+
 ///| let message = peer_a.sync().export_since(peer_b_version)
+
 ///| peer_b.sync().apply(message)
+
 ///| ```
 
 ///| A message containing operations and version info for syncing between peers.

@@ -25,6 +25,8 @@ pub impl Show for Change
 
 pub(all) struct Frontier(Array[Int])
 pub fn Frontier::from_array(Array[Int]) -> Self
+pub fn Frontier::from_array_dedup(Array[Int]) -> Self
+pub fn Frontier::has_duplicates(Self) -> Bool
 #deprecated
 pub fn Frontier::inner(Self) -> Array[Int]
 pub impl Eq for Frontier

@@ -340,7 +340,6 @@ test "undelete on missing item raises MissingItem" {
   } catch {
     e => Err(e)
   }
-
   match result {
     Err(MissingItem(id~)) => inspect(id, content="999")
     Ok(_) => fail("Expected MissingItem error")

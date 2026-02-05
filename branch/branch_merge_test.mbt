@@ -250,7 +250,6 @@ test "merge error - missing op during apply" {
     0,
     "agent_a",
   )
-
   let ctx = MergeContext::new(tree, oplog)
 
   // Try to apply operations including a non-existent LV
@@ -260,7 +259,6 @@ test "merge error - missing op during apply" {
   } catch {
     e => Err(e)
   }
-
   match result {
     Err(MissingOp(lv~)) => inspect(lv, content="999")
     _ => fail("Expected MissingOp error")
@@ -298,7 +296,6 @@ test "merge error - apply operations succeeds for valid ops" {
     0,
     "agent_a",
   )
-
   let ctx = MergeContext::new(tree2, oplog)
 
   // Apply op2 through merge context - should succeed
@@ -308,7 +305,6 @@ test "merge error - apply operations succeeds for valid ops" {
   } catch {
     e => Err(e)
   }
-
   match result {
     Ok(_) => inspect(tree2.to_text(), content="AB")
     Err(_) => fail("Expected success but got error")
@@ -332,7 +328,6 @@ test "merge error - state unchanged after failure" {
   // Capture state before
   let text_before = tree.to_text()
   inspect(text_before, content="ABC")
-
   let ctx = MergeContext::new(tree, oplog)
 
   // Try an operation that will fail
@@ -370,9 +365,7 @@ test "retreat then apply with missing item" {
   tree.insert(op1.lv, "A", -1, -1, 0, "agent_a")
   let op2 = try! oplog.insert("B", op1.lv, -1)
   tree.insert(op2.lv, "B", op1.lv, -1, 1, "agent_a")
-
   inspect(tree.to_text(), content="AB")
-
   let ctx = MergeContext::new(tree, oplog)
 
   // Try to retreat a non-existent item - should raise Fugue(MissingItem)
@@ -382,7 +375,6 @@ test "retreat then apply with missing item" {
   } catch {
     e => Err(e)
   }
-
   match result {
     Err(Fugue(@fugue.MissingItem(id~))) => inspect(id, content="999")
     _ => fail("Expected Fugue(MissingItem) error")

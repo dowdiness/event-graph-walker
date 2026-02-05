@@ -318,7 +318,6 @@ test "sync recovery - partial operation log" {
   let delta_msg = doc1.sync().export_since(bob_version)
   // Should contain "B" and "C" ops
   inspect(delta_msg.op_count(), content="2")
-
   doc2.sync().apply(delta_msg)
   inspect(doc2.text(), content="ABC")
 }
@@ -332,7 +331,6 @@ test "sync recovery - stale version vector" {
   // Build up some history
   let _ = doc1.insert(Pos::at(0), "Hello")
   let old_version = doc1.version() // Save this for later
-
   let _ = doc1.insert(Pos::at(5), " ")
   let _ = doc1.insert(Pos::at(6), "World")
   let _ = doc1.insert(Pos::at(11), "!")
@@ -367,7 +365,6 @@ test "sync recovery - network partition reunion (3 peers)" {
   let msg_init = doc_a.sync().export_all()
   doc_b.sync().apply(msg_init)
   doc_c.sync().apply(msg_init)
-
   let shared_version = doc_a.version()
 
   // === Partition 1: Alice and Bob ===
@@ -422,13 +419,11 @@ test "sync recovery - bidirectional delta after disconnect" {
   let _ = doc1.insert(Pos::at(0), "START")
   let msg_init = doc1.sync().export_all()
   doc2.sync().apply(msg_init)
-
   let shared = doc1.version()
 
   // Both make local changes while disconnected
   let _ = doc1.insert(Pos::at(5), "-A1")
   let _ = doc1.insert(Pos::at(8), "-A2")
-
   let _ = doc2.insert(Pos::at(5), "-B1")
   let _ = doc2.insert(Pos::at(8), "-B2")
 

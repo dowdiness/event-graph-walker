@@ -264,7 +264,6 @@ test "concurrent undo while peer inserts" {
   // Full bidirectional sync using export_all for complete convergence
   let full_a = doc_a.sync().export_all()
   let full_b = doc_b.sync().export_all()
-
   doc_a.sync().apply(full_b)
   doc_b.sync().apply(full_a)
 
@@ -304,7 +303,6 @@ test "concurrent undelete while peer operations (add-wins)" {
   // Full bidirectional sync for complete convergence
   let full_a = doc_a.sync().export_all()
   let full_b = doc_b.sync().export_all()
-
   doc_a.sync().apply(full_b)
   doc_b.sync().apply(full_a)
 
@@ -337,7 +335,6 @@ test "three-agent concurrent undos converge" {
   let msg_a = doc_a.sync().export_all()
   let msg_b = doc_b.sync().export_all()
   let msg_c = doc_c.sync().export_all()
-
   doc_a.sync().apply(msg_b)
   doc_a.sync().apply(msg_c)
   doc_b.sync().apply(msg_a)
@@ -357,10 +354,18 @@ test "three-agent concurrent undos converge" {
   let undo_c = mgr_c.undo(doc_c)
 
   // Sync all undo ops
-  let undo_msg_a = @text.SyncMessage::new(undo_a, doc_a.sync().export_all().get_heads())
-  let undo_msg_b = @text.SyncMessage::new(undo_b, doc_b.sync().export_all().get_heads())
-  let undo_msg_c = @text.SyncMessage::new(undo_c, doc_c.sync().export_all().get_heads())
-
+  let undo_msg_a = @text.SyncMessage::new(
+    undo_a,
+    doc_a.sync().export_all().get_heads(),
+  )
+  let undo_msg_b = @text.SyncMessage::new(
+    undo_b,
+    doc_b.sync().export_all().get_heads(),
+  )
+  let undo_msg_c = @text.SyncMessage::new(
+    undo_c,
+    doc_c.sync().export_all().get_heads(),
+  )
   doc_a.sync().apply(undo_msg_b)
   doc_a.sync().apply(undo_msg_c)
   doc_b.sync().apply(undo_msg_a)
@@ -396,7 +401,10 @@ test "undo ops arrive at peer after sync" {
   inspect(undo_ops.length() > 0, content="true")
 
   // Step 4: Sync undo ops to Bob
-  let undo_msg = @text.SyncMessage::new(undo_ops, doc_a.sync().export_all().get_heads())
+  let undo_msg = @text.SyncMessage::new(
+    undo_ops,
+    doc_a.sync().export_all().get_heads(),
+  )
   doc_b.sync().apply(undo_msg)
 
   // Step 5: Bob converges to same state
@@ -422,7 +430,10 @@ test "redo after peer sync preserves state" {
   inspect(doc_a.text(), content="")
 
   // Sync undo to Bob
-  let undo_msg = @text.SyncMessage::new(undo_ops, doc_a.sync().export_all().get_heads())
+  let undo_msg = @text.SyncMessage::new(
+    undo_ops,
+    doc_a.sync().export_all().get_heads(),
+  )
   doc_b.sync().apply(undo_msg)
   inspect(doc_b.text(), content="")
 
@@ -431,7 +442,10 @@ test "redo after peer sync preserves state" {
   inspect(doc_a.text(), content="Test")
 
   // Sync redo to Bob
-  let redo_msg = @text.SyncMessage::new(redo_ops, doc_a.sync().export_all().get_heads())
+  let redo_msg = @text.SyncMessage::new(
+    redo_ops,
+    doc_a.sync().export_all().get_heads(),
+  )
   doc_b.sync().apply(redo_msg)
 
   // Both should have "Test" again

@@ -71,8 +71,11 @@ fn Document::invalidate_cache(self : Document) -> Unit {
 }
 
 ///| Map a user position (0-based cursor position) to the LV at that position
+
 ///|
+
 ///| Returns the LV of the item before the cursor position
+
 ///|
 /// Returns -1 if at the start of the document
 fn Document::position_to_lv(self : Document, position : Int) -> Int {
@@ -98,7 +101,9 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
 }
 
 ///| Insert text at a cursor position
+
 ///|
+
 ///|
 /// Returns the last operation that was created (for multi-character inserts)
 pub fn Document::insert(
@@ -121,19 +126,7 @@ pub fn Document::insert(
     }
 
     // Map position to LV using cached items
-    let origin_left = if current_pos == 0 {
-      -1
-    } else if current_pos > items_list.length() {
-      if items_list.length() > 0 {
-        let (id, _) = items_list[items_list.length() - 1]
-        id
-      } else {
-        -1
-      }
-    } else {
-      let (id, _) = items_list[current_pos - 1]
-      id
-    }
+    let origin_left = self.position_to_lv(current_pos)
 
     // Find origin_right (the item after the cursor)
     let origin_right = if current_pos == 0 {
@@ -173,7 +166,6 @@ pub fn Document::insert(
     if i + 1 < text.length() {
       items_list = self.get_position_cache()
     }
-
     last_op = Some(op)
     current_pos = current_pos + 1
   }
@@ -191,7 +183,9 @@ pub fn Document::insert(
 }
 
 ///| Delete character at a cursor position
+
 ///|
+
 ///|
 /// Returns Some(operation) if successful, None if position is invalid
 pub fn Document::delete(

@@ -156,7 +156,7 @@ pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int]) -> Array[@core.Op] {
 ///|
 /// Get all operations (returns a copy for safety)
 pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
-  self.operations.copy()
+  self.ops_ref().copy()
 }
 
 ///|
