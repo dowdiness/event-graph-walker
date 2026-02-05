@@ -116,6 +116,12 @@ pub fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
       TextError::SyncFailed(
         SyncFailure::MissingDependency(hint="missing frontier: \{raw}"),
       )
+    DuplicateOperation(raw~) =>
+      TextError::SyncFailed(
+        SyncFailure::MalformedMessage(
+          detail="duplicate operation in batch: \{raw}",
+        ),
+      )
     CausalGraphError(error~) =>
       match error {
         @causal_graph.CausalGraphError::MissingParent(lv~) =>

@@ -1,5 +1,5 @@
-// Event Graph Walker - Core eg-walker algorithm
-// Traverses the causal graph in topological order to replay operations
+///| Event Graph Walker - Core eg-walker algorithm
+/// Traverses the causal graph in topological order to replay operations
 
 ///|
 /// Walk the event graph from a frontier, collecting all reachable operations
@@ -25,8 +25,15 @@ pub fn CausalGraph::walk_from_frontier(
 }
 
 ///|
-/// Collect all versions reachable from the given frontier
-/// This includes the frontier versions themselves and all their ancestors
+/// Collect all versions reachable from the given frontier.
+///
+/// Uses BFS traversal to find all ancestor versions. This includes the frontier
+/// versions themselves and all their transitive parents in the causal graph.
+///
+/// **Complexity**: O(V + E) where V = number of versions, E = number of parent edges.
+///
+/// **Invariant**: The returned set forms a downward-closed subset of the DAG -
+/// if a version is included, all its ancestors are also included.
 fn collect_reachable_versions(
   graph : CausalGraph,
   frontier : Array[Int],

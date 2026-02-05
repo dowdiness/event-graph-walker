@@ -51,15 +51,18 @@ event-graph-walker/
 ### Key Data Structures
 
 #### Document
-The high-level API for collaborative editing. Manages text operations with position-based (cursor) API. Internal fields (`tree`, `oplog`) are encapsulated; use public methods instead.
+The high-level API for collaborative editing. Manages text operations with position-based (cursor) API. Internal fields (`tree`, `oplog`, `position_cache`) are encapsulated; use public methods instead.
 
 ```moonbit
 pub struct Document {
-  priv tree: @fugue.FugueTree  // CRDT tree state (encapsulated)
-  priv oplog: @oplog.OpLog     // Operation log (encapsulated)
-  agent_id: String             // Unique peer identifier
+  priv tree: @fugue.FugueTree              // CRDT tree state (encapsulated)
+  priv oplog: @oplog.OpLog                 // Operation log (encapsulated)
+  agent_id: String                         // Unique peer identifier
+  priv mut position_cache: Array[...]?     // Lazy position cache (invalidated on mutation)
 }
 ```
+
+The position cache provides O(1) position-to-LV lookups after first access. It is automatically invalidated on any mutation (insert, delete, apply_remote, merge_remote).
 
 **Operations:**
 - `insert(position, text)` - Insert text at cursor position
@@ -86,6 +89,9 @@ pub struct OpLog {
   agent_id: String               // This agent's ID
 }
 ```
+
+**Methods:**
+- `get_all_ops()` - Returns a defensive copy of all operations (safe for external use)
 
 **Note:** Operations should carry globally stable IDs (RawVersion) for
 parents and FugueMax anchors; OpLog maps those IDs to local LVs on receipt.
@@ -117,11 +123,15 @@ Document snapshot at a specific frontier. Enables efficient checkout and advance
 
 ```moonbit
 pub struct Branch {
-  frontier: Array[Int]           // Version frontier
+  frontier: @core.Frontier       // Version frontier
   tree: @fugue.FugueTree         // CRDT tree state
   oplog: @oplog.OpLog            // Reference to operation log
 }
 ```
+
+**Methods:**
+- `get_frontier()` - Returns a defensive copy of the frontier (safe for external use)
+- `frontier_ref()` - Returns frontier without copying (internal/read-only use; callers must not mutate)
 
 ## Algorithm Components
 
@@ -412,6 +422,7 @@ The module includes:
 - **Walker** - O(n) for topological sort on DAG
 - **Version vectors** - O(m) where m = number of agents
 - **Branch advance** - O(k) where k = new operations
+- **Position mapping** - O(1) after first access (lazy cache, invalidated on mutation)
 
 See the performance documentation in the [crdt monorepo](https://github.com/dowdiness/crdt/tree/main/docs/performance) for detailed benchmarks.
 

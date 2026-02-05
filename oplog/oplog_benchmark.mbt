@@ -260,3 +260,49 @@ test "oplog - random position inserts (100 ops)" (b : @bench.T) {
     b.keep(oplog)
   })
 }
+
+// =============================================================================
+// Gap 2: Large Document Stress Tests (100k+ ops)
+// =============================================================================
+
+///|
+/// Benchmark: Sequential typing (100000 chars) - simulate typing a large document
+test "oplog - sequential typing (100000 chars)" (b : @bench.T) {
+  b.bench(fn() {
+    let oplog = OpLog::new("agent_a")
+    let mut prev = -1
+
+    // Simulate typing a 100,000-character document
+    for i = 0; i < 100000; i = i + 1 {
+      let op = try! oplog.insert("x", prev, -1)
+      prev = op.lv
+    }
+    b.keep(oplog)
+  })
+}
+
+///|
+/// Benchmark: Diff and collect (100000 ops advance)
+/// Tests performance of computing delta from an old frontier to current
+test "oplog - diff_and_collect (100000 ops advance)" (b : @bench.T) {
+  let oplog = OpLog::new("agent_a")
+  let mut prev = -1
+
+  // Build base: 100 operations
+  for i = 0; i < 100; i = i + 1 {
+    let op = try! oplog.insert("a", prev, -1)
+    prev = op.lv
+  }
+  let from_frontier = oplog.get_frontier()
+
+  // Add 100000 more operations
+  for i = 0; i < 100000; i = i + 1 {
+    let op = try! oplog.insert("b", prev, -1)
+    prev = op.lv
+  }
+  let to_frontier = oplog.get_frontier()
+  b.bench(fn() {
+    let result = oplog.diff_and_collect(from_frontier, to_frontier)
+    b.keep(result)
+  })
+}

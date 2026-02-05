@@ -229,3 +229,162 @@ test "merge - simple merge using graph_diff" {
   let merged_text = tree2.to_text()
   inspect(merged_text, content="Hello")
 }
+
+// =============================================================================
+// Gap 4: Cascading Error Propagation in Mid-Merge Tests
+// =============================================================================
+
+///|
+/// Test: MergeContext::apply_operations with invalid LV raises MissingOp
+test "merge error - missing op during apply" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree = @fugue.FugueTree::new()
+
+  // Insert one valid operation
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert(
+    op1.lv,
+    "A",
+    resolve_origin(oplog, op1.origin_left),
+    resolve_origin(oplog, op1.origin_right),
+    0,
+    "agent_a",
+  )
+
+  let ctx = MergeContext::new(tree, oplog)
+
+  // Try to apply operations including a non-existent LV
+  let result : Result[Unit, BranchError] = try {
+    ctx.apply_operations([999])
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+
+  match result {
+    Err(MissingOp(lv~)) => inspect(lv, content="999")
+    _ => fail("Expected MissingOp error")
+  }
+}
+
+///|
+/// Test: apply_operations with valid op works, demonstrates error path exists
+test "merge error - apply operations succeeds for valid ops" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree = @fugue.FugueTree::new()
+
+  // Insert first operation
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert(
+    op1.lv,
+    "A",
+    resolve_origin(oplog, op1.origin_left),
+    resolve_origin(oplog, op1.origin_right),
+    0,
+    "agent_a",
+  )
+
+  // Insert second operation
+  let op2 = try! oplog.insert("B", op1.lv, -1)
+
+  // Create a fresh tree and use MergeContext to apply op2
+  let tree2 = @fugue.FugueTree::new()
+  // First add op1 to tree2
+  tree2.insert(
+    op1.lv,
+    "A",
+    resolve_origin(oplog, op1.origin_left),
+    resolve_origin(oplog, op1.origin_right),
+    0,
+    "agent_a",
+  )
+
+  let ctx = MergeContext::new(tree2, oplog)
+
+  // Apply op2 through merge context - should succeed
+  let result : Result[Unit, BranchError] = try {
+    ctx.apply_operations([op2.lv])
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+
+  match result {
+    Ok(_) => inspect(tree2.to_text(), content="AB")
+    Err(_) => fail("Expected success but got error")
+  }
+}
+
+///|
+/// Test: Capture state before failed merge, verify unchanged after
+test "merge error - state unchanged after failure" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree = @fugue.FugueTree::new()
+
+  // Build initial state "ABC"
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert(op1.lv, "A", -1, -1, 0, "agent_a")
+  let op2 = try! oplog.insert("B", op1.lv, -1)
+  tree.insert(op2.lv, "B", op1.lv, -1, 1, "agent_a")
+  let op3 = try! oplog.insert("C", op2.lv, -1)
+  tree.insert(op3.lv, "C", op2.lv, -1, 2, "agent_a")
+
+  // Capture state before
+  let text_before = tree.to_text()
+  inspect(text_before, content="ABC")
+
+  let ctx = MergeContext::new(tree, oplog)
+
+  // Try an operation that will fail
+  let result : Result[Unit, BranchError] = try {
+    ctx.apply_operations([999])
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+
+  // Verify error occurred
+  match result {
+    Err(_) => {
+      // State should be unchanged after failed operation
+      // Note: The tree state may have been partially modified depending on
+      // where in the operation list the failure occurred. With a single
+      // invalid op at the start, the tree should remain unchanged.
+      let text_after = tree.to_text()
+      let count_after = tree.visible_count()
+      inspect(text_after, content="ABC")
+      inspect(count_after, content="3")
+    }
+    Ok(_) => fail("Expected error")
+  }
+}
+
+///|
+/// Test: Retreat then apply with missing item propagates Fugue error
+test "retreat then apply with missing item" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree = @fugue.FugueTree::new()
+
+  // Insert "AB"
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert(op1.lv, "A", -1, -1, 0, "agent_a")
+  let op2 = try! oplog.insert("B", op1.lv, -1)
+  tree.insert(op2.lv, "B", op1.lv, -1, 1, "agent_a")
+
+  inspect(tree.to_text(), content="AB")
+
+  let ctx = MergeContext::new(tree, oplog)
+
+  // Try to retreat a non-existent item - should raise Fugue(MissingItem)
+  let result : Result[Unit, BranchError] = try {
+    ctx.retreat_operations([999])
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+
+  match result {
+    Err(Fugue(@fugue.MissingItem(id~))) => inspect(id, content="999")
+    _ => fail("Expected Fugue(MissingItem) error")
+  }
+}

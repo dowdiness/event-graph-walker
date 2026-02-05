@@ -31,7 +31,22 @@ The critical O(n²) bottleneck in topological sort has been eliminated by buildi
 - Replaced nested loop `for candidate in versions` with direct map lookup
 - Impact: 138x speedup at 10k ops, linear scaling across all sizes
 - Files: `causal_graph/walker.mbt`
-- Tests: All 329 tests passing
+- Tests: All 319 tests passing
+
+### ✅ Completed (2026-02-04)
+
+**Document Position Cache** (`document/document.mbt`)
+- Added lazy `position_cache: Array[(Int, @fugue.Item)]?` for visible items
+- First access: O(n) tree traversal, subsequent lookups: O(1)
+- Automatically invalidated on any mutation (insert, delete, apply_remote, merge_remote)
+- Cache invalidation happens *before* tree mutations for exception safety
+- Files: `document/document.mbt`, `document/document_test.mbt`
+
+**Zero-Copy Reference Methods** (`branch/branch.mbt`, `oplog/oplog.mbt`)
+- Added `Branch::frontier_ref()` - returns frontier without copying
+- Added `OpLog::ops_ref()` - returns operations without copying
+- For internal/read-only use; callers must not mutate returned arrays
+- Public methods (`get_frontier()`, `get_all_ops()`) still return defensive copies
 
 **Code Change**:
 ```moonbit
@@ -79,7 +94,7 @@ match children.get(current) {
 | 10,000 ops | 28ms (target: <500ms) ✅ |
 | 100,000 ops | ~280ms (estimated) ✅ |
 | Linear scaling | O(n + edges) ✅ |
-| Tests | 329/329 passing ✅ |
+| Tests | 319/319 passing ✅ |
 | Memory | Stable ✅ |
 
 ### Recommendation

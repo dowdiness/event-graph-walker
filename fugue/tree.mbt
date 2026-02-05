@@ -1,6 +1,6 @@
 ///| FugueMax tree implementation
-//  maximal non-interleaving list
-// https://arxiv.org/abs/2305.00583
+/// Maximal non-interleaving list CRDT
+/// https://arxiv.org/abs/2305.00583
 
 ///|
 /// FugueTree - maintains ordered sequence with CRDT properties
@@ -148,14 +148,26 @@ pub fn FugueTree::lv_to_position(self : FugueTree, id : Int) -> Int? {
 }
 
 ///|
-/// Add item to tree
+/// Add item to the tree's internal map.
+///
+/// **Invariant**: The item's `id` must be unique within the tree. Duplicate IDs
+/// will overwrite existing items, which violates CRDT convergence guarantees.
+///
+/// **Complexity**: O(log n) for immutable hashmap insertion.
 fn FugueTree::add_item(self : FugueTree, item : Item) -> Unit {
   self.items = self.items.add(item.id, item)
   self.length = self.length + 1
 }
 
 ///|
-/// Compare children by Lamport timestamp (primary) and agent (tiebreaker)
+/// Compare children for sibling ordering in the Fugue tree.
+///
+/// Uses Lamport timestamp as primary sort key, with agent ID as tiebreaker.
+/// This deterministic ordering ensures all peers converge to the same tree
+/// structure regardless of operation arrival order.
+///
+/// **Complexity**: O(1) for numeric comparison, O(k) for string tiebreaker
+/// where k = agent ID length.
 fn compare_children(a : (Int, Item), b : (Int, Item)) -> Int {
   let (_, item_a) = a
   let (_, item_b) = b
@@ -208,8 +220,20 @@ test "ancestor check correctness" {
 }
 
 ///|
-/// Find the correct parent and side for a new item using FugueMax algorithm
-/// Returns (parent_id, side)
+/// Find the correct parent and side for a new item using FugueMax algorithm.
+///
+/// Given the left and right origin constraints from an insert operation,
+/// determines where in the tree the new item should be placed. This implements
+/// the core conflict resolution logic that ensures convergence.
+///
+/// **Algorithm**:
+/// - If `origin_left == -1`: Insert at document start (parent = root, side = Right)
+/// - If `origin_right == -1`: Insert after origin_left (parent = origin_left, side = Right)
+/// - Otherwise: Navigate the tree to find the correct position between origins
+///
+/// **Complexity**: O(d) where d = tree depth (typically O(log n) for balanced trees).
+///
+/// Returns `(parent_id, side)` where side indicates Left or Right child placement.
 fn FugueTree::find_parent_and_side(
   self : FugueTree,
   origin_left : Int,

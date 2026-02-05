@@ -35,7 +35,12 @@ pub fn Op::new_insert(
 }
 
 ///|
-/// Create a new delete operation
+/// Create a new delete operation.
+///
+/// The `origin_left` parameter specifies the tombstone ID - the local version
+/// of the item being deleted. This is required to identify which item in the
+/// Fugue tree should be marked as deleted. Callers must always provide a
+/// concrete target ID; `None` is only valid for internal/placeholder use.
 pub fn Op::new_delete(
   lv : Int,
   parents : Array[RawVersion],
