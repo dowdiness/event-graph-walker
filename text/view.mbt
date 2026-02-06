@@ -45,8 +45,8 @@ pub fn TextView::to_rle(self : TextView) -> @rle.Runs[String] {
 /// deleted status are merged.
 ///
 /// Use cases:
-/// - `causal_len`: total structural length including tombstones
-/// - `visible_len`: visible text length (tombstones contribute 0)
+/// - `span`: total structural length including tombstones
+/// - `content_len`: visible text length (tombstones contribute 0)
 /// - Range queries that need to track deleted positions
 pub fn TextView::to_spans(self : TextView) -> @rle.Runs[TextSpan] {
   let items = self.branch.inner_tree().get_all_items()
