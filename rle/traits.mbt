@@ -29,34 +29,39 @@ pub(open) trait Sliceable {
 ///|
 /// **HasLength** - "Plain size"
 ///
-/// Basic, non-CRDT length for a value.
+/// Basic length for a value.
 pub(open) trait HasLength {
   length(Self) -> Int
 }
 
 ///|
-/// **HasCausalLength** - "CRDT position space"
+/// **Spanning** - "Two notions of size"
 ///
-/// Two different notions of "length" matter for CRDTs:
+/// Many data structures need two different notions of "length":
 ///
-/// - `causal_len`: The causal/structural length including tombstones.
-///   This represents the position space for causal ordering.
-///   Always positive, even for deleted content.
-///   Think: "how many slots does this occupy in the causal sequence?"
+/// - `span`: The total size in the position/index space.
+///   This is the space used for indexing and lookups.
+///   Always positive; includes all elements regardless of state.
+///   Think: "how many slots does this occupy in the index space?"
 ///
-/// - `visible_len`: The visible length excluding tombstones.
-///   This is what users see and interact with.
-///   Zero for tombstones, positive otherwise.
-///   Think: "how many characters would the user see?"
+/// - `content_len`: The size of the useful/visible payload.
+///   May be less than `span` if some elements are hidden, filtered, or deleted.
+///   Think: "how much content is actually meaningful to the consumer?"
 ///
-/// Note: `causal_len` defaults to `HasLength::length` unless overridden.
-pub(open) trait HasCausalLength: HasLength {
-  causal_len(Self) -> Int = _
-  visible_len(Self) -> Int
+/// Examples:
+/// - In a CRDT: span = structural length (incl. tombstones),
+///   content_len = visible length (excl. tombstones)
+/// - In a gap buffer: span = total (incl. gap), content_len = actual text
+/// - In plain text: span = content_len = character count
+///
+/// Note: `span` defaults to `HasLength::length` unless overridden.
+pub(open) trait Spanning: HasLength {
+  span(Self) -> Int = _
+  content_len(Self) -> Int
 }
 
 ///|
-/// Default causal length delegates to plain length.
-impl HasCausalLength with causal_len(self) {
+/// Default span delegates to plain length.
+impl Spanning with span(self) {
   HasLength::length(self)
 }

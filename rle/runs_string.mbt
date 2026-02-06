@@ -18,8 +18,8 @@ pub impl HasLength for String with length(self : String) -> Int {
 }
 
 ///|
-/// String implements HasCausalLength - causal_len = visible_len = char count
-pub impl HasCausalLength for String with visible_len(self : String) -> Int {
+/// String implements Spanning - span = content_len = char count
+pub impl Spanning for String with content_len(self : String) -> Int {
   self.length()
 }
 

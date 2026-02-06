@@ -7,7 +7,7 @@ test "invariant: no zero-length runs after append" {
   let _ = runs.append("b")
   let _ = runs.append("c")
   for item in runs.0 {
-    inspect(HasCausalLength::causal_len(item) > 0, content="true")
+    inspect(Spanning::span(item) > 0, content="true")
   }
 }
 
@@ -46,10 +46,10 @@ test "split preserves invariants" {
   match result {
     Ok((left, right)) => {
       for item in left.0 {
-        inspect(HasCausalLength::causal_len(item) > 0, content="true")
+        inspect(Spanning::span(item) > 0, content="true")
       }
       for item in right.0 {
-        inspect(HasCausalLength::causal_len(item) > 0, content="true")
+        inspect(Spanning::span(item) > 0, content="true")
       }
     }
     Err(_) => fail("split should succeed")
@@ -75,8 +75,8 @@ test "prefix_sums internal structure" {
   let _ = runs.append("abc")
   // Since strings always merge, still one run
   let sums = runs.prefix_sums()
-  inspect(sums.atoms.length(), content="1")
-  inspect(sums.atoms[0], content="3")
+  inspect(sums.spans.length(), content="1")
+  inspect(sums.spans[0], content="3")
   inspect(sums.content[0], content="3")
 }
 

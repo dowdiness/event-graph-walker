@@ -38,7 +38,7 @@ test "Rle::append rejects empty element" {
 }
 
 ///|
-test "Rle::len returns total causal length (cached)" {
+test "Rle::len returns total span length (cached)" {
   let rle = @rle.Rle::from_string("hello")
   inspect(rle.len(), content="5")
   // Second call uses cache
@@ -46,9 +46,9 @@ test "Rle::len returns total causal length (cached)" {
 }
 
 ///|
-test "Rle::visible_len returns total visible length (cached)" {
+test "Rle::content_len returns total content length (cached)" {
   let rle = @rle.Rle::from_string("hello")
-  inspect(rle.visible_len(), content="5")
+  inspect(rle.content_len(), content="5")
 }
 
 ///|

@@ -12,7 +12,7 @@ pub impl HasLength for BenchRun with length(self : BenchRun) -> Int {
 }
 
 ///|
-pub impl HasCausalLength for BenchRun with visible_len(self : BenchRun) -> Int {
+pub impl Spanning for BenchRun with content_len(self : BenchRun) -> Int {
   self.len
 }
 

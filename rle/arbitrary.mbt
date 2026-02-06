@@ -75,7 +75,7 @@ pub impl @qc.Shrink for Runs[String] with shrink(runs) {
   // Strategy 4: Shorten individual runs
   for i = 0; i < len; i = i + 1 {
     let item = items[i]
-    let item_len = HasCausalLength::causal_len(item)
+    let item_len = Spanning::span(item)
     if item_len > 1 {
       // Try with shortened run
       let shortened : Runs[String] = Runs::new()
@@ -149,33 +149,33 @@ pub impl @qc.Shrink for RunPos with shrink(pos) {
 pub impl @quickcheck.Arbitrary for PrefixSums with arbitrary(size, random_state) {
   let num_runs = random_state.split().next_uint64().to_int().abs() % (size + 1) +
     1
-  let atoms : Array[Int] = []
+  let spans : Array[Int] = []
   let content : Array[Int] = []
-  let mut atom_sum = 0
+  let mut span_sum = 0
   let mut content_sum = 0
   for _ in 0..<num_runs {
     let run_len = random_state.split().next_uint64().to_int().abs() % 10 + 1
-    atom_sum = atom_sum + run_len
+    span_sum = span_sum + run_len
     content_sum = content_sum + run_len
-    atoms.push(atom_sum)
+    spans.push(span_sum)
     content.push(content_sum)
   }
-  { atoms, content }
+  { spans, content }
 }
 
 ///|
 /// Shrink instance for PrefixSums - shrinks by removing entries
 pub impl @qc.Shrink for PrefixSums with shrink(sums) {
   let results : Array[PrefixSums] = []
-  let len = sums.atoms.length()
+  let len = sums.spans.length()
   // Try empty
   if len > 0 {
-    results.push({ atoms: [], content: [] })
+    results.push({ spans: [], content: [] })
   }
   // Remove last entry
   if len > 1 {
     results.push({
-      atoms: sums.atoms[:len - 1].to_array(),
+      spans: sums.spans[:len - 1].to_array(),
       content: sums.content[:len - 1].to_array(),
     })
   }
@@ -183,7 +183,7 @@ pub impl @qc.Shrink for PrefixSums with shrink(sums) {
   if len > 2 {
     let half = len / 2
     results.push({
-      atoms: sums.atoms[:half].to_array(),
+      spans: sums.spans[:half].to_array(),
       content: sums.content[:half].to_array(),
     })
   }
@@ -205,7 +205,7 @@ pub impl @quickcheck.Arbitrary for Slice[String] with arbitrary(
     sb.write_char(chars[char_idx])
   }
   let value = sb.to_string()
-  let value_len = HasCausalLength::causal_len(value)
+  let value_len = Spanning::span(value)
   let start = random_state.split().next_uint64().to_int().abs() % value_len
   let end = start +
     random_state.split().next_uint64().to_int().abs() % (value_len - start) +
@@ -217,7 +217,7 @@ pub impl @quickcheck.Arbitrary for Slice[String] with arbitrary(
 /// Shrink instance for Slice[String] - shrinks value and narrows range
 pub impl @qc.Shrink for Slice[String] with shrink(slice) {
   let results : Array[Slice[String]] = []
-  let value_len = HasCausalLength::causal_len(slice.value)
+  let value_len = Spanning::span(slice.value)
   // Shrink to smaller range
   if slice.end > slice.start + 1 {
     results.push({ ..slice, end: slice.start + 1 })

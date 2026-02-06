@@ -17,7 +17,7 @@ test "property: merge is associative" {
 ///|
 /// Property: Slice/merge round-trip - merge(slice(x, end=k), slice(x, start=k)) == x
 fn prop_slice_merge_roundtrip(text : String) -> Bool {
-  let len = @rle.HasCausalLength::causal_len(text)
+  let len = @rle.Spanning::span(text)
   if len == 0 {
     return true
   }
@@ -33,32 +33,32 @@ test "property: slice/merge round-trip" {
 }
 
 ///|
-/// Property: causal_len is non-negative
-fn prop_causal_len_non_negative(text : String) -> Bool {
-  @rle.HasCausalLength::causal_len(text) >= 0
+/// Property: span is non-negative
+fn prop_span_non_negative(text : String) -> Bool {
+  @rle.Spanning::span(text) >= 0
 }
 
 ///|
-test "property: causal_len is non-negative" {
-  @qc.quick_check_fn(prop_causal_len_non_negative)
+test "property: span is non-negative" {
+  @qc.quick_check_fn(prop_span_non_negative)
 }
 
 ///|
-/// Property: visible_len <= causal_len
-fn prop_visible_len_bounded(text : String) -> Bool {
-  @rle.HasCausalLength::visible_len(text) <=
-  @rle.HasCausalLength::causal_len(text)
+/// Property: content_len <= span
+fn prop_content_len_bounded(text : String) -> Bool {
+  @rle.Spanning::content_len(text) <=
+  @rle.Spanning::span(text)
 }
 
 ///|
-test "property: visible_len <= causal_len" {
-  @qc.quick_check_fn(prop_visible_len_bounded)
+test "property: content_len <= span" {
+  @qc.quick_check_fn(prop_content_len_bounded)
 }
 
 ///|
 /// Property: full slice equals original
 fn prop_full_slice_identity(text : String) -> Bool {
-  let len = @rle.HasCausalLength::causal_len(text)
+  let len = @rle.Spanning::span(text)
   @rle.Sliceable::slice(text, start=0, end=len) == text
 }
 
@@ -71,7 +71,7 @@ test "property: full slice equals original" {
 /// Property: Runs len equals sum of pushed items
 fn prop_runs_len_preserved(texts : Array[String]) -> Bool {
   let expected = texts.fold(init=0, fn(acc, s) {
-    let len = @rle.HasCausalLength::causal_len(s)
+    let len = @rle.Spanning::span(s)
     if len > 0 {
       acc + len
     } else {
@@ -207,7 +207,7 @@ fn prop_range_coverage(text : String) -> Bool {
     Ok(iter) => {
       let slices = iter.collect()
       let total_len = slices.fold(init=0, fn(acc, slice) {
-        acc + @rle.HasCausalLength::causal_len(slice.to_inner())
+        acc + @rle.Spanning::span(slice.to_inner())
       })
       total_len == end - start
     }

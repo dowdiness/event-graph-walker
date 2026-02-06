@@ -23,17 +23,17 @@ test "TextSpan HasLength" {
 }
 
 ///|
-test "TextSpan HasCausalLength - visible span" {
+test "TextSpan Spanning - visible span" {
   let span = @text.TextSpan::visible("hello")
-  inspect(@rle.HasCausalLength::causal_len(span), content="5")
-  inspect(@rle.HasCausalLength::visible_len(span), content="5")
+  inspect(@rle.Spanning::span(span), content="5")
+  inspect(@rle.Spanning::content_len(span), content="5")
 }
 
 ///|
-test "TextSpan HasCausalLength - tombstone" {
+test "TextSpan Spanning - tombstone" {
   let span = @text.TextSpan::tombstone("deleted")
-  inspect(@rle.HasCausalLength::causal_len(span), content="7")
-  inspect(@rle.HasCausalLength::visible_len(span), content="0")
+  inspect(@rle.Spanning::span(span), content="7")
+  inspect(@rle.Spanning::content_len(span), content="0")
 }
 
 ///|
@@ -90,6 +90,6 @@ test "Runs[TextSpan] merges adjacent same-status spans" {
   let runs = @rle.Runs::from_array(spans)
   // "hello" merged, "X" separate, " world" separate = 3 runs
   inspect(runs.count(), content="3")
-  inspect(runs.len(), content="12") // causal: 5 + 1 + 6
-  inspect(runs.visible_len(), content="11") // visible: 5 + 0 + 6
+  inspect(runs.len(), content="12") // span: 5 + 1 + 6
+  inspect(runs.content_len(), content="11") // content: 5 + 0 + 6
 }

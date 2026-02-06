@@ -1,27 +1,27 @@
 ///|
 /// Prefix sums for O(log n) position lookup
 pub(all) struct PrefixSums {
-  atoms : Array[Int] // cumulative causal lengths
-  content : Array[Int] // cumulative visible lengths
+  spans : Array[Int] // cumulative span lengths
+  content : Array[Int] // cumulative content lengths
 } derive(Show, Eq)
 
 ///|
 pub fn PrefixSums::new() -> PrefixSums {
-  { atoms: [], content: [] }
+  { spans: [], content: [] }
 }
 
 ///|
-/// Total causal length - O(1)
+/// Total span length - O(1)
 pub fn PrefixSums::len(self : PrefixSums) -> Int {
-  match self.atoms.last() {
+  match self.spans.last() {
     Some(total) => total
     None => 0
   }
 }
 
 ///|
-/// Total visible length - O(1)
-pub fn PrefixSums::visible_len(self : PrefixSums) -> Int {
+/// Total content length - O(1)
+pub fn PrefixSums::content_len(self : PrefixSums) -> Int {
   match self.content.last() {
     Some(total) => total
     None => 0
@@ -31,25 +31,25 @@ pub fn PrefixSums::visible_len(self : PrefixSums) -> Int {
 ///|
 /// Number of runs
 pub fn PrefixSums::count(self : PrefixSums) -> Int {
-  self.atoms.length()
+  self.spans.length()
 }
 
 ///|
-/// Get causal offset at run index (end of run i)
-pub fn PrefixSums::atom_at(self : PrefixSums, index : Int) -> Int? {
-  if index < 0 || index >= self.atoms.length() {
+/// Get span offset at run index (end of run i)
+pub fn PrefixSums::span_at(self : PrefixSums, index : Int) -> Int? {
+  if index < 0 || index >= self.spans.length() {
     None
   } else {
-    Some(self.atoms[index])
+    Some(self.spans[index])
   }
 }
 
 ///|
-/// Get causal offset before run index (start of run i)
-pub fn PrefixSums::atom_before(self : PrefixSums, index : Int) -> Int {
+/// Get span offset before run index (start of run i)
+pub fn PrefixSums::span_before(self : PrefixSums, index : Int) -> Int {
   if index <= 0 {
     0
   } else {
-    self.atoms[index - 1]
+    self.spans[index - 1]
   }
 }

@@ -38,15 +38,15 @@ test "Runs::append rejects empty element" {
 }
 
 ///|
-test "Runs::len returns total causal length" {
+test "Runs::len returns total span length" {
   let runs = @rle.Runs::from_string("hello")
   inspect(runs.len(), content="5")
 }
 
 ///|
-test "Runs::visible_len returns total visible length" {
+test "Runs::content_len returns total content length" {
   let runs = @rle.Runs::from_string("hello")
-  inspect(runs.visible_len(), content="5")
+  inspect(runs.content_len(), content="5")
 }
 
 ///|
@@ -231,7 +231,7 @@ test "Runs unicode split" {
 test "Runs::prefix_sums builds correct sums" {
   let runs = @rle.Runs::from_string("hello")
   let sums = runs.prefix_sums()
-  inspect(sums.atoms, content="[5]")
+  inspect(sums.spans, content="[5]")
   inspect(sums.content, content="[5]")
 }
 

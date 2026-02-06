@@ -12,7 +12,7 @@ pub fn[T] Rle::new() -> Rle[T] {
 }
 
 ///|
-pub fn[T : Mergeable + HasCausalLength] Rle::from_array(
+pub fn[T : Mergeable + Spanning] Rle::from_array(
   arr : Array[T],
 ) -> Rle[T] {
   { runs: Runs::from_array(arr), prefix: None, version: 0 }
@@ -48,7 +48,7 @@ fn[T] Rle::invalidate(self : Rle[T]) -> Unit {
 
 ///|
 /// Rebuild prefix sums if stale
-fn[T : HasCausalLength] Rle::ensure_prefix(self : Rle[T]) -> PrefixSums {
+fn[T : Spanning] Rle::ensure_prefix(self : Rle[T]) -> PrefixSums {
   match self.prefix {
     Some(p) => p
     None => {
@@ -80,20 +80,20 @@ pub fn[T] Rle::iter(self : Rle[T]) -> Iter[T] {
 }
 
 ///|
-/// Total causal length - O(1) with cache
-pub fn[T : HasCausalLength] Rle::len(self : Rle[T]) -> Int {
+/// Total span length - O(1) with cache
+pub fn[T : Spanning] Rle::len(self : Rle[T]) -> Int {
   self.ensure_prefix().len()
 }
 
 ///|
-/// Total visible length - O(1) with cache
-pub fn[T : HasCausalLength] Rle::visible_len(self : Rle[T]) -> Int {
-  self.ensure_prefix().visible_len()
+/// Total content length - O(1) with cache
+pub fn[T : Spanning] Rle::content_len(self : Rle[T]) -> Int {
+  self.ensure_prefix().content_len()
 }
 
 ///|
 /// Append element - invalidates cache and bumps version
-pub fn[T : Mergeable + HasCausalLength] Rle::append(
+pub fn[T : Mergeable + Spanning] Rle::append(
   self : Rle[T],
   elem : T,
 ) -> Result[Unit, RleError] {
@@ -109,14 +109,14 @@ pub fn[T : Mergeable + HasCausalLength] Rle::append(
 
 ///|
 /// Find position - O(log n) with cache
-pub fn[T : HasCausalLength] Rle::find(self : Rle[T], pos : Int) -> RunPos? {
+pub fn[T : Spanning] Rle::find(self : Rle[T], pos : Int) -> RunPos? {
   let sums = self.ensure_prefix()
   self.runs.find_fast(sums, pos)
 }
 
 ///|
 /// Iterate slices in range [start, end) - uses cache
-pub fn[T : HasCausalLength] Rle::range(
+pub fn[T : Spanning] Rle::range(
   self : Rle[T],
   start~ : Int,
   end~ : Int,
@@ -153,8 +153,8 @@ pub fn[T : HasCausalLength] Rle::range(
   let mut i = sp.run
   while i < self.runs.0.length() {
     let item = self.runs.0[i]
-    let prefix = sums.atom_before(i)
-    let item_end = sums.atoms[i]
+    let prefix = sums.span_before(i)
+    let item_end = sums.spans[i]
     if item_end > start && prefix < end {
       let slice_start = if prefix < start { start - prefix } else { 0 }
       let slice_end = if item_end > end {
@@ -174,7 +174,7 @@ pub fn[T : HasCausalLength] Rle::range(
 
 ///|
 /// Iterate slices with clamped bounds
-pub fn[T : HasCausalLength] Rle::range_clamped(
+pub fn[T : Spanning] Rle::range_clamped(
   self : Rle[T],
   start~ : Int,
   end~ : Int,
@@ -193,7 +193,7 @@ pub fn[T : HasCausalLength] Rle::range_clamped(
 
 ///|
 /// Split at position - invalidates cache
-pub fn[T : Sliceable + HasCausalLength + Mergeable] Rle::split(
+pub fn[T : Sliceable + Spanning + Mergeable] Rle::split(
   self : Rle[T],
   pos : Int,
 ) -> Result[(Rle[T], Rle[T]), RleError] {
@@ -213,7 +213,7 @@ pub fn[T] Rle::clear(self : Rle[T]) -> Unit {
 
 ///|
 /// Concatenate two Rle
-pub fn[T : Mergeable + HasCausalLength] Rle::concat(
+pub fn[T : Mergeable + Spanning] Rle::concat(
   self : Rle[T],
   other : Rle[T],
 ) -> Rle[T] {
@@ -223,8 +223,8 @@ pub fn[T : Mergeable + HasCausalLength] Rle::concat(
 ///|
 /// Extend in-place - invalidates cache and bumps version only if mutation occurs.
 /// Note: bumps version if other is non-empty, even if all items are filtered
-/// (causal_len <= 0). This is conservative; callers should pre-filter if needed.
-pub fn[T : Mergeable + HasCausalLength] Rle::extend(
+/// (span <= 0). This is conservative; callers should pre-filter if needed.
+pub fn[T : Mergeable + Spanning] Rle::extend(
   self : Rle[T],
   other : Rle[T],
 ) -> Unit {

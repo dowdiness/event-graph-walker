@@ -57,8 +57,8 @@ pub impl @rle.HasLength for TextSpan with length(self) {
 }
 
 ///|
-/// HasCausalLength: visible length is 0 for tombstones.
-pub impl @rle.HasCausalLength for TextSpan with visible_len(self) {
+/// Spanning: content length is 0 for tombstones.
+pub impl @rle.Spanning for TextSpan with content_len(self) {
   if self.deleted {
     0
   } else {
