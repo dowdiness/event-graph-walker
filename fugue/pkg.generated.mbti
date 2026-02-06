@@ -6,43 +6,72 @@ import {
 }
 
 // Values
+pub let root_lv : Lv
 
 // Errors
 pub(all) suberror FugueError {
-  MissingItem(id~ : Int)
+  MissingItem(id~ : Lv)
 }
 
 // Types and methods
-pub struct FugueTree {
-  mut items : @hashmap.HashMap[Int, Item]
-  root : Int
+pub struct FugueTree[T] {
+  mut items : @hashmap.HashMap[Lv, Item[T]]
   mut length : Int
 }
-pub fn FugueTree::delete(Self, Int) -> Unit raise FugueError
+pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
+pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
 #alias("_[_]")
-pub fn FugueTree::get(Self, Int) -> Item?
-pub fn FugueTree::get_all_items(Self) -> Array[(Int, Item)]
-pub fn FugueTree::get_visible_items(Self) -> Array[(Int, Item)]
-pub fn FugueTree::insert(Self, Int, String, Int, Int, Int, String) -> Unit
-pub fn FugueTree::is_ancestor(Self, Int, Int) -> Bool
-pub fn FugueTree::lv_to_position(Self, Int) -> Int?
-pub fn FugueTree::new() -> Self
-pub fn FugueTree::to_text(Self) -> String
-pub fn FugueTree::undelete(Self, Int) -> Unit raise FugueError
-pub fn FugueTree::visible_count(Self) -> Int
-pub impl Show for FugueTree
+pub fn[T] FugueTree::get(Self[T], Lv) -> Item[T]?
+pub fn[T : Eq] FugueTree::get_all_items(Self[T]) -> Array[(Lv, Item[T])]
+pub fn[T : Eq] FugueTree::get_visible_items(Self[T]) -> Array[(Lv, Item[T])]
+pub fn[T] FugueTree::insert(Self[T], InsertOp[T]) -> Unit
+pub fn[T] FugueTree::is_ancestor(Self[T], Lv, Lv) -> Bool
+pub fn[T : Eq] FugueTree::iter(Self[T]) -> Iter[(Lv, Item[T])]
+pub fn[T : Eq] FugueTree::lv_to_position(Self[T], Lv) -> Int?
+pub fn[T] FugueTree::make(T) -> Self[T]
+pub fn[T : Default] FugueTree::new() -> Self[T]
+pub fn FugueTree::to_text(Self[String]) -> String
+pub fn[T] FugueTree::undelete(Self[T], Lv) -> Unit raise FugueError
+pub fn[T : Eq] FugueTree::visible_count(Self[T]) -> Int
+pub impl[T : Show] Show for FugueTree[T]
 
-pub struct Item {
-  id : Int
-  content : String
-  parent : Int
+pub(all) struct InsertOp[T] {
+  id : Lv
+  content : T
+  origin_left : Lv?
+  origin_right : Lv?
+  timestamp : Timestamp
+  agent : ReplicaId
+}
+pub impl[T : Show] Show for InsertOp[T]
+
+pub(all) struct Item[T] {
+  id : Lv
+  content : T
+  parent : Lv?
   side : Side
   deleted : Bool
-  timestamp : Int
-  agent : String
+  timestamp : Timestamp
+  agent : ReplicaId
 }
-pub impl Eq for Item
-pub impl Show for Item
+pub impl[T : Eq] Eq for Item[T]
+pub impl[T : Show] Show for Item[T]
+
+pub(all) struct Lv(Int)
+#deprecated
+pub fn Lv::inner(Self) -> Int
+pub impl Compare for Lv
+pub impl Default for Lv
+pub impl Eq for Lv
+pub impl Hash for Lv
+pub impl Show for Lv
+
+pub(all) struct ReplicaId(String)
+#deprecated
+pub fn ReplicaId::inner(Self) -> String
+pub impl Compare for ReplicaId
+pub impl Eq for ReplicaId
+pub impl Show for ReplicaId
 
 pub enum Side {
   Left
@@ -50,6 +79,14 @@ pub enum Side {
 }
 pub impl Eq for Side
 pub impl Show for Side
+
+pub(all) struct Timestamp(Int)
+#deprecated
+pub fn Timestamp::inner(Self) -> Int
+pub impl Compare for Timestamp
+pub impl Default for Timestamp
+pub impl Eq for Timestamp
+pub impl Show for Timestamp
 
 // Type aliases
 

@@ -7,14 +7,14 @@
 ///|
 /// MergeContext - state during merge operation
 pub struct MergeContext {
-  tree : @fugue.FugueTree // The FugueMax tree being merged
+  tree : @fugue.FugueTree[String] // The FugueMax tree being merged
   oplog : @oplog.OpLog // Operation log
 }
 
 ///|
 /// Create a new merge context
 pub fn MergeContext::new(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
 ) -> MergeContext {
   { tree, oplog }
@@ -40,19 +40,19 @@ pub fn MergeContext::apply_operations(
       Some(op) =>
         match op.content {
           @core.Insert(text) => {
-            let origin_left = match op.origin_left {
-              None => -1
+            let origin_left : @fugue.Lv? = match op.origin_left {
+              None => None
               Some(raw) =>
                 match self.oplog.graph.raw_to_lv(raw) {
-                  Some(mapped) => mapped
+                  Some(mapped) => Some(@fugue.Lv(mapped))
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
-            let origin_right = match op.origin_right {
-              None => -1
+            let origin_right : @fugue.Lv? = match op.origin_right {
+              None => None
               Some(raw) =>
                 match self.oplog.graph.raw_to_lv(raw) {
-                  Some(mapped) => mapped
+                  Some(mapped) => Some(@fugue.Lv(mapped))
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
@@ -63,14 +63,14 @@ pub fn MergeContext::apply_operations(
             }
 
             // Insert into tree with FugueMax algorithm
-            self.tree.insert(
-              op.lv,
-              text,
+            self.tree.insert({
+              id: @fugue.Lv(op.lv),
+              content: text,
               origin_left,
               origin_right,
-              timestamp,
-              agent,
-            )
+              timestamp: @fugue.Timestamp(timestamp),
+              agent: @fugue.ReplicaId(agent),
+            })
           }
           @core.Delete =>
             match op.origin_left {
@@ -78,7 +78,7 @@ pub fn MergeContext::apply_operations(
               Some(raw) =>
                 match self.oplog.graph.raw_to_lv(raw) {
                   Some(mapped) =>
-                    self.tree.delete(mapped) catch {
+                    self.tree.delete(@fugue.Lv(mapped)) catch {
                       e => raise BranchError::Fugue(e)
                     }
                   None => raise BranchError::MissingOrigin(raw~)
@@ -90,7 +90,7 @@ pub fn MergeContext::apply_operations(
               Some(raw) =>
                 match self.oplog.graph.raw_to_lv(raw) {
                   Some(mapped) =>
-                    self.tree.undelete(mapped) catch {
+                    self.tree.undelete(@fugue.Lv(mapped)) catch {
                       e => raise BranchError::Fugue(e)
                     }
                   None => raise BranchError::MissingOrigin(raw~)
@@ -115,7 +115,7 @@ pub fn MergeContext::retreat_operations(
   // For simplicity, we mark retreated items as deleted
   // A more sophisticated implementation would actually remove them
   for lv in operations {
-    self.tree.delete(lv) catch {
+    self.tree.delete(@fugue.Lv(lv)) catch {
       e => raise BranchError::Fugue(e)
     }
   }
@@ -134,7 +134,7 @@ pub fn MergeContext::retreat_operations(
 ///|
 /// 3. Advance (apply) operations in target
 pub fn merge(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
   current_frontier : @core.Frontier,
   target_frontier : @core.Frontier,
@@ -164,7 +164,7 @@ pub fn merge(
 ///
 /// This is a convenience function for applying remote operations
 pub fn merge_remote_ops(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
   remote_ops : Array[@core.Op],
 ) -> Unit raise BranchError {

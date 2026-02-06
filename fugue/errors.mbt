@@ -2,5 +2,5 @@
 
 ///|
 pub(all) suberror FugueError {
-  MissingItem(id~ : Int)
+  MissingItem(id~ : Lv)
 }

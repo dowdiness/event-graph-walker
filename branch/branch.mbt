@@ -15,7 +15,7 @@
 /// advanced forward by applying new operations.
 pub struct Branch {
   frontier : @core.Frontier // Version frontier this branch represents
-  tree : @fugue.FugueTree // CRDT tree state at this frontier
+  tree : @fugue.FugueTree[String] // CRDT tree state at this frontier
   oplog : @oplog.OpLog // Reference to the operation log
 } derive(Show)
 
@@ -33,7 +33,7 @@ pub fn Branch::new(oplog : @oplog.OpLog) -> Branch {
 /// Create a branch from existing tree and oplog at current frontier
 /// This is useful for wrapping existing Document state
 pub fn Branch::from_tree_and_oplog(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
 ) -> Branch {
   let frontier = oplog.get_frontier()
@@ -57,7 +57,7 @@ pub fn Branch::checkout(
   frontier : @core.Frontier,
 ) -> Branch raise BranchError {
   // Create empty tree
-  let tree = @fugue.FugueTree::new()
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Use walker to get all operations in causal order
   let ops = oplog.walk_and_collect(frontier)
@@ -141,7 +141,7 @@ pub fn Branch::visible_count(self : Branch) -> Int {
 
 ///|
 /// Access the underlying FugueTree for advanced operations
-pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree {
+pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree[String] {
   self.tree
 }
 
@@ -247,23 +247,23 @@ pub fn Branch::merge_remote_ops(
 /// This is a helper function that applies either an Insert or Delete
 /// operation to the tree, handling the FugueMax integration.
 fn apply_operation_to_tree(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   op : @core.Op,
   oplog : @oplog.OpLog,
 ) -> Unit raise BranchError {
-  let origin_left = match op.origin_left {
-    None => -1
+  let origin_left : @fugue.Lv? = match op.origin_left {
+    None => None
     Some(raw) =>
       match oplog.graph.raw_to_lv(raw) {
-        Some(lv) => lv
+        Some(lv) => Some(@fugue.Lv(lv))
         None => raise BranchError::MissingOrigin(raw~)
       }
   }
-  let origin_right = match op.origin_right {
-    None => -1
+  let origin_right : @fugue.Lv? = match op.origin_right {
+    None => None
     Some(raw) =>
       match oplog.graph.raw_to_lv(raw) {
-        Some(lv) => lv
+        Some(lv) => Some(@fugue.Lv(lv))
         None => raise BranchError::MissingOrigin(raw~)
       }
   }
@@ -276,21 +276,32 @@ fn apply_operation_to_tree(
       }
 
       // Insert into tree with FugueMax algorithm
-      tree.insert(op.lv, text, origin_left, origin_right, timestamp, agent)
+      tree.insert({
+        id: @fugue.Lv(op.lv),
+        content: text,
+        origin_left,
+        origin_right,
+        timestamp: @fugue.Timestamp(timestamp),
+        agent: @fugue.ReplicaId(agent),
+      })
     }
     @core.Delete =>
-      if origin_left != -1 {
-        // Mark item as deleted
-        tree.delete(origin_left) catch {
-          e => raise BranchError::Fugue(e)
-        }
+      match origin_left {
+        Some(lv) =>
+          // Mark item as deleted
+          tree.delete(lv) catch {
+            e => raise BranchError::Fugue(e)
+          }
+        None => ()
       }
     @core.Undelete =>
-      if origin_left != -1 {
-        // Revive a previously deleted item
-        tree.undelete(origin_left) catch {
-          e => raise BranchError::Fugue(e)
-        }
+      match origin_left {
+        Some(lv) =>
+          // Revive a previously deleted item
+          tree.undelete(lv) catch {
+            e => raise BranchError::Fugue(e)
+          }
+        None => ()
       }
   }
 }

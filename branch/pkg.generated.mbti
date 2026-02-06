@@ -9,9 +9,9 @@ import {
 }
 
 // Values
-pub fn merge(@fugue.FugueTree, @oplog.OpLog, @core.Frontier, @core.Frontier) -> Unit raise BranchError
+pub fn merge(@fugue.FugueTree[String], @oplog.OpLog, @core.Frontier, @core.Frontier) -> Unit raise BranchError
 
-pub fn merge_remote_ops(@fugue.FugueTree, @oplog.OpLog, Array[@core.Op]) -> Unit raise BranchError
+pub fn merge_remote_ops(@fugue.FugueTree[String], @oplog.OpLog, Array[@core.Op]) -> Unit raise BranchError
 
 // Errors
 pub(all) suberror BranchError {
@@ -24,7 +24,7 @@ pub(all) suberror BranchError {
 // Types and methods
 pub struct Branch {
   frontier : @core.Frontier
-  tree : @fugue.FugueTree
+  tree : @fugue.FugueTree[String]
   oplog : @oplog.OpLog
 }
 pub fn Branch::advance(Self, @core.Frontier) -> Self raise BranchError
@@ -33,11 +33,11 @@ pub fn Branch::at_frontier(Self, @core.Frontier) -> Bool
 pub fn Branch::at_version_vector(Self, @causal_graph.VersionVector) -> Bool
 pub fn Branch::checkout(@oplog.OpLog, @core.Frontier) -> Self raise BranchError
 pub fn Branch::checkout_version_vector(@oplog.OpLog, @causal_graph.VersionVector) -> Self raise BranchError
-pub fn Branch::from_tree_and_oplog(@fugue.FugueTree, @oplog.OpLog) -> Self
+pub fn Branch::from_tree_and_oplog(@fugue.FugueTree[String], @oplog.OpLog) -> Self
 pub fn Branch::frontier_ref(Self) -> @core.Frontier
 pub fn Branch::get_frontier(Self) -> @core.Frontier
 pub fn Branch::get_version_vector(Self) -> @causal_graph.VersionVector
-pub fn Branch::inner_tree(Self) -> @fugue.FugueTree
+pub fn Branch::inner_tree(Self) -> @fugue.FugueTree[String]
 pub fn Branch::merge_remote_ops(Self, Array[@core.Op]) -> Self raise BranchError
 pub fn Branch::new(@oplog.OpLog) -> Self
 pub fn Branch::to_text(Self) -> String
@@ -45,11 +45,11 @@ pub fn Branch::visible_count(Self) -> Int
 pub impl Show for Branch
 
 pub struct MergeContext {
-  tree : @fugue.FugueTree
+  tree : @fugue.FugueTree[String]
   oplog : @oplog.OpLog
 }
 pub fn MergeContext::apply_operations(Self, Array[Int]) -> Unit raise BranchError
-pub fn MergeContext::new(@fugue.FugueTree, @oplog.OpLog) -> Self
+pub fn MergeContext::new(@fugue.FugueTree[String], @oplog.OpLog) -> Self
 pub fn MergeContext::retreat_operations(Self, Array[Int]) -> Unit raise BranchError
 
 // Type aliases

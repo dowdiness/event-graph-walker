@@ -33,7 +33,7 @@ pub fn Document::get_all_ops(Self) -> Array[@core.Op]
 pub fn Document::get_frontier(Self) -> @core.Frontier
 pub fn Document::get_frontier_array(Self) -> Array[Int]
 pub fn Document::get_frontier_raw(Self) -> Array[@core.RawVersion] raise DocumentError
-pub fn Document::get_visible_items(Self) -> Array[(Int, @fugue.Item)]
+pub fn Document::get_visible_items(Self) -> Array[(@fugue.Lv, @fugue.Item[String])]
 pub fn Document::insert(Self, Int, String) -> @core.Op raise DocumentError
 pub fn Document::lv_to_position(Self, Int) -> Int?
 pub fn Document::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise DocumentError
