@@ -266,3 +266,136 @@ fn prop_agents_correct(vv : VersionVector) -> Bool {
 test "property: agents returns all agent IDs" {
   @qc.quick_check_fn(prop_agents_correct)
 }
+
+///|
+/// Property: merge is the least upper bound (LUB / join)
+///
+/// merge(a, b) is not just *an* upper bound — it is the *smallest* one.
+/// For any c that is an upper bound of both a and b, merge(a, b) <= c.
+/// Together with prop_merge_preserves, this makes merge a semilattice join.
+fn prop_merge_is_lub(
+  triple : (VersionVector, VersionVector, VersionVector),
+) -> Bool {
+  let (vv_a, vv_b, vv_c) = triple
+  if vv_a <= vv_c && vv_b <= vv_c {
+    vv_a.merge(vv_b) <= vv_c
+  } else {
+    true // premise doesn't hold; vacuously true
+  }
+}
+
+///|
+test "property: merge is least upper bound" {
+  @qc.quick_check_fn(prop_merge_is_lub)
+}
+
+///|
+/// Property: empty is the identity element for merge
+///
+/// Merging with the empty version vector is a no-op in both directions.
+fn prop_merge_empty_identity(vv : VersionVector) -> Bool {
+  let empty = VersionVector::new()
+  vv.merge(empty) == vv && empty.merge(vv) == vv
+}
+
+///|
+test "property: merge with empty is identity" {
+  @qc.quick_check_fn(prop_merge_empty_identity)
+}
+
+///|
+/// Property: merge is monotone in both arguments
+///
+/// If a <= b, then for any c, merge(a, c) <= merge(b, c).
+/// This ensures that learning more (advancing a to b) never makes the merge smaller.
+fn prop_merge_monotone(triple : (VersionVector, VersionVector, VersionVector)) -> Bool {
+  let (vv_a, vv_b, vv_c) = triple
+  if vv_a <= vv_b {
+    vv_a.merge(vv_c) <= vv_b.merge(vv_c)
+  } else {
+    true
+  }
+}
+
+///|
+test "property: merge is monotone in its arguments" {
+  @qc.quick_check_fn(prop_merge_monotone)
+}
+
+///|
+/// Property: concurrent is irreflexive
+///
+/// A version vector is never concurrent with itself.
+/// (By definition: concurrent(a, a) would require !(a <= a), but a <= a always holds.)
+fn prop_concurrent_irreflexive(vv : VersionVector) -> Bool {
+  not(vv.concurrent(vv))
+}
+
+///|
+test "property: concurrent is irreflexive" {
+  @qc.quick_check_fn(prop_concurrent_irreflexive)
+}
+
+///|
+/// Property: includes is downward-closed in seq
+///
+/// If a version vector includes (agent, seq), it also includes (agent, seq')
+/// for any seq' <= seq. Knowing "up to seq" implies knowing "up to seq-1, seq-2, ...".
+fn prop_includes_downward_closed(vv : VersionVector) -> Bool {
+  let agents = vv.agents()
+  if agents.is_empty() {
+    return true
+  }
+  let agent = agents[0]
+  match vv.0.get(agent) {
+    Some(max_seq) => {
+      // includes(max_seq) is true; includes(0..max_seq) must all be true
+      let mut ok = true
+      for s = 0; s <= max_seq && ok; s = s + 1 {
+        if not(vv.includes(agent, s)) {
+          ok = false
+        }
+      }
+      ok
+    }
+    None => true
+  }
+}
+
+///|
+test "property: includes is downward-closed in seq" {
+  @qc.quick_check_fn(prop_includes_downward_closed)
+}
+
+///|
+/// Property: increment only changes the target agent
+///
+/// After vv.increment(agent), every other agent retains its original seq,
+/// and the target agent's seq increases by exactly 1 (or becomes 0 if new).
+fn prop_increment_target_only(vv : VersionVector) -> Bool {
+  let target = "alice" // always present in generated VVs or may be absent
+  let before = vv.0.get(target)
+  let vv2 = vv.increment(target)
+  let after = vv2.0.get(target)
+
+  // Target agent changes correctly
+  let target_ok = match (before, after) {
+    (Some(n), Some(m)) => m == n + 1
+    (None, Some(0)) => true
+    _ => false
+  }
+  // All other agents are unchanged
+  let others_ok = vv.agents().iter().all(fn(agent) {
+    if agent == target {
+      true
+    } else {
+      vv.0.get(agent) == vv2.0.get(agent)
+    }
+  })
+  target_ok && others_ok
+}
+
+///|
+test "property: increment only changes the target agent" {
+  @qc.quick_check_fn(prop_increment_target_only)
+}
