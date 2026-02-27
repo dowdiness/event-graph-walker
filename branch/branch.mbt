@@ -121,16 +121,9 @@ pub fn Branch::to_text(self : Branch) -> String {
 }
 
 ///|
-/// Get the frontier of this branch (returns a copy for safety)
+/// Get the frontier of this branch (returns a defensive copy).
 pub fn Branch::get_frontier(self : Branch) -> @core.Frontier {
   @core.Frontier::from_array(self.frontier.0.copy())
-}
-
-///|
-/// Get the frontier of this branch without copying (for internal/read-only use)
-/// Callers must not mutate the returned frontier's internal array.
-pub fn Branch::frontier_ref(self : Branch) -> @core.Frontier {
-  self.frontier
 }
 
 ///|
