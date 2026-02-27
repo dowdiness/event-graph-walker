@@ -73,16 +73,22 @@ pub fn Branch::checkout(
 }
 
 ///|
-/// Advance a branch by applying new operations
+/// Advance a branch to a new frontier.
 ///
-/// This efficiently updates a branch by only applying operations
-/// that are new (not in the current frontier).
+/// **Fast path (O(k))**: If the target frontier is strictly ahead of the current
+/// one — i.e. no operations need to be undone — only the `k` new operations are
+/// applied incrementally to the existing tree. This is the common case when a
+/// peer receives new remote edits.
 ///
-/// # Arguments
-/// * `target_frontier` - The new frontier to advance to
+/// **Slow path (O(n))**: If reaching the target requires *retreating* (undoing
+/// operations that are in the current frontier but not in the target), a full
+/// checkout is performed by replaying all `n` operations from scratch.
+/// Retreat happens when moving to a concurrent or earlier frontier, e.g. when
+/// computing a historical diff or merging a branch that diverged before the
+/// current one.
 ///
-/// # Returns
-/// A new Branch at the target frontier
+/// To avoid the slow path in a hot loop, prefer advancing monotonically forward
+/// rather than jumping between concurrent frontiers.
 pub fn Branch::advance(
   self : Branch,
   target_frontier : @core.Frontier,
@@ -93,15 +99,12 @@ pub fn Branch::advance(
     target_frontier,
   )
 
-  // For now, we'll use a simple approach:
-  // If there are retreat operations, do a full checkout
-  // Otherwise, just apply advance operations incrementally
   if retreat_ops.length() > 0 {
-    // Need to retreat - do full checkout
+    // Slow path: retreat required — full O(n) replay from scratch
     Branch::checkout(self.oplog, target_frontier)
   } else {
-    // Only advancing - apply new operations incrementally
-    let tree = self.tree // Reuse existing tree (mutable)
+    // Fast path: advance only — apply k new ops incrementally
+    let tree = self.tree
     for op in advance_ops {
       apply_operation_to_tree(tree, op, self.oplog)
     }
