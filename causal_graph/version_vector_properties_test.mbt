@@ -308,7 +308,9 @@ test "property: merge with empty is identity" {
 ///
 /// If a <= b, then for any c, merge(a, c) <= merge(b, c).
 /// This ensures that learning more (advancing a to b) never makes the merge smaller.
-fn prop_merge_monotone(triple : (VersionVector, VersionVector, VersionVector)) -> Bool {
+fn prop_merge_monotone(
+  triple : (VersionVector, VersionVector, VersionVector),
+) -> Bool {
   let (vv_a, vv_b, vv_c) = triple
   if vv_a <= vv_b {
     vv_a.merge(vv_c) <= vv_b.merge(vv_c)
@@ -385,13 +387,16 @@ fn prop_increment_target_only(vv : VersionVector) -> Bool {
     _ => false
   }
   // All other agents are unchanged
-  let others_ok = vv.agents().iter().all(fn(agent) {
-    if agent == target {
-      true
-    } else {
-      vv.0.get(agent) == vv2.0.get(agent)
-    }
-  })
+  let others_ok = vv
+    .agents()
+    .iter()
+    .all(fn(agent) {
+      if agent == target {
+        true
+      } else {
+        vv.0.get(agent) == vv2.0.get(agent)
+      }
+    })
   target_ok && others_ok
 }
 

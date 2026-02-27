@@ -22,7 +22,8 @@ pub fn Pos::value(self : Pos) -> Int {
   self.value
 }
 
-///| Text range representing a contiguous span of text.
+///|
+/// Text range representing a contiguous span of text.
 ///
 /// `start` is inclusive, `end` is exclusive (half-open interval).
 ///
