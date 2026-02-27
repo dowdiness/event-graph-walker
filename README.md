@@ -131,7 +131,6 @@ pub struct Branch {
 
 **Methods:**
 - `get_frontier()` - Returns a defensive copy of the frontier (safe for external use)
-- `frontier_ref()` - Returns frontier without copying (internal/read-only use; callers must not mutate)
 
 ## Algorithm Components
 
@@ -191,6 +190,8 @@ pub fn merge_remote_ops(
 ```
 
 ## Usage
+
+For complete worked examples (sync with error handling, undo/redo, historical checkout), see **[docs/EXAMPLES.md](docs/EXAMPLES.md)**.
 
 ### Quick Start (Recommended API)
 
