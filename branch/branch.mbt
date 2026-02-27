@@ -223,7 +223,6 @@ pub fn Branch::merge_remote_ops(
     let _ = self.oplog.apply_remote(remote_op) catch {
       e => raise BranchError::OpLog(e)
     }
-
   }
 
   // Get the new frontier after adding remote ops

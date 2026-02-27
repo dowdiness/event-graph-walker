@@ -142,7 +142,6 @@ fn[T : Mergeable] Runs::normalize_tail(self : Runs[T]) -> Unit {
     if T::can_merge(a, b) {
       self.0[prev] = T::merge(a, b)
       let _ = self.0.pop()
-
     } else {
       break
     }

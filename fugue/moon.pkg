@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/immut/hashmap" @immut/hashmap,
+}
+
+import {
+  "moonbitlang/core/cmp",
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+} for "test"
+
+options(
+  is_main: false,
+)

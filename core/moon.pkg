@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/core/hashset",
+}
+
+options(
+  is_main: false,
+)
