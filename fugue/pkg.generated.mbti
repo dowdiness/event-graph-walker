@@ -17,6 +17,7 @@ pub(all) suberror FugueError {
 pub struct FugueTree[T] {
   mut items : @hashmap.HashMap[Lv, Item[T]]
   mut length : Int
+  mut visible : Int
 }
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
 pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
@@ -32,7 +33,7 @@ pub fn[T] FugueTree::make(T) -> Self[T]
 pub fn[T : Default] FugueTree::new() -> Self[T]
 pub fn FugueTree::to_text(Self[String]) -> String
 pub fn[T] FugueTree::undelete(Self[T], Lv) -> Unit raise FugueError
-pub fn[T : Eq] FugueTree::visible_count(Self[T]) -> Int
+pub fn[T] FugueTree::visible_count(Self[T]) -> Int
 pub impl[T : Show] Show for FugueTree[T]
 
 pub(all) struct InsertOp[T] {

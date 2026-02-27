@@ -7,6 +7,7 @@
 pub struct FugueTree[T] {
   mut items : @immut/hashmap.HashMap[Lv, Item[T]] // Map from LV to Item
   mut length : Int // Total items (including deleted)
+  mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
 } derive(Show)
 
 ///|
@@ -40,7 +41,7 @@ pub fn[T] FugueTree::make(root_content : T) -> FugueTree[T] {
   )
   let mut items = @immut/hashmap.new()
   items = items.add(root_lv, root_item)
-  { items, length: 0 }
+  { items, length: 0, visible: 0 }
 }
 
 ///|
@@ -73,9 +74,10 @@ pub fn[T : Eq] FugueTree::get_all_items(
 }
 
 ///|
-/// Count visible (non-deleted) items
-pub fn[T : Eq] FugueTree::visible_count(self : FugueTree[T]) -> Int {
-  self.get_visible_items().length()
+/// Count visible (non-deleted) items.
+/// O(1) — returns the cached counter maintained by `add_item`, `delete`, and `undelete`.
+pub fn[T] FugueTree::visible_count(self : FugueTree[T]) -> Int {
+  self.visible
 }
 
 ///|
@@ -134,6 +136,9 @@ pub fn[T] FugueTree::delete(
 ) -> Unit raise FugueError {
   match self[id] {
     Some(item) => {
+      if not(item.deleted) {
+        self.visible = self.visible - 1
+      }
       let deleted_item = item.mark_deleted()
       self.items = self.items.add(id, deleted_item)
     }
@@ -150,6 +155,7 @@ pub fn[T] FugueTree::undelete(
   match self[id] {
     Some(item) =>
       if item.deleted {
+        self.visible = self.visible + 1
         let visible_item = item.mark_visible()
         self.items = self.items.add(id, visible_item)
       }
@@ -181,6 +187,7 @@ pub fn[T : Eq] FugueTree::lv_to_position(self : FugueTree[T], id : Lv) -> Int? {
 fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
   self.items = self.items.add(item.id, item)
   self.length = self.length + 1
+  self.visible = self.visible + 1
 }
 
 ///|
