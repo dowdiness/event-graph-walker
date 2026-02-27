@@ -38,6 +38,7 @@ pub fn[T : Mergeable + HasCausalLength] Runs::from_array_batch(
 }
 
 ///|
+/// Construct Runs from a flat array using batch-optimized stack merging.
 pub fn[T : Mergeable + HasCausalLength] Runs::from_array(
   arr : Array[T],
 ) -> Runs[T] {
@@ -45,16 +46,19 @@ pub fn[T : Mergeable + HasCausalLength] Runs::from_array(
 }
 
 ///|
+/// Returns true if there are no runs.
 pub fn[T] Runs::is_empty(self : Runs[T]) -> Bool {
   self.0.is_empty()
 }
 
 ///|
+/// Number of runs (not the total causal length).
 pub fn[T] Runs::count(self : Runs[T]) -> Int {
   self.0.length()
 }
 
 ///|
+/// Get a run by index, or None if out of bounds.
 pub fn[T] Runs::get(self : Runs[T], index : Int) -> T? {
   if index < 0 || index >= self.0.length() {
     None
@@ -64,11 +68,13 @@ pub fn[T] Runs::get(self : Runs[T], index : Int) -> T? {
 }
 
 ///|
+/// Iterate over all runs in order.
 pub fn[T] Runs::iter(self : Runs[T]) -> Iter[T] {
   self.0.iter()
 }
 
 ///|
+/// Copy all runs into a new array (callers may mutate freely).
 pub fn[T] Runs::to_array(self : Runs[T]) -> Array[T] {
   self.0.copy()
 }

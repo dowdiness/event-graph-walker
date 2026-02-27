@@ -20,12 +20,10 @@ pub fn MergeContext::new(
   { tree, oplog }
 }
 
-///| Apply operations from the advance set
-
 ///|
-
-///|
-/// This integrates operations into the tree in topological order
+/// Apply operations from the advance set.
+///
+/// Integrates operations into the tree in topological order.
 pub fn MergeContext::apply_operations(
   self : MergeContext,
   operations : Array[Int],
@@ -102,12 +100,11 @@ pub fn MergeContext::apply_operations(
   }
 }
 
-///| Remove operations from the retreat set
-
 ///|
-
-///|
-/// This removes items from the tree that are in the retreat set
+/// Remove operations from the retreat set.
+///
+/// Marks retreated items as deleted in the tree so that their positions
+/// are vacated before advance operations are applied.
 pub fn MergeContext::retreat_operations(
   self : MergeContext,
   operations : Array[Int],
@@ -121,18 +118,12 @@ pub fn MergeContext::retreat_operations(
   }
 }
 
-///| Perform a full merge operation
-
 ///|
-
-///| This implements the three-phase retreat-advance-apply merge:
-
-///| 1. Calculate diff between current frontier and target frontier
-
-///| 2. Retreat operations not in target
-
-///|
-/// 3. Advance (apply) operations in target
+/// Perform a full three-phase retreat-advance-apply merge.
+///
+/// 1. Calculate diff between current frontier and target frontier
+/// 2. Retreat — remove operations not in target
+/// 3. Advance — apply operations in target
 pub fn merge(
   tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
@@ -152,17 +143,14 @@ pub fn merge(
   ctx.apply_operations(advance_ops)
 }
 
-///| Merge remote operations into local state using Branch system
-
 ///|
-
-///|
-/// This properly uses the eg-walker Branch system:
+/// Merge remote operations into local state using the eg-walker Branch system.
+///
 /// 1. Creates a Branch representing current state
 /// 2. Uses Branch::merge_remote_ops which leverages the walker
 /// 3. Updates the tree to match the merged branch
 ///
-/// This is a convenience function for applying remote operations
+/// This is a convenience function for applying remote operations.
 pub fn merge_remote_ops(
   tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,

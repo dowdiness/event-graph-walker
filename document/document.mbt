@@ -72,14 +72,11 @@ fn Document::invalidate_cache(self : Document) -> Unit {
   self.position_cache = None
 }
 
-///| Map a user position (0-based cursor position) to the LV at that position
-
 ///|
-
-///| Returns the LV of the item before the cursor position
-
-///|
-/// Returns -1 if at the start of the document
+/// Map a user position (0-based cursor position) to the LV at that position.
+///
+/// Returns the LV of the item before the cursor position,
+/// or -1 if at the start of the document.
 fn Document::position_to_lv(self : Document, position : Int) -> Int {
   if position == 0 {
     return -1
@@ -102,12 +99,11 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
   id.0
 }
 
-///| Insert text at a cursor position
-
 ///|
-
-///|
-/// Returns the last operation that was created (for multi-character inserts)
+/// Insert text at a cursor position.
+///
+/// Splits multi-character strings into individual character operations.
+/// Returns the last operation created (or a no-op for empty strings).
 pub fn Document::insert(
   self : Document,
   position : Int,
@@ -199,12 +195,10 @@ pub fn Document::insert(
   }
 }
 
-///| Delete character at a cursor position
-
 ///|
-
-///|
-/// Returns Some(operation) if successful, None if position is invalid
+/// Delete the character at a cursor position.
+///
+/// Raises `InvalidPosition` if the position is negative or beyond the last character.
 pub fn Document::delete(
   self : Document,
   position : Int,

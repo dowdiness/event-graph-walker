@@ -48,7 +48,6 @@ pub fn[T] FugueTree::make(root_content : T) -> FugueTree[T] {
 /// Returns the item for the given LV, or None if missing.
 ///
 #alias("_[_]")
-///|
 pub fn[T] FugueTree::get(self : FugueTree[T], id : Lv) -> Item[T]? {
   self.items.get(id)
 }
