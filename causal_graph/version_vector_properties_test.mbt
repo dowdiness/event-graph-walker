@@ -374,8 +374,7 @@ test "property: includes is downward-closed in seq" {
 ///
 /// After vv.increment(agent), every other agent retains its original seq,
 /// and the target agent's seq increases by exactly 1 (or becomes 0 if new).
-fn prop_increment_target_only(vv : VersionVector) -> Bool {
-  let target = "alice" // always present in generated VVs or may be absent
+fn check_increment_target_only(vv : VersionVector, target : String) -> Bool {
   let before = vv.0.get(target)
   let vv2 = vv.increment(target)
   let after = vv2.0.get(target)
@@ -397,7 +396,32 @@ fn prop_increment_target_only(vv : VersionVector) -> Bool {
         vv.0.get(agent) == vv2.0.get(agent)
       }
     })
-  target_ok && others_ok
+
+  // increment must not introduce any non-target agents
+  let no_new_non_target_agents = vv2
+    .agents()
+    .iter()
+    .all(fn(agent) {
+      if agent == target {
+        true
+      } else {
+        match vv.0.get(agent) {
+          Some(_) => true
+          None => false
+        }
+      }
+    })
+
+  target_ok && others_ok && no_new_non_target_agents
+}
+
+///|
+fn prop_increment_target_only(vv : VersionVector) -> Bool {
+  let existing_target_ok = check_increment_target_only(vv, "alice")
+  // Arbitrary VersionVector currently uses ["alice", "bob", "charlie", "dave", "eve"].
+  // Using "zoe" ensures the absent-target increment path is exercised.
+  let absent_target_ok = check_increment_target_only(vv, "zoe")
+  existing_target_ok && absent_target_ok
 }
 
 ///|
