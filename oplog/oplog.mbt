@@ -145,7 +145,11 @@ pub fn OpLog::undelete(
 }
 
 ///|
-/// Get operation by LV
+/// Get the operation at a specific local version (LV).
+///
+/// Returns `None` for negative LVs, the sentinel value -1, or any LV
+/// beyond the end of the log. All valid LVs in `[0, op_count())` are
+/// guaranteed to return `Some`.
 pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
   if lv >= 0 && lv < self.operations.length() {
     Some(self.operations[lv])
@@ -155,6 +159,12 @@ pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
 }
 
 ///|
+/// Collect operations for a list of LVs, silently skipping invalid indices.
+///
+/// This is the batch counterpart of `get_op`: given a slice of LVs
+/// (e.g. from `walk_and_collect` or `diff_and_collect`) it returns the
+/// corresponding operations in the same order, omitting any LV that is
+/// out of range.
 pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int]) -> Array[@core.Op] {
   lvs.filter_map(lv => self.get_op(lv))
 }

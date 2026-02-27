@@ -235,7 +235,16 @@ fn CausalGraph::transitive_closure(
 }
 
 ///|
-/// Calculate diff between two frontiers for retreat/advance
+/// Compute the symmetric difference between two frontiers as LV sets.
+///
+/// Returns `(retreat, advance)` where:
+/// - `retreat` — LVs reachable from `from` but **not** from `to`
+///   (operations that must be *undone* when moving from → to)
+/// - `advance` — LVs reachable from `to` but **not** from `from`
+///   (operations that must be *applied* when moving from → to)
+///
+/// Both sets are returned as unsorted arrays; call `diff_frontiers_lvs`
+/// for a topologically ordered version ready for replay.
 pub fn CausalGraph::graph_diff(
   self : CausalGraph,
   from : @core.Frontier,

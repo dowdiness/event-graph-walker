@@ -107,7 +107,15 @@ pub fn TextDoc::apply_remote(
 }
 
 ///|
-/// Merge remote operations into this document.
+/// Merge a batch of remote operations into this document.
+///
+/// Validates the batch first (`validate_remote_batch`): raises
+/// `TextError` if the batch contains duplicate operations, references
+/// a parent not present locally or in the batch, or declares a frontier
+/// entry that cannot be resolved.  On success the operations are applied
+/// in causal order and the document advances to the new frontier.
+///
+/// For individual out-of-order operations use `apply_remote` instead.
 pub fn TextDoc::merge_remote(
   self : TextDoc,
   remote_ops : Array[@core.Op],
