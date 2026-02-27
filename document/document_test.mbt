@@ -87,10 +87,11 @@ test "cache coherent after apply_remote delete: deleted item gone from positions
   try! bob.apply_remote(delete_op)
 
   inspect(bob.to_text(), content="ac")
-  inspect(bob.visible_count(), content="2")
-  // Bob can now correctly delete at position 0 ('a')
-  let _ = try! bob.delete(0)
-  inspect(bob.to_text(), content="c")
+  // With stale cache this would return 3 — directly exposes the invalidation bug
+  inspect(bob.get_visible_items().length(), content="2")
+  // Bob deletes at position 1 ('c') using the fresh cache correctly
+  let _ = try! bob.delete(1)
+  inspect(bob.to_text(), content="a")
 }
 
 ///|
@@ -113,10 +114,11 @@ test "cache coherent after merge_remote: positions reflect merged state" {
   try! alice.merge_remote(bob_ops, bob_frontier)
 
   // Both words appear (order depends on FugueMax conflict resolution)
-  inspect(alice.visible_count(), content="10")
-  // Position-based delete should work after merge
-  let _ = try! alice.delete(0)
-  inspect(alice.visible_count(), content="9")
+  // With stale cache this would return 5 — directly exposes the invalidation bug
+  inspect(alice.get_visible_items().length(), content="10")
+  // Delete at position 6 (only reachable via fresh 10-item cache, not stale 5-item "Hello" cache)
+  let _ = try! alice.delete(6)
+  inspect(alice.get_visible_items().length(), content="9")
 }
 
 ///|
@@ -138,16 +140,20 @@ test "cache coherent: interleaved local and remote edits maintain consistency" {
   let _ = try! alice.insert(1, "b")
   inspect(alice.to_text(), content="abc")
 
+  // Re-prime Alice's cache after the local insert so the remote apply is what must invalidate it
+  ignore(alice.get_visible_items())
+
   // Bob inserts 'X' at start — invalidates Bob's cache
   let _ = try! bob.insert(0, "X")
   inspect(bob.to_text().contains("X"), content="true")
 
-  // Apply Bob's insert to Alice
+  // Apply Bob's insert to Alice — must invalidate Alice's re-primed cache
   let bob_new_op = bob.get_all_ops()[bob.get_all_ops().length() - 1]
   try! alice.apply_remote(bob_new_op)
-  inspect(alice.visible_count(), content="4")
+  // With stale cache this would return 3 — directly exposes the invalidation bug
+  inspect(alice.get_visible_items().length(), content="4")
 
   // Alice's cache must allow correct further edits
   let _ = try! alice.delete(0) // delete whatever is at position 0 now
-  inspect(alice.visible_count(), content="3")
+  inspect(alice.get_visible_items().length(), content="3")
 }
