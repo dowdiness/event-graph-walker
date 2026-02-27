@@ -24,15 +24,30 @@ pub enum Side {
 } derive(Show, Eq)
 
 ///|
-/// Item in the sequence - represents a character or text chunk
+/// A node in the FugueMax tree, representing one unit of content (e.g. a character).
+///
+/// Items are never removed — deleted content becomes a **tombstone** (`deleted = true`)
+/// so that concurrent operations that reference it can still resolve correctly.
 pub(all) struct Item[T] {
-  id : Lv // LV that created this item
-  content : T // The content (genericized)
-  parent : Lv? // Parent item ID in tree (None for root)
-  side : Side // Which side of parent (Left or Right)
-  deleted : Bool // Is this item deleted (tombstone)
-  timestamp : Timestamp // Lamport timestamp for tie-breaking
-  agent : ReplicaId // Agent that created this item (for deterministic tiebreaking)
+  /// Local version of this item. Unique within the tree.
+  id : Lv
+  /// The content value (e.g. a `String` character).
+  content : T
+  /// Parent item in the Fugue tree. `None` means the parent is the virtual root (`root_lv`).
+  parent : Lv?
+  /// Which subtree of the parent this item belongs to.
+  /// `Left` subtree items appear *before* the parent in document order;
+  /// `Right` subtree items appear *after* the parent.
+  side : Side
+  /// `true` if the item has been deleted (tombstone). Tombstones remain in the
+  /// tree so concurrent operations that reference this item remain valid.
+  deleted : Bool
+  /// Lamport timestamp used as the primary sort key when ordering siblings
+  /// that share the same parent and side.
+  timestamp : Timestamp
+  /// Replica that created this item. Used as a deterministic tiebreaker when
+  /// two siblings have equal Lamport timestamps.
+  agent : ReplicaId
 } derive(Show, Eq)
 
 ///|

@@ -3,10 +3,16 @@
 ///|
 /// OpLog - stores operations with causal graph
 pub struct OpLog {
-  mut operations : Array[@core.Op] // All operations in LV order
-  mut pending : Array[@core.Op] // Remote ops waiting for missing parents
-  graph : @causal_graph.CausalGraph // The causal graph
-  agent_id : String // This agent's ID
+  /// All committed operations, in local-version (LV) order.
+  mut operations : Array[@core.Op]
+  /// Remote operations buffered because one or more of their causal parents
+  /// have not yet arrived. On each `apply_remote` call, `drain_pending` re-tries
+  /// all buffered ops and promotes any whose parents are now satisfied.
+  mut pending : Array[@core.Op]
+  /// Causal graph tracking operation dependencies and version mapping.
+  graph : @causal_graph.CausalGraph
+  /// This peer's globally stable agent ID. Local operations are created under this ID.
+  agent_id : String
 } derive(Show)
 
 ///|
