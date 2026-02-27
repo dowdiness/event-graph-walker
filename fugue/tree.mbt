@@ -136,7 +136,7 @@ pub fn[T] FugueTree::delete(
 ) -> Unit raise FugueError {
   match self[id] {
     Some(item) => {
-      if not(item.deleted) {
+      if id != root_lv && not(item.deleted) {
         self.visible = self.visible - 1
       }
       let deleted_item = item.mark_deleted()

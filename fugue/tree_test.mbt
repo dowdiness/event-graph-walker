@@ -346,6 +346,23 @@ test "undelete after delete changes state" {
 }
 
 ///|
+/// Test: delete(root_lv) must not corrupt the visible counter.
+///
+/// root_lv (Lv(-1)) is never counted in visible (it is added directly in make(),
+/// not through add_item).  Calling delete(root_lv) on a tree with n visible items
+/// must leave visible_count() == n, not n-1.
+test "delete root_lv does not corrupt visible_count" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  // Insert one visible item so the counter is non-trivial
+  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  inspect(tree.visible_count(), content="1")
+
+  // Delete the virtual root — must be a no-op for the visible counter
+  try! tree.delete(@fugue.root_lv)
+  inspect(tree.visible_count(), content="1")
+}
+
+///|
 /// Test: undelete on missing item raises MissingItem error
 test "undelete on missing item raises MissingItem" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
