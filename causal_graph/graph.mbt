@@ -42,8 +42,11 @@ pub fn CausalGraph::raw_to_lv(
 }
 
 ///|
-/// Get graph entry by LV
+/// Index operator for looking up a graph entry by LV.
+/// Returns the graph entry for the given LV, or None if missing.
+///
 #alias("_[_]")
+///|
 pub fn CausalGraph::get_entry(
   self : CausalGraph,
   lv : Int,
