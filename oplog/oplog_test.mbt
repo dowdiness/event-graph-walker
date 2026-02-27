@@ -24,7 +24,15 @@ test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
 test "validate_remote_batch raises MissingRemoteParent for unknown parent" {
   let oplog = OpLog::new("local")
   let ghost_parent = @core.RawVersion::new("ghost", 0)
-  let op = @core.Op::new_insert(-1, [ghost_parent], "remote", 0, "a", None, None)
+  let op = @core.Op::new_insert(
+    -1,
+    [ghost_parent],
+    "remote",
+    0,
+    "a",
+    None,
+    None,
+  )
   let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
     [op],
     [],
