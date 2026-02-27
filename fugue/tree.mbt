@@ -134,9 +134,15 @@ pub fn[T] FugueTree::delete(
   self : FugueTree[T],
   id : Lv,
 ) -> Unit raise FugueError {
+  // root_lv is the virtual sentinel and is never part of the visible sequence.
+  // Tombstoning it would corrupt the visible counter on a subsequent undelete(root_lv),
+  // so treat delete(root_lv) as a full no-op.
+  if id == root_lv {
+    return
+  }
   match self[id] {
     Some(item) => {
-      if id != root_lv && not(item.deleted) {
+      if not(item.deleted) {
         self.visible = self.visible - 1
       }
       let deleted_item = item.mark_deleted()
