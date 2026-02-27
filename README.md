@@ -55,10 +55,10 @@ The high-level API for collaborative editing. Manages text operations with posit
 
 ```moonbit
 pub struct Document {
-  priv tree: @fugue.FugueTree              // CRDT tree state (encapsulated)
-  priv oplog: @oplog.OpLog                 // Operation log (encapsulated)
-  agent_id: String                         // Unique peer identifier
-  priv mut position_cache: Array[...]?     // Lazy position cache (invalidated on mutation)
+  priv tree : @fugue.FugueTree[String]                        // CRDT tree state (encapsulated)
+  priv oplog : @oplog.OpLog                                   // Operation log (encapsulated)
+  agent_id : String                                           // Unique peer identifier
+  priv mut position_cache : Array[(@fugue.Lv, @fugue.Item[String])]?  // Lazy cache (invalidated on mutation)
 }
 ```
 
@@ -84,9 +84,10 @@ Maintains append-only operation history with causal dependency tracking.
 
 ```moonbit
 pub struct OpLog {
-  operations: Array[Op]          // All operations in LV order
-  graph: @causal_graph.CausalGraph  // Causal graph
-  agent_id: String               // This agent's ID
+  mut operations : Array[@core.Op]          // All operations in LV order
+  mut pending : Array[@core.Op]             // Remote ops waiting for missing parents
+  graph : @causal_graph.CausalGraph         // Causal graph
+  agent_id : String                         // This agent's ID
 }
 ```
 
@@ -101,9 +102,11 @@ Tracks causality between operations using parents and version information.
 
 ```moonbit
 pub struct CausalGraph {
-  versions: Array[Version]       // Version info indexed by LV
-  agents: Map[String, Int]       // Agent sequence counters
-  // ... version vector tracking
+  mut entries : HashMap[Int, GraphEntry]       // Graph entries indexed by LV
+  mut version_map : HashMap[RawVersion, Int]   // RawVersion → LV index
+  mut next_lv : Int                            // Next available local version
+  mut frontier : Frontier                      // Current frontier
+  mut agent_seqs : HashMap[String, Int]        // Highest seq per agent
 }
 ```
 
@@ -111,10 +114,9 @@ pub struct CausalGraph {
 CRDT tree implementing FugueMax algorithm for ordered sequences with conflict-free insertions.
 
 ```moonbit
-pub struct FugueTree {
-  items: HashMap[Int, Item]      // Items indexed by logical version
-  root: Int                      // Virtual root (-1)
-  length: Int                    // Item count
+pub struct FugueTree[T] {
+  mut items : HashMap[Lv, Item[T]]  // Items indexed by LV (includes tombstones)
+  mut length : Int                  // Total items, including deleted
 }
 ```
 
@@ -123,9 +125,9 @@ Document snapshot at a specific frontier. Enables efficient checkout and advance
 
 ```moonbit
 pub struct Branch {
-  frontier: @core.Frontier       // Version frontier
-  tree: @fugue.FugueTree         // CRDT tree state
-  oplog: @oplog.OpLog            // Reference to operation log
+  frontier : @core.Frontier          // Version frontier this branch represents
+  tree : @fugue.FugueTree[String]    // CRDT tree state at this frontier
+  oplog : @oplog.OpLog               // Reference to the operation log
 }
 ```
 
@@ -163,9 +165,7 @@ The branch system uses the walker to replay operations, avoiding expensive full 
 Compact representation of known versions per agent:
 
 ```moonbit
-pub struct VersionVector {
-  map: Map[String, Int]  // Max sequence number per agent
-}
+pub struct VersionVector(Map[String, Int])  // Max seq per agent (newtype wrapper)
 ```
 
 - Enables efficient network sync optimization
@@ -183,10 +183,10 @@ Three-phase merge for concurrent edits:
 
 ```moonbit
 pub fn merge_remote_ops(
-  tree: @fugue.FugueTree,
-  oplog: @oplog.OpLog,
-  remote_ops: Array[@oplog.Op]
-) -> Unit
+  tree : @fugue.FugueTree[String],
+  oplog : @oplog.OpLog,
+  remote_ops : Array[@core.Op],
+) -> Unit raise BranchError
 ```
 
 ## Usage
