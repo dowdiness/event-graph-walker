@@ -23,3 +23,26 @@ pub struct UndoGroup {
   items : Array[UndoItem]
   timestamp : Int
 } derive(Show)
+
+///|
+/// Errors that can occur during undo/redo operations
+pub(all) suberror UndoError {
+  ItemNotFound
+  Internal(detail~ : String)
+}
+
+///|
+pub fn UndoError::message(self : UndoError) -> String {
+  match self {
+    ItemNotFound => "Undo target item not found in document"
+    Internal(detail~) => "Internal undo error: \{detail}"
+  }
+}
+
+///|
+pub fn UndoError::is_retryable(self : UndoError) -> Bool {
+  match self {
+    ItemNotFound => false
+    Internal(_) => false
+  }
+}
