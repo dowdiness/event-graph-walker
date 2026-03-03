@@ -4,10 +4,17 @@
 // using Arbitrary and Shrink traits for automatic test generation and minimization.
 
 ///|
+/// A single text edit captured during generation (position-based).
+enum TextEdit {
+  Insert(Int, String)
+  Delete(Int)
+} derive(Show)
+
+///|
 /// Generated operations for property testing (real TextDoc edits).
 pub(all) struct RealOps {
   agent : String
-  ops : Array[@core.Op]
+  edits : Array[TextEdit]
 } derive(Show)
 
 ///|
@@ -19,10 +26,11 @@ pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
   ]
   let agent_id = random_state.split().next_uint64().to_int().abs()
   let agent = "gen-\{agent_id}"
-  let doc = @text.TextDoc::new(agent)
-  let ops : Array[@core.Op] = []
+  // Use a scratch doc to track position validity during generation
+  let scratch = @text.TextDoc::new(agent)
+  let edits : Array[TextEdit] = []
   for i = 0; i < size; i = i + 1 {
-    let len = doc.len()
+    let len = scratch.len()
     let is_insert = if len == 0 {
       true
     } else {
@@ -32,41 +40,43 @@ pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
       let pos = random_state.split().next_uint64().to_int().abs() % (len + 1)
       let char_idx = random_state.split().next_uint64().to_int().abs() %
         chars.length()
-      let change = doc.insert(@text.Pos::at(pos), chars[char_idx].to_string()) catch {
-        _ => continue
-      }
-      ops.push(change.to_op())
+      let ch = chars[char_idx].to_string()
+      scratch.insert(@text.Pos::at(pos), ch) catch { _ => continue }
+      edits.push(Insert(pos, ch))
     } else {
       let pos = random_state.split().next_uint64().to_int().abs() % len
-      let change = doc.delete(@text.Pos::at(pos)) catch { _ => continue }
-      ops.push(change.to_op())
+      scratch.delete(@text.Pos::at(pos)) catch { _ => continue }
+      edits.push(Delete(pos))
     }
   }
-  { agent, ops }
+  { agent, edits }
 }
 
 ///|
 /// Shrink instance for RealOps
 pub impl @qc.Shrink for RealOps with shrink(self) {
   let results : Array[RealOps] = []
-  let ops = self.ops
-  let len = ops.length()
+  let edits = self.edits
+  let len = edits.length()
   if len > 0 {
-    results.push({ agent: self.agent, ops: [] })
+    results.push({ agent: self.agent, edits: [] })
     let half = len / 2
     if half > 0 {
-      results.push({ agent: self.agent, ops: ops[:half].to_array() })
+      results.push({ agent: self.agent, edits: edits[:half].to_array() })
     }
-    results.push({ agent: self.agent, ops: ops[:len - 1].to_array() })
+    results.push({ agent: self.agent, edits: edits[:len - 1].to_array() })
   }
   results.iter()
 }
 
 ///|
-/// Apply a real operation to a document, returning success.
-fn apply_op(doc : @text.TextDoc, op : @core.Op) -> Bool {
+/// Apply a single TextEdit to a document, returning success.
+fn apply_edit(doc : @text.TextDoc, edit : TextEdit) -> Bool {
   try {
-    doc.apply_remote(op)
+    match edit {
+      Insert(pos, ch) => doc.insert(@text.Pos::at(pos), ch)
+      Delete(pos) => doc.delete(@text.Pos::at(pos))
+    }
     true
   } catch {
     _ => false
@@ -74,22 +84,22 @@ fn apply_op(doc : @text.TextDoc, op : @core.Op) -> Bool {
 }
 
 ///|
-/// Apply a sequence of operations to a document
-fn apply_ops(doc : @text.TextDoc, ops : Array[@core.Op]) -> Unit {
-  for op in ops {
-    let _ = apply_op(doc, op)
+/// Apply a sequence of edits to a document
+fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Unit {
+  for edit in edits {
+    let _ = apply_edit(doc, edit)
 
   }
 }
 
 ///|
-/// Property: Sync convergence - two documents with same ops converge
+/// Property: Sync convergence - two documents with same edits converge
 fn prop_sync_convergence(ops : RealOps) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
 
-  // Apply ops to doc1
-  apply_ops(doc1, ops.ops)
+  // Apply edits to doc1
+  apply_edits(doc1, ops.edits)
 
   // Sync doc1 -> doc2
   let msg = doc1.sync().export_all() catch {
@@ -113,7 +123,7 @@ test "property: sync convergence" {
 fn prop_sync_idempotent(ops : RealOps) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
-  apply_ops(doc1, ops.ops)
+  apply_edits(doc1, ops.edits)
   let msg = doc1.sync().export_all() catch { _ => return true }
 
   // Apply once
@@ -230,10 +240,10 @@ test "property: delete decreases length" {
 fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
 
-  // Apply some ops
-  let mid = ops.ops.length() / 2
+  // Apply first half of edits
+  let mid = ops.edits.length() / 2
   for i = 0; i < mid; i = i + 1 {
-    let _ = apply_op(doc, ops.ops[i])
+    let _ = apply_edit(doc, ops.edits[i])
 
   }
 
@@ -241,9 +251,9 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   let saved_version = doc.version()
   let saved_text = doc.text()
 
-  // Apply more ops
-  for i = mid; i < ops.ops.length(); i = i + 1 {
-    let _ = apply_op(doc, ops.ops[i])
+  // Apply remaining edits
+  for i = mid; i < ops.edits.length(); i = i + 1 {
+    let _ = apply_edit(doc, ops.edits[i])
 
   }
 
@@ -288,7 +298,7 @@ test "property: Pos clamps negative values" {
 /// Property: Version equality is reflexive
 fn prop_version_reflexive(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_ops(doc, ops.ops)
+  apply_edits(doc, ops.edits)
   let v = doc.version()
   v == v
 }
@@ -302,7 +312,7 @@ test "property: version equality is reflexive" {
 /// Property: SyncMessage::is_empty consistent with op_count
 fn prop_sync_message_empty_consistent(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_ops(doc, ops.ops)
+  apply_edits(doc, ops.edits)
   let msg = doc.sync().export_all() catch { _ => return true }
   (msg.is_empty() && msg.op_count() == 0) ||
   (not(msg.is_empty()) && msg.op_count() > 0)
@@ -320,9 +330,9 @@ fn prop_bidirectional_sync_converges(pair : (RealOps, RealOps)) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
 
-  // Apply different ops to each doc
-  apply_ops(doc1, ops1.ops)
-  apply_ops(doc2, ops2.ops)
+  // Apply different edits to each doc
+  apply_edits(doc1, ops1.edits)
+  apply_edits(doc2, ops2.edits)
 
   // Sync both ways
   let msg1 = doc1.sync().export_all() catch { _ => return true }
@@ -347,7 +357,7 @@ test "property: bidirectional sync converges" {
 /// Property: export_since with current version exports empty
 fn prop_export_since_current_is_empty(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_ops(doc, ops.ops)
+  apply_edits(doc, ops.edits)
   let current_version = doc.version()
   let msg = doc.sync().export_since(current_version) catch { _ => return true }
   msg.is_empty()

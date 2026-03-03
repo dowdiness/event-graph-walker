@@ -37,15 +37,14 @@ pub fn TextDoc::insert(
   self : TextDoc,
   pos : Pos,
   text : String,
-) -> Change raise TextError {
+) -> Unit raise TextError {
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val > doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
   try {
-    let op = self.inner.insert(pos_val, text)
-    Change::from_op(op)
+    let _ = self.inner.insert(pos_val, text)
   } catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
@@ -53,15 +52,14 @@ pub fn TextDoc::insert(
 
 ///|
 /// Delete a single character at the given position
-pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Change raise TextError {
+pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Unit raise TextError {
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val >= doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
   try {
-    let op = self.inner.delete(pos_val)
-    Change::from_op(op)
+    let _ = self.inner.delete(pos_val)
   } catch {
     err => raise TextError::from_document_error(err, doc_len)
   }

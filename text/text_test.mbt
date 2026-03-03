@@ -35,24 +35,6 @@ test "TextDoc::delete removes character" {
 }
 
 ///|
-test "TextDoc::insert returns Change" {
-  let doc = TextDoc::new("alice")
-  let change = doc.insert(Pos::at(0), "H")
-  inspect(change.is_insert(), content="true")
-  inspect(change.is_delete(), content="false")
-  inspect(change.get_text(), content="Some(\"H\")")
-}
-
-///|
-test "TextDoc::delete returns Change" {
-  let doc = TextDoc::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hi")
-  let change = doc.delete(Pos::at(0))
-  inspect(change.is_insert(), content="false")
-  inspect(change.is_delete(), content="true")
-}
-
-///|
 test "TextDoc::version changes after edit" {
   let doc = TextDoc::new("alice")
   let v1 = doc.version()
@@ -195,7 +177,7 @@ test "Version::empty creates empty version" {
 ///|
 test "TextDoc insert at invalid position raises error" {
   let doc = TextDoc::new("alice")
-  let result : Result[Change, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
+  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
     e => Err(e)
   }
   match result {
@@ -211,7 +193,7 @@ test "TextDoc insert at invalid position raises error" {
 test "TextDoc delete at invalid position raises error" {
   let doc = TextDoc::new("alice")
   let _ = doc.insert(Pos::at(0), "Hi")
-  let result : Result[Change, TextError] = Ok(doc.delete(Pos::at(5))) catch {
+  let result : Result[Unit, TextError] = Ok(doc.delete(Pos::at(5))) catch {
     e => Err(e)
   }
   match result {
