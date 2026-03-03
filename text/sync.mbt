@@ -10,27 +10,6 @@ pub(all) struct SyncMessage {
 } derive(Show)
 
 ///|
-/// Create a SyncMessage from internal types (for advanced use/deserialization).
-pub fn SyncMessage::new(
-  ops : Array[@core.Op],
-  heads : Array[@core.RawVersion],
-) -> SyncMessage {
-  { ops, heads }
-}
-
-///|
-/// Get the operations in this message (for advanced use/serialization).
-pub fn SyncMessage::get_ops(self : SyncMessage) -> Array[@core.Op] {
-  self.ops
-}
-
-///|
-/// Get the heads (version frontier) in this message (for advanced use/serialization).
-pub fn SyncMessage::get_heads(self : SyncMessage) -> Array[@core.RawVersion] {
-  self.heads
-}
-
-///|
 /// Check if this message contains no operations.
 pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
   self.ops.is_empty()
@@ -48,12 +27,6 @@ pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
 /// Obtain via `TextDoc::sync()`.
 pub(all) struct SyncSession {
   priv doc : TextDoc
-}
-
-///|
-/// Create a sync session for a document (typically use TextDoc::sync() instead).
-pub fn SyncSession::new(doc : TextDoc) -> SyncSession {
-  { doc, }
 }
 
 ///|

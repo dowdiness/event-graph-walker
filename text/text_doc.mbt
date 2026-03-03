@@ -74,7 +74,7 @@ pub fn TextDoc::version(self : TextDoc) -> Version {
 ///|
 /// Get a sync session for this document
 pub fn TextDoc::sync(self : TextDoc) -> SyncSession {
-  SyncSession::new(self)
+  SyncSession::{ doc: self }
 }
 
 ///|

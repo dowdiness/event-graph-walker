@@ -150,8 +150,9 @@ test "SyncFailure::Cancelled is not retryable" {
 ///|
 test "Version::empty creates empty version" {
   let v = Version::empty()
-  let f = v.to_frontier()
-  inspect(f, content="Frontier([])")
+  // An empty version equals the initial state of a new document
+  let doc = TextDoc::new("test")
+  inspect(doc.version() == v, content="true")
 }
 
 ///|

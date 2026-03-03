@@ -54,14 +54,12 @@ pub(all) struct Version {
 } derive(Show, Eq)
 
 ///|
-/// Create a Version from an internal Frontier (for advanced use).
-pub fn Version::from_frontier(frontier : @core.Frontier) -> Version {
+fn Version::from_frontier(frontier : @core.Frontier) -> Version {
   { frontier, }
 }
 
 ///|
-/// Convert to internal Frontier (for advanced use).
-pub fn Version::to_frontier(self : Version) -> @core.Frontier {
+fn Version::to_frontier(self : Version) -> @core.Frontier {
   self.frontier
 }
 
