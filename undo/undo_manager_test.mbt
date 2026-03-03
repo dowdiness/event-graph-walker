@@ -167,65 +167,50 @@ test "undo delete then redo delete" {
 }
 
 ///|
-test "undo-insert generates Delete op" {
+test "undo-insert reflects in doc text" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  let ops = mgr.undo(doc)
-  inspect(ops.length(), content="1")
-  inspect(ops[0].is_delete(), content="true")
+  mgr.undo(doc)
   inspect(doc.text(), content="")
 }
 
 ///|
-test "undo-delete generates Undelete op" {
+test "undo-delete reflects in doc text" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   doc.delete_and_record(@text.Pos::at(0), mgr, timestamp_ms=2000)
   inspect(doc.text(), content="")
-  let ops = mgr.undo(doc)
-  inspect(ops.length(), content="1")
-  inspect(ops[0].is_undelete(), content="true")
+  mgr.undo(doc)
   inspect(doc.text(), content="H")
 }
 
 ///|
-test "redo generates ops" {
+test "redo reflects in doc text" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  let _ = mgr.undo(doc)
+  mgr.undo(doc)
   inspect(doc.text(), content="")
-  let ops = mgr.redo(doc)
-  inspect(ops.length(), content="1")
-  inspect(ops[0].is_undelete(), content="true")
+  mgr.redo(doc)
   inspect(doc.text(), content="H")
 }
 
 ///|
-test "undo ops can be applied to peer" {
+test "undo syncs to peer via export_all" {
   let doc_a = @text.TextDoc::new("alice")
   let doc_b = @text.TextDoc::new("bob")
   let mgr = @undo.UndoManager::new("alice")
-  // Alice inserts "H", sync to Bob
-  let insert_change = doc_a.insert(@text.Pos::at(0), "H")
-  let insert_msg = @text.SyncMessage::new(
-    [insert_change.to_op()],
-    doc_a.sync().export_all().get_heads(),
-  )
-  doc_b.sync().apply(insert_msg)
+  // Alice inserts "H" and records for undo
+  doc_a.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  // Sync to Bob
+  doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="H")
-  // Record the insert for undo tracking
-  mgr.record_insert(0, "alice", 1000, content=Some("H"))
-  // Alice undoes, gets Delete op
-  let undo_ops = mgr.undo(doc_a)
+  // Alice undoes
+  mgr.undo(doc_a)
   inspect(doc_a.text(), content="")
-  // Send undo ops to Bob via sync
-  let undo_msg = @text.SyncMessage::new(
-    undo_ops,
-    doc_a.sync().export_all().get_heads(),
-  )
-  doc_b.sync().apply(undo_msg)
+  // Sync undo to Bob (export_all includes the delete op from undo)
+  doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="")
 }
