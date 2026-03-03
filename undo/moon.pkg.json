@@ -1,9 +1,6 @@
 {
   "is_main": false,
-  "import": [
-    "dowdiness/event-graph-walker/internal/core",
-    "dowdiness/event-graph-walker/internal/document"
-  ],
+  "import": [],
   "test-import": [
     "dowdiness/event-graph-walker/text",
     "moonbitlang/core/quickcheck"
