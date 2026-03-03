@@ -1,7 +1,7 @@
 {
   "is_main": false,
   "import": [
-    "dowdiness/event-graph-walker/core",
+    "dowdiness/event-graph-walker/internal/core",
     "moonbitlang/core/bench",
     "moonbitlang/core/queue",
     "moonbitlang/core/json",
