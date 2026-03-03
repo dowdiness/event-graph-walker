@@ -12,22 +12,19 @@ enum TextEdit {
 
 ///|
 /// Generated operations for property testing (real TextDoc edits).
-pub(all) struct RealOps {
-  agent : String
+struct RealOps {
   edits : Array[TextEdit]
 } derive(Show)
 
 ///|
 /// Arbitrary instance for RealOps
-pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
+impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
   let chars : Array[Char] = [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
     'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
   ]
-  let agent_id = random_state.split().next_uint64().to_int().abs()
-  let agent = "gen-\{agent_id}"
   // Use a scratch doc to track position validity during generation
-  let scratch = @text.TextDoc::new(agent)
+  let scratch = @text.TextDoc::new("scratch")
   let edits : Array[TextEdit] = []
   for i = 0; i < size; i = i + 1 {
     let len = scratch.len()
@@ -49,22 +46,22 @@ pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
       edits.push(Delete(pos))
     }
   }
-  { agent, edits }
+  { edits }
 }
 
 ///|
 /// Shrink instance for RealOps
-pub impl @qc.Shrink for RealOps with shrink(self) {
+impl @qc.Shrink for RealOps with shrink(self) {
   let results : Array[RealOps] = []
   let edits = self.edits
   let len = edits.length()
   if len > 0 {
-    results.push({ agent: self.agent, edits: [] })
+    results.push({ edits: [] })
     let half = len / 2
     if half > 0 {
-      results.push({ agent: self.agent, edits: edits[:half].to_array() })
+      results.push({ edits: edits[:half].to_array() })
     }
-    results.push({ agent: self.agent, edits: edits[:len - 1].to_array() })
+    results.push({ edits: edits[:len - 1].to_array() })
   }
   results.iter()
 }
@@ -88,7 +85,6 @@ fn apply_edit(doc : @text.TextDoc, edit : TextEdit) -> Bool {
 fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Unit {
   for edit in edits {
     let _ = apply_edit(doc, edit)
-
   }
 }
 
