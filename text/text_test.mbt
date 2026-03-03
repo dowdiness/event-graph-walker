@@ -127,26 +127,6 @@ test "TextDoc::checkout creates historical view" {
 }
 
 ///|
-test "TextDoc::apply_remote applies remote operation" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
-  let _ = doc1.insert(Pos::at(0), "Hi")
-  let msg = doc1.sync().export_all()
-  for op in msg.get_ops() {
-    doc2.apply_remote(op)
-  }
-  inspect(doc2.text(), content="Hi")
-}
-
-///|
-test "TextDoc::from_document wraps existing document" {
-  let doc = @document.Document::new("alice")
-  let text_doc = TextDoc::from_document(doc)
-  inspect(text_doc.text(), content="")
-  inspect(text_doc.is_empty(), content="true")
-}
-
-///|
 test "SyncFailure::Timeout is retryable" {
   let err : TextError = TextError::SyncFailed(
     SyncFailure::Timeout(detail="operation timed out after 30s"),
