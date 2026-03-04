@@ -269,14 +269,15 @@ fn apply_operation_to_tree(
   match op.content() {
     @core.Insert(text) => {
       // Get Lamport timestamp and agent from causal graph
-      let (timestamp, agent) = match cg[op.lv()] {
+      let lv = op.lv()
+      let (timestamp, agent) = match cg[lv] {
         Some(entry) => (entry.timestamp, entry.agent)
-        None => raise BranchError::MissingOp(lv=op.lv())
+        None => raise BranchError::MissingOp(lv~)
       }
 
       // Insert into tree with FugueMax algorithm
       tree.insert({
-        id: @fugue.Lv(op.lv()),
+        id: @fugue.Lv(lv),
         content: text,
         origin_left,
         origin_right,

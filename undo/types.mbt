@@ -40,9 +40,8 @@ pub fn UndoError::message(self : UndoError) -> String {
 }
 
 ///|
+// All undo errors are non-retryable by design.
 pub fn UndoError::is_retryable(self : UndoError) -> Bool {
-  match self {
-    ItemNotFound => false
-    Internal(_) => false
-  }
+  ignore(self)
+  false
 }

@@ -57,14 +57,15 @@ pub fn MergeContext::apply_operations(
                 }
             }
             // Get Lamport timestamp and agent from causal graph for proper ordering
-            let (timestamp, agent) = match cg[op.lv()] {
+            let lv = op.lv()
+            let (timestamp, agent) = match cg[lv] {
               Some(entry) => (entry.timestamp, entry.agent)
-              None => raise BranchError::MissingOp(lv=op.lv())
+              None => raise BranchError::MissingOp(lv~)
             }
 
             // Insert into tree with FugueMax algorithm
             self.tree.insert({
-              id: @fugue.Lv(op.lv()),
+              id: @fugue.Lv(lv),
               content: text,
               origin_left,
               origin_right,

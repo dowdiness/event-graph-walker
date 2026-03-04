@@ -49,7 +49,6 @@ pub fn Range::from_ints(start : Int, end : Int) -> Range {
   { start: Pos::at(start), end: Pos::at(end) }
 }
 
-
 ///| Opaque version identifier representing the document state at a point in time.
 
 ///|

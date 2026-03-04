@@ -300,8 +300,9 @@ fn OpLog::try_apply_remote(
     Some(lv) => lv
     None => return (true, None)
   }
-  if (op.content() is @core.Delete || op.content() is @core.Undelete) &&
-    op.origin_left() is None {
+  let content = op.content()
+  let raw_parents = op.parents()
+  if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
     raise OpLogError::MissingOrigin
   }
   let local_lv = self.graph.add_version_with_seq(
@@ -311,11 +312,11 @@ fn OpLog::try_apply_remote(
   ) catch {
     error => raise OpLogError::CausalGraphError(error~)
   }
-  let local_op = match op.content() {
+  let local_op = match content {
     @core.Insert(text) =>
       @core.Op::new_insert(
         local_lv,
-        op.parents(),
+        raw_parents,
         op.agent(),
         op.seq(),
         text,
@@ -325,7 +326,7 @@ fn OpLog::try_apply_remote(
     @core.Delete =>
       @core.Op::new_delete(
         local_lv,
-        op.parents(),
+        raw_parents,
         op.agent(),
         op.seq(),
         op.origin_left(),
@@ -333,7 +334,7 @@ fn OpLog::try_apply_remote(
     @core.Undelete =>
       @core.Op::new_undelete(
         local_lv,
-        op.parents(),
+        raw_parents,
         op.agent(),
         op.seq(),
         op.origin_left(),
