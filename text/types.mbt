@@ -22,6 +22,34 @@ pub fn Pos::value(self : Pos) -> Int {
   self.value
 }
 
+///|
+/// Text range representing a contiguous span of text.
+///
+/// `start` is inclusive, `end` is exclusive (half-open interval).
+///
+/// **Note:** `Range` is defined for upcoming batch operations (e.g. `delete_range`,
+/// `get_text`) but no public API currently accepts it. It is exported so that
+/// callers can construct and store ranges in preparation for those APIs.
+pub(all) struct Range {
+  /// Starting position (inclusive)
+  start : Pos
+  /// Ending position (exclusive)
+  end : Pos
+} derive(Show, Eq)
+
+///|
+/// Create a range from two positions.
+pub fn Range::new(start : Pos, end : Pos) -> Range {
+  { start, end }
+}
+
+///|
+/// Create a range from two integers.
+pub fn Range::from_ints(start : Int, end : Int) -> Range {
+  { start: Pos::at(start), end: Pos::at(end) }
+}
+
+
 ///| Opaque version identifier representing the document state at a point in time.
 
 ///|

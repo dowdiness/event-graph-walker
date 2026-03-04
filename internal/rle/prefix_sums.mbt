@@ -6,6 +6,7 @@ pub(all) struct PrefixSums {
 } derive(Show, Eq)
 
 ///|
+/// Create an empty PrefixSums with no runs.
 pub fn PrefixSums::new() -> PrefixSums {
   { atoms: [], content: [] }
 }

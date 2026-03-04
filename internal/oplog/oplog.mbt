@@ -143,7 +143,11 @@ pub fn OpLog::undelete(
 }
 
 ///|
-/// Get operation by LV
+/// Get the operation at a specific local version (LV).
+///
+/// Returns `None` for negative LVs, the sentinel value -1, or any LV
+/// beyond the end of the log. All valid LVs in `[0, op_count())` are
+/// guaranteed to return `Some`.
 pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
   if lv >= 0 && lv < self.operations.length() {
     Some(self.operations[lv])
@@ -153,14 +157,27 @@ pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
 }
 
 ///|
+/// Collect operations for a list of LVs, silently skipping invalid indices.
+///
+/// This is the batch counterpart of `get_op`: given a slice of LVs
+/// (e.g. from `walk_and_collect` or `diff_and_collect`) it returns the
+/// corresponding operations in the same order, omitting any LV that is
+/// out of range.
 pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int]) -> Array[@core.Op] {
   lvs.filter_map(lv => self.get_op(lv))
 }
 
 ///|
-/// Get all operations
+/// Get all operations (returns a copy for safety)
 pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
-  self.operations.copy()
+  self.ops_ref().copy()
+}
+
+///|
+/// Get all operations without copying (for internal/read-only use)
+/// Callers must not mutate the returned array.
+fn OpLog::ops_ref(self : OpLog) -> Array[@core.Op] {
+  self.operations
 }
 
 ///|
@@ -192,7 +209,8 @@ pub fn OpLog::get_frontier_raw(
 }
 
 ///|
-/// Validate that a remote batch is closed w.r.t. parents and frontier
+/// Validate that a remote batch is closed w.r.t. parents and frontier.
+/// Also checks for duplicate operations within the batch.
 pub fn OpLog::validate_remote_batch(
   self : OpLog,
   remote_ops : Array[@core.Op],
@@ -201,6 +219,10 @@ pub fn OpLog::validate_remote_batch(
   let mut batch : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.new()
   for op in remote_ops {
     let raw = @core.RawVersion::new(op.agent(), op.seq())
+    // Check for duplicates within the batch
+    if batch.contains(raw) {
+      raise OpLogError::DuplicateOperation(raw~)
+    }
     batch = batch.add(raw)
   }
   for op in remote_ops {

@@ -20,7 +20,7 @@ pub struct VersionVector(Map[String, Int]) derive (
   FromJson,
 )
 
-// Traits
+///| Trait implementations
 
 ///|
 /// Compares two version vectors to determine their ordering relationship.

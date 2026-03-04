@@ -38,6 +38,7 @@ pub fn[T : Mergeable + HasCausalLength] Runs::from_array_batch(
 }
 
 ///|
+/// Construct Runs from a flat array using batch-optimized stack merging.
 pub fn[T : Mergeable + HasCausalLength] Runs::from_array(
   arr : Array[T],
 ) -> Runs[T] {
@@ -45,16 +46,19 @@ pub fn[T : Mergeable + HasCausalLength] Runs::from_array(
 }
 
 ///|
+/// Returns true if there are no runs.
 pub fn[T] Runs::is_empty(self : Runs[T]) -> Bool {
   self.0.is_empty()
 }
 
 ///|
+/// Number of runs (not the total causal length).
 pub fn[T] Runs::count(self : Runs[T]) -> Int {
   self.0.length()
 }
 
 ///|
+/// Get a run by index, or None if out of bounds.
 pub fn[T] Runs::get(self : Runs[T], index : Int) -> T? {
   if index < 0 || index >= self.0.length() {
     None
@@ -64,11 +68,13 @@ pub fn[T] Runs::get(self : Runs[T], index : Int) -> T? {
 }
 
 ///|
+/// Iterate over all runs in order.
 pub fn[T] Runs::iter(self : Runs[T]) -> Iter[T] {
   self.0.iter()
 }
 
 ///|
+/// Copy all runs into a new array (callers may mutate freely).
 pub fn[T] Runs::to_array(self : Runs[T]) -> Array[T] {
   self.0.copy()
 }
@@ -86,7 +92,16 @@ pub fn[T : HasCausalLength] Runs::visible_len(self : Runs[T]) -> Int {
 }
 
 ///|
-/// Append element, merging with last run if possible
+/// Append an element to the runs, merging with the last run if possible.
+///
+/// This is the primary insertion method for RLE-compressed sequences. If the
+/// new element is contiguous with the last run (determined by `can_merge`),
+/// they are combined into a single run. Otherwise, a new run is created.
+///
+/// **Complexity**: O(1) amortized. Merge check and append are constant time,
+/// with occasional O(k) normalization where k = number of cascading merges.
+///
+/// **Invariant**: After append, no two adjacent runs are mergeable.
 pub fn[T : Mergeable + HasCausalLength] Runs::append(
   self : Runs[T],
   elem : T,
@@ -108,7 +123,16 @@ pub fn[T : Mergeable + HasCausalLength] Runs::append(
 }
 
 ///|
-/// Cascade merging leftward after append
+/// Cascade merging leftward after append to maintain RLE invariants.
+///
+/// After merging the last two runs, the resulting run may now be mergeable
+/// with its predecessor. This function iteratively merges backward until
+/// no more merges are possible.
+///
+/// **Complexity**: O(k) where k = number of consecutive mergeable runs.
+/// In practice, k is typically 1-2 for well-distributed insertions.
+///
+/// **Invariant**: After normalization, no two adjacent runs satisfy `can_merge`.
 fn[T : Mergeable] Runs::normalize_tail(self : Runs[T]) -> Unit {
   while self.0.length() >= 2 {
     let last = self.0.length() - 1
@@ -285,16 +309,28 @@ pub fn[T : Sliceable + HasCausalLength + Mergeable] Runs::split(
     let run_len = T::causal_len(item)
     let item_end = cur + run_len
     if item_end <= pos {
-      guard left.append(item) is Ok(_)
+      match left.append(item) {
+        Err(e) => return Err(e)
+        Ok(_) => ()
+      }
     } else if cur >= pos {
-      guard right.append(item) is Ok(_)
+      match right.append(item) {
+        Err(e) => return Err(e)
+        Ok(_) => ()
+      }
     } else {
       let offset = pos - cur
       if offset > 0 {
-        guard left.append(T::slice(item, start=0, end=offset)) is Ok(_)
+        match left.append(T::slice(item, start=0, end=offset)) {
+          Err(e) => return Err(e)
+          Ok(_) => ()
+        }
       }
       if offset < run_len {
-        guard right.append(T::slice(item, start=offset, end=run_len)) is Ok(_)
+        match right.append(T::slice(item, start=offset, end=run_len)) {
+          Err(e) => return Err(e)
+          Ok(_) => ()
+        }
       }
     }
     cur = item_end

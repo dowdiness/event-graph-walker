@@ -15,7 +15,7 @@
 /// advanced forward by applying new operations.
 pub struct Branch {
   priv frontier : @core.Frontier // Version frontier this branch represents
-  priv tree : @fugue.FugueTree // CRDT tree state at this frontier
+  priv tree : @fugue.FugueTree[String] // CRDT tree state at this frontier
   priv oplog : @oplog.OpLog // Reference to the operation log
 } derive(Show)
 
@@ -33,7 +33,7 @@ pub fn Branch::new(oplog : @oplog.OpLog) -> Branch {
 /// Create a branch from existing tree and oplog at current frontier
 /// This is useful for wrapping existing Document state
 pub fn Branch::from_tree_and_oplog(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
 ) -> Branch {
   let frontier = oplog.get_frontier()
@@ -57,7 +57,7 @@ pub fn Branch::checkout(
   frontier : @core.Frontier,
 ) -> Branch raise BranchError {
   // Create empty tree
-  let tree = @fugue.FugueTree::new()
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Use walker to get all operations in causal order
   let ops = oplog.walk_and_collect(frontier)
@@ -68,20 +68,27 @@ pub fn Branch::checkout(
   }
 
   // Return branch with reconstructed state
+  // Defensive copy to prevent aliasing with caller-owned array
   { frontier: @core.Frontier::from_array(frontier.0.copy()), tree, oplog }
 }
 
 ///|
-/// Advance a branch by applying new operations
+/// Advance a branch to a new frontier.
 ///
-/// This efficiently updates a branch by only applying operations
-/// that are new (not in the current frontier).
+/// **Fast path (O(k))**: If the target frontier is strictly ahead of the current
+/// one — i.e. no operations need to be undone — only the `k` new operations are
+/// applied incrementally to the existing tree. This is the common case when a
+/// peer receives new remote edits.
 ///
-/// # Arguments
-/// * `target_frontier` - The new frontier to advance to
+/// **Slow path (O(n))**: If reaching the target requires *retreating* (undoing
+/// operations that are in the current frontier but not in the target), a full
+/// checkout is performed by replaying all `n` operations from scratch.
+/// Retreat happens when moving to a concurrent or earlier frontier, e.g. when
+/// computing a historical diff or merging a branch that diverged before the
+/// current one.
 ///
-/// # Returns
-/// A new Branch at the target frontier
+/// To avoid the slow path in a hot loop, prefer advancing monotonically forward
+/// rather than jumping between concurrent frontiers.
 pub fn Branch::advance(
   self : Branch,
   target_frontier : @core.Frontier,
@@ -92,18 +99,16 @@ pub fn Branch::advance(
     target_frontier,
   )
 
-  // For now, we'll use a simple approach:
-  // If there are retreat operations, do a full checkout
-  // Otherwise, just apply advance operations incrementally
   if retreat_ops.length() > 0 {
-    // Need to retreat - do full checkout
+    // Slow path: retreat required — full O(n) replay from scratch
     Branch::checkout(self.oplog, target_frontier)
   } else {
-    // Only advancing - apply new operations incrementally
-    let tree = self.tree // Reuse existing tree (mutable)
+    // Fast path: advance only — apply k new ops incrementally
+    let tree = self.tree
     for op in advance_ops {
       apply_operation_to_tree(tree, op, self.oplog)
     }
+    // Defensive copy to prevent aliasing with caller-owned array
     {
       frontier: @core.Frontier::from_array(target_frontier.0.copy()),
       tree,
@@ -119,7 +124,7 @@ pub fn Branch::to_text(self : Branch) -> String {
 }
 
 ///|
-/// Get the frontier of this branch
+/// Get the frontier of this branch (returns a defensive copy).
 pub fn Branch::get_frontier(self : Branch) -> @core.Frontier {
   @core.Frontier::from_array(self.frontier.0.copy())
 }
@@ -131,20 +136,24 @@ pub fn Branch::visible_count(self : Branch) -> Int {
 }
 
 ///|
-/// Check if this branch is at the given frontier
+/// Access the underlying FugueTree for advanced operations
+pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree[String] {
+  self.tree
+}
+
+///|
+/// Check if this branch is at the given frontier.
+/// Compares as unordered sets (sorted copies) so element multiplicity is preserved.
 pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
   if self.frontier.0.length() != frontier.0.length() {
     return false
   }
-
-  // Check if all elements match (order doesn't matter for frontiers)
-  for lv in self.frontier.0 {
-    if not(frontier.0.contains(lv)) {
-      return false
-    }
-  }
-  for lv in frontier.0 {
-    if not(self.frontier.0.contains(lv)) {
+  let lhs = self.frontier.0.copy()
+  let rhs = frontier.0.copy()
+  lhs.sort()
+  rhs.sort()
+  for i = 0; i < lhs.length(); i = i + 1 {
+    if lhs[i] != rhs[i] {
       return false
     }
   }
@@ -236,24 +245,24 @@ pub fn Branch::merge_remote_ops(
 /// This is a helper function that applies either an Insert or Delete
 /// operation to the tree, handling the FugueMax integration.
 fn apply_operation_to_tree(
-  tree : @fugue.FugueTree,
+  tree : @fugue.FugueTree[String],
   op : @core.Op,
   oplog : @oplog.OpLog,
 ) -> Unit raise BranchError {
   let cg = oplog.causal_graph()
-  let origin_left = match op.origin_left() {
-    None => -1
+  let origin_left : @fugue.Lv? = match op.origin_left() {
+    None => None
     Some(raw) =>
       match cg.raw_to_lv(raw) {
-        Some(lv) => lv
+        Some(lv) => Some(@fugue.Lv(lv))
         None => raise BranchError::MissingOrigin(raw~)
       }
   }
-  let origin_right = match op.origin_right() {
-    None => -1
+  let origin_right : @fugue.Lv? = match op.origin_right() {
+    None => None
     Some(raw) =>
       match cg.raw_to_lv(raw) {
-        Some(lv) => lv
+        Some(lv) => Some(@fugue.Lv(lv))
         None => raise BranchError::MissingOrigin(raw~)
       }
   }
@@ -266,21 +275,32 @@ fn apply_operation_to_tree(
       }
 
       // Insert into tree with FugueMax algorithm
-      tree.insert(op.lv(), text, origin_left, origin_right, timestamp, agent)
+      tree.insert({
+        id: @fugue.Lv(op.lv()),
+        content: text,
+        origin_left,
+        origin_right,
+        timestamp: @fugue.Timestamp(timestamp),
+        agent: @fugue.ReplicaId(agent),
+      })
     }
     @core.Delete =>
-      if origin_left != -1 {
-        // Mark item as deleted
-        tree.delete(origin_left) catch {
-          e => raise BranchError::Fugue(e)
-        }
+      match origin_left {
+        Some(lv) =>
+          // Mark item as deleted
+          tree.delete(lv) catch {
+            e => raise BranchError::Fugue(e)
+          }
+        None => ()
       }
     @core.Undelete =>
-      if origin_left != -1 {
-        // Revive a previously deleted item
-        tree.undelete(origin_left) catch {
-          e => raise BranchError::Fugue(e)
-        }
+      match origin_left {
+        Some(lv) =>
+          // Revive a previously deleted item
+          tree.undelete(lv) catch {
+            e => raise BranchError::Fugue(e)
+          }
+        None => ()
       }
   }
 }

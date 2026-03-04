@@ -1,5 +1,5 @@
-// OpLog-specific walker functions
-// Wraps the generic causal graph walker with operation collection
+///| OpLog-specific walker functions
+/// Wraps the generic causal graph walker with operation collection
 
 ///|
 /// Walk the operation log from a frontier, collecting operations in causal order
@@ -18,8 +18,19 @@ pub fn OpLog::walk_and_collect(
 }
 
 ///|
-/// Walk with a filtering predicate
-/// Useful for replaying only specific types of operations
+/// Walk the operation log from a frontier, returning only operations that
+/// satisfy `predicate`.
+///
+/// Equivalent to `walk_and_collect(frontier).filter(predicate)`.
+/// Useful for replaying a subset of operation types — for example,
+/// insert-only or delete-only passes during diff computation.
+///
+/// # Arguments
+/// * `frontier` - Starting frontier
+/// * `predicate` - Filter function; return `true` to include an operation
+///
+/// # Returns
+/// Matching operations in topological (causal) order
 pub fn OpLog::walk_filtered(
   self : OpLog,
   frontier : @core.Frontier,

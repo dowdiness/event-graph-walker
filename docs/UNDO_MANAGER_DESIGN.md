@@ -366,8 +366,9 @@ Match missing items as `DocumentError::Fugue(FugueError::MissingItem(_))` since 
 
 **Syncing undo ops:** The returned `Array[@oplog.Op]` should be sent to peers via `SyncSession`. Example:
 ```moonbit
-let undo_ops = mgr.undo(doc)!
-let msg = @text.SyncMessage::new(undo_ops, doc.sync().export_all().get_heads())
+let undo_ops = mgr.undo(doc)
+let heads = doc.get_frontier_raw()
+let msg = @text.SyncMessage::new(undo_ops, heads)
 // Send msg to peers
 ```
 
@@ -407,21 +408,25 @@ let doc = @text.TextDoc::new("alice")
 let mgr = @undo.UndoManager::new("alice")
 
 // Insert with tracking — helper records each char's LV
-doc.insert_and_record(@text.Pos::at(0), "Hello", mgr, timestamp_ms=1000)!
+doc.insert_and_record(@text.Pos::at(0), "Hello", mgr, timestamp_ms=1000)
 
 // Delete with tracking — helper looks up content before deleting
-doc.delete_and_record(@text.Pos::at(4), mgr, timestamp_ms=2000)!
+doc.delete_and_record(@text.Pos::at(4), mgr, timestamp_ms=2000)
 
-// Remote op — suppress tracking
-mgr.set_tracking(false)
-doc.sync().apply(remote_message)!
-mgr.set_tracking(true)
+// Remote op — apply directly; no set_tracking needed.
+// sync().apply() and apply_remote() never call record_insert/record_delete,
+// so remote ops are never recorded regardless of the tracking flag.
+// (set_tracking is only needed if you call record_insert/record_delete manually
+// and want to temporarily suppress them.)
+doc.sync().apply(remote_message)
 
-// Undo — returns Delete/Undelete ops to sync with peers
-let undo_ops = mgr.undo(doc)!
+// Undo — returns Delete/Undelete ops to sync with peers.
+// Tracking is suppressed automatically during undo/redo.
+let undo_ops = mgr.undo(doc)
 // Send ops to peers via SyncSession
-let msg = @text.SyncMessage::new(undo_ops, doc.sync().export_all().get_heads())
-// peer.sync().apply(msg)!
+let heads = doc.get_frontier_raw()
+let msg = @text.SyncMessage::new(undo_ops, heads)
+// peer.sync().apply(msg)
 ```
 
 ## Edge Cases
@@ -510,9 +515,14 @@ When `Delete` and `Undelete` are concurrent (neither causally precedes the other
 pub enum OpContent {
   Insert(String)
   Delete
-  Undelete(Int)  // target_lv of the tombstone to revive
+  Undelete  // Revive a previously deleted character
 } derive(Eq, Show, FromJson, ToJson)
 ```
+
+**Note:** `Undelete` carries no payload. The target tombstone is identified via
+the `origin_left` field of the enclosing `Op`, consistent with how `Delete`
+identifies its target. The design doc originally proposed `Undelete(Int)` but
+the implementation uses the existing `origin_left` mechanism instead.
 
 ### `UndoManager.undo()` Return Value — No API Break
 

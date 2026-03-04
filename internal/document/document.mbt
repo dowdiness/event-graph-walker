@@ -7,17 +7,20 @@
 ///|
 /// Provides position-based operations (insert/delete at cursor position)
 pub struct Document {
-  priv tree : @fugue.FugueTree
+  priv tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
   agent_id : String
+  // Position cache: maps position -> (Lv, Item[String]) for O(1) lookup
+  // Invalidated on any modification (set to None)
+  priv mut position_cache : Array[(@fugue.Lv, @fugue.Item[String])]?
 } derive(Show)
 
 ///|
 /// Create a new document for an agent
 pub fn Document::new(agent_id : String) -> Document {
   let oplog = @oplog.OpLog::new(agent_id)
-  let tree = @fugue.FugueTree::new()
-  { tree, oplog, agent_id }
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  { tree, oplog, agent_id, position_cache: None }
 }
 
 ///|
@@ -48,42 +51,59 @@ pub fn Document::get_frontier_raw(
   }
 }
 
-///| Map a user position (0-based cursor position) to the LV at that position
+///|
+/// Get or build the position cache (lazy initialization)
+fn Document::get_position_cache(
+  self : Document,
+) -> Array[(@fugue.Lv, @fugue.Item[String])] {
+  match self.position_cache {
+    Some(cache) => cache
+    None => {
+      let cache = self.tree.get_visible_items()
+      self.position_cache = Some(cache)
+      cache
+    }
+  }
+}
 
 ///|
-
-///| Returns the LV of the item before the cursor position
+/// Invalidate the position cache (call after any modification)
+fn Document::invalidate_cache(self : Document) -> Unit {
+  self.position_cache = None
+}
 
 ///|
-/// Returns -1 if at the start of the document
+/// Map a user position (0-based cursor position) to the LV at that position.
+///
+/// Returns the LV of the item before the cursor position,
+/// or -1 if at the start of the document.
 fn Document::position_to_lv(self : Document, position : Int) -> Int {
   if position == 0 {
     return -1
   }
 
-  // Get all visible items in proper tree order
-  let items_list = self.tree.get_visible_items()
+  // Use cached visible items for O(1) lookup after first access
+  let items_list = self.get_position_cache()
 
   // Find the LV at position - 1
   if position > items_list.length() {
     // Position beyond end, use last item
     if items_list.length() > 0 {
       let (id, _) = items_list[items_list.length() - 1]
-      return id
+      return id.0
     } else {
       return -1
     }
   }
   let (id, _) = items_list[position - 1]
-  id
+  id.0
 }
 
-///| Insert text at a cursor position
-
 ///|
-
-///|
-/// Returns the last operation that was created (for multi-character inserts)
+/// Insert text at a cursor position.
+///
+/// Splits multi-character strings into individual character operations.
+/// Returns the last operation created (or a no-op for empty strings).
 pub fn Document::insert(
   self : Document,
   position : Int,
@@ -93,6 +113,9 @@ pub fn Document::insert(
   let mut current_pos = position
   let mut last_op : @core.Op? = None
 
+  // Get initial cache for position lookups (will be invalidated after first insert)
+  let mut items_list = self.get_position_cache()
+
   // Iterate through each character in the string
   for i = 0; i < text.length(); i = i + 1 {
     // Extract single character as string
@@ -100,23 +123,21 @@ pub fn Document::insert(
       _ => continue // Skip invalid indices
     }
 
-    // Map position to LV
+    // Map position to LV using cached items
     let origin_left = self.position_to_lv(current_pos)
 
     // Find origin_right (the item after the cursor)
-    let items_list : Array[(Int, @fugue.Item)] = self.tree.get_visible_items()
     let origin_right = if current_pos == 0 {
       // At start, find first visible item
       if items_list.length() > 0 {
         let (id, _) = items_list[0]
-        id
+        id.0
       } else {
         -1
       }
-      // Find item at position
     } else if current_pos < items_list.length() {
       let (id, _) = items_list[current_pos]
-      id
+      id.0
     } else {
       -1
     }
@@ -135,8 +156,29 @@ pub fn Document::insert(
         )
     }
 
-    // Apply to tree
-    self.tree.insert(op.lv(), ch, origin_left, origin_right, timestamp, agent)
+    // Apply to tree and invalidate cache
+    self.tree.insert({
+      id: @fugue.Lv(op.lv()),
+      content: ch,
+      origin_left: if origin_left == -1 {
+        None
+      } else {
+        Some(@fugue.Lv(origin_left))
+      },
+      origin_right: if origin_right == -1 {
+        None
+      } else {
+        Some(@fugue.Lv(origin_right))
+      },
+      timestamp: @fugue.Timestamp(timestamp),
+      agent: @fugue.ReplicaId(agent),
+    })
+    self.invalidate_cache()
+
+    // Rebuild cache for next iteration if there are more characters
+    if i + 1 < text.length() {
+      items_list = self.get_position_cache()
+    }
     last_op = Some(op)
     current_pos = current_pos + 1
   }
@@ -153,12 +195,10 @@ pub fn Document::insert(
   }
 }
 
-///| Delete character at a cursor position
-
 ///|
-
-///|
-/// Returns Some(operation) if successful, None if position is invalid
+/// Delete the character at a cursor position.
+///
+/// Raises `InvalidPosition` if the position is negative or beyond the last character.
 pub fn Document::delete(
   self : Document,
   position : Int,
@@ -167,8 +207,8 @@ pub fn Document::delete(
     raise DocumentError::InvalidPosition(pos=position)
   }
 
-  // Get all visible items in proper tree order
-  let items_list = self.tree.get_visible_items()
+  // Use cached visible items for O(1) lookup
+  let items_list = self.get_position_cache()
   if position >= items_list.length() {
     raise DocumentError::InvalidPosition(pos=position)
   }
@@ -177,12 +217,15 @@ pub fn Document::delete(
   let (target_lv, _) = items_list[position]
 
   // Create and apply delete operation
-  let op = self.oplog.delete(target_lv) catch {
+  let op = self.oplog.delete(target_lv.0) catch {
     e => raise DocumentError::OpLog(e)
   }
   self.tree.delete(target_lv) catch {
     e => raise DocumentError::Fugue(e)
   }
+
+  // Invalidate cache after modification
+  self.invalidate_cache()
   op
 }
 
@@ -196,9 +239,10 @@ pub fn Document::undelete(
   let op = self.oplog.undelete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.tree.undelete(target_lv) catch {
+  self.tree.undelete(@fugue.Lv(target_lv)) catch {
     e => raise DocumentError::Fugue(e)
   }
+  self.invalidate_cache()
   op
 }
 
@@ -212,9 +256,10 @@ pub fn Document::delete_by_lv(
   let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.tree.delete(target_lv) catch {
+  self.tree.delete(@fugue.Lv(target_lv)) catch {
     e => raise DocumentError::Fugue(e)
   }
+  self.invalidate_cache()
   op
 }
 
@@ -229,22 +274,27 @@ pub fn Document::apply_remote(
     e => raise DocumentError::OpLog(e)
   }
 
+  // Invalidate before any tree mutation so exception paths can't leave stale cache.
+  if applied_ops.length() > 0 {
+    self.invalidate_cache()
+  }
+
   // Apply any newly-resolved operations to the tree
   let cg = self.oplog.causal_graph()
   for applied in applied_ops {
-    let origin_left = match applied.origin_left() {
-      None => -1
+    let origin_left : @fugue.Lv? = match applied.origin_left() {
+      None => None
       Some(raw) =>
         match cg.raw_to_lv(raw) {
-          Some(lv) => lv
+          Some(lv) => Some(@fugue.Lv(lv))
           None => raise DocumentError::MissingOrigin(raw~)
         }
     }
-    let origin_right = match applied.origin_right() {
-      None => -1
+    let origin_right : @fugue.Lv? = match applied.origin_right() {
+      None => None
       Some(raw) =>
         match cg.raw_to_lv(raw) {
-          Some(lv) => lv
+          Some(lv) => Some(@fugue.Lv(lv))
           None => raise DocumentError::MissingOrigin(raw~)
         }
     }
@@ -258,26 +308,30 @@ pub fn Document::apply_remote(
               @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
             )
         }
-        self.tree.insert(
-          applied.lv(),
-          text,
+        self.tree.insert({
+          id: @fugue.Lv(applied.lv()),
+          content: text,
           origin_left,
           origin_right,
-          timestamp,
-          agent,
-        )
+          timestamp: @fugue.Timestamp(timestamp),
+          agent: @fugue.ReplicaId(agent),
+        })
       }
       @core.Delete =>
-        if origin_left != -1 {
-          self.tree.delete(origin_left) catch {
-            e => raise DocumentError::Fugue(e)
-          }
+        match origin_left {
+          Some(lv) =>
+            self.tree.delete(lv) catch {
+              e => raise DocumentError::Fugue(e)
+            }
+          None => ()
         }
       @core.Undelete =>
-        if origin_left != -1 {
-          self.tree.undelete(origin_left) catch {
-            e => raise DocumentError::Fugue(e)
-          }
+        match origin_left {
+          Some(lv) =>
+            self.tree.undelete(lv) catch {
+              e => raise DocumentError::Fugue(e)
+            }
+          None => ()
         }
     }
   }
@@ -293,6 +347,8 @@ pub fn Document::merge_remote(
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }
+  // Invalidate before merge so partial-merge failures can't leave stale cache.
+  self.invalidate_cache()
   // Use the branch module's merge convenience function
   @branch.merge_remote_ops(self.tree, self.oplog, remote_ops) catch {
     e => raise DocumentError::Branch(e)
@@ -335,15 +391,16 @@ pub fn Document::checkout_branch(
 }
 
 ///|
-/// Get visible items from the tree.
+/// Get visible items from the tree (returns a copy for safety).
 pub fn Document::get_visible_items(
   self : Document,
-) -> Array[(Int, @fugue.Item)] {
-  self.tree.get_visible_items()
+) -> Array[(@fugue.Lv, @fugue.Item[String])] {
+  // Return a copy to prevent callers from mutating internal cache
+  self.get_position_cache().copy()
 }
 
 ///|
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
-  self.tree.lv_to_position(lv)
+  self.tree.lv_to_position(@fugue.Lv(lv))
 }

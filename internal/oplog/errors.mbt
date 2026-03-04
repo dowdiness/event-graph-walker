@@ -13,6 +13,8 @@ pub(all) suberror OpLogError {
   MissingRemoteParent(raw~ : @core.RawVersion)
   /// Remote frontier references an op not present locally or in the batch.
   MissingRemoteFrontier(raw~ : @core.RawVersion)
+  /// Remote batch contains duplicate operations (same agent:seq appears twice).
+  DuplicateOperation(raw~ : @core.RawVersion)
   /// A causal graph error occurred during operation creation or application
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
 }

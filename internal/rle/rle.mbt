@@ -12,6 +12,7 @@ pub fn[T] Rle::new() -> Rle[T] {
 }
 
 ///|
+/// Construct an Rle from a flat array, merging adjacent compatible elements.
 pub fn[T : Mergeable + HasCausalLength] Rle::from_array(
   arr : Array[T],
 ) -> Rle[T] {
@@ -19,11 +20,13 @@ pub fn[T : Mergeable + HasCausalLength] Rle::from_array(
 }
 
 ///|
+/// Wrap an existing Runs without copying. Prefix sums start stale.
 pub fn[T] Rle::from_runs(runs : Runs[T]) -> Rle[T] {
   { runs, prefix: None, version: 0 }
 }
 
 ///|
+/// Unwrap the inner Runs (no copy).
 pub fn[T] Rle::to_runs(self : Rle[T]) -> Runs[T] {
   self.runs
 }
@@ -60,21 +63,25 @@ fn[T : HasCausalLength] Rle::ensure_prefix(self : Rle[T]) -> PrefixSums {
 }
 
 ///|
+/// Returns true if there are no runs.
 pub fn[T] Rle::is_empty(self : Rle[T]) -> Bool {
   self.runs.is_empty()
 }
 
 ///|
+/// Number of runs (not the total causal length).
 pub fn[T] Rle::count(self : Rle[T]) -> Int {
   self.runs.count()
 }
 
 ///|
+/// Get a run by index, or None if out of bounds.
 pub fn[T] Rle::get(self : Rle[T], index : Int) -> T? {
   self.runs.get(index)
 }
 
 ///|
+/// Iterate over all runs in order.
 pub fn[T] Rle::iter(self : Rle[T]) -> Iter[T] {
   self.runs.iter()
 }
