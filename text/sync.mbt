@@ -42,17 +42,6 @@ pub(all) struct SyncMessage {
 } derive(Show)
 
 ///|
-/// Create a SyncMessage from an explicit ops array and heads.
-/// Use this when constructing a message from externally-produced ops
-/// (e.g. undo/redo ops that need to be synced to peers).
-pub fn SyncMessage::new(
-  ops : Array[@core.Op],
-  heads : Array[@core.RawVersion],
-) -> SyncMessage {
-  { ops, heads }
-}
-
-///|
 /// Check if this message contains no operations.
 pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
   self.ops.is_empty()
@@ -62,18 +51,6 @@ pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
 /// Get the number of operations in this message.
 pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
   self.ops.length()
-}
-
-///|
-/// Get the operations in this message (returns a copy).
-pub fn SyncMessage::get_ops(self : SyncMessage) -> Array[@core.Op] {
-  self.ops.copy()
-}
-
-///|
-/// Get the frontier heads for this message (returns a copy).
-pub fn SyncMessage::get_heads(self : SyncMessage) -> Array[@core.RawVersion] {
-  self.heads.copy()
 }
 
 ///| A sync session providing methods to synchronize a TextDoc with peers.

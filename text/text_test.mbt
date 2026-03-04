@@ -244,22 +244,22 @@ test "sync recovery - partial operation log" {
   let doc1 = TextDoc::new("alice")
   let doc2 = TextDoc::new("bob")
 
-  // Alice inserts multiple characters
+  // Alice inserts "A" alone so Bob can sync to that specific version
   let _ = doc1.insert(Pos::at(0), "A")
-  let _ = doc1.insert(Pos::at(1), "B")
-  let _ = doc1.insert(Pos::at(2), "C")
+  let version_after_a = doc1.version()
 
-  // Bob only received ops up to v1 (partial sync)
-  let partial_msg = doc1.sync().export_since(Version::empty())
-  // Simulate partial by only applying first op
-  let first_op = partial_msg.get_ops()[0]
-  doc2.apply_remote(first_op)
+  // Sync only "A" to Bob
+  let msg_a = doc1.sync().export_since(Version::empty())
+  doc2.sync().apply(msg_a)
   inspect(doc2.text(), content="A")
 
-  // Now Bob reconnects with his stale version
-  let bob_version = doc2.version()
+  // Alice continues writing, Bob misses it
+  let _ = doc1.insert(Pos::at(1), "B")
+  let _ = doc1.insert(Pos::at(2), "C")
+  ignore(version_after_a)
 
-  // Alice sends delta from Bob's version
+  // Bob reconnects; Alice sends only the delta
+  let bob_version = doc2.version()
   let delta_msg = doc1.sync().export_since(bob_version)
   // Should contain "B" and "C" ops
   inspect(delta_msg.op_count(), content="2")
@@ -294,8 +294,7 @@ test "sync recovery - stale version vector" {
   inspect(delta.op_count(), content="7")
 
   // Verify that delta contains the expected characters
-  let delta_ops = delta.get_ops()
-  inspect(delta_ops.length(), content="7")
+  inspect(delta.op_count(), content="7")
 }
 
 ///|

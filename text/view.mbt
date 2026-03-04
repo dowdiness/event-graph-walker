@@ -7,13 +7,7 @@ pub(all) struct TextView {
 }
 
 ///|
-/// Wrap a Branch as a read-only TextView.
-///
-/// Prefer `TextDoc::checkout(version)` over calling this directly;
-/// this constructor is exposed for advanced use-cases where a Branch
-/// has already been constructed (e.g. from `Branch::checkout` or
-/// `Branch::advance`).
-pub fn TextView::from_branch(branch : @branch.Branch) -> TextView {
+fn TextView::from_branch(branch : @branch.Branch) -> TextView {
   TextView::{ branch, }
 }
 
