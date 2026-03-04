@@ -58,14 +58,12 @@ pub(all) struct Version {
 } derive(Show, Eq)
 
 ///|
-/// Create a Version from an internal Frontier (for advanced use).
-pub fn Version::from_frontier(frontier : @core.Frontier) -> Version {
+fn Version::from_frontier(frontier : @core.Frontier) -> Version {
   { frontier, }
 }
 
 ///|
-/// Convert to internal Frontier (for advanced use).
-pub fn Version::to_frontier(self : Version) -> @core.Frontier {
+fn Version::to_frontier(self : Version) -> @core.Frontier {
   self.frontier
 }
 
@@ -74,8 +72,3 @@ pub fn Version::to_frontier(self : Version) -> @core.Frontier {
 pub fn Version::empty() -> Version {
   { frontier: @core.Frontier::from_array([]) }
 }
-
-///|
-/// Represents a local edit operation (insert or delete).
-/// Returned from TextDoc::insert() and TextDoc::delete().
-pub type Change = @core.Change

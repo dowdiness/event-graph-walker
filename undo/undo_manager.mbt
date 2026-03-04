@@ -2,12 +2,12 @@
 
 ///|
 pub struct UndoManager {
-  agent_id : String
-  mut undo_stack : Array[UndoGroup]
-  mut redo_stack : Array[UndoGroup]
-  capture_timeout_ms : Int
-  mut last_change_ms : Int
-  mut tracking_enabled : Bool
+  priv agent_id : String
+  priv mut undo_stack : Array[UndoGroup]
+  priv mut redo_stack : Array[UndoGroup]
+  priv capture_timeout_ms : Int
+  priv mut last_change_ms : Int
+  priv mut tracking_enabled : Bool
 } derive(Show)
 
 ///|
@@ -91,28 +91,25 @@ fn UndoManager::record_item(
 }
 
 ///|
-/// Pop undo group, apply inverses locally, push to redo.
-/// Returns ops to sync with peers (Delete/Undelete ops from the oplog).
-pub fn[D : @document.Undoable] UndoManager::undo(
+/// Pop undo group and apply inverses locally. Push inverse group to redo stack.
+/// For peer sync after undo: capture version before calling, then export_since.
+pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
-) -> Array[@core.Op] raise @document.DocumentError {
+) -> Unit raise UndoError {
   guard self.undo_stack.length() > 0
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
-  let synced_ops : Array[@core.Op] = []
   let redo_items : Array[UndoItem] = []
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
     try {
       match item.op_type {
-        Insert => {
-          let pos = doc.lv_to_position(item.target_lv)
-          match pos {
+        Insert =>
+          match doc.lv_to_position(item.target_lv) {
             Some(_) => {
-              let op = doc.delete_lv(item.target_lv)
-              synced_ops.push(op)
+              doc.delete_lv(item.target_lv)
               redo_items.push({
                 target_lv: item.target_lv,
                 op_type: Insert,
@@ -121,10 +118,8 @@ pub fn[D : @document.Undoable] UndoManager::undo(
             }
             None => ()
           }
-        }
         Delete => {
-          let op = doc.undelete_lv(item.target_lv)
-          synced_ops.push(op)
+          doc.undelete_lv(item.target_lv)
           redo_items.push({
             target_lv: item.target_lv,
             op_type: Delete,
@@ -133,7 +128,7 @@ pub fn[D : @document.Undoable] UndoManager::undo(
         }
       }
     } catch {
-      @document.DocumentError::Fugue(_) => continue
+      UndoError::ItemNotFound => continue
       e => {
         self.tracking_enabled = was_tracking
         raise e
@@ -145,41 +140,35 @@ pub fn[D : @document.Undoable] UndoManager::undo(
     self.redo_stack.push({ items: redo_items, timestamp: group.timestamp })
   }
   self.tracking_enabled = was_tracking
-  synced_ops
 }
 
 ///|
-/// Pop redo group, apply inverses locally, push to undo.
-/// Returns ops to sync with peers (Delete/Undelete ops from the oplog).
-pub fn[D : @document.Undoable] UndoManager::redo(
+/// Pop redo group and reapply. Push inverse group back to undo stack.
+pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
-) -> Array[@core.Op] raise @document.DocumentError {
+) -> Unit raise UndoError {
   guard self.redo_stack.length() > 0
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
-  let synced_ops : Array[@core.Op] = []
   let undo_items : Array[UndoItem] = []
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
     try {
       match item.op_type {
         Insert => {
-          let op = doc.undelete_lv(item.target_lv)
-          synced_ops.push(op)
+          doc.undelete_lv(item.target_lv)
           undo_items.push({
             target_lv: item.target_lv,
             op_type: Insert,
             content: item.content,
           })
         }
-        Delete => {
-          let pos = doc.lv_to_position(item.target_lv)
-          match pos {
+        Delete =>
+          match doc.lv_to_position(item.target_lv) {
             Some(_) => {
-              let op = doc.delete_lv(item.target_lv)
-              synced_ops.push(op)
+              doc.delete_lv(item.target_lv)
               undo_items.push({
                 target_lv: item.target_lv,
                 op_type: Delete,
@@ -188,10 +177,9 @@ pub fn[D : @document.Undoable] UndoManager::redo(
             }
             None => ()
           }
-        }
       }
     } catch {
-      @document.DocumentError::Fugue(_) => continue
+      UndoError::ItemNotFound => continue
       e => {
         self.tracking_enabled = was_tracking
         raise e
@@ -203,7 +191,6 @@ pub fn[D : @document.Undoable] UndoManager::redo(
     self.undo_stack.push({ items: undo_items, timestamp: group.timestamp })
   }
   self.tracking_enabled = was_tracking
-  synced_ops
 }
 
 ///|

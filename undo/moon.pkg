@@ -1,9 +1,4 @@
 import {
-  "dowdiness/event-graph-walker/core",
-  "dowdiness/event-graph-walker/document",
-}
-
-import {
   "dowdiness/event-graph-walker/text",
   "moonbitlang/core/quickcheck",
 } for "test"

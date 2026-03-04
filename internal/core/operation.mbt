@@ -1,0 +1,152 @@
+///| Operation types for CRDT
+
+///|
+/// Operation content - either insert or delete
+pub enum OpContent {
+  Insert(String) // Insert text
+  Delete // Delete character
+  Undelete // Undelete (revive) a previously deleted character
+} derive(Eq, Show, FromJson, ToJson)
+
+///|
+/// Operation structure with causal and FugueMax metadata
+pub struct Op {
+  priv lv : Int // Local version when this op was created
+  priv parents : Array[RawVersion] // Causal dependencies (frontier)
+  priv agent : String // Agent that created this operation
+  priv seq : Int // Sequence number for this agent
+  priv content : OpContent // Operation content
+  priv origin_left : RawVersion? // FugueMax: item to the left
+  priv origin_right : RawVersion? // FugueMax: item to the right
+} derive(Show, FromJson, ToJson)
+
+///|
+pub fn Op::lv(self : Op) -> Int {
+  self.lv
+}
+
+///|
+pub fn Op::parents(self : Op) -> Array[RawVersion] {
+  self.parents.copy()
+}
+
+///|
+pub fn Op::agent(self : Op) -> String {
+  self.agent
+}
+
+///|
+pub fn Op::seq(self : Op) -> Int {
+  self.seq
+}
+
+///|
+pub fn Op::content(self : Op) -> OpContent {
+  self.content
+}
+
+///|
+pub fn Op::origin_left(self : Op) -> RawVersion? {
+  self.origin_left
+}
+
+///|
+pub fn Op::origin_right(self : Op) -> RawVersion? {
+  self.origin_right
+}
+
+///|
+/// Create a new insert operation
+pub fn Op::new_insert(
+  lv : Int,
+  parents : Array[RawVersion],
+  agent : String,
+  seq : Int,
+  text : String,
+  origin_left : RawVersion?,
+  origin_right : RawVersion?,
+) -> Op {
+  { lv, parents, agent, seq, content: Insert(text), origin_left, origin_right }
+}
+
+///|
+/// Create a new delete operation.
+///
+/// The `origin_left` parameter specifies the tombstone ID - the local version
+/// of the item being deleted. This is required to identify which item in the
+/// Fugue tree should be marked as deleted. Callers must always provide a
+/// concrete target ID; `None` is only valid for internal/placeholder use.
+pub fn Op::new_delete(
+  lv : Int,
+  parents : Array[RawVersion],
+  agent : String,
+  seq : Int,
+  origin_left : RawVersion?,
+) -> Op {
+  { lv, parents, agent, seq, content: Delete, origin_left, origin_right: None }
+}
+
+///|
+/// Create a new undelete operation
+pub fn Op::new_undelete(
+  lv : Int,
+  parents : Array[RawVersion],
+  agent : String,
+  seq : Int,
+  origin_left : RawVersion?,
+) -> Op {
+  {
+    lv,
+    parents,
+    agent,
+    seq,
+    content: Undelete,
+    origin_left,
+    origin_right: None,
+  }
+}
+
+///|
+/// Check if operation is an insert
+pub fn Op::is_insert(self : Op) -> Bool {
+  match self.content {
+    Insert(_) => true
+    Delete | Undelete => false
+  }
+}
+
+///|
+/// Check if operation is a delete
+pub fn Op::is_delete(self : Op) -> Bool {
+  match self.content {
+    Insert(_) | Undelete => false
+    Delete => true
+  }
+}
+
+///|
+/// Check if operation is an undelete
+pub fn Op::is_undelete(self : Op) -> Bool {
+  match self.content {
+    Insert(_) | Delete => false
+    Undelete => true
+  }
+}
+
+///|
+/// Get the target LV for delete/undelete operations (from origin_left)
+pub fn Op::get_delete_target(self : Op) -> RawVersion? {
+  match self.content {
+    Delete | Undelete => self.origin_left
+    Insert(_) => None
+  }
+}
+
+///|
+/// Get insert text if this is an insert operation
+pub fn Op::get_insert_text(self : Op) -> String? {
+  match self.content {
+    Insert(text) => Some(text)
+    Delete | Undelete => None
+  }
+}

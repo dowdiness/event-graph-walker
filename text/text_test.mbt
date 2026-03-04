@@ -35,24 +35,6 @@ test "TextDoc::delete removes character" {
 }
 
 ///|
-test "TextDoc::insert returns Change" {
-  let doc = TextDoc::new("alice")
-  let change = doc.insert(Pos::at(0), "H")
-  inspect(change.is_insert(), content="true")
-  inspect(change.is_delete(), content="false")
-  inspect(change.get_text(), content="Some(\"H\")")
-}
-
-///|
-test "TextDoc::delete returns Change" {
-  let doc = TextDoc::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hi")
-  let change = doc.delete(Pos::at(0))
-  inspect(change.is_insert(), content="false")
-  inspect(change.is_delete(), content="true")
-}
-
-///|
 test "TextDoc::version changes after edit" {
   let doc = TextDoc::new("alice")
   let v1 = doc.version()
@@ -65,13 +47,6 @@ test "TextDoc::version changes after edit" {
 test "Pos::at clamps negative values" {
   let pos = Pos::at(-5)
   inspect(pos.value(), content="0")
-}
-
-///|
-test "Range::from_ints creates range" {
-  let range = Range::from_ints(0, 5)
-  inspect(range.start.value(), content="0")
-  inspect(range.end.value(), content="5")
 }
 
 ///|
@@ -145,26 +120,6 @@ test "TextDoc::checkout creates historical view" {
 }
 
 ///|
-test "TextDoc::apply_remote applies remote operation" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
-  let _ = doc1.insert(Pos::at(0), "Hi")
-  let msg = doc1.sync().export_all()
-  for op in msg.get_ops() {
-    doc2.apply_remote(op)
-  }
-  inspect(doc2.text(), content="Hi")
-}
-
-///|
-test "TextDoc::from_document wraps existing document" {
-  let doc = @document.Document::new("alice")
-  let text_doc = TextDoc::from_document(doc)
-  inspect(text_doc.text(), content="")
-  inspect(text_doc.is_empty(), content="true")
-}
-
-///|
 test "SyncFailure::Timeout is retryable" {
   let err : TextError = TextError::SyncFailed(
     SyncFailure::Timeout(detail="operation timed out after 30s"),
@@ -188,14 +143,15 @@ test "SyncFailure::Cancelled is not retryable" {
 ///|
 test "Version::empty creates empty version" {
   let v = Version::empty()
-  let f = v.to_frontier()
-  inspect(f, content="Frontier([])")
+  // An empty version equals the initial state of a new document
+  let doc = TextDoc::new("test")
+  inspect(doc.version() == v, content="true")
 }
 
 ///|
 test "TextDoc insert at invalid position raises error" {
   let doc = TextDoc::new("alice")
-  let result : Result[Change, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
+  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
     e => Err(e)
   }
   match result {
@@ -211,7 +167,7 @@ test "TextDoc insert at invalid position raises error" {
 test "TextDoc delete at invalid position raises error" {
   let doc = TextDoc::new("alice")
   let _ = doc.insert(Pos::at(0), "Hi")
-  let result : Result[Change, TextError] = Ok(doc.delete(Pos::at(5))) catch {
+  let result : Result[Unit, TextError] = Ok(doc.delete(Pos::at(5))) catch {
     e => Err(e)
   }
   match result {
@@ -221,17 +177,6 @@ test "TextDoc delete at invalid position raises error" {
     }
     _ => fail("Expected InvalidPosition error")
   }
-}
-
-///|
-test "TextView::to_rle returns RLE view" {
-  let doc = TextDoc::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
-  let view = doc.checkout(doc.version())
-  let rle = view.to_rle()
-  inspect(rle.count(), content="1")
-  inspect(rle.len(), content="5")
-  inspect(rle.to_string(), content="Hello")
 }
 
 ///|
@@ -299,22 +244,22 @@ test "sync recovery - partial operation log" {
   let doc1 = TextDoc::new("alice")
   let doc2 = TextDoc::new("bob")
 
-  // Alice inserts multiple characters
+  // Alice inserts "A" alone so Bob can sync to that specific version
   let _ = doc1.insert(Pos::at(0), "A")
-  let _ = doc1.insert(Pos::at(1), "B")
-  let _ = doc1.insert(Pos::at(2), "C")
+  let version_after_a = doc1.version()
 
-  // Bob only received ops up to v1 (partial sync)
-  let partial_msg = doc1.sync().export_since(Version::empty())
-  // Simulate partial by only applying first op
-  let first_op = partial_msg.get_ops()[0]
-  doc2.apply_remote(first_op)
+  // Sync only "A" to Bob
+  let msg_a = doc1.sync().export_since(Version::empty())
+  doc2.sync().apply(msg_a)
   inspect(doc2.text(), content="A")
 
-  // Now Bob reconnects with his stale version
-  let bob_version = doc2.version()
+  // Alice continues writing, Bob misses it
+  let _ = doc1.insert(Pos::at(1), "B")
+  let _ = doc1.insert(Pos::at(2), "C")
+  ignore(version_after_a)
 
-  // Alice sends delta from Bob's version
+  // Bob reconnects; Alice sends only the delta
+  let bob_version = doc2.version()
   let delta_msg = doc1.sync().export_since(bob_version)
   // Should contain "B" and "C" ops
   inspect(delta_msg.op_count(), content="2")
@@ -349,8 +294,7 @@ test "sync recovery - stale version vector" {
   inspect(delta.op_count(), content="7")
 
   // Verify that delta contains the expected characters
-  let delta_ops = delta.get_ops()
-  inspect(delta_ops.length(), content="7")
+  inspect(delta.op_count(), content="7")
 }
 
 ///|

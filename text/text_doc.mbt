@@ -37,15 +37,14 @@ pub fn TextDoc::insert(
   self : TextDoc,
   pos : Pos,
   text : String,
-) -> Change raise TextError {
+) -> Unit raise TextError {
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val > doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
   try {
-    let op = self.inner.insert(pos_val, text)
-    Change::from_op(op)
+    let _ = self.inner.insert(pos_val, text)
   } catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
@@ -53,15 +52,14 @@ pub fn TextDoc::insert(
 
 ///|
 /// Delete a single character at the given position
-pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Change raise TextError {
+pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Unit raise TextError {
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val >= doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
   try {
-    let op = self.inner.delete(pos_val)
-    Change::from_op(op)
+    let _ = self.inner.delete(pos_val)
   } catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
@@ -76,7 +74,7 @@ pub fn TextDoc::version(self : TextDoc) -> Version {
 ///|
 /// Get a sync session for this document
 pub fn TextDoc::sync(self : TextDoc) -> SyncSession {
-  SyncSession::new(self)
+  SyncSession::{ doc: self }
 }
 
 ///|
@@ -91,74 +89,6 @@ pub fn TextDoc::checkout(
   } catch {
     err => raise TextError::from_document_error(err, self.len())
   }
-}
-
-///|
-/// Apply a remote operation to this document.
-/// Use this when receiving individual operations from a peer
-/// outside the SyncSession workflow.
-pub fn TextDoc::apply_remote(
-  self : TextDoc,
-  op : @core.Op,
-) -> Unit raise TextError {
-  self.inner.apply_remote(op) catch {
-    err => raise TextError::from_document_error(err, self.len())
-  }
-}
-
-///|
-/// Merge a batch of remote operations into this document.
-///
-/// Validates the batch first (`validate_remote_batch`): raises
-/// `TextError` if the batch contains duplicate operations, references
-/// a parent not present locally or in the batch, or declares a frontier
-/// entry that cannot be resolved.  On success the operations are applied
-/// in causal order and the document advances to the new frontier.
-///
-/// For individual out-of-order operations use `apply_remote` instead.
-pub fn TextDoc::merge_remote(
-  self : TextDoc,
-  remote_ops : Array[@core.Op],
-  remote_frontier : Array[@core.RawVersion],
-) -> Unit raise TextError {
-  self.inner.merge_remote(remote_ops, remote_frontier) catch {
-    err => raise TextError::from_document_error(err, self.len())
-  }
-}
-
-///|
-/// Get frontier as RawVersions for network sync.
-pub fn TextDoc::get_frontier_raw(
-  self : TextDoc,
-) -> Array[@core.RawVersion] raise TextError {
-  self.inner.get_frontier_raw() catch {
-    err => raise TextError::from_document_error(err, self.len())
-  }
-}
-
-///|
-/// Get all operations from the oplog.
-pub fn TextDoc::get_all_ops(self : TextDoc) -> Array[@core.Op] {
-  self.inner.get_all_ops()
-}
-
-///|
-/// Get the version vector at the current frontier.
-pub fn TextDoc::get_version_vector(
-  self : TextDoc,
-) -> @causal_graph.VersionVector raise TextError {
-  try {
-    let branch = self.inner.checkout_branch(self.inner.get_frontier())
-    branch.get_version_vector()
-  } catch {
-    err => raise TextError::from_document_error(err, self.len())
-  }
-}
-
-///|
-/// Create TextDoc from an existing Document (for migration/interop)
-pub fn TextDoc::from_document(doc : @document.Document) -> TextDoc {
-  TextDoc::{ inner: doc }
 }
 
 ///|

@@ -167,66 +167,51 @@ test "undo delete then redo delete" {
 }
 
 ///|
-test "undo-insert generates Delete op" {
+test "undo-insert reflects in doc text" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  let ops = mgr.undo(doc)
-  inspect(ops.length(), content="1")
-  inspect(ops[0].is_delete(), content="true")
+  mgr.undo(doc)
   inspect(doc.text(), content="")
 }
 
 ///|
-test "undo-delete generates Undelete op" {
+test "undo-delete reflects in doc text" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   doc.delete_and_record(@text.Pos::at(0), mgr, timestamp_ms=2000)
   inspect(doc.text(), content="")
-  let ops = mgr.undo(doc)
-  inspect(ops.length(), content="1")
-  inspect(ops[0].is_undelete(), content="true")
+  mgr.undo(doc)
   inspect(doc.text(), content="H")
 }
 
 ///|
-test "redo generates ops" {
+test "redo reflects in doc text" {
   let doc = @text.TextDoc::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  let _ = mgr.undo(doc)
+  mgr.undo(doc)
   inspect(doc.text(), content="")
-  let ops = mgr.redo(doc)
-  inspect(ops.length(), content="1")
-  inspect(ops[0].is_undelete(), content="true")
+  mgr.redo(doc)
   inspect(doc.text(), content="H")
 }
 
 ///|
-test "undo ops can be applied to peer" {
+test "undo syncs to peer via export_all" {
   let doc_a = @text.TextDoc::new("alice")
   let doc_b = @text.TextDoc::new("bob")
   let mgr = @undo.UndoManager::new("alice")
-  // Alice inserts "H", sync to Bob
-  let insert_change = doc_a.insert(@text.Pos::at(0), "H")
-  let insert_msg = @text.SyncMessage::new(
-    [insert_change.to_op()],
-    doc_a.sync().export_all().get_heads(),
-  )
-  doc_b.sync().apply(insert_msg)
+  // Alice inserts "H" and records for undo
+  doc_a.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  // Sync to Bob
+  doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="H")
-  // Record the insert for undo tracking
-  mgr.record_insert(0, "alice", 1000, content=Some("H"))
-  // Alice undoes, gets Delete op
-  let undo_ops = mgr.undo(doc_a)
+  // Alice undoes
+  mgr.undo(doc_a)
   inspect(doc_a.text(), content="")
-  // Send undo ops to Bob via sync
-  let undo_msg = @text.SyncMessage::new(
-    undo_ops,
-    doc_a.sync().export_all().get_heads(),
-  )
-  doc_b.sync().apply(undo_msg)
+  // Sync undo to Bob (export_all includes the delete op from undo)
+  doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="")
 }
 
@@ -253,9 +238,8 @@ test "concurrent undo while peer inserts" {
 
   // Concurrent operations: Alice undoes while Bob inserts "B"
   // Alice's undo (generates Delete op)
-  let undo_ops = mgr_a.undo(doc_a)
+  let _ = mgr_a.undo(doc_a)
   inspect(doc_a.text(), content="")
-  inspect(undo_ops.length(), content="1")
 
   // Bob inserts "B" after "A" concurrently (doesn't know about undo yet)
   let _ = doc_b.insert(@text.Pos::at(1), "B")
@@ -292,9 +276,8 @@ test "concurrent undelete while peer operations (add-wins)" {
   inspect(doc_b.text(), content="")
 
   // Concurrent operations: Alice undoes delete (undelete), Bob inserts "Y"
-  let undelete_ops = mgr_a.undo(doc_a)
+  let _ = mgr_a.undo(doc_a)
   inspect(doc_a.text(), content="X")
-  inspect(undelete_ops.length() > 0, content="true")
 
   // Bob inserts "Y" concurrently
   let _ = doc_b.insert(@text.Pos::at(0), "Y")
@@ -349,23 +332,14 @@ test "three-agent concurrent undos converge" {
   inspect(doc_b.text() == doc_c.text(), content="true")
 
   // Each agent undoes their own insert concurrently
-  let undo_a = mgr_a.undo(doc_a)
-  let undo_b = mgr_b.undo(doc_b)
-  let undo_c = mgr_c.undo(doc_c)
+  let _ = mgr_a.undo(doc_a)
+  let _ = mgr_b.undo(doc_b)
+  let _ = mgr_c.undo(doc_c)
 
-  // Sync all undo ops
-  let undo_msg_a = @text.SyncMessage::new(
-    undo_a,
-    doc_a.sync().export_all().get_heads(),
-  )
-  let undo_msg_b = @text.SyncMessage::new(
-    undo_b,
-    doc_b.sync().export_all().get_heads(),
-  )
-  let undo_msg_c = @text.SyncMessage::new(
-    undo_c,
-    doc_c.sync().export_all().get_heads(),
-  )
+  // Sync all undo ops using export_all (includes the undo delete ops)
+  let undo_msg_a = doc_a.sync().export_all()
+  let undo_msg_b = doc_b.sync().export_all()
+  let undo_msg_c = doc_c.sync().export_all()
   doc_a.sync().apply(undo_msg_b)
   doc_a.sync().apply(undo_msg_c)
   doc_b.sync().apply(undo_msg_a)
@@ -395,16 +369,13 @@ test "undo ops arrive at peer after sync" {
   doc_b.sync().apply(msg1)
   inspect(doc_b.text(), content="Hello")
 
-  // Step 3: Alice undoes the insert
-  let undo_ops = mgr_a.undo(doc_a)
+  // Step 3: Alice undoes the insert (saves version before undo to export delta)
+  let pre_undo_version = doc_a.version()
+  let _ = mgr_a.undo(doc_a)
   inspect(doc_a.text(), content="")
-  inspect(undo_ops.length() > 0, content="true")
 
-  // Step 4: Sync undo ops to Bob
-  let undo_msg = @text.SyncMessage::new(
-    undo_ops,
-    doc_a.sync().export_all().get_heads(),
-  )
+  // Step 4: Sync undo ops to Bob (export delta since pre-undo state)
+  let undo_msg = doc_a.sync().export_since(pre_undo_version)
   doc_b.sync().apply(undo_msg)
 
   // Step 5: Bob converges to same state
@@ -425,27 +396,23 @@ test "redo after peer sync preserves state" {
   inspect(doc_a.text(), content="Test")
   inspect(doc_b.text(), content="Test")
 
-  // Alice undoes
-  let undo_ops = mgr_a.undo(doc_a)
+  // Alice undoes (save version before to export delta)
+  let pre_undo_version = doc_a.version()
+  let _ = mgr_a.undo(doc_a)
   inspect(doc_a.text(), content="")
 
-  // Sync undo to Bob
-  let undo_msg = @text.SyncMessage::new(
-    undo_ops,
-    doc_a.sync().export_all().get_heads(),
-  )
+  // Sync undo to Bob via delta export
+  let undo_msg = doc_a.sync().export_since(pre_undo_version)
   doc_b.sync().apply(undo_msg)
   inspect(doc_b.text(), content="")
 
-  // Alice redoes
-  let redo_ops = mgr_a.redo(doc_a)
+  // Alice redoes (save version before to export delta)
+  let pre_redo_version = doc_a.version()
+  let _ = mgr_a.redo(doc_a)
   inspect(doc_a.text(), content="Test")
 
-  // Sync redo to Bob
-  let redo_msg = @text.SyncMessage::new(
-    redo_ops,
-    doc_a.sync().export_all().get_heads(),
-  )
+  // Sync redo to Bob via delta export
+  let redo_msg = doc_a.sync().export_since(pre_redo_version)
   doc_b.sync().apply(redo_msg)
 
   // Both should have "Test" again

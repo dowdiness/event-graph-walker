@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/internal/causal_graph"
+
+import {
+  "dowdiness/event-graph-walker/internal/core",
+  "moonbitlang/core/json",
+  "moonbitlang/core/quickcheck/splitmix",
+}
+
+// Values
+
+// Errors
+pub(all) suberror CausalGraphError {
+  MissingParent(lv~ : Int)
+  MissingEntry(lv~ : Int)
+}
+pub impl Show for CausalGraphError
+
+// Types and methods
+pub struct CausalGraph {
+  // private fields
+}
+pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
+pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
+pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (Array[Int], Array[Int])
+#alias("_[_]")
+pub fn CausalGraph::get_entry(Self, Int) -> @core.GraphEntry?
+pub fn CausalGraph::get_frontier(Self) -> @core.Frontier
+pub fn CausalGraph::graph_diff(Self, @core.Frontier, @core.Frontier) -> (Array[Int], Array[Int])
+pub fn CausalGraph::is_ancestor(Self, Int, Int) -> Bool
+pub fn CausalGraph::lv_to_raw(Self, Int) -> @core.RawVersion?
+pub fn CausalGraph::new() -> Self
+pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
+pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> Array[Int]
+pub impl Show for CausalGraph
+
+pub struct VersionVector(Map[String, Int])
+pub fn VersionVector::agents(Self) -> Array[String]
+pub fn VersionVector::concurrent(Self, Self) -> Bool
+pub fn VersionVector::from_frontier(CausalGraph, @core.Frontier) -> Self
+pub fn VersionVector::includes(Self, String, Int) -> Bool
+pub fn VersionVector::increment(Self, String) -> Self
+#deprecated
+pub fn VersionVector::inner(Self) -> Map[String, Int]
+pub fn VersionVector::merge(Self, Self) -> Self
+pub fn VersionVector::new() -> Self
+pub fn VersionVector::set(Self, String, Int) -> Self
+pub fn VersionVector::to_frontier(Self, CausalGraph) -> @core.Frontier
+pub impl Compare for VersionVector
+pub impl Default for VersionVector
+pub impl Eq for VersionVector
+pub impl Show for VersionVector
+pub impl ToJson for VersionVector
+pub impl @json.FromJson for VersionVector
+pub impl @moonbitlang/core/quickcheck.Arbitrary for VersionVector
+pub impl @moonbitlang/quickcheck.Shrink for VersionVector
+
+// Type aliases
+
+// Traits
+

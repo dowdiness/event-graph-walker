@@ -1,36 +1,25 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "dowdiness/event-graph-walker/undo"
 
-import {
-  "dowdiness/event-graph-walker/core",
-  "dowdiness/event-graph-walker/document",
-}
-
 // Values
 
 // Errors
+pub(all) suberror UndoError {
+  ItemNotFound
+  Internal(detail~ : String)
+}
+pub fn UndoError::is_retryable(Self) -> Bool
+pub fn UndoError::message(Self) -> String
 
 // Types and methods
-pub struct UndoGroup {
-  items : Array[UndoItem]
-  timestamp : Int
-}
+type UndoGroup
 pub impl Show for UndoGroup
 
-pub struct UndoItem {
-  target_lv : Int
-  op_type : UndoOpType
-  content : String?
-}
+type UndoItem
 pub impl Show for UndoItem
 
 pub struct UndoManager {
-  agent_id : String
-  mut undo_stack : Array[UndoGroup]
-  mut redo_stack : Array[UndoGroup]
-  capture_timeout_ms : Int
-  mut last_change_ms : Int
-  mut tracking_enabled : Bool
+  // private fields
 }
 pub fn UndoManager::can_redo(Self) -> Bool
 pub fn UndoManager::can_undo(Self) -> Bool
@@ -39,9 +28,9 @@ pub fn UndoManager::is_tracking(Self) -> Bool
 pub fn UndoManager::new(String, capture_timeout_ms? : Int) -> Self
 pub fn UndoManager::record_delete(Self, Int, String, Int, content? : String?) -> Unit
 pub fn UndoManager::record_insert(Self, Int, String, Int, content? : String?) -> Unit
-pub fn[D : @document.Undoable] UndoManager::redo(Self, D) -> Array[@core.Op] raise @document.DocumentError
+pub fn[D : Undoable] UndoManager::redo(Self, D) -> Unit raise UndoError
 pub fn UndoManager::set_tracking(Self, Bool) -> Unit
-pub fn[D : @document.Undoable] UndoManager::undo(Self, D) -> Array[@core.Op] raise @document.DocumentError
+pub fn[D : Undoable] UndoManager::undo(Self, D) -> Unit raise UndoError
 pub impl Show for UndoManager
 
 pub enum UndoOpType {
@@ -54,4 +43,9 @@ pub impl Show for UndoOpType
 // Type aliases
 
 // Traits
+pub(open) trait Undoable {
+  lv_to_position(Self, Int) -> Int?
+  delete_lv(Self, Int) -> Unit raise UndoError
+  undelete_lv(Self, Int) -> Unit raise UndoError
+}
 

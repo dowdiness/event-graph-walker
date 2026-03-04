@@ -4,25 +4,30 @@
 // using Arbitrary and Shrink traits for automatic test generation and minimization.
 
 ///|
+/// A single text edit captured during generation (position-based).
+enum TextEdit {
+  Insert(Int, String)
+  Delete(Int)
+} derive(Show)
+
+///|
 /// Generated operations for property testing (real TextDoc edits).
-pub(all) struct RealOps {
-  agent : String
-  ops : Array[@core.Op]
+struct RealOps {
+  edits : Array[TextEdit]
 } derive(Show)
 
 ///|
 /// Arbitrary instance for RealOps
-pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
+impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
   let chars : Array[Char] = [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
     'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
   ]
-  let agent_id = random_state.split().next_uint64().to_int().abs()
-  let agent = "gen-\{agent_id}"
-  let doc = @text.TextDoc::new(agent)
-  let ops : Array[@core.Op] = []
+  // Use a scratch doc to track position validity during generation
+  let scratch = @text.TextDoc::new("scratch")
+  let edits : Array[TextEdit] = []
   for i = 0; i < size; i = i + 1 {
-    let len = doc.len()
+    let len = scratch.len()
     let is_insert = if len == 0 {
       true
     } else {
@@ -32,41 +37,47 @@ pub impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
       let pos = random_state.split().next_uint64().to_int().abs() % (len + 1)
       let char_idx = random_state.split().next_uint64().to_int().abs() %
         chars.length()
-      let change = doc.insert(@text.Pos::at(pos), chars[char_idx].to_string()) catch {
+      let ch = chars[char_idx].to_string()
+      scratch.insert(@text.Pos::at(pos), ch) catch {
         _ => continue
       }
-      ops.push(change.to_op())
+      edits.push(Insert(pos, ch))
     } else {
       let pos = random_state.split().next_uint64().to_int().abs() % len
-      let change = doc.delete(@text.Pos::at(pos)) catch { _ => continue }
-      ops.push(change.to_op())
+      scratch.delete(@text.Pos::at(pos)) catch {
+        _ => continue
+      }
+      edits.push(Delete(pos))
     }
   }
-  { agent, ops }
+  { edits, }
 }
 
 ///|
 /// Shrink instance for RealOps
-pub impl @qc.Shrink for RealOps with shrink(self) {
+impl @qc.Shrink for RealOps with shrink(self) {
   let results : Array[RealOps] = []
-  let ops = self.ops
-  let len = ops.length()
+  let edits = self.edits
+  let len = edits.length()
   if len > 0 {
-    results.push({ agent: self.agent, ops: [] })
+    results.push({ edits: [] })
     let half = len / 2
     if half > 0 {
-      results.push({ agent: self.agent, ops: ops[:half].to_array() })
+      results.push({ edits: edits[:half].to_array() })
     }
-    results.push({ agent: self.agent, ops: ops[:len - 1].to_array() })
+    results.push({ edits: edits[:len - 1].to_array() })
   }
   results.iter()
 }
 
 ///|
-/// Apply a real operation to a document, returning success.
-fn apply_op(doc : @text.TextDoc, op : @core.Op) -> Bool {
+/// Apply a single TextEdit to a document, returning success.
+fn apply_edit(doc : @text.TextDoc, edit : TextEdit) -> Bool {
   try {
-    doc.apply_remote(op)
+    match edit {
+      Insert(pos, ch) => doc.insert(@text.Pos::at(pos), ch)
+      Delete(pos) => doc.delete(@text.Pos::at(pos))
+    }
     true
   } catch {
     _ => false
@@ -74,22 +85,26 @@ fn apply_op(doc : @text.TextDoc, op : @core.Op) -> Bool {
 }
 
 ///|
-/// Apply a sequence of operations to a document
-fn apply_ops(doc : @text.TextDoc, ops : Array[@core.Op]) -> Unit {
-  for op in ops {
-    let _ = apply_op(doc, op)
-
+/// Apply a sequence of edits to a document; returns false if any edit fails.
+fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Bool {
+  for edit in edits {
+    if not(apply_edit(doc, edit)) {
+      return false
+    }
   }
+  true
 }
 
 ///|
-/// Property: Sync convergence - two documents with same ops converge
+/// Property: Sync convergence - two documents with same edits converge
 fn prop_sync_convergence(ops : RealOps) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
 
-  // Apply ops to doc1
-  apply_ops(doc1, ops.ops)
+  // Apply edits to doc1
+  if not(apply_edits(doc1, ops.edits)) {
+    return true
+  }
 
   // Sync doc1 -> doc2
   let msg = doc1.sync().export_all() catch {
@@ -113,7 +128,9 @@ test "property: sync convergence" {
 fn prop_sync_idempotent(ops : RealOps) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
-  apply_ops(doc1, ops.ops)
+  if not(apply_edits(doc1, ops.edits)) {
+    return true
+  }
   let msg = doc1.sync().export_all() catch { _ => return true }
 
   // Apply once
@@ -143,7 +160,6 @@ fn prop_version_changes_after_edit(char : Char) -> Bool {
   let v1 = doc.version()
   try {
     let _ = doc.insert(@text.Pos::at(0), char.to_string())
-
   } catch {
     _ => return true
   }
@@ -163,7 +179,6 @@ fn prop_insert_increases_length(pos : Int) -> Bool {
   // Pre-populate with some content
   try {
     let _ = doc.insert(@text.Pos::at(0), "hello")
-
   } catch {
     _ => return true
   }
@@ -177,7 +192,6 @@ fn prop_insert_increases_length(pos : Int) -> Bool {
   }
   try {
     let _ = doc.insert(@text.Pos::at(clamped_pos), "x")
-
   } catch {
     _ => return true
   }
@@ -196,7 +210,6 @@ fn prop_delete_decreases_length(pos : Int) -> Bool {
   // Pre-populate
   try {
     let _ = doc.insert(@text.Pos::at(0), "hello")
-
   } catch {
     _ => return true
   }
@@ -213,7 +226,6 @@ fn prop_delete_decreases_length(pos : Int) -> Bool {
   }
   try {
     let _ = doc.delete(@text.Pos::at(clamped_pos))
-
   } catch {
     _ => return true
   }
@@ -230,21 +242,19 @@ test "property: delete decreases length" {
 fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
 
-  // Apply some ops
-  let mid = ops.ops.length() / 2
-  for i = 0; i < mid; i = i + 1 {
-    let _ = apply_op(doc, ops.ops[i])
-
+  // Apply first half of edits
+  let mid = ops.edits.length() / 2
+  if not(apply_edits(doc, ops.edits[:mid].to_array())) {
+    return true
   }
 
   // Save version and text
   let saved_version = doc.version()
   let saved_text = doc.text()
 
-  // Apply more ops
-  for i = mid; i < ops.ops.length(); i = i + 1 {
-    let _ = apply_op(doc, ops.ops[i])
-
+  // Apply remaining edits
+  if not(apply_edits(doc, ops.edits[mid:].to_array())) {
+    return true
   }
 
   // Checkout saved version
@@ -288,7 +298,9 @@ test "property: Pos clamps negative values" {
 /// Property: Version equality is reflexive
 fn prop_version_reflexive(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_ops(doc, ops.ops)
+  if not(apply_edits(doc, ops.edits)) {
+    return true
+  }
   let v = doc.version()
   v == v
 }
@@ -302,7 +314,9 @@ test "property: version equality is reflexive" {
 /// Property: SyncMessage::is_empty consistent with op_count
 fn prop_sync_message_empty_consistent(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_ops(doc, ops.ops)
+  if not(apply_edits(doc, ops.edits)) {
+    return true
+  }
   let msg = doc.sync().export_all() catch { _ => return true }
   (msg.is_empty() && msg.op_count() == 0) ||
   (not(msg.is_empty()) && msg.op_count() > 0)
@@ -320,9 +334,13 @@ fn prop_bidirectional_sync_converges(pair : (RealOps, RealOps)) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
 
-  // Apply different ops to each doc
-  apply_ops(doc1, ops1.ops)
-  apply_ops(doc2, ops2.ops)
+  // Apply different edits to each doc
+  if not(apply_edits(doc1, ops1.edits)) {
+    return true
+  }
+  if not(apply_edits(doc2, ops2.edits)) {
+    return true
+  }
 
   // Sync both ways
   let msg1 = doc1.sync().export_all() catch { _ => return true }
@@ -347,7 +365,9 @@ test "property: bidirectional sync converges" {
 /// Property: export_since with current version exports empty
 fn prop_export_since_current_is_empty(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_ops(doc, ops.ops)
+  if not(apply_edits(doc, ops.edits)) {
+    return true
+  }
   let current_version = doc.version()
   let msg = doc.sync().export_since(current_version) catch { _ => return true }
   msg.is_empty()
@@ -378,7 +398,6 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   while mgr.can_undo() {
     try {
       let _ = mgr.undo(doc)
-
     } catch {
       _ => return true
     }
@@ -393,7 +412,6 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   while mgr.can_redo() {
     try {
       let _ = mgr.redo(doc)
-
     } catch {
       _ => return true
     }
@@ -432,7 +450,6 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   while mgr.can_undo() && undo_count < clamped {
     try {
       let _ = mgr.undo(doc)
-
     } catch {
       _ => return true
     }
@@ -443,7 +460,6 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   while mgr.can_redo() && redo_count < undo_count {
     try {
       let _ = mgr.redo(doc)
-
     } catch {
       _ => return true
     }

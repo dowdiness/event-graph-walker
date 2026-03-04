@@ -1,0 +1,307 @@
+///| Branch System - Efficient document snapshots at any frontier
+
+///|
+
+///| This module implements the branch/snapshot system for eg-walker,
+
+///| allowing efficient checkout of document state at any frontier
+
+///| and incremental updates.
+
+///|
+/// A Branch represents a document state at a specific frontier
+///
+/// This is a snapshot of the document that can be efficiently
+/// advanced forward by applying new operations.
+pub struct Branch {
+  priv frontier : @core.Frontier // Version frontier this branch represents
+  priv tree : @fugue.FugueTree[String] // CRDT tree state at this frontier
+  priv oplog : @oplog.OpLog // Reference to the operation log
+} derive(Show)
+
+///|
+/// Create a new empty branch
+pub fn Branch::new(oplog : @oplog.OpLog) -> Branch {
+  {
+    frontier: @core.Frontier::from_array([]),
+    tree: @fugue.FugueTree::new(),
+    oplog,
+  }
+}
+
+///|
+/// Create a branch from existing tree and oplog at current frontier
+/// This is useful for wrapping existing Document state
+pub fn Branch::from_tree_and_oplog(
+  tree : @fugue.FugueTree[String],
+  oplog : @oplog.OpLog,
+) -> Branch {
+  let frontier = oplog.get_frontier()
+  { frontier, tree, oplog }
+}
+
+///|
+/// Checkout document state at a specific frontier
+///
+/// This reconstructs the document by walking the operation graph
+/// from the beginning and applying all operations up to the frontier.
+///
+/// # Arguments
+/// * `oplog` - The operation log containing all operations
+/// * `frontier` - The frontier to checkout
+///
+/// # Returns
+/// A Branch representing the document state at the frontier
+pub fn Branch::checkout(
+  oplog : @oplog.OpLog,
+  frontier : @core.Frontier,
+) -> Branch raise BranchError {
+  // Create empty tree
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+
+  // Use walker to get all operations in causal order
+  let ops = oplog.walk_and_collect(frontier)
+
+  // Apply each operation to the tree
+  for op in ops {
+    apply_operation_to_tree(tree, op, oplog)
+  }
+
+  // Return branch with reconstructed state
+  // Defensive copy to prevent aliasing with caller-owned array
+  { frontier: @core.Frontier::from_array(frontier.0.copy()), tree, oplog }
+}
+
+///|
+/// Advance a branch to a new frontier.
+///
+/// **Fast path (O(k))**: If the target frontier is strictly ahead of the current
+/// one — i.e. no operations need to be undone — only the `k` new operations are
+/// applied incrementally to the existing tree. This is the common case when a
+/// peer receives new remote edits.
+///
+/// **Slow path (O(n))**: If reaching the target requires *retreating* (undoing
+/// operations that are in the current frontier but not in the target), a full
+/// checkout is performed by replaying all `n` operations from scratch.
+/// Retreat happens when moving to a concurrent or earlier frontier, e.g. when
+/// computing a historical diff or merging a branch that diverged before the
+/// current one.
+///
+/// To avoid the slow path in a hot loop, prefer advancing monotonically forward
+/// rather than jumping between concurrent frontiers.
+pub fn Branch::advance(
+  self : Branch,
+  target_frontier : @core.Frontier,
+) -> Branch raise BranchError {
+  // Calculate what operations to apply
+  let (retreat_ops, advance_ops) = self.oplog.diff_and_collect(
+    self.frontier,
+    target_frontier,
+  )
+
+  if retreat_ops.length() > 0 {
+    // Slow path: retreat required — full O(n) replay from scratch
+    Branch::checkout(self.oplog, target_frontier)
+  } else {
+    // Fast path: advance only — apply k new ops incrementally
+    let tree = self.tree
+    for op in advance_ops {
+      apply_operation_to_tree(tree, op, self.oplog)
+    }
+    // Defensive copy to prevent aliasing with caller-owned array
+    {
+      frontier: @core.Frontier::from_array(target_frontier.0.copy()),
+      tree,
+      oplog: self.oplog,
+    }
+  }
+}
+
+///|
+/// Get the text content of this branch
+pub fn Branch::to_text(self : Branch) -> String {
+  self.tree.to_text()
+}
+
+///|
+/// Get the frontier of this branch (returns a defensive copy).
+pub fn Branch::get_frontier(self : Branch) -> @core.Frontier {
+  @core.Frontier::from_array(self.frontier.0.copy())
+}
+
+///|
+/// Count visible characters in this branch
+pub fn Branch::visible_count(self : Branch) -> Int {
+  self.tree.visible_count()
+}
+
+///|
+/// Access the underlying FugueTree for advanced operations
+pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree[String] {
+  self.tree
+}
+
+///|
+/// Check if this branch is at the given frontier.
+/// Compares as unordered sets (sorted copies) so element multiplicity is preserved.
+pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
+  if self.frontier.0.length() != frontier.0.length() {
+    return false
+  }
+  let lhs = self.frontier.0.copy()
+  let rhs = frontier.0.copy()
+  lhs.sort()
+  rhs.sort()
+  for i = 0; i < lhs.length(); i = i + 1 {
+    if lhs[i] != rhs[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Get the frontier of this branch as a VersionVector
+///
+/// This provides a more compact representation of the frontier,
+/// especially when there are many operations from the same agents.
+pub fn Branch::get_version_vector(self : Branch) -> @causal_graph.VersionVector {
+  @causal_graph.VersionVector::from_frontier(
+    self.oplog.causal_graph(),
+    self.frontier,
+  )
+}
+
+///|
+/// Check if this branch is at the given version vector
+pub fn Branch::at_version_vector(
+  self : Branch,
+  vv : @causal_graph.VersionVector,
+) -> Bool {
+  let frontier = vv.to_frontier(self.oplog.causal_graph())
+  self.at_frontier(frontier)
+}
+
+///|
+/// Advance a branch to a version vector
+///
+/// This is a convenience method that converts the version vector to a frontier
+/// and then uses the regular advance method.
+pub fn Branch::advance_to_version_vector(
+  self : Branch,
+  vv : @causal_graph.VersionVector,
+) -> Branch raise BranchError {
+  let frontier = vv.to_frontier(self.oplog.causal_graph())
+  self.advance(frontier)
+}
+
+///|
+/// Checkout document state at a specific version vector
+///
+/// This is a convenience method that converts the version vector to a frontier
+/// and then uses the regular checkout method.
+pub fn Branch::checkout_version_vector(
+  oplog : @oplog.OpLog,
+  vv : @causal_graph.VersionVector,
+) -> Branch raise BranchError {
+  let frontier = vv.to_frontier(oplog.causal_graph())
+  Branch::checkout(oplog, frontier)
+}
+
+///|
+/// Merge remote operations into this branch
+///
+/// This properly uses the eg-walker algorithm:
+/// 1. Adds remote operations to the oplog with LV translation
+/// 2. Uses branch.advance() to apply the new operations
+///
+/// # Arguments
+/// * `remote_ops` - Array of remote operations to merge
+///
+/// # Returns
+/// A new Branch with the merged state
+pub fn Branch::merge_remote_ops(
+  self : Branch,
+  remote_ops : Array[@core.Op],
+) -> Branch raise BranchError {
+  // Add remote operations to oplog (buffering if parents are missing)
+  for remote_op in remote_ops {
+    let _ = self.oplog.apply_remote(remote_op) catch {
+      e => raise BranchError::OpLog(e)
+    }
+  }
+
+  // Get the new frontier after adding remote ops
+  let new_frontier = self.oplog.get_frontier()
+
+  // Use Branch::advance to apply the new operations
+  // This leverages the walker to apply operations in causal order
+  self.advance(new_frontier)
+}
+
+///|
+/// Apply an operation to a FugueTree
+///
+/// This is a helper function that applies either an Insert or Delete
+/// operation to the tree, handling the FugueMax integration.
+fn apply_operation_to_tree(
+  tree : @fugue.FugueTree[String],
+  op : @core.Op,
+  oplog : @oplog.OpLog,
+) -> Unit raise BranchError {
+  let cg = oplog.causal_graph()
+  let origin_left : @fugue.Lv? = match op.origin_left() {
+    None => None
+    Some(raw) =>
+      match cg.raw_to_lv(raw) {
+        Some(lv) => Some(@fugue.Lv(lv))
+        None => raise BranchError::MissingOrigin(raw~)
+      }
+  }
+  let origin_right : @fugue.Lv? = match op.origin_right() {
+    None => None
+    Some(raw) =>
+      match cg.raw_to_lv(raw) {
+        Some(lv) => Some(@fugue.Lv(lv))
+        None => raise BranchError::MissingOrigin(raw~)
+      }
+  }
+  match op.content() {
+    @core.Insert(text) => {
+      // Get Lamport timestamp and agent from causal graph
+      let lv = op.lv()
+      let (timestamp, agent) = match cg[lv] {
+        Some(entry) => (entry.timestamp, entry.agent)
+        None => raise BranchError::MissingOp(lv~)
+      }
+
+      // Insert into tree with FugueMax algorithm
+      tree.insert({
+        id: @fugue.Lv(lv),
+        content: text,
+        origin_left,
+        origin_right,
+        timestamp: @fugue.Timestamp(timestamp),
+        agent: @fugue.ReplicaId(agent),
+      })
+    }
+    @core.Delete =>
+      match origin_left {
+        Some(lv) =>
+          // Mark item as deleted
+          tree.delete(lv) catch {
+            e => raise BranchError::Fugue(e)
+          }
+        None => ()
+      }
+    @core.Undelete =>
+      match origin_left {
+        Some(lv) =>
+          // Revive a previously deleted item
+          tree.undelete(lv) catch {
+            e => raise BranchError::Fugue(e)
+          }
+        None => ()
+      }
+  }
+}
