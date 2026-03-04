@@ -238,10 +238,11 @@ fn apply_operation_to_tree(
   op : @core.Op,
   oplog : @oplog.OpLog,
 ) -> Unit raise BranchError {
+  let cg = oplog.causal_graph()
   let origin_left = match op.origin_left {
     None => -1
     Some(raw) =>
-      match oplog.causal_graph().raw_to_lv(raw) {
+      match cg.raw_to_lv(raw) {
         Some(lv) => lv
         None => raise BranchError::MissingOrigin(raw~)
       }
@@ -249,7 +250,7 @@ fn apply_operation_to_tree(
   let origin_right = match op.origin_right {
     None => -1
     Some(raw) =>
-      match oplog.causal_graph().raw_to_lv(raw) {
+      match cg.raw_to_lv(raw) {
         Some(lv) => lv
         None => raise BranchError::MissingOrigin(raw~)
       }
@@ -257,7 +258,7 @@ fn apply_operation_to_tree(
   match op.content {
     @core.Insert(text) => {
       // Get Lamport timestamp and agent from causal graph
-      let (timestamp, agent) = match oplog.causal_graph()[op.lv] {
+      let (timestamp, agent) = match cg[op.lv] {
         Some(entry) => (entry.timestamp, entry.agent)
         None => raise BranchError::MissingOp(lv=op.lv)
       }

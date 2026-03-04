@@ -3,7 +3,7 @@
 ///|
 /// OpLog - stores operations with causal graph
 pub struct OpLog {
-  priv mut operations : Array[@core.Op] // All operations in LV order
+  priv operations : Array[@core.Op] // All operations in LV order
   priv mut pending : Array[@core.Op] // Remote ops waiting for missing parents
   priv graph : @causal_graph.CausalGraph // The causal graph
   priv agent_id : String // This agent's ID
@@ -29,9 +29,7 @@ pub fn OpLog::causal_graph(self : OpLog) -> @causal_graph.CausalGraph {
 ///|
 /// Add a new operation to the log
 fn OpLog::add_op(self : OpLog, op : @core.Op) -> Unit {
-  let ops = self.operations
-  ops.push(op)
-  self.operations = ops
+  self.operations.push(op)
 }
 
 ///|
@@ -225,9 +223,7 @@ pub fn OpLog::apply_remote(
   self : OpLog,
   op : @core.Op,
 ) -> Array[@core.Op] raise OpLogError {
-  let pending = self.pending
-  pending.push(op)
-  self.pending = pending
+  self.pending.push(op)
   self.drain_pending()
 }
 

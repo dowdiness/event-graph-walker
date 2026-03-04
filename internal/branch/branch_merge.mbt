@@ -34,6 +34,8 @@ pub fn MergeContext::apply_operations(
   let sorted_ops = operations.copy()
   sorted_ops.sort()
 
+  let cg = self.oplog.causal_graph()
+
   // Apply each operation in order
   for lv in sorted_ops {
     match self.oplog.get_op(lv) {
@@ -43,7 +45,7 @@ pub fn MergeContext::apply_operations(
             let origin_left = match op.origin_left {
               None => -1
               Some(raw) =>
-                match self.oplog.causal_graph().raw_to_lv(raw) {
+                match cg.raw_to_lv(raw) {
                   Some(mapped) => mapped
                   None => raise BranchError::MissingOrigin(raw~)
                 }
@@ -51,13 +53,13 @@ pub fn MergeContext::apply_operations(
             let origin_right = match op.origin_right {
               None => -1
               Some(raw) =>
-                match self.oplog.causal_graph().raw_to_lv(raw) {
+                match cg.raw_to_lv(raw) {
                   Some(mapped) => mapped
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
             // Get Lamport timestamp and agent from causal graph for proper ordering
-            let (timestamp, agent) = match self.oplog.causal_graph()[op.lv] {
+            let (timestamp, agent) = match cg[op.lv] {
               Some(entry) => (entry.timestamp, entry.agent)
               None => raise BranchError::MissingOp(lv=op.lv)
             }
@@ -76,7 +78,7 @@ pub fn MergeContext::apply_operations(
             match op.origin_left {
               None => ()
               Some(raw) =>
-                match self.oplog.causal_graph().raw_to_lv(raw) {
+                match cg.raw_to_lv(raw) {
                   Some(mapped) =>
                     self.tree.delete(mapped) catch {
                       e => raise BranchError::Fugue(e)
@@ -88,7 +90,7 @@ pub fn MergeContext::apply_operations(
             match op.origin_left {
               None => ()
               Some(raw) =>
-                match self.oplog.causal_graph().raw_to_lv(raw) {
+                match cg.raw_to_lv(raw) {
                   Some(mapped) =>
                     self.tree.undelete(mapped) catch {
                       e => raise BranchError::Fugue(e)
