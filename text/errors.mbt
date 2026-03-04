@@ -81,7 +81,7 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
 
 ///|
 /// Convert from DocumentError to TextError
-pub fn TextError::from_document_error(
+fn TextError::from_document_error(
   err : @document.DocumentError,
   doc_len : Int,
 ) -> TextError {
@@ -100,7 +100,7 @@ pub fn TextError::from_document_error(
 
 ///|
 /// Convert from OpLogError to TextError
-pub fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
+fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
   match err {
     MissingLocalVersion(lv~) =>
       TextError::Internal(detail="missing local version: \{lv}")
@@ -132,7 +132,7 @@ pub fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
 
 ///|
 /// Convert from BranchError to TextError
-pub fn TextError::from_branch_error(err : @branch.BranchError) -> TextError {
+fn TextError::from_branch_error(err : @branch.BranchError) -> TextError {
   match err {
     MissingOp(lv~) => TextError::Internal(detail="missing op at lv: \{lv}")
     MissingOrigin(raw~) =>
