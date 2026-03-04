@@ -22,29 +22,6 @@ pub fn Pos::value(self : Pos) -> Int {
   self.value
 }
 
-///| Text range representing a span of text.
-
-///|
-/// `start` is inclusive, `end` is exclusive.
-pub(all) struct Range {
-  /// Starting position (inclusive)
-  start : Pos
-  /// Ending position (exclusive)
-  end : Pos
-} derive(Show, Eq)
-
-///|
-/// Create a range from two positions.
-pub fn Range::new(start : Pos, end : Pos) -> Range {
-  { start, end }
-}
-
-///|
-/// Create a range from two integers.
-pub fn Range::from_ints(start : Int, end : Int) -> Range {
-  { start: Pos::at(start), end: Pos::at(end) }
-}
-
 ///| Opaque version identifier representing the document state at a point in time.
 
 ///|
@@ -69,7 +46,3 @@ pub fn Version::empty() -> Version {
   { frontier: @core.Frontier::from_array([]) }
 }
 
-///|
-/// Represents a local edit operation (insert or delete).
-/// Returned from TextDoc::insert() and TextDoc::delete().
-pub type Change = @core.Change

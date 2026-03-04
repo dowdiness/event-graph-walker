@@ -46,7 +46,7 @@ impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
       edits.push(Delete(pos))
     }
   }
-  { edits }
+  { edits, }
 }
 
 ///|

@@ -7,7 +7,7 @@ pub(all) struct TextView {
 }
 
 ///|
-pub fn TextView::from_branch(branch : @branch.Branch) -> TextView {
+fn TextView::from_branch(branch : @branch.Branch) -> TextView {
   TextView::{ branch, }
 }
 
@@ -27,39 +27,6 @@ pub fn TextView::version(self : TextView) -> Version {
 /// Get the number of visible characters at this version
 pub fn TextView::len(self : TextView) -> Int {
   self.branch.visible_count()
-}
-
-///|
-/// Returns an RLE view of the text content.
-/// Useful for efficient text iteration and range operations.
-///
-/// Note: For plain text, this creates a single-run RleVec. The RLE structure
-/// becomes more useful with styled/attributed text (future enhancement).
-pub fn TextView::to_rle(self : TextView) -> @rle.Runs[String] {
-  @rle.Runs::from_string(self.text())
-}
-
-///|
-/// Returns RLE spans including tombstones for causal length queries.
-/// Each span has `text`, `deleted` status. Adjacent spans with same
-/// deleted status are merged.
-///
-/// Use cases:
-/// - `causal_len`: total structural length including tombstones
-/// - `visible_len`: visible text length (tombstones contribute 0)
-/// - Range queries that need to track deleted positions
-pub fn TextView::to_spans(self : TextView) -> @rle.Runs[TextSpan] {
-  let items = self.branch.inner_tree().get_all_items()
-  let spans : Array[TextSpan] = []
-  for item in items {
-    let (_, it) = item
-    if it.deleted {
-      spans.push(TextSpan::tombstone(it.content))
-    } else {
-      spans.push(TextSpan::visible(it.content))
-    }
-  }
-  @rle.Runs::from_array(spans)
 }
 
 ///|

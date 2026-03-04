@@ -50,13 +50,6 @@ test "Pos::at clamps negative values" {
 }
 
 ///|
-test "Range::from_ints creates range" {
-  let range = Range::from_ints(0, 5)
-  inspect(range.start.value(), content="0")
-  inspect(range.end.value(), content="5")
-}
-
-///|
 test "TextError::message provides user message" {
   let err : TextError = TextError::InvalidPosition(pos=10, len=5)
   inspect(
@@ -184,17 +177,6 @@ test "TextDoc delete at invalid position raises error" {
     }
     _ => fail("Expected InvalidPosition error")
   }
-}
-
-///|
-test "TextView::to_rle returns RLE view" {
-  let doc = TextDoc::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
-  let view = doc.checkout(doc.version())
-  let rle = view.to_rle()
-  inspect(rle.count(), content="1")
-  inspect(rle.len(), content="5")
-  inspect(rle.to_string(), content="Hello")
 }
 
 ///|
