@@ -1,11 +1,11 @@
 ///|
 /// CausalGraph - tracks operation dependencies and causal ordering
 pub struct CausalGraph {
-  mut entries : @immut/hashmap.HashMap[Int, @core.GraphEntry]
-  mut version_map : @immut/hashmap.HashMap[@core.RawVersion, Int]
-  mut next_lv : Int
-  mut frontier : @core.Frontier
-  mut agent_seqs : @immut/hashmap.HashMap[String, Int]
+  priv mut entries : @immut/hashmap.HashMap[Int, @core.GraphEntry]
+  priv mut version_map : @immut/hashmap.HashMap[@core.RawVersion, Int]
+  priv mut next_lv : Int
+  priv mut frontier : @core.Frontier
+  priv mut agent_seqs : @immut/hashmap.HashMap[String, Int]
 } derive(Show)
 
 ///|
