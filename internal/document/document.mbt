@@ -230,11 +230,12 @@ pub fn Document::apply_remote(
   }
 
   // Apply any newly-resolved operations to the tree
+  let cg = self.oplog.causal_graph()
   for applied in applied_ops {
     let origin_left = match applied.origin_left() {
       None => -1
       Some(raw) =>
-        match self.oplog.causal_graph().raw_to_lv(raw) {
+        match cg.raw_to_lv(raw) {
           Some(lv) => lv
           None => raise DocumentError::MissingOrigin(raw~)
         }
@@ -242,7 +243,7 @@ pub fn Document::apply_remote(
     let origin_right = match applied.origin_right() {
       None => -1
       Some(raw) =>
-        match self.oplog.causal_graph().raw_to_lv(raw) {
+        match cg.raw_to_lv(raw) {
           Some(lv) => lv
           None => raise DocumentError::MissingOrigin(raw~)
         }
@@ -250,7 +251,7 @@ pub fn Document::apply_remote(
     match applied.content() {
       @core.Insert(text) => {
         // Get Lamport timestamp and agent from causal graph for proper ordering
-        let (timestamp, agent) = match self.oplog.causal_graph()[applied.lv()] {
+        let (timestamp, agent) = match cg[applied.lv()] {
           Some(entry) => (entry.timestamp, entry.agent)
           None =>
             raise DocumentError::OpLog(

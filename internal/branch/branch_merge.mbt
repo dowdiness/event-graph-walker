@@ -7,8 +7,8 @@
 ///|
 /// MergeContext - state during merge operation
 pub struct MergeContext {
-  tree : @fugue.FugueTree // The FugueMax tree being merged
-  oplog : @oplog.OpLog // Operation log
+  priv tree : @fugue.FugueTree // The FugueMax tree being merged
+  priv oplog : @oplog.OpLog // Operation log
 }
 
 ///|

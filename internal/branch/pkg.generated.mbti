@@ -41,8 +41,7 @@ pub fn Branch::visible_count(Self) -> Int
 pub impl Show for Branch
 
 pub struct MergeContext {
-  tree : @fugue.FugueTree
-  oplog : @oplog.OpLog
+  // private fields
 }
 pub fn MergeContext::apply_operations(Self, Array[Int]) -> Unit raise BranchError
 pub fn MergeContext::new(@fugue.FugueTree, @oplog.OpLog) -> Self

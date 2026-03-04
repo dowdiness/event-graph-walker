@@ -85,11 +85,14 @@ fn apply_edit(doc : @text.TextDoc, edit : TextEdit) -> Bool {
 }
 
 ///|
-/// Apply a sequence of edits to a document
-fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Unit {
+/// Apply a sequence of edits to a document; returns false if any edit fails.
+fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Bool {
   for edit in edits {
-    let _ = apply_edit(doc, edit)
+    if not(apply_edit(doc, edit)) {
+      return false
+    }
   }
+  true
 }
 
 ///|
@@ -99,7 +102,9 @@ fn prop_sync_convergence(ops : RealOps) -> Bool {
   let doc2 = @text.TextDoc::new("bob")
 
   // Apply edits to doc1
-  apply_edits(doc1, ops.edits)
+  if not(apply_edits(doc1, ops.edits)) {
+    return true
+  }
 
   // Sync doc1 -> doc2
   let msg = doc1.sync().export_all() catch {
@@ -123,7 +128,9 @@ test "property: sync convergence" {
 fn prop_sync_idempotent(ops : RealOps) -> Bool {
   let doc1 = @text.TextDoc::new("alice")
   let doc2 = @text.TextDoc::new("bob")
-  apply_edits(doc1, ops.edits)
+  if not(apply_edits(doc1, ops.edits)) {
+    return true
+  }
   let msg = doc1.sync().export_all() catch { _ => return true }
 
   // Apply once
@@ -291,7 +298,9 @@ test "property: Pos clamps negative values" {
 /// Property: Version equality is reflexive
 fn prop_version_reflexive(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_edits(doc, ops.edits)
+  if not(apply_edits(doc, ops.edits)) {
+    return true
+  }
   let v = doc.version()
   v == v
 }
@@ -305,7 +314,9 @@ test "property: version equality is reflexive" {
 /// Property: SyncMessage::is_empty consistent with op_count
 fn prop_sync_message_empty_consistent(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_edits(doc, ops.edits)
+  if not(apply_edits(doc, ops.edits)) {
+    return true
+  }
   let msg = doc.sync().export_all() catch { _ => return true }
   (msg.is_empty() && msg.op_count() == 0) ||
   (not(msg.is_empty()) && msg.op_count() > 0)
@@ -324,8 +335,12 @@ fn prop_bidirectional_sync_converges(pair : (RealOps, RealOps)) -> Bool {
   let doc2 = @text.TextDoc::new("bob")
 
   // Apply different edits to each doc
-  apply_edits(doc1, ops1.edits)
-  apply_edits(doc2, ops2.edits)
+  if not(apply_edits(doc1, ops1.edits)) {
+    return true
+  }
+  if not(apply_edits(doc2, ops2.edits)) {
+    return true
+  }
 
   // Sync both ways
   let msg1 = doc1.sync().export_all() catch { _ => return true }
@@ -350,7 +365,9 @@ test "property: bidirectional sync converges" {
 /// Property: export_since with current version exports empty
 fn prop_export_since_current_is_empty(ops : RealOps) -> Bool {
   let doc = @text.TextDoc::new("alice")
-  apply_edits(doc, ops.edits)
+  if not(apply_edits(doc, ops.edits)) {
+    return true
+  }
   let current_version = doc.version()
   let msg = doc.sync().export_since(current_version) catch { _ => return true }
   msg.is_empty()

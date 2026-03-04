@@ -27,7 +27,7 @@ pub fn Op::lv(self : Op) -> Int {
 
 ///|
 pub fn Op::parents(self : Op) -> Array[RawVersion] {
-  self.parents
+  self.parents.copy()
 }
 
 ///|

@@ -40,8 +40,9 @@ test "oplog - insert and delete mix (100 ops)" (b : @bench.T) {
     // Insert 100 characters
     for i = 0; i < 100; i = i + 1 {
       let op = try! oplog.insert("a", prev, -1)
-      lvs.push(op.lv())
-      prev = op.lv()
+      let lv = op.lv()
+      lvs.push(lv)
+      prev = lv
     }
 
     // Delete every other character
@@ -206,8 +207,9 @@ test "oplog - walk_filtered (inserts only)" (b : @bench.T) {
   // Insert 50 characters
   for i = 0; i < 50; i = i + 1 {
     let op = try! oplog.insert("a", prev, -1)
-    lvs.push(op.lv())
-    prev = op.lv()
+    let lv = op.lv()
+    lvs.push(lv)
+    prev = lv
   }
 
   // Delete 25 characters
