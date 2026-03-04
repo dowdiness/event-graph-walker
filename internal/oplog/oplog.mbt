@@ -285,26 +285,28 @@ fn OpLog::try_apply_remote(
     Some(_) => return (false, None)
     None => ()
   }
+  let origin_left = op.origin_left()
+  let origin_right = op.origin_right()
+  let content = op.content()
+  if (op.is_delete() || op.is_undelete()) && origin_left is None {
+    raise OpLogError::MissingOrigin
+  }
   let local_parents : Array[Int] = []
-  for parent in op.parents() {
+  for parent in op.parents_iter() {
     match self.graph.raw_to_lv(parent) {
       Some(lv) => local_parents.push(lv)
       None => return (true, None)
     }
   }
-  let _local_origin_left = match self.lv_from_raw(op.origin_left()) {
-    Some(lv) => lv
+  match self.lv_from_raw(origin_left) {
+    Some(_) => ()
     None => return (true, None)
   }
-  let _local_origin_right = match self.lv_from_raw(op.origin_right()) {
-    Some(lv) => lv
+  match self.lv_from_raw(origin_right) {
+    Some(_) => ()
     None => return (true, None)
   }
-  let content = op.content()
   let raw_parents = op.parents()
-  if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
-    raise OpLogError::MissingOrigin
-  }
   let local_lv = self.graph.add_version_with_seq(
     local_parents,
     op.agent(),
@@ -320,8 +322,8 @@ fn OpLog::try_apply_remote(
         op.agent(),
         op.seq(),
         text,
-        op.origin_left(),
-        op.origin_right(),
+        origin_left,
+        origin_right,
       )
     @core.Delete =>
       @core.Op::new_delete(
@@ -329,7 +331,7 @@ fn OpLog::try_apply_remote(
         raw_parents,
         op.agent(),
         op.seq(),
-        op.origin_left(),
+        origin_left,
       )
     @core.Undelete =>
       @core.Op::new_undelete(
@@ -337,7 +339,7 @@ fn OpLog::try_apply_remote(
         raw_parents,
         op.agent(),
         op.seq(),
-        op.origin_left(),
+        origin_left,
       )
   }
   self.add_op(local_op)

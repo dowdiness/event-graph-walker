@@ -246,7 +246,6 @@ test "sync recovery - partial operation log" {
 
   // Alice inserts "A" alone so Bob can sync to that specific version
   let _ = doc1.insert(Pos::at(0), "A")
-  let version_after_a = doc1.version()
 
   // Sync only "A" to Bob
   let msg_a = doc1.sync().export_since(Version::empty())
@@ -256,7 +255,6 @@ test "sync recovery - partial operation log" {
   // Alice continues writing, Bob misses it
   let _ = doc1.insert(Pos::at(1), "B")
   let _ = doc1.insert(Pos::at(2), "C")
-  ignore(version_after_a)
 
   // Bob reconnects; Alice sends only the delta
   let bob_version = doc2.version()
@@ -291,9 +289,6 @@ test "sync recovery - stale version vector" {
 
   // The delta should have ops for " World!" (7 chars = 7 ops)
   // Each character is a separate op in this implementation
-  inspect(delta.op_count(), content="7")
-
-  // Verify that delta contains the expected characters
   inspect(delta.op_count(), content="7")
 }
 

@@ -59,6 +59,7 @@ pub fn Op::new_undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Sel
 pub fn Op::origin_left(Self) -> RawVersion?
 pub fn Op::origin_right(Self) -> RawVersion?
 pub fn Op::parents(Self) -> Array[RawVersion]
+pub fn Op::parents_iter(Self) -> Iter[RawVersion]
 pub fn Op::seq(Self) -> Int
 pub impl Show for Op
 pub impl ToJson for Op

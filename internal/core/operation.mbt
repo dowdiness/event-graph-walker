@@ -31,6 +31,12 @@ pub fn Op::parents(self : Op) -> Array[RawVersion] {
 }
 
 ///|
+/// Iterate over parent versions without allocating a copy.
+pub fn Op::parents_iter(self : Op) -> Iter[RawVersion] {
+  self.parents.iter()
+}
+
+///|
 pub fn Op::agent(self : Op) -> String {
   self.agent
 }

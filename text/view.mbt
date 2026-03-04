@@ -45,21 +45,7 @@ pub fn TextView::runs(self : TextView) -> Iter[String] {
 ///|
 pub impl Show for TextView with output(self, logger) {
   logger.write_string("TextView { text: \"")
-  let text = self.text()
-  let display_text = if text.length() > 50 {
-    text
-    .iter()
-    .take(50)
-    .fold(init=StringBuilder::new(), fn(sb, c) {
-      sb.write_char(c)
-      sb
-    })
-    .to_string() +
-    "..."
-  } else {
-    text
-  }
-  logger.write_string(display_text)
+  logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")
   self.version().to_frontier().output(logger)
   logger.write_string(" }")
