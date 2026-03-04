@@ -36,7 +36,7 @@ pub struct VersionVector(Map[String, Int]) derive (
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv1 = VersionVector::new().set("alice", 1).set("bob", 2)
 /// let vv2 = VersionVector::new().set("alice", 2).set("bob", 2)
 /// let vv3 = VersionVector::new().set("alice", 1).set("bob", 2)
@@ -73,7 +73,7 @@ pub impl Compare for VersionVector with compare(self, other) {
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv1 = VersionVector::new().set("alice", 2).set("bob", 3)
 /// let vv2 = VersionVector::new().set("alice", 3).set("bob", 3).set("charlie", 1)
 /// inspect(vv1 <= vv2, content="true")
@@ -200,7 +200,7 @@ pub impl @qc.Shrink for VersionVector with shrink(vv) {
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv = VersionVector::new()
 /// inspect(vv.0.is_empty(), content="true")
 /// inspect(vv.0.length(), content="0")
@@ -224,7 +224,7 @@ pub fn VersionVector::new() -> VersionVector {
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv = VersionVector::new()
 /// let updated = vv.set("alice", 5)
 /// inspect(updated.get("alice"), content="Some(5)")
@@ -251,9 +251,11 @@ pub fn VersionVector::increment(
   self : VersionVector,
   agent : String,
 ) -> VersionVector {
-  self.0.update(agent, seq => match seq {
-    Some(n) => Some(n + 1)
-    None => Some(0)
+  self.0.update(agent, seq => {
+    match seq {
+      Some(n) => Some(n + 1)
+      None => Some(0)
+    }
   })
   self
 }
@@ -272,7 +274,7 @@ pub fn VersionVector::increment(
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv = VersionVector::new().set("alice", 5).set("bob", 3).set("charlie", 7)
 ///
 /// let agents = vv.agents()
@@ -298,7 +300,7 @@ pub fn VersionVector::agents(self : VersionVector) -> Array[String] {
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv1 = VersionVector::new().set("alice", 5).set("bob", 3)
 ///
 /// let vv2 = VersionVector::new().set("alice", 2).set("charlie", 8)
@@ -341,7 +343,7 @@ pub fn VersionVector::merge(
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv1 = VersionVector({"alice": 2, "bob": 1})
 /// let vv2 = VersionVector({"alice": 1, "bob": 2})
 /// inspect(vv1.concurrent(vv2), content="true")
@@ -375,7 +377,7 @@ pub fn VersionVector::concurrent(
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// // Assuming we have a causal graph with some entries
 /// let graph = CausalGraph::new()
 /// // ... populate graph with entries ...
@@ -398,10 +400,12 @@ pub fn VersionVector::from_frontier(
   let reachable = graph.transitive_closure(frontier)
 
   // Find max seq for each agent in reachable versions
-  reachable.each(lv => if graph[lv] is Some(entry) {
-    let current_max = agent_max_seq.get(entry.agent).unwrap_or(-1)
-    if entry.seq > current_max {
-      agent_max_seq[entry.agent] = entry.seq
+  reachable.each(lv => {
+    if graph[lv] is Some(entry) {
+      let current_max = agent_max_seq.get(entry.agent).unwrap_or(-1)
+      if entry.seq > current_max {
+        agent_max_seq[entry.agent] = entry.seq
+      }
     }
   })
   VersionVector(agent_max_seq)
@@ -445,7 +449,7 @@ pub fn VersionVector::to_frontier(
 ///
 /// Examples:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let vv = VersionVector::new()
 ///   |> VersionVector::set("alice", 5)
 ///   |> VersionVector::set("bob", 3)

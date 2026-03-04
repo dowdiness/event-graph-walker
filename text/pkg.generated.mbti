@@ -2,12 +2,6 @@
 package "dowdiness/event-graph-walker/text"
 
 import {
-  "dowdiness/event-graph-walker/branch",
-  "dowdiness/event-graph-walker/causal_graph",
-  "dowdiness/event-graph-walker/core",
-  "dowdiness/event-graph-walker/document",
-  "dowdiness/event-graph-walker/oplog",
-  "dowdiness/event-graph-walker/rle",
   "dowdiness/event-graph-walker/undo",
 }
 
@@ -21,9 +15,6 @@ pub(all) suberror TextError {
   Internal(detail~ : String)
 }
 pub fn TextError::debug(Self) -> String
-pub fn TextError::from_branch_error(@branch.BranchError) -> Self
-pub fn TextError::from_document_error(@document.DocumentError, Int) -> Self
-pub fn TextError::from_oplog_error(@oplog.OpLogError) -> Self
 pub fn TextError::help(Self) -> String
 pub fn TextError::is_retryable(Self) -> Bool
 pub fn TextError::message(Self) -> String
@@ -37,15 +28,6 @@ pub fn Pos::value(Self) -> Int
 pub impl Eq for Pos
 pub impl Show for Pos
 
-pub(all) struct Range {
-  start : Pos
-  end : Pos
-}
-pub fn Range::from_ints(Int, Int) -> Self
-pub fn Range::new(Pos, Pos) -> Self
-pub impl Eq for Range
-pub impl Show for Range
-
 pub(all) enum SyncFailure {
   MissingDependency(hint~ : String)
   MalformedMessage(detail~ : String)
@@ -57,10 +39,7 @@ pub impl Show for SyncFailure
 pub(all) struct SyncMessage {
   // private fields
 }
-pub fn SyncMessage::get_heads(Self) -> Array[@core.RawVersion]
-pub fn SyncMessage::get_ops(Self) -> Array[@core.Op]
 pub fn SyncMessage::is_empty(Self) -> Bool
-pub fn SyncMessage::new(Array[@core.Op], Array[@core.RawVersion]) -> Self
 pub fn SyncMessage::op_count(Self) -> Int
 pub impl Show for SyncMessage
 
@@ -71,56 +50,30 @@ pub fn SyncSession::apply(Self, SyncMessage) -> Unit raise TextError
 pub fn SyncSession::current_version(Self) -> Version
 pub fn SyncSession::export_all(Self) -> SyncMessage raise TextError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TextError
-pub fn SyncSession::new(TextDoc) -> Self
 
 pub(all) struct TextDoc {
   // private fields
 }
-pub fn TextDoc::apply_remote(Self, @core.Op) -> Unit raise TextError
 pub fn TextDoc::checkout(Self, Version) -> TextView raise TextError
-pub fn TextDoc::delete(Self, Pos) -> @core.Change raise TextError
+pub fn TextDoc::delete(Self, Pos) -> Unit raise TextError
 pub fn TextDoc::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
-pub fn TextDoc::from_document(@document.Document) -> Self
-pub fn TextDoc::get_all_ops(Self) -> Array[@core.Op]
-pub fn TextDoc::get_frontier_raw(Self) -> Array[@core.RawVersion] raise TextError
-pub fn TextDoc::get_version_vector(Self) -> @causal_graph.VersionVector raise TextError
-pub fn TextDoc::insert(Self, Pos, String) -> @core.Change raise TextError
+pub fn TextDoc::insert(Self, Pos, String) -> Unit raise TextError
 pub fn TextDoc::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextDoc::is_empty(Self) -> Bool
 pub fn TextDoc::len(Self) -> Int
-pub fn TextDoc::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise TextError
 pub fn TextDoc::new(String) -> Self
 pub fn TextDoc::sync(Self) -> SyncSession
 pub fn TextDoc::text(Self) -> String
 pub fn TextDoc::version(Self) -> Version
-pub impl @document.Undoable for TextDoc
+pub impl @undo.Undoable for TextDoc
 pub impl Show for TextDoc
-
-pub struct TextSpan {
-  text : String
-  deleted : Bool
-}
-pub fn TextSpan::content(Self) -> String
-pub fn TextSpan::is_tombstone(Self) -> Bool
-pub fn TextSpan::is_visible(Self) -> Bool
-pub fn TextSpan::tombstone(String) -> Self
-pub fn TextSpan::visible(String) -> Self
-pub impl @rle.HasCausalLength for TextSpan
-pub impl @rle.HasLength for TextSpan
-pub impl @rle.Mergeable for TextSpan
-pub impl @rle.Sliceable for TextSpan
-pub impl Eq for TextSpan
-pub impl Show for TextSpan
 
 pub(all) struct TextView {
   // private fields
 }
-pub fn TextView::from_branch(@branch.Branch) -> Self
 pub fn TextView::len(Self) -> Int
 pub fn TextView::runs(Self) -> Iter[String]
 pub fn TextView::text(Self) -> String
-pub fn TextView::to_rle(Self) -> @rle.Runs[String]
-pub fn TextView::to_spans(Self) -> @rle.Runs[TextSpan]
 pub fn TextView::version(Self) -> Version
 pub impl Show for TextView
 
@@ -128,13 +81,10 @@ pub(all) struct Version {
   // private fields
 }
 pub fn Version::empty() -> Self
-pub fn Version::from_frontier(@core.Frontier) -> Self
-pub fn Version::to_frontier(Self) -> @core.Frontier
 pub impl Eq for Version
 pub impl Show for Version
 
 // Type aliases
-pub using @core {type Change}
 
 // Traits
 

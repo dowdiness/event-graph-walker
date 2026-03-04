@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/core/bench",
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+}
+
+options(
+  version: "0.3.0",
+)

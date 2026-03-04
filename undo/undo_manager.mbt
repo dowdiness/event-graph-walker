@@ -106,7 +106,7 @@ pub fn[D : Undoable] UndoManager::undo(
     let item = group.items[i]
     try {
       match item.op_type {
-        Insert => {
+        Insert =>
           match doc.lv_to_position(item.target_lv) {
             Some(_) => {
               doc.delete_lv(item.target_lv)
@@ -118,7 +118,6 @@ pub fn[D : Undoable] UndoManager::undo(
             }
             None => ()
           }
-        }
         Delete => {
           doc.undelete_lv(item.target_lv)
           redo_items.push({
@@ -166,7 +165,7 @@ pub fn[D : Undoable] UndoManager::redo(
             content: item.content,
           })
         }
-        Delete => {
+        Delete =>
           match doc.lv_to_position(item.target_lv) {
             Some(_) => {
               doc.delete_lv(item.target_lv)
@@ -178,7 +177,6 @@ pub fn[D : Undoable] UndoManager::redo(
             }
             None => ()
           }
-        }
       }
     } catch {
       UndoError::ItemNotFound => continue

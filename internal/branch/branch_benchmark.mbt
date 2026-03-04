@@ -157,7 +157,6 @@ test "branch - checkout with deletes" (b : @bench.T) {
   // Delete every other character
   for i = 0; i < lvs.length(); i = i + 2 {
     let _del = try! oplog.delete(lvs[i])
-
   }
   let frontier = oplog.get_frontier()
   b.bench(fn() {

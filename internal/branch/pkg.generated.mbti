@@ -1,11 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/event-graph-walker/branch"
+package "dowdiness/event-graph-walker/internal/branch"
 
 import {
-  "dowdiness/event-graph-walker/causal_graph",
-  "dowdiness/event-graph-walker/core",
-  "dowdiness/event-graph-walker/fugue",
-  "dowdiness/event-graph-walker/oplog",
+  "dowdiness/event-graph-walker/internal/causal_graph",
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/fugue",
+  "dowdiness/event-graph-walker/internal/oplog",
 }
 
 // Values
@@ -23,9 +23,7 @@ pub(all) suberror BranchError {
 
 // Types and methods
 pub struct Branch {
-  frontier : @core.Frontier
-  tree : @fugue.FugueTree
-  oplog : @oplog.OpLog
+  // private fields
 }
 pub fn Branch::advance(Self, @core.Frontier) -> Self raise BranchError
 pub fn Branch::advance_to_version_vector(Self, @causal_graph.VersionVector) -> Self raise BranchError
@@ -36,7 +34,6 @@ pub fn Branch::checkout_version_vector(@oplog.OpLog, @causal_graph.VersionVector
 pub fn Branch::from_tree_and_oplog(@fugue.FugueTree, @oplog.OpLog) -> Self
 pub fn Branch::get_frontier(Self) -> @core.Frontier
 pub fn Branch::get_version_vector(Self) -> @causal_graph.VersionVector
-pub fn Branch::inner_tree(Self) -> @fugue.FugueTree
 pub fn Branch::merge_remote_ops(Self, Array[@core.Op]) -> Self raise BranchError
 pub fn Branch::new(@oplog.OpLog) -> Self
 pub fn Branch::to_text(Self) -> String

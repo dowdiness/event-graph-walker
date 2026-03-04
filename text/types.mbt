@@ -45,4 +45,3 @@ fn Version::to_frontier(self : Version) -> @core.Frontier {
 pub fn Version::empty() -> Version {
   { frontier: @core.Frontier::from_array([]) }
 }
-

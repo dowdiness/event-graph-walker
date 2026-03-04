@@ -142,9 +142,9 @@ pub fn merge(
   target_frontier : @core.Frontier,
 ) -> Unit raise BranchError {
   // Calculate retreat and advance sets
-  let (retreat_ops, advance_ops) = oplog.causal_graph().graph_diff(
-    current_frontier, target_frontier,
-  )
+  let (retreat_ops, advance_ops) = oplog
+    .causal_graph()
+    .graph_diff(current_frontier, target_frontier)
   let ctx = MergeContext::new(tree, oplog)
 
   // Phase 1: Retreat - remove operations not in target

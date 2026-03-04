@@ -26,7 +26,6 @@ pub impl @quickcheck.Arbitrary for Runs[String] with arbitrary(
     let s = sb.to_string()
     if not(s.is_empty()) {
       let _ = runs.append(s)
-
     }
   }
   runs
@@ -56,7 +55,6 @@ pub impl @qc.Shrink for Runs[String] with shrink(runs) {
       for j = 0; j < len; j = j + 1 {
         if i != j {
           let _ = smaller.append(items[j])
-
         }
       }
       results.push(smaller)
@@ -68,7 +66,6 @@ pub impl @qc.Shrink for Runs[String] with shrink(runs) {
     let first_half : Runs[String] = Runs::new()
     for i = 0; i < half; i = i + 1 {
       let _ = first_half.append(items[i])
-
     }
     results.push(first_half)
   }
@@ -84,11 +81,9 @@ pub impl @qc.Shrink for Runs[String] with shrink(runs) {
           let half = item_len / 2
           if half > 0 {
             let _ = shortened.append(Sliceable::slice(item, start=0, end=half))
-
           }
         } else {
           let _ = shortened.append(items[j])
-
         }
       }
       if not(shortened.is_empty()) {

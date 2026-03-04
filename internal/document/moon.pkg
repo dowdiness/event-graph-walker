@@ -1,0 +1,11 @@
+import {
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/causal_graph",
+  "dowdiness/event-graph-walker/internal/oplog",
+  "dowdiness/event-graph-walker/internal/fugue",
+  "dowdiness/event-graph-walker/internal/branch",
+}
+
+options(
+  is_main: false,
+)

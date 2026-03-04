@@ -157,7 +157,10 @@ pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
 /// This provides a more compact representation of the frontier,
 /// especially when there are many operations from the same agents.
 pub fn Branch::get_version_vector(self : Branch) -> @causal_graph.VersionVector {
-  @causal_graph.VersionVector::from_frontier(self.oplog.causal_graph(), self.frontier)
+  @causal_graph.VersionVector::from_frontier(
+    self.oplog.causal_graph(),
+    self.frontier,
+  )
 }
 
 ///|
@@ -217,7 +220,6 @@ pub fn Branch::merge_remote_ops(
     let _ = self.oplog.apply_remote(remote_op) catch {
       e => raise BranchError::OpLog(e)
     }
-
   }
 
   // Get the new frontier after adding remote ops

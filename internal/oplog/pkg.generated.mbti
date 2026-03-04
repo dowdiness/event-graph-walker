@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/event-graph-walker/oplog"
+package "dowdiness/event-graph-walker/internal/oplog"
 
 import {
-  "dowdiness/event-graph-walker/causal_graph",
-  "dowdiness/event-graph-walker/core",
+  "dowdiness/event-graph-walker/internal/causal_graph",
+  "dowdiness/event-graph-walker/internal/core",
 }
 
 // Values
@@ -19,12 +19,10 @@ pub(all) suberror OpLogError {
 
 // Types and methods
 pub struct OpLog {
-  mut operations : Array[@core.Op]
-  mut pending : Array[@core.Op]
-  graph : @causal_graph.CausalGraph
-  agent_id : String
+  // private fields
 }
 pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
+pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
 pub fn OpLog::delete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
 pub fn OpLog::get_all_ops(Self) -> Array[@core.Op]

@@ -176,7 +176,6 @@ fn prop_no_adjacent_mergeable(strings : Array[String]) -> Bool {
   for s in strings {
     if s.iter().count() > 0 {
       let _ = runs.append(s)
-
     }
   }
   let items = runs.to_array()

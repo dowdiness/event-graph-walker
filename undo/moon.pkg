@@ -1,0 +1,11 @@
+import {
+}
+
+import {
+  "dowdiness/event-graph-walker/text",
+  "moonbitlang/core/quickcheck",
+} for "test"
+
+options(
+  is_main: false,
+)

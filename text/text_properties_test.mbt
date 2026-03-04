@@ -38,11 +38,15 @@ impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
       let char_idx = random_state.split().next_uint64().to_int().abs() %
         chars.length()
       let ch = chars[char_idx].to_string()
-      scratch.insert(@text.Pos::at(pos), ch) catch { _ => continue }
+      scratch.insert(@text.Pos::at(pos), ch) catch {
+        _ => continue
+      }
       edits.push(Insert(pos, ch))
     } else {
       let pos = random_state.split().next_uint64().to_int().abs() % len
-      scratch.delete(@text.Pos::at(pos)) catch { _ => continue }
+      scratch.delete(@text.Pos::at(pos)) catch {
+        _ => continue
+      }
       edits.push(Delete(pos))
     }
   }
@@ -149,7 +153,6 @@ fn prop_version_changes_after_edit(char : Char) -> Bool {
   let v1 = doc.version()
   try {
     let _ = doc.insert(@text.Pos::at(0), char.to_string())
-
   } catch {
     _ => return true
   }
@@ -169,7 +172,6 @@ fn prop_insert_increases_length(pos : Int) -> Bool {
   // Pre-populate with some content
   try {
     let _ = doc.insert(@text.Pos::at(0), "hello")
-
   } catch {
     _ => return true
   }
@@ -183,7 +185,6 @@ fn prop_insert_increases_length(pos : Int) -> Bool {
   }
   try {
     let _ = doc.insert(@text.Pos::at(clamped_pos), "x")
-
   } catch {
     _ => return true
   }
@@ -202,7 +203,6 @@ fn prop_delete_decreases_length(pos : Int) -> Bool {
   // Pre-populate
   try {
     let _ = doc.insert(@text.Pos::at(0), "hello")
-
   } catch {
     _ => return true
   }
@@ -219,7 +219,6 @@ fn prop_delete_decreases_length(pos : Int) -> Bool {
   }
   try {
     let _ = doc.delete(@text.Pos::at(clamped_pos))
-
   } catch {
     _ => return true
   }
@@ -240,7 +239,6 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   let mid = ops.edits.length() / 2
   for i = 0; i < mid; i = i + 1 {
     let _ = apply_edit(doc, ops.edits[i])
-
   }
 
   // Save version and text
@@ -250,7 +248,6 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   // Apply remaining edits
   for i = mid; i < ops.edits.length(); i = i + 1 {
     let _ = apply_edit(doc, ops.edits[i])
-
   }
 
   // Checkout saved version
@@ -384,7 +381,6 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   while mgr.can_undo() {
     try {
       let _ = mgr.undo(doc)
-
     } catch {
       _ => return true
     }
@@ -399,7 +395,6 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   while mgr.can_redo() {
     try {
       let _ = mgr.redo(doc)
-
     } catch {
       _ => return true
     }
@@ -438,7 +433,6 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   while mgr.can_undo() && undo_count < clamped {
     try {
       let _ = mgr.undo(doc)
-
     } catch {
       _ => return true
     }
@@ -449,7 +443,6 @@ fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   while mgr.can_redo() && redo_count < undo_count {
     try {
       let _ = mgr.redo(doc)
-
     } catch {
       _ => return true
     }

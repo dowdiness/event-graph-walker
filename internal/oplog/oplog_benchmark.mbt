@@ -47,7 +47,6 @@ test "oplog - insert and delete mix (100 ops)" (b : @bench.T) {
     // Delete every other character
     for i = 0; i < lvs.length(); i = i + 2 {
       let _del = try! oplog.delete(lvs[i])
-
     }
     b.keep(oplog)
   })
@@ -214,7 +213,6 @@ test "oplog - walk_filtered (inserts only)" (b : @bench.T) {
   // Delete 25 characters
   for i = 0; i < 25; i = i + 1 {
     let _del = try! oplog.delete(lvs[i])
-
   }
   let frontier = oplog.get_frontier()
   b.bench(fn() {

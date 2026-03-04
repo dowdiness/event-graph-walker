@@ -1,9 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/event-graph-walker/causal_graph"
+package "dowdiness/event-graph-walker/internal/causal_graph"
 
 import {
-  "dowdiness/event-graph-walker/core",
-  "moonbitlang/core/immut/hashmap",
+  "dowdiness/event-graph-walker/internal/core",
   "moonbitlang/core/json",
   "moonbitlang/core/quickcheck/splitmix",
 }
@@ -19,11 +18,7 @@ pub impl Show for CausalGraphError
 
 // Types and methods
 pub struct CausalGraph {
-  mut entries : @hashmap.HashMap[Int, @core.GraphEntry]
-  mut version_map : @hashmap.HashMap[@core.RawVersion, Int]
-  mut next_lv : Int
-  mut frontier : @core.Frontier
-  mut agent_seqs : @hashmap.HashMap[String, Int]
+  // private fields
 }
 pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
 pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError

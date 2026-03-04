@@ -21,25 +21,39 @@ pub struct Op {
 } derive(Show, FromJson, ToJson)
 
 ///|
-pub fn Op::lv(self : Op) -> Int { self.lv }
+pub fn Op::lv(self : Op) -> Int {
+  self.lv
+}
 
 ///|
-pub fn Op::parents(self : Op) -> Array[RawVersion] { self.parents }
+pub fn Op::parents(self : Op) -> Array[RawVersion] {
+  self.parents
+}
 
 ///|
-pub fn Op::agent(self : Op) -> String { self.agent }
+pub fn Op::agent(self : Op) -> String {
+  self.agent
+}
 
 ///|
-pub fn Op::seq(self : Op) -> Int { self.seq }
+pub fn Op::seq(self : Op) -> Int {
+  self.seq
+}
 
 ///|
-pub fn Op::content(self : Op) -> OpContent { self.content }
+pub fn Op::content(self : Op) -> OpContent {
+  self.content
+}
 
 ///|
-pub fn Op::origin_left(self : Op) -> RawVersion? { self.origin_left }
+pub fn Op::origin_left(self : Op) -> RawVersion? {
+  self.origin_left
+}
 
 ///|
-pub fn Op::origin_right(self : Op) -> RawVersion? { self.origin_right }
+pub fn Op::origin_right(self : Op) -> RawVersion? {
+  self.origin_right
+}
 
 ///|
 /// Create a new insert operation

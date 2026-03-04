@@ -16,9 +16,7 @@ pub fn TextDoc::insert_and_record(
   }
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_string() catch { _ => continue }
-    let op = try {
-      self.inner.insert(pos_val + i, ch)
-    } catch {
+    let op = self.inner.insert(pos_val + i, ch) catch {
       err => raise TextError::from_document_error(err, doc_len)
     }
     mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch))
@@ -41,9 +39,7 @@ pub fn TextDoc::delete_and_record(
   } else {
     None
   }
-  let op = try {
-    self.inner.delete(pos_val)
-  } catch {
+  let op = self.inner.delete(pos_val) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
   match op.get_delete_target() {

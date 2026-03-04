@@ -1,0 +1,14 @@
+import {
+  "dowdiness/event-graph-walker/internal/core",
+  "moonbitlang/core/bench",
+  "moonbitlang/core/queue",
+  "moonbitlang/core/json",
+  "moonbitlang/core/immut/hashmap" @immut/hashmap,
+  "moonbitlang/core/immut/hashset" @immut/hashset,
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+}
+
+options(
+  is_main: false,
+)

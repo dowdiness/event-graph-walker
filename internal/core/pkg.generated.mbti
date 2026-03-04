@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/event-graph-walker/core"
+package "dowdiness/event-graph-walker/internal/core"
 
 import {
   "moonbitlang/core/json",
@@ -41,22 +41,23 @@ pub(all) struct GraphEntry {
 pub impl Show for GraphEntry
 
 pub struct Op {
-  lv : Int
-  parents : Array[RawVersion]
-  agent : String
-  seq : Int
-  content : OpContent
-  origin_left : RawVersion?
-  origin_right : RawVersion?
+  // private fields
 }
+pub fn Op::agent(Self) -> String
+pub fn Op::content(Self) -> OpContent
 pub fn Op::get_delete_target(Self) -> RawVersion?
 pub fn Op::get_insert_text(Self) -> String?
 pub fn Op::is_delete(Self) -> Bool
 pub fn Op::is_insert(Self) -> Bool
 pub fn Op::is_undelete(Self) -> Bool
+pub fn Op::lv(Self) -> Int
 pub fn Op::new_delete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
 pub fn Op::new_insert(Int, Array[RawVersion], String, Int, String, RawVersion?, RawVersion?) -> Self
 pub fn Op::new_undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
+pub fn Op::origin_left(Self) -> RawVersion?
+pub fn Op::origin_right(Self) -> RawVersion?
+pub fn Op::parents(Self) -> Array[RawVersion]
+pub fn Op::seq(Self) -> Int
 pub impl Show for Op
 pub impl ToJson for Op
 pub impl @json.FromJson for Op

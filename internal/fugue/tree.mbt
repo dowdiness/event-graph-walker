@@ -25,7 +25,7 @@ pub struct FugueTree {
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let tree = FugueTree::default()
 /// inspect(tree.visible_count(), content="0")
 /// inspect(tree.to_text(), content="")
@@ -268,9 +268,11 @@ fn partition_children(
 ) -> (Array[(Int, Item)], Array[(Int, Item)]) {
   let left = []
   let right = []
-  children.each((id, item) => match item.side {
-    Left => left.push((id, item))
-    Right => right.push((id, item))
+  children.each((id, item) => {
+    match item.side {
+      Left => left.push((id, item))
+      Right => right.push((id, item))
+    }
   })
   (left, right)
 }

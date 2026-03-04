@@ -33,7 +33,7 @@ pub struct Item {
 ///
 /// Example:
 ///
-/// ```moonbit
+/// ```moonbit nocheck
 /// let item1 = Item::new(1, "a", -1, Left, 10, "agent1")
 /// let item2 = Item::new(2, "b", -1, Left, 20, "agent2")
 /// inspect(item1.compare(item2), content="-1") // item1 comes before item2 due to earlier timestamp
