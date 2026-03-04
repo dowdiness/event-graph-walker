@@ -244,8 +244,8 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
 
   // Apply first half of edits
   let mid = ops.edits.length() / 2
-  for i = 0; i < mid; i = i + 1 {
-    let _ = apply_edit(doc, ops.edits[i])
+  if not(apply_edits(doc, ops.edits[:mid].to_array())) {
+    return true
   }
 
   // Save version and text
@@ -253,8 +253,8 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   let saved_text = doc.text()
 
   // Apply remaining edits
-  for i = mid; i < ops.edits.length(); i = i + 1 {
-    let _ = apply_edit(doc, ops.edits[i])
+  if not(apply_edits(doc, ops.edits[mid:].to_array())) {
+    return true
   }
 
   // Checkout saved version
