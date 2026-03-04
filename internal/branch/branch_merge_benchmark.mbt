@@ -6,7 +6,7 @@ fn resolve_origin(oplog : @oplog.OpLog, raw : @core.RawVersion?) -> Int {
   match raw {
     None => -1
     Some(rv) =>
-      match oplog.graph.raw_to_lv(rv) {
+      match oplog.causal_graph().raw_to_lv(rv) {
         Some(lv) => lv
         None => -1
       }
@@ -208,7 +208,7 @@ test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
     let ops_from_b = []
     for i = 0; i < 25; i = i + 1 {
       let raw = @core.RawVersion::new(ops_a[i * 2].agent, ops_a[i * 2].seq)
-      let target_lv = match oplog_b.graph.raw_to_lv(raw) {
+      let target_lv = match oplog_b.causal_graph().raw_to_lv(raw) {
         Some(lv) => lv
         None => continue
       }

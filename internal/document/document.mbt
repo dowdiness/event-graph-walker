@@ -127,7 +127,7 @@ pub fn Document::insert(
     }
 
     // Get Lamport timestamp and agent from causal graph for proper ordering
-    let (timestamp, agent) = match self.oplog.graph[op.lv] {
+    let (timestamp, agent) = match self.oplog.causal_graph()[op.lv] {
       Some(entry) => (entry.timestamp, entry.agent)
       None =>
         raise DocumentError::OpLog(
@@ -234,7 +234,7 @@ pub fn Document::apply_remote(
     let origin_left = match applied.origin_left {
       None => -1
       Some(raw) =>
-        match self.oplog.graph.raw_to_lv(raw) {
+        match self.oplog.causal_graph().raw_to_lv(raw) {
           Some(lv) => lv
           None => raise DocumentError::MissingOrigin(raw~)
         }
@@ -242,7 +242,7 @@ pub fn Document::apply_remote(
     let origin_right = match applied.origin_right {
       None => -1
       Some(raw) =>
-        match self.oplog.graph.raw_to_lv(raw) {
+        match self.oplog.causal_graph().raw_to_lv(raw) {
           Some(lv) => lv
           None => raise DocumentError::MissingOrigin(raw~)
         }
@@ -250,7 +250,7 @@ pub fn Document::apply_remote(
     match applied.content {
       @core.Insert(text) => {
         // Get Lamport timestamp and agent from causal graph for proper ordering
-        let (timestamp, agent) = match self.oplog.graph[applied.lv] {
+        let (timestamp, agent) = match self.oplog.causal_graph()[applied.lv] {
           Some(entry) => (entry.timestamp, entry.agent)
           None =>
             raise DocumentError::OpLog(

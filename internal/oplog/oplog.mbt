@@ -3,10 +3,10 @@
 ///|
 /// OpLog - stores operations with causal graph
 pub struct OpLog {
-  mut operations : Array[@core.Op] // All operations in LV order
-  mut pending : Array[@core.Op] // Remote ops waiting for missing parents
-  graph : @causal_graph.CausalGraph // The causal graph
-  agent_id : String // This agent's ID
+  priv mut operations : Array[@core.Op] // All operations in LV order
+  priv mut pending : Array[@core.Op] // Remote ops waiting for missing parents
+  priv graph : @causal_graph.CausalGraph // The causal graph
+  priv agent_id : String // This agent's ID
 } derive(Show)
 
 ///|
@@ -18,6 +18,12 @@ pub fn OpLog::new(agent_id : String) -> OpLog {
     graph: @causal_graph.CausalGraph::new(),
     agent_id,
   }
+}
+
+///|
+/// Get the causal graph (read-only accessor for sibling packages)
+pub fn OpLog::causal_graph(self : OpLog) -> @causal_graph.CausalGraph {
+  self.graph
 }
 
 ///|

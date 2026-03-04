@@ -4,7 +4,7 @@ fn resolve_origin(oplog : @oplog.OpLog, raw : @core.RawVersion?) -> Int {
   match raw {
     None => -1
     Some(rv) =>
-      match oplog.graph.raw_to_lv(rv) {
+      match oplog.causal_graph().raw_to_lv(rv) {
         Some(lv) => lv
         None => -1
       }
@@ -14,7 +14,7 @@ fn resolve_origin(oplog : @oplog.OpLog, raw : @core.RawVersion?) -> Int {
 ///|
 fn resolve_op_lv(oplog : @oplog.OpLog, op : @core.Op) -> Int? {
   let raw = @core.RawVersion::new(op.agent, op.seq)
-  oplog.graph.raw_to_lv(raw)
+  oplog.causal_graph().raw_to_lv(raw)
 }
 
 ///|

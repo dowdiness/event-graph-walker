@@ -14,9 +14,9 @@
 /// This is a snapshot of the document that can be efficiently
 /// advanced forward by applying new operations.
 pub struct Branch {
-  frontier : @core.Frontier // Version frontier this branch represents
-  tree : @fugue.FugueTree // CRDT tree state at this frontier
-  oplog : @oplog.OpLog // Reference to the operation log
+  priv frontier : @core.Frontier // Version frontier this branch represents
+  priv tree : @fugue.FugueTree // CRDT tree state at this frontier
+  priv oplog : @oplog.OpLog // Reference to the operation log
 } derive(Show)
 
 ///|
@@ -131,12 +131,6 @@ pub fn Branch::visible_count(self : Branch) -> Int {
 }
 
 ///|
-/// Access the underlying FugueTree for advanced operations
-pub fn Branch::inner_tree(self : Branch) -> @fugue.FugueTree {
-  self.tree
-}
-
-///|
 /// Check if this branch is at the given frontier
 pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
   if self.frontier.0.length() != frontier.0.length() {
@@ -163,7 +157,7 @@ pub fn Branch::at_frontier(self : Branch, frontier : @core.Frontier) -> Bool {
 /// This provides a more compact representation of the frontier,
 /// especially when there are many operations from the same agents.
 pub fn Branch::get_version_vector(self : Branch) -> @causal_graph.VersionVector {
-  @causal_graph.VersionVector::from_frontier(self.oplog.graph, self.frontier)
+  @causal_graph.VersionVector::from_frontier(self.oplog.causal_graph(), self.frontier)
 }
 
 ///|
@@ -172,7 +166,7 @@ pub fn Branch::at_version_vector(
   self : Branch,
   vv : @causal_graph.VersionVector,
 ) -> Bool {
-  let frontier = vv.to_frontier(self.oplog.graph)
+  let frontier = vv.to_frontier(self.oplog.causal_graph())
   self.at_frontier(frontier)
 }
 
@@ -185,7 +179,7 @@ pub fn Branch::advance_to_version_vector(
   self : Branch,
   vv : @causal_graph.VersionVector,
 ) -> Branch raise BranchError {
-  let frontier = vv.to_frontier(self.oplog.graph)
+  let frontier = vv.to_frontier(self.oplog.causal_graph())
   self.advance(frontier)
 }
 
@@ -198,7 +192,7 @@ pub fn Branch::checkout_version_vector(
   oplog : @oplog.OpLog,
   vv : @causal_graph.VersionVector,
 ) -> Branch raise BranchError {
-  let frontier = vv.to_frontier(oplog.graph)
+  let frontier = vv.to_frontier(oplog.causal_graph())
   Branch::checkout(oplog, frontier)
 }
 
@@ -247,7 +241,7 @@ fn apply_operation_to_tree(
   let origin_left = match op.origin_left {
     None => -1
     Some(raw) =>
-      match oplog.graph.raw_to_lv(raw) {
+      match oplog.causal_graph().raw_to_lv(raw) {
         Some(lv) => lv
         None => raise BranchError::MissingOrigin(raw~)
       }
@@ -255,7 +249,7 @@ fn apply_operation_to_tree(
   let origin_right = match op.origin_right {
     None => -1
     Some(raw) =>
-      match oplog.graph.raw_to_lv(raw) {
+      match oplog.causal_graph().raw_to_lv(raw) {
         Some(lv) => lv
         None => raise BranchError::MissingOrigin(raw~)
       }
@@ -263,7 +257,7 @@ fn apply_operation_to_tree(
   match op.content {
     @core.Insert(text) => {
       // Get Lamport timestamp and agent from causal graph
-      let (timestamp, agent) = match oplog.graph[op.lv] {
+      let (timestamp, agent) = match oplog.causal_graph()[op.lv] {
         Some(entry) => (entry.timestamp, entry.agent)
         None => raise BranchError::MissingOp(lv=op.lv)
       }
