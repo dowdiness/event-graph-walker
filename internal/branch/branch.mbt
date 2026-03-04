@@ -63,8 +63,9 @@ pub fn Branch::checkout(
   let ops = oplog.walk_and_collect(frontier)
 
   // Apply each operation to the tree
+  let cg = oplog.causal_graph()
   for op in ops {
-    apply_operation_to_tree(tree, op, oplog)
+    apply_operation_to_tree(tree, op, cg)
   }
 
   // Return branch with reconstructed state
@@ -105,8 +106,9 @@ pub fn Branch::advance(
   } else {
     // Fast path: advance only — apply k new ops incrementally
     let tree = self.tree
+    let cg = self.oplog.causal_graph()
     for op in advance_ops {
-      apply_operation_to_tree(tree, op, self.oplog)
+      apply_operation_to_tree(tree, op, cg)
     }
     // Defensive copy to prevent aliasing with caller-owned array
     {
@@ -247,9 +249,8 @@ pub fn Branch::merge_remote_ops(
 fn apply_operation_to_tree(
   tree : @fugue.FugueTree[String],
   op : @core.Op,
-  oplog : @oplog.OpLog,
+  cg : @causal_graph.CausalGraph,
 ) -> Unit raise BranchError {
-  let cg = oplog.causal_graph()
   let origin_left : @fugue.Lv? = match op.origin_left() {
     None => None
     Some(raw) =>

@@ -33,6 +33,9 @@ pub fn TextDoc::delete_and_record(
 ) -> Unit raise TextError {
   let doc_len = self.len()
   let pos_val = pos.value()
+  if pos_val >= doc_len {
+    raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
+  }
   let items = self.inner.get_visible_items()
   let content : String? = if pos_val < items.length() {
     Some(items[pos_val].1.content)
