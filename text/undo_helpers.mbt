@@ -21,7 +21,7 @@ pub fn TextDoc::insert_and_record(
     } catch {
       err => raise TextError::from_document_error(err, doc_len)
     }
-    mgr.record_insert(op.lv, op.agent, timestamp_ms, content=Some(ch))
+    mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch))
   }
 }
 
@@ -49,7 +49,7 @@ pub fn TextDoc::delete_and_record(
   match op.get_delete_target() {
     Some(raw) =>
       match self.inner.raw_to_lv(raw) {
-        Some(lv) => mgr.record_delete(lv, op.agent, timestamp_ms, content~)
+        Some(lv) => mgr.record_delete(lv, op.agent(), timestamp_ms, content~)
         None => ()
       }
     None => ()

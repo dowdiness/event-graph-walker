@@ -121,7 +121,7 @@ test "version vector efficiency - many operations from same agent" {
   let mut last_lv = -1
   for i = 0; i < 100; i = i + 1 {
     let op = try! oplog.insert("x", last_lv, -1)
-    last_lv = op.lv
+    last_lv = op.lv()
   }
   let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
 

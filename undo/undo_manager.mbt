@@ -2,12 +2,12 @@
 
 ///|
 pub struct UndoManager {
-  agent_id : String
-  mut undo_stack : Array[UndoGroup]
-  mut redo_stack : Array[UndoGroup]
-  capture_timeout_ms : Int
-  mut last_change_ms : Int
-  mut tracking_enabled : Bool
+  priv agent_id : String
+  priv mut undo_stack : Array[UndoGroup]
+  priv mut redo_stack : Array[UndoGroup]
+  priv capture_timeout_ms : Int
+  priv mut last_change_ms : Int
+  priv mut tracking_enabled : Bool
 } derive(Show)
 
 ///|

@@ -11,7 +11,7 @@ pub enum UndoOpType {
 /// `target_lv` is the LV of the element being inserted/deleted (NOT the op LV).
 /// For inserts: the inserted item's LV.
 /// For deletes: the deleted item's LV (the tombstone to revive on undo).
-pub struct UndoItem {
+struct UndoItem {
   target_lv : Int
   op_type : UndoOpType
   content : String?
@@ -19,7 +19,7 @@ pub struct UndoItem {
 
 ///|
 /// A group of operations undone/redone together
-pub struct UndoGroup {
+struct UndoGroup {
   items : Array[UndoItem]
   timestamp : Int
 } derive(Show)

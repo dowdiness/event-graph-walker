@@ -40,9 +40,9 @@ pub fn MergeContext::apply_operations(
   for lv in sorted_ops {
     match self.oplog.get_op(lv) {
       Some(op) =>
-        match op.content {
+        match op.content() {
           @core.Insert(text) => {
-            let origin_left = match op.origin_left {
+            let origin_left = match op.origin_left() {
               None => -1
               Some(raw) =>
                 match cg.raw_to_lv(raw) {
@@ -50,7 +50,7 @@ pub fn MergeContext::apply_operations(
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
-            let origin_right = match op.origin_right {
+            let origin_right = match op.origin_right() {
               None => -1
               Some(raw) =>
                 match cg.raw_to_lv(raw) {
@@ -59,14 +59,14 @@ pub fn MergeContext::apply_operations(
                 }
             }
             // Get Lamport timestamp and agent from causal graph for proper ordering
-            let (timestamp, agent) = match cg[op.lv] {
+            let (timestamp, agent) = match cg[op.lv()] {
               Some(entry) => (entry.timestamp, entry.agent)
-              None => raise BranchError::MissingOp(lv=op.lv)
+              None => raise BranchError::MissingOp(lv=op.lv())
             }
 
             // Insert into tree with FugueMax algorithm
             self.tree.insert(
-              op.lv,
+              op.lv(),
               text,
               origin_left,
               origin_right,
@@ -75,7 +75,7 @@ pub fn MergeContext::apply_operations(
             )
           }
           @core.Delete =>
-            match op.origin_left {
+            match op.origin_left() {
               None => ()
               Some(raw) =>
                 match cg.raw_to_lv(raw) {
@@ -87,7 +87,7 @@ pub fn MergeContext::apply_operations(
                 }
             }
           @core.Undelete =>
-            match op.origin_left {
+            match op.origin_left() {
               None => ()
               Some(raw) =>
                 match cg.raw_to_lv(raw) {

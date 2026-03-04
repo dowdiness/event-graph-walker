@@ -200,11 +200,11 @@ pub fn OpLog::validate_remote_batch(
 ) -> Unit raise OpLogError {
   let mut batch : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.new()
   for op in remote_ops {
-    let raw = @core.RawVersion::new(op.agent, op.seq)
+    let raw = @core.RawVersion::new(op.agent(), op.seq())
     batch = batch.add(raw)
   }
   for op in remote_ops {
-    for parent in op.parents {
+    for parent in op.parents() {
       if self.graph.raw_to_lv(parent) is None && not(batch.contains(parent)) {
         raise OpLogError::MissingRemoteParent(raw=parent)
       }
@@ -258,63 +258,63 @@ fn OpLog::try_apply_remote(
   self : OpLog,
   op : @core.Op,
 ) -> (Bool, @core.Op?) raise OpLogError {
-  let raw = @core.RawVersion::new(op.agent, op.seq)
+  let raw = @core.RawVersion::new(op.agent(), op.seq())
   match self.graph.raw_to_lv(raw) {
     Some(_) => return (false, None)
     None => ()
   }
   let local_parents : Array[Int] = []
-  for parent in op.parents {
+  for parent in op.parents() {
     match self.graph.raw_to_lv(parent) {
       Some(lv) => local_parents.push(lv)
       None => return (true, None)
     }
   }
-  let _local_origin_left = match self.lv_from_raw(op.origin_left) {
+  let _local_origin_left = match self.lv_from_raw(op.origin_left()) {
     Some(lv) => lv
     None => return (true, None)
   }
-  let _local_origin_right = match self.lv_from_raw(op.origin_right) {
+  let _local_origin_right = match self.lv_from_raw(op.origin_right()) {
     Some(lv) => lv
     None => return (true, None)
   }
-  if (op.content is @core.Delete || op.content is @core.Undelete) &&
-    op.origin_left is None {
+  if (op.content() is @core.Delete || op.content() is @core.Undelete) &&
+    op.origin_left() is None {
     raise OpLogError::MissingOrigin
   }
   let local_lv = self.graph.add_version_with_seq(
     local_parents,
-    op.agent,
-    op.seq,
+    op.agent(),
+    op.seq(),
   ) catch {
     error => raise OpLogError::CausalGraphError(error~)
   }
-  let local_op = match op.content {
+  let local_op = match op.content() {
     @core.Insert(text) =>
       @core.Op::new_insert(
         local_lv,
-        op.parents,
-        op.agent,
-        op.seq,
+        op.parents(),
+        op.agent(),
+        op.seq(),
         text,
-        op.origin_left,
-        op.origin_right,
+        op.origin_left(),
+        op.origin_right(),
       )
     @core.Delete =>
       @core.Op::new_delete(
         local_lv,
-        op.parents,
-        op.agent,
-        op.seq,
-        op.origin_left,
+        op.parents(),
+        op.agent(),
+        op.seq(),
+        op.origin_left(),
       )
     @core.Undelete =>
       @core.Op::new_undelete(
         local_lv,
-        op.parents,
-        op.agent,
-        op.seq,
-        op.origin_left,
+        op.parents(),
+        op.agent(),
+        op.seq(),
+        op.origin_left(),
       )
   }
   self.add_op(local_op)

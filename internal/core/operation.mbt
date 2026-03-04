@@ -11,14 +11,35 @@ pub enum OpContent {
 ///|
 /// Operation structure with causal and FugueMax metadata
 pub struct Op {
-  lv : Int // Local version when this op was created
-  parents : Array[RawVersion] // Causal dependencies (frontier)
-  agent : String // Agent that created this operation
-  seq : Int // Sequence number for this agent
-  content : OpContent // Operation content
-  origin_left : RawVersion? // FugueMax: item to the left
-  origin_right : RawVersion? // FugueMax: item to the right
+  priv lv : Int // Local version when this op was created
+  priv parents : Array[RawVersion] // Causal dependencies (frontier)
+  priv agent : String // Agent that created this operation
+  priv seq : Int // Sequence number for this agent
+  priv content : OpContent // Operation content
+  priv origin_left : RawVersion? // FugueMax: item to the left
+  priv origin_right : RawVersion? // FugueMax: item to the right
 } derive(Show, FromJson, ToJson)
+
+///|
+pub fn Op::lv(self : Op) -> Int { self.lv }
+
+///|
+pub fn Op::parents(self : Op) -> Array[RawVersion] { self.parents }
+
+///|
+pub fn Op::agent(self : Op) -> String { self.agent }
+
+///|
+pub fn Op::seq(self : Op) -> Int { self.seq }
+
+///|
+pub fn Op::content(self : Op) -> OpContent { self.content }
+
+///|
+pub fn Op::origin_left(self : Op) -> RawVersion? { self.origin_left }
+
+///|
+pub fn Op::origin_right(self : Op) -> RawVersion? { self.origin_right }
 
 ///|
 /// Create a new insert operation

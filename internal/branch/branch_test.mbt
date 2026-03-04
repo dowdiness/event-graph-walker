@@ -7,7 +7,7 @@ fn insert_string(oplog : @oplog.OpLog, text : String, start_lv : Int) -> Int {
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_string() catch { _ => continue }
     let op = try! oplog.insert(ch, last_lv, -1)
-    last_lv = op.lv
+    last_lv = op.lv()
   }
   last_lv
 }
@@ -88,11 +88,11 @@ test "checkout at different frontiers" {
   let oplog = @oplog.OpLog::new("agent-1")
 
   // Insert "a"
-  let lv1 = try! oplog.insert("a", -1, -1).lv
+  let lv1 = try! oplog.insert("a", -1, -1).lv()
   let frontier1 = oplog.get_frontier()
 
   // Insert "b"
-  let lv2 = try! oplog.insert("b", lv1, -1).lv
+  let lv2 = try! oplog.insert("b", lv1, -1).lv()
   let frontier2 = oplog.get_frontier()
 
   // Insert "c"
@@ -174,11 +174,11 @@ test "multiple advances" {
   let oplog = @oplog.OpLog::new("agent-1")
 
   // Insert "a"
-  let lv1 = try! oplog.insert("a", -1, -1).lv
+  let lv1 = try! oplog.insert("a", -1, -1).lv()
   let f1 = oplog.get_frontier()
 
   // Insert "b"
-  let lv2 = try! oplog.insert("b", lv1, -1).lv
+  let lv2 = try! oplog.insert("b", lv1, -1).lv()
   let f2 = oplog.get_frontier()
 
   // Insert "c"
@@ -200,9 +200,9 @@ test "branch with complex operations" {
 
   // Build "hello world" with inserts and deletes
   let hello_last = insert_string(oplog, "hello", -1)
-  let x_lv = try! oplog.insert("x", hello_last, -1).lv // "hellox"
+  let x_lv = try! oplog.insert("x", hello_last, -1).lv() // "hellox"
   let _ = try! oplog.delete(x_lv) // Delete 'x' -> "hello"
-  let space_lv = try! oplog.insert(" ", hello_last, -1).lv // "hello "
+  let space_lv = try! oplog.insert(" ", hello_last, -1).lv() // "hello "
   let _ = insert_string(oplog, "world", space_lv) // "hello world"
   let frontier = oplog.get_frontier()
   let branch = try! Branch::checkout(oplog, frontier)

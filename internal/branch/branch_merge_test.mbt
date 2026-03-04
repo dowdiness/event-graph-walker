@@ -13,7 +13,7 @@ fn resolve_origin(oplog : @oplog.OpLog, raw : @core.RawVersion?) -> Int {
 
 ///|
 fn resolve_op_lv(oplog : @oplog.OpLog, op : @core.Op) -> Int? {
-  let raw = @core.RawVersion::new(op.agent, op.seq)
+  let raw = @core.RawVersion::new(op.agent(), op.seq())
   oplog.causal_graph().raw_to_lv(raw)
 }
 
@@ -28,19 +28,19 @@ test "merge_remote_ops - basic concurrent inserts" {
   // Agent A inserts "He"
   let op_a1 = try! oplog_a.insert("H", -1, -1)
   tree_a.insert(
-    op_a1.lv,
+    op_a1.lv(),
     "H",
-    resolve_origin(oplog_a, op_a1.origin_left),
-    resolve_origin(oplog_a, op_a1.origin_right),
+    resolve_origin(oplog_a, op_a1.origin_left()),
+    resolve_origin(oplog_a, op_a1.origin_right()),
     0,
     "agent_a",
   )
-  let op_a2 = try! oplog_a.insert("e", op_a1.lv, -1)
+  let op_a2 = try! oplog_a.insert("e", op_a1.lv(), -1)
   tree_a.insert(
-    op_a2.lv,
+    op_a2.lv(),
     "e",
-    resolve_origin(oplog_a, op_a2.origin_left),
-    resolve_origin(oplog_a, op_a2.origin_right),
+    resolve_origin(oplog_a, op_a2.origin_left()),
+    resolve_origin(oplog_a, op_a2.origin_right()),
     1,
     "agent_a",
   )
@@ -48,19 +48,19 @@ test "merge_remote_ops - basic concurrent inserts" {
   // Agent B concurrently inserts "Wo" (starting from same state)
   let op_b1 = try! oplog_b.insert("W", -1, -1)
   tree_b.insert(
-    op_b1.lv,
+    op_b1.lv(),
     "W",
-    resolve_origin(oplog_b, op_b1.origin_left),
-    resolve_origin(oplog_b, op_b1.origin_right),
+    resolve_origin(oplog_b, op_b1.origin_left()),
+    resolve_origin(oplog_b, op_b1.origin_right()),
     0,
     "agent_b",
   )
-  let op_b2 = try! oplog_b.insert("o", op_b1.lv, -1)
+  let op_b2 = try! oplog_b.insert("o", op_b1.lv(), -1)
   tree_b.insert(
-    op_b2.lv,
+    op_b2.lv(),
     "o",
-    resolve_origin(oplog_b, op_b2.origin_left),
-    resolve_origin(oplog_b, op_b2.origin_right),
+    resolve_origin(oplog_b, op_b2.origin_left()),
+    resolve_origin(oplog_b, op_b2.origin_right()),
     1,
     "agent_b",
   )
@@ -90,28 +90,28 @@ test "merge_remote_ops - insert and delete" {
   // Agent A inserts "ABC"
   let op_a1 = try! oplog_a.insert("A", -1, -1)
   tree_a.insert(
-    op_a1.lv,
+    op_a1.lv(),
     "A",
-    resolve_origin(oplog_a, op_a1.origin_left),
-    resolve_origin(oplog_a, op_a1.origin_right),
+    resolve_origin(oplog_a, op_a1.origin_left()),
+    resolve_origin(oplog_a, op_a1.origin_right()),
     0,
     "agent_a",
   )
-  let op_a2 = try! oplog_a.insert("B", op_a1.lv, -1)
+  let op_a2 = try! oplog_a.insert("B", op_a1.lv(), -1)
   tree_a.insert(
-    op_a2.lv,
+    op_a2.lv(),
     "B",
-    resolve_origin(oplog_a, op_a2.origin_left),
-    resolve_origin(oplog_a, op_a2.origin_right),
+    resolve_origin(oplog_a, op_a2.origin_left()),
+    resolve_origin(oplog_a, op_a2.origin_right()),
     1,
     "agent_a",
   )
-  let op_a3 = try! oplog_a.insert("C", op_a2.lv, -1)
+  let op_a3 = try! oplog_a.insert("C", op_a2.lv(), -1)
   tree_a.insert(
-    op_a3.lv,
+    op_a3.lv(),
     "C",
-    resolve_origin(oplog_a, op_a3.origin_left),
-    resolve_origin(oplog_a, op_a3.origin_right),
+    resolve_origin(oplog_a, op_a3.origin_left()),
+    resolve_origin(oplog_a, op_a3.origin_right()),
     2,
     "agent_a",
   )
@@ -127,7 +127,7 @@ test "merge_remote_ops - insert and delete" {
     None => fail("missing op_a2 in oplog_b")
   }
   let op_b1 = try! oplog_b.delete(local_a2_lv)
-  let delete_target = resolve_origin(oplog_b, op_b1.origin_left)
+  let delete_target = resolve_origin(oplog_b, op_b1.origin_left())
   if delete_target != -1 {
     tree_b.delete(delete_target)
   }
@@ -150,19 +150,19 @@ test "merge - simple merge using graph_diff" {
   // Insert "Hello"
   let op1 = try! oplog.insert("H", -1, -1)
   tree.insert(
-    op1.lv,
+    op1.lv(),
     "H",
-    resolve_origin(oplog, op1.origin_left),
-    resolve_origin(oplog, op1.origin_right),
+    resolve_origin(oplog, op1.origin_left()),
+    resolve_origin(oplog, op1.origin_right()),
     0,
     "agent_a",
   )
-  let op2 = try! oplog.insert("e", op1.lv, -1)
+  let op2 = try! oplog.insert("e", op1.lv(), -1)
   tree.insert(
-    op2.lv,
+    op2.lv(),
     "e",
-    resolve_origin(oplog, op2.origin_left),
-    resolve_origin(oplog, op2.origin_right),
+    resolve_origin(oplog, op2.origin_left()),
+    resolve_origin(oplog, op2.origin_right()),
     1,
     "agent_a",
   )
@@ -171,30 +171,30 @@ test "merge - simple merge using graph_diff" {
   inspect(text_before, content="He")
 
   // Add more operations
-  let op3 = try! oplog.insert("l", op2.lv, -1)
+  let op3 = try! oplog.insert("l", op2.lv(), -1)
   tree.insert(
-    op3.lv,
+    op3.lv(),
     "l",
-    resolve_origin(oplog, op3.origin_left),
-    resolve_origin(oplog, op3.origin_right),
+    resolve_origin(oplog, op3.origin_left()),
+    resolve_origin(oplog, op3.origin_right()),
     2,
     "agent_a",
   )
-  let op4 = try! oplog.insert("l", op3.lv, -1)
+  let op4 = try! oplog.insert("l", op3.lv(), -1)
   tree.insert(
-    op4.lv,
+    op4.lv(),
     "l",
-    resolve_origin(oplog, op4.origin_left),
-    resolve_origin(oplog, op4.origin_right),
+    resolve_origin(oplog, op4.origin_left()),
+    resolve_origin(oplog, op4.origin_right()),
     3,
     "agent_a",
   )
-  let op5 = try! oplog.insert("o", op4.lv, -1)
+  let op5 = try! oplog.insert("o", op4.lv(), -1)
   tree.insert(
-    op5.lv,
+    op5.lv(),
     "o",
-    resolve_origin(oplog, op5.origin_left),
-    resolve_origin(oplog, op5.origin_right),
+    resolve_origin(oplog, op5.origin_left()),
+    resolve_origin(oplog, op5.origin_right()),
     4,
     "agent_a",
   )
@@ -208,18 +208,18 @@ test "merge - simple merge using graph_diff" {
 
   // First apply operations up to frontier_before
   tree2.insert(
-    op1.lv,
+    op1.lv(),
     "H",
-    resolve_origin(oplog, op1.origin_left),
-    resolve_origin(oplog, op1.origin_right),
+    resolve_origin(oplog, op1.origin_left()),
+    resolve_origin(oplog, op1.origin_right()),
     0,
     "agent_a",
   )
   tree2.insert(
-    op2.lv,
+    op2.lv(),
     "e",
-    resolve_origin(oplog, op2.origin_left),
-    resolve_origin(oplog, op2.origin_right),
+    resolve_origin(oplog, op2.origin_left()),
+    resolve_origin(oplog, op2.origin_right()),
     1,
     "agent_a",
   )

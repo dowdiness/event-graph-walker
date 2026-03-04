@@ -127,16 +127,16 @@ pub fn Document::insert(
     }
 
     // Get Lamport timestamp and agent from causal graph for proper ordering
-    let (timestamp, agent) = match self.oplog.causal_graph()[op.lv] {
+    let (timestamp, agent) = match self.oplog.causal_graph()[op.lv()] {
       Some(entry) => (entry.timestamp, entry.agent)
       None =>
         raise DocumentError::OpLog(
-          @oplog.OpLogError::MissingLocalVersion(lv=op.lv),
+          @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
 
     // Apply to tree
-    self.tree.insert(op.lv, ch, origin_left, origin_right, timestamp, agent)
+    self.tree.insert(op.lv(), ch, origin_left, origin_right, timestamp, agent)
     last_op = Some(op)
     current_pos = current_pos + 1
   }
@@ -231,7 +231,7 @@ pub fn Document::apply_remote(
 
   // Apply any newly-resolved operations to the tree
   for applied in applied_ops {
-    let origin_left = match applied.origin_left {
+    let origin_left = match applied.origin_left() {
       None => -1
       Some(raw) =>
         match self.oplog.causal_graph().raw_to_lv(raw) {
@@ -239,7 +239,7 @@ pub fn Document::apply_remote(
           None => raise DocumentError::MissingOrigin(raw~)
         }
     }
-    let origin_right = match applied.origin_right {
+    let origin_right = match applied.origin_right() {
       None => -1
       Some(raw) =>
         match self.oplog.causal_graph().raw_to_lv(raw) {
@@ -247,18 +247,18 @@ pub fn Document::apply_remote(
           None => raise DocumentError::MissingOrigin(raw~)
         }
     }
-    match applied.content {
+    match applied.content() {
       @core.Insert(text) => {
         // Get Lamport timestamp and agent from causal graph for proper ordering
-        let (timestamp, agent) = match self.oplog.causal_graph()[applied.lv] {
+        let (timestamp, agent) = match self.oplog.causal_graph()[applied.lv()] {
           Some(entry) => (entry.timestamp, entry.agent)
           None =>
             raise DocumentError::OpLog(
-              @oplog.OpLogError::MissingLocalVersion(lv=applied.lv),
+              @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
             )
         }
         self.tree.insert(
-          applied.lv,
+          applied.lv(),
           text,
           origin_left,
           origin_right,
