@@ -18,13 +18,16 @@ This module provides a complete implementation of efficient collaborative editin
 
 ```
 event-graph-walker/
-├── text/             # User-friendly facade API (recommended)
-├── document/         # Low-level document API
-├── oplog/            # Operation log and walker
-├── causal_graph/     # Causal graph and topological sorting
-├── branch/           # Document snapshots at any frontier
-├── fugue/            # FugueMax sequence CRDT tree
-└── moon.mod.json     # Module metadata
+├── text/                     # User-friendly facade API (recommended)
+├── undo/                     # Undo/redo support
+├── internal/
+│   ├── document/             # Low-level document API
+│   ├── oplog/                # Operation log and walker
+│   ├── causal_graph/         # Causal graph and topological sorting
+│   ├── branch/               # Document snapshots at any frontier
+│   ├── fugue/                # FugueMax sequence CRDT tree
+│   └── core/                 # Shared core types
+└── moon.mod.json             # Module metadata
 ```
 
 ### Package Layers
@@ -34,17 +37,21 @@ event-graph-walker/
 │  text (Facade - Recommended)            │
 │  TextDoc, SyncMessage, Version, etc.    │
 ├─────────────────────────────────────────┤
-│  document (Internal)                    │
+│  internal/document                      │
 │  Document, DocumentError                │
 ├──────────────┬──────────────────────────┤
+│  internal/   │  internal/               │
 │  branch      │  oplog                   │
 │  Branch      │  OpLog, Op               │
 ├──────────────┴──────────────────────────┤
-│  causal_graph                           │
+│  internal/causal_graph                  │
 │  CausalGraph, Frontier, VersionVector   │
 ├─────────────────────────────────────────┤
-│  fugue                                  │
+│  internal/fugue                         │
 │  FugueTree, Item                        │
+├─────────────────────────────────────────┤
+│  internal/core                          │
+│  Shared core types                      │
 └─────────────────────────────────────────┘
 ```
 
@@ -62,22 +69,18 @@ pub struct Document {
 }
 ```
 
-The position cache provides O(1) position-to-LV lookups after first access. It is automatically invalidated on any mutation (insert, delete, apply_remote, merge_remote).
+The position cache provides O(1) position-to-LV lookups after first access. It is automatically invalidated on any mutation (insert, delete).
 
 **Operations:**
-- `insert(position, text)` - Insert text at cursor position
-- `delete(position)` - Delete character at cursor position
-- `apply_remote(op)` - Apply operations from remote peers
-- `merge_remote(ops, frontier)` - Merge multiple remote operations (frontier uses RawVersions)
+- `insert(position, text) -> Unit` - Insert text at cursor position
+- `delete(position) -> Unit` - Delete character at cursor position
 - `to_text()` - Get current document text
 - `visible_count()` - Get visible character count
-- `get_all_ops()` - Get all operations from the oplog
 - `diff_and_collect(from, to)` - Compute diff between two frontiers
 - `checkout_branch(frontier)` - Checkout a branch at a given frontier
 - `get_visible_items()` - Get visible items from the tree
 - `lv_to_position(lv)` - Map local version to visible position
 - `get_frontier()` - Get local LVs for internal operations
-- `get_frontier_raw()` - Get RawVersions for network sync
 
 #### OpLog
 Maintains append-only operation history with causal dependency tracking.
@@ -90,9 +93,6 @@ pub struct OpLog {
   agent_id : String                         // This agent's ID
 }
 ```
-
-**Methods:**
-- `get_all_ops()` - Returns a defensive copy of all operations (safe for external use)
 
 **Note:** Operations should carry globally stable IDs (RawVersion) for
 parents and FugueMax anchors; OpLog maps those IDs to local LVs on receipt.
@@ -137,7 +137,7 @@ pub struct Branch {
 ## Algorithm Components
 
 ### 1. Event Graph Walker
-**Location:** `causal_graph/walker.mbt`, `oplog/walker.mbt`
+**Location:** `internal/causal_graph/walker.mbt`, `internal/oplog/walker.mbt`
 
 The core algorithm that traverses the operation graph in topological (causal) order:
 
@@ -150,7 +150,7 @@ local LV; the paper suggests a DFS-based ordering that keeps branches
 consecutive when possible.
 
 ### 2. Branch System
-**Location:** `branch/branch.mbt`
+**Location:** `internal/branch/branch.mbt`
 
 Efficient document state computation at any frontier:
 
@@ -160,7 +160,7 @@ Efficient document state computation at any frontier:
 The branch system uses the walker to replay operations, avoiding expensive full tree reconstructions when advancing forward.
 
 ### 3. Version Vectors
-**Location:** `causal_graph/version_vector.mbt`
+**Location:** `internal/causal_graph/version_vector.mbt`
 
 Compact representation of known versions per agent:
 
@@ -173,7 +173,7 @@ pub struct VersionVector(Map[String, Int])  // Max seq per agent (newtype wrappe
 - Merge: `vv1.merge(vv2)` - Combines knowledge from two peers
 
 ### 4. Merge Algorithm
-**Location:** `branch/branch_merge.mbt`
+**Location:** `internal/branch/branch_merge.mbt`
 
 Three-phase merge for concurrent edits:
 
@@ -270,24 +270,6 @@ try {
 }
 ```
 
-### Applying Remote Operations
-
-For applying individual remote operations outside the sync workflow:
-
-```moonbit
-let doc1 = @text.TextDoc::new("alice")
-let doc2 = @text.TextDoc::new("bob")
-
-doc1.insert(@text.Pos::at(0), "Hello")
-
-// Export and apply individual ops
-let msg = doc1.sync().export_all()
-for op in msg.get_ops() {
-  doc2.apply_remote(op)
-}
-println(doc2.text())  // "Hello"
-```
-
 ---
 
 ## Low-Level API (Advanced)
@@ -314,21 +296,6 @@ let text = doc.to_text()  // "ello"
 ### Network Collaboration (Low-Level)
 
 ```moonbit
-// Get frontier for sending to peer
-let frontier = doc.get_frontier_raw()
-
-// Apply remote operation
-let remote_op = ...  // From peer
-doc.apply_remote(remote_op)
-
-// Or merge multiple operations
-let remote_ops = [...]  // From peer
-let remote_frontier = [...]  // RawVersions from peer
-doc.merge_remote(remote_ops, remote_frontier)
-
-// Get all operations for export
-let all_ops = doc.get_all_ops()
-
 // Diff between frontiers
 let (retreat, advance) = doc.diff_and_collect(old_frontier, new_frontier)
 ```
@@ -361,18 +328,6 @@ If you're using the low-level `Document` API, here's how to migrate to `TextDoc`
 | `doc.delete(pos)` | `doc.delete(Pos::at(pos))` |
 | `doc.to_text()` | `doc.text()` |
 | `doc.get_frontier()` | `doc.version().to_frontier()` |
-| `doc.merge_remote(ops, heads)` | `doc.sync().apply(SyncMessage::new(ops, heads))` |
-
-**Gradual Migration:**
-
-```moonbit
-// Wrap existing Document
-let old_doc = @document.Document::new("alice")
-let new_doc = @text.TextDoc::from_document(old_doc)
-
-// Use new API
-new_doc.insert(@text.Pos::at(0), "Hello")
-```
 
 **Key Benefits of TextDoc:**
 
@@ -413,7 +368,7 @@ moon test
 ```
 
 The module includes:
-- 100+ unit tests for each component
+- 330 unit tests across all components
 - Property-based tests with Arbitrary/Shrink traits
 - Benchmarks for performance profiling
 
@@ -465,7 +420,7 @@ Uses immutable HashMaps and Arrays for:
 
 When modifying this module:
 
-1. Keep components independent (document, oplog, causal_graph, fugue, branch)
+1. Keep components independent (internal/document, internal/oplog, internal/causal_graph, internal/fugue, internal/branch)
 2. Update tests alongside implementation changes
 3. Run `moon test` to verify CRDT properties
 4. Use `moon benchmark` for performance-critical changes

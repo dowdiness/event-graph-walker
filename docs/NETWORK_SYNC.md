@@ -62,7 +62,7 @@ When you type in the editor:
 1. **Local Edit** - Text is inserted/deleted locally
 2. **CRDT Operation** - MoonBit creates a CRDT operation with causal metadata
 3. **Broadcast** - Operation is serialized to JSON and sent to all peers via WebRTC
-4. **Remote Merge** - Each peer receives the operation and calls `merge_operations()`
+4. **Remote Merge** - Each peer receives the operation and calls `doc.sync().apply(msg)`
 5. **Convergence** - The eg-walker ensures all peers converge to the same state
 
 ### Conflict Resolution
@@ -245,26 +245,27 @@ pm2 start signaling-server.js --name crdt-signaling
 
 ## Advanced: Custom Network Layer
 
-You can implement your own network layer by:
+You can implement your own network layer using the `sync()` API on `TextDoc`:
 
-1. Getting operations: `crdt.get_operations_json(handle)`
-2. Getting frontier: `crdt.get_frontier_raw_json(handle)`
-3. Getting version vector: `crdt.get_version_vector_json(handle)`
+1. Export all operations: `doc.sync().export_all()`
+2. Export operations since a known version: `doc.sync().export_since(ver)`
 3. Broadcasting via your transport (WebSocket, HTTP, etc.)
-4. Receiving operations and calling: `crdt.merge_operations(handle, ops, frontier, version_vector)`
+4. Receiving operations and calling: `doc.sync().apply(msg)`
 
 Example:
 
 ```typescript
-// Send operations
-const ops = crdt.get_operations_json(handle);
-const frontier = crdt.get_frontier_raw_json(handle);
-const version_vector = crdt.get_version_vector_json(handle);
-myTransport.send({ ops, frontier, version_vector });
+// Send all operations
+const msg = doc.sync().export_all();
+myTransport.send(msg);
+
+// Or send only new operations since the peer's last known version
+const msg = doc.sync().export_since(peerVersion);
+myTransport.send(msg);
 
 // Receive operations
 myTransport.onMessage((data) => {
-  crdt.merge_operations(handle, data.ops, data.frontier, data.version_vector);
+  doc.sync().apply(data);
   updateUI();
 });
 ```

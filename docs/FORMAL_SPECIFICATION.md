@@ -140,7 +140,7 @@ RLE/Span
 
 | Layer | Laws it must satisfy | Primary files |
 |------|----------------------|---------------|
-| RLE / Span | L1.x, I3.x, L3.x | `event-graph-walker/rle/*`, `event-graph-walker/text/span.mbt` |
+| RLE / Span | L1.x, I3.x, L3.x | `event-graph-walker/rle/*` |
 | FugueTree | L5.x | `event-graph-walker/fugue/item.mbt`, `event-graph-walker/fugue/tree.mbt` |
 | CausalGraph + Walker | L4.x | `event-graph-walker/causal_graph/*` |
 | Branch / Document merge | L6.x | `event-graph-walker/branch/branch_merge.mbt`, `event-graph-walker/causal_graph/graph.mbt` |
@@ -158,7 +158,7 @@ RLE/Span
 
 ## 2. Element Algebra
 
-**Source:** `event-graph-walker/rle/traits.mbt`, `event-graph-walker/rle/runs_string.mbt`, `event-graph-walker/text/span.mbt`
+**Source:** `event-graph-walker/rle/traits.mbt`, `event-graph-walker/rle/runs_string.mbt`
 
 An **element** `T` is a value equipped with up to four traits:
 
@@ -261,9 +261,8 @@ causal_len(t) > 0  AND  visible_len(t) == 0
 ```
 
 - **Rationale:** Tombstones occupy causal position space but contribute
-  no visible content. This is exemplified by `TextSpan` where
-  `deleted == true` yields `visible_len == 0`.
-- **Tested indirectly:** `"TextSpan HasCausalLength - tombstone"` in `event-graph-walker/text/span_test.mbt:33`
+  no visible content. Elements with `deleted == true` yield `visible_len == 0`.
+- **Tested indirectly:** via RLE property tests in `event-graph-walker/rle/runs_properties_test.mbt`
 
 **L1.8 Tombstone Merge Guard.** **UNTESTED**
 For elements `a, b : T`:
@@ -274,7 +273,7 @@ is_tombstone(a) != is_tombstone(b)  ->  can_merge(a, b) == false
 
 - **Rationale:** Mixing tombstones with live content would violate the
   visible length homomorphism.
-- **Tested indirectly:** `"TextSpan Mergeable - different status cannot merge"` in `event-graph-walker/text/span_test.mbt:50`
+- **Tested indirectly:** via RLE merge property tests in `event-graph-walker/rle/runs_properties_test.mbt`
 
 ---
 
@@ -1160,8 +1159,8 @@ L5.4/L5.5 (strong list spec).
 | L1.4 | Length bounds | `event-graph-walker/rle/runs_properties_test.mbt` | 42, 54 | Tested |
 | L1.5 | Slice identity | `event-graph-walker/rle/runs_properties_test.mbt` | 66 | Tested |
 | L1.6 | Slice/merge round-trip | `event-graph-walker/rle/runs_properties_test.mbt` | 31 | Tested |
-| L1.7 | Tombstone characterization | `event-graph-walker/text/span_test.mbt` | 33 | Indirect |
-| L1.8 | Tombstone merge guard | `event-graph-walker/text/span_test.mbt` | 50 | Indirect |
+| L1.7 | Tombstone characterization | `event-graph-walker/rle/runs_properties_test.mbt` | — | Indirect |
+| L1.8 | Tombstone merge guard | `event-graph-walker/rle/runs_properties_test.mbt` | — | Indirect |
 | I3.1 | No empty elements | `event-graph-walker/rle/runs_wbtest.mbt` | 4 | Tested |
 | I3.2 | No adjacent mergeable | `event-graph-walker/rle/runs_properties_test.mbt` | 192 | Tested |
 | L3.1 | Length preservation | `event-graph-walker/rle/runs_properties_test.mbt` | 86 | Tested |
@@ -1240,8 +1239,8 @@ Laws without standalone property-based tests:
 
 | Law | Name | Reason | Indirect Coverage |
 |-----|------|--------|-------------------|
-| L1.7 | Tombstone characterization | Domain-specific definition | `event-graph-walker/text/span_test.mbt:33` |
-| L1.8 | Tombstone merge guard | Domain-specific constraint | `event-graph-walker/text/span_test.mbt:50` |
+| L1.7 | Tombstone characterization | Domain-specific definition | `event-graph-walker/rle/runs_properties_test.mbt` |
+| L1.8 | Tombstone merge guard | Domain-specific constraint | `event-graph-walker/rle/runs_properties_test.mbt` |
 | L4.15 | Lamport clock | Structural property of `add_version` | Walker/merge tests |
 | L4.16 | Topological ordering | Walker correctness | `event-graph-walker/causal_graph/walker_test.mbt:195` |
 | L6.1 | Retreat/advance partition | No standalone partition test | `event-graph-walker/causal_graph/graph_test.mbt:70` |

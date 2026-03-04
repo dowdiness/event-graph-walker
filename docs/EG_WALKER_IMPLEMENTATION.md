@@ -1,6 +1,6 @@
 # Eg-walker Implementation Status for MoonBit
 
-> **🎉 STATUS: IMPLEMENTATION COMPLETE** (329 tests passing)
+> **🎉 STATUS: IMPLEMENTATION COMPLETE** (330 tests passing)
 >
 > All phases of the eg-walker CRDT are fully implemented:
 > - ✅ Phase 1: Event Graph Walker
@@ -111,7 +111,7 @@ pub fn from_frontier(graph : CausalGraph, frontier : Array[Int]) -> VersionVecto
 - Network sync now uses version vectors instead of frontiers (`web/src/network.ts`)
 - `merge_operations()` accepts frontier for consistency checks and version vector for optimization
 - Early return optimization when `remote_vv <= local_vv` (already synced)
-- 329 tests passing including 25 property-based tests with Arbitrary/Shrink traits
+- 330 tests passing including 25 property-based tests with Arbitrary/Shrink traits
 
 ### 4. ✅ Efficient Merge (COMPLETED)
 
@@ -237,12 +237,6 @@ pub fn get_operations_json(_handle: Int) -> String
 /// Get frontier as JSON
 pub fn get_frontier_json(_handle: Int) -> String
 
-/// Get frontier (RawVersions) as JSON
-pub fn get_frontier_raw_json(_handle: Int) -> String
-
-/// Get version vector as JSON (for network sync)
-pub fn get_version_vector_json(_handle: Int) -> String
-
 /// Merge remote operations with version vector optimization
 pub fn merge_operations(
   _handle: Int,
@@ -346,7 +340,7 @@ Your architecture **improves** on basic eg-walker:
 
 1. ✅ Implemented `walk_and_collect()` in walker.mbt
 2. ✅ Implemented `checkout()` and `advance()` in branch.mbt
-3. ✅ Tested with concurrent edits (329 tests passing)
+3. ✅ Tested with concurrent edits (330 tests passing)
 4. ✅ Full character-level operations support
 5. ✅ Implemented version vectors with comprehensive property-based tests (25 tests, 100 cases each)
 6. ✅ Network sync updated to use version vectors
@@ -394,7 +388,7 @@ Your architecture **improves** on basic eg-walker:
 8. ✅ **signaling-server.js** - WebSocket signaling for peer discovery
 9. ✅ **Cloudflare deployment** - Durable Objects guides for production signaling
 
-**Total: 329 tests passing, all phases complete!**
+**Total: 330 tests passing, all phases complete!**
 
 ## 🚧 Next Steps
 

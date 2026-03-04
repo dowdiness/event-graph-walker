@@ -87,7 +87,7 @@ println(alice.text())  // "Hello World!"
 
 ## Example 2: Undo/Redo with Collaborative Sync
 
-The `UndoManager` tracks which operations belong to the local user, so undo only reverts *your own* edits even when remote edits are interleaved. Use `insert_and_record` / `delete_and_record` for local edits; use `apply_remote` / `merge_remote` for remote edits (those are never recorded).
+The `UndoManager` tracks which operations belong to the local user, so undo only reverts *your own* edits even when remote edits are interleaved. Use `insert_and_record` / `delete_and_record` for local edits; use `sync().apply()` for remote edits (those are never recorded).
 
 ```moonbit
 import "dowdiness/event-graph-walker/text"
@@ -113,16 +113,14 @@ alice_doc.sync().apply(bob_msg)
 // Undo only reverts alice's last edit, leaving bob's "Hi " intact
 if alice_mgr.can_undo() {
   try {
-    let undo_ops = alice_mgr.undo(alice_doc)
+    alice_mgr.undo(alice_doc)
     println(alice_doc.text())  // "Hi Hello" (bob's "Hi " is still there)
 
-    // Propagate the undo to peers by wrapping returned ops in a SyncMessage
-    if not(undo_ops.is_empty()) {
-      let heads = alice_doc.get_frontier_raw()
-      let undo_msg = @text.SyncMessage::new(undo_ops, heads)
-      // send undo_msg to peers...
-      let _ = undo_msg  // (in real code: send over network)
-    }
+    // Propagate the undo to peers using export_since() to capture the inverse ops
+    let ver_after_undo = alice_doc.version()
+    let undo_msg = alice_doc.sync().export_since(ver_after_undo)
+    // send undo_msg to peers...
+    let _ = undo_msg  // (in real code: send over network)
   } catch {
     err => println("Undo failed: \{err}")
   }
@@ -131,9 +129,9 @@ if alice_mgr.can_undo() {
 // Redo restores alice's text
 if alice_mgr.can_redo() {
   try {
-    let redo_ops = alice_mgr.redo(alice_doc)
+    alice_mgr.redo(alice_doc)
     println(alice_doc.text())  // "Hi Hello World"
-    let _ = redo_ops  // propagate to peers the same way
+    // propagate to peers the same way via export_since()
   } catch {
     err => println("Redo failed: \{err}")
   }
@@ -142,7 +140,7 @@ if alice_mgr.can_redo() {
 
 **Key points:**
 - `insert_and_record` / `delete_and_record` both edit the document *and* record to the undo stack in one call.
-- `undo` / `redo` return `Array[@core.Op]` — the inverse operations applied. Wrap them in `SyncMessage::new(ops, heads)` and send to peers so they see the undo too.
+- `undo` / `redo` return `Unit` (raise `UndoError` on failure). To propagate the inverse operations to peers, call `export_since(version_before_undo)` after the call to capture the ops that were just applied.
 - `can_undo()` / `can_redo()` let you enable/disable buttons in the UI without triggering errors.
 
 ---

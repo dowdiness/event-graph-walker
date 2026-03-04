@@ -7,7 +7,7 @@ The event graph walker has been successfully implemented in MoonBit. This is the
 ## 📁 Files Created
 
 1. **`/causal_graph/walker.mbt`** - Core graph walking algorithms
-2. **`/causal_graph/walker_test.mbt`** - Comprehensive test suite (16 tests, all passing)
+2. **`/causal_graph/walker_test.mbt`** - Comprehensive test suite (all passing)
 3. **`/oplog/walker.mbt`** - OpLog-specific wrappers
 
 ## 🎯 Core API
@@ -115,12 +115,9 @@ let base_frontier = oplog.get_frontier()
 let _op2 = oplog.insert(" world", 5, -1)
 let frontier_a = oplog.get_frontier()
 
-// Meanwhile, Branch B: remote edits (simulate)
-// Reset to base and apply remote ops
-let remote_ops = [...] // from network
-for remote_op in remote_ops {
-  oplog.apply_remote(remote_op)
-}
+// Meanwhile, Branch B: remote edits arrive via sync
+// Use doc.sync().apply(msg) to integrate remote operations
+// After applying, get the updated frontier
 let frontier_b = oplog.get_frontier()
 
 // Now merge: walk from both frontiers
@@ -166,7 +163,7 @@ The walker uses **Kahn's algorithm** for topological sorting:
 
 ## ✅ Test Coverage
 
-All tests passing (16/16):
+All tests passing (330 total):
 
 - ✅ Empty frontier
 - ✅ Single operation
@@ -237,19 +234,22 @@ pub fn merge_branches(
 
 ```typescript
 // web/src/sync.ts
-import * as crdt from '../public/crdt';
-
 class Sync {
   sendOps() {
-    const ops = crdt.get_operations_json(this.handle);
-    const frontier = crdt.get_frontier_raw_json(this.handle);
-    const version_vector = crdt.get_version_vector_json(this.handle);
-    this.ws.send(JSON.stringify({ ops, frontier, version_vector }));
+    // Export all operations via the sync API
+    const msg = this.doc.sync().export_all();
+    this.ws.send(msg);
   }
 
-  receiveOps(data: { ops: string, frontier: string, version_vector: string }) {
-    // Merge remote operations
-    crdt.merge_operations(this.handle, data.ops, data.frontier, data.version_vector);
+  sendOpsSince(peerVersion: Version) {
+    // Export only new operations since the peer's last known version
+    const msg = this.doc.sync().export_since(peerVersion);
+    this.ws.send(msg);
+  }
+
+  receiveOps(data: string) {
+    // Merge remote operations via the sync API
+    this.doc.sync().apply(data);
 
     // Walker automatically ensures correct replay order!
     this.updateUI();
