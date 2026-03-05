@@ -7,6 +7,7 @@ import {
   "dowdiness/event-graph-walker/internal/document",
   "dowdiness/event-graph-walker/undo",
   "moonbitlang/core/bench",
+  "moonbitlang/core/json",
 }
 
 import {

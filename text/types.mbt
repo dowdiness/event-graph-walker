@@ -72,3 +72,22 @@ fn Version::to_frontier(self : Version) -> @core.Frontier {
 pub fn Version::empty() -> Version {
   { frontier: @core.Frontier::from_array([]) }
 }
+
+///|
+/// Encode this version as a JSON string for cross-boundary transport (e.g. JS FFI).
+pub fn Version::to_json_string(self : Version) -> String {
+  self.frontier.to_json().stringify()
+}
+
+///|
+/// Decode a Version from a JSON string produced by `to_json_string`.
+pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
+  try {
+    let json = @json.parse!(json_str)
+    let frontier : @core.Frontier = @json.from_json!(json)
+    { frontier, }
+  } catch {
+    _ => raise TextError::Internal(detail="Invalid Version JSON")
+  }
+}
+
