@@ -69,7 +69,7 @@ pub fn SyncMessage::from_json_string(
   json_str : String,
 ) -> SyncMessage raise TextError {
   try {
-    let json = @json.parse!(json_str)
+    let json = @json.parse(json_str)
     let obj = match json {
       Json::Object(m) => m
       _ => raise TextError::Internal(detail="Invalid SyncMessage JSON")
@@ -82,8 +82,8 @@ pub fn SyncMessage::from_json_string(
       Some(v) => v
       None => Json::null()
     }
-    let ops : Array[@core.Op] = @json.from_json!(ops_json)
-    let heads : Array[@core.RawVersion] = @json.from_json!(heads_json)
+    let ops : Array[@core.Op] = @json.from_json(ops_json)
+    let heads : Array[@core.RawVersion] = @json.from_json(heads_json)
     { ops, heads }
   } catch {
     _ => raise TextError::Internal(detail="Invalid SyncMessage JSON")
