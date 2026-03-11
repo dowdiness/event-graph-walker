@@ -5,7 +5,7 @@
 fn insert_string(oplog : @oplog.OpLog, text : String, start_lv : Int) -> Int {
   let mut last_lv = start_lv
   for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i:i + 1].to_string() catch { _ => continue }
+    let ch = text[i:i + 1].to_string()
     let op = try! oplog.insert(ch, last_lv, -1)
     last_lv = op.lv()
   }

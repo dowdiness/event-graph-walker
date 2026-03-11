@@ -15,7 +15,7 @@ pub fn TextDoc::insert_and_record(
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
   for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i:i + 1].to_string() catch { _ => continue }
+    let ch = text[i:i + 1].to_string()
     let op = self.inner.insert(pos_val + i, ch) catch {
       err => raise TextError::from_document_error(err, doc_len)
     }

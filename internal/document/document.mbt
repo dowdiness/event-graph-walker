@@ -119,9 +119,7 @@ pub fn Document::insert(
   // Iterate through each character in the string
   for i = 0; i < text.length(); i = i + 1 {
     // Extract single character as string
-    let ch = text[i:i + 1].to_string() catch {
-      _ => continue // Skip invalid indices
-    }
+    let ch = text[i:i + 1].to_string()
 
     // Map position to LV using cached items
     let origin_left = self.position_to_lv(current_pos)
