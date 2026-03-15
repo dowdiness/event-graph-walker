@@ -35,6 +35,54 @@ test "TextDoc::delete removes character" {
 }
 
 ///|
+test "TextDoc::delete_range removes text at document start" {
+  let doc = TextDoc::new("alice")
+  let _ = doc.insert(Pos::at(0), "Hello")
+  let _ = doc.delete_range(Range::from_ints(0, 2))
+  inspect(doc.text(), content="llo")
+}
+
+///|
+test "TextDoc::delete_range removes text in document middle" {
+  let doc = TextDoc::new("alice")
+  let _ = doc.insert(Pos::at(0), "Hello")
+  let _ = doc.delete_range(Range::from_ints(1, 4))
+  inspect(doc.text(), content="Ho")
+}
+
+///|
+test "TextDoc::delete_range removes text at document end" {
+  let doc = TextDoc::new("alice")
+  let _ = doc.insert(Pos::at(0), "Hello")
+  let _ = doc.delete_range(Range::from_ints(3, 5))
+  inspect(doc.text(), content="Hel")
+}
+
+///|
+test "TextDoc::replace_range handles shorter replacement" {
+  let doc = TextDoc::new("alice")
+  let _ = doc.insert(Pos::at(0), "abcdef")
+  let _ = doc.replace_range(Range::from_ints(1, 4), "Z")
+  inspect(doc.text(), content="aZef")
+}
+
+///|
+test "TextDoc::replace_range handles equal-length replacement" {
+  let doc = TextDoc::new("alice")
+  let _ = doc.insert(Pos::at(0), "abcdef")
+  let _ = doc.replace_range(Range::from_ints(1, 3), "XY")
+  inspect(doc.text(), content="aXYdef")
+}
+
+///|
+test "TextDoc::replace_range handles longer replacement" {
+  let doc = TextDoc::new("alice")
+  let _ = doc.insert(Pos::at(0), "abcdef")
+  let _ = doc.replace_range(Range::from_ints(1, 2), "WXYZ")
+  inspect(doc.text(), content="aWXYZcdef")
+}
+
+///|
 test "TextDoc::version changes after edit" {
   let doc = TextDoc::new("alice")
   let v1 = doc.version()
@@ -177,6 +225,24 @@ test "TextDoc delete at invalid position raises error" {
     }
     _ => fail("Expected InvalidPosition error")
   }
+}
+
+///|
+test "TextDoc::replace_range_and_record undo and redo restore range edit" {
+  let doc = TextDoc::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
+  let _ = doc.replace_range_and_record(
+    Range::from_ints(1, 4),
+    "XYZ",
+    mgr,
+    timestamp_ms=2000,
+  )
+  inspect(doc.text(), content="aXYZef")
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="abcdef")
+  let _ = mgr.redo(doc)
+  inspect(doc.text(), content="aXYZef")
 }
 
 ///|

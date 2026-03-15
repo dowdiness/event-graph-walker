@@ -30,6 +30,11 @@ pub fn Document::to_text(self : Document) -> String {
 }
 
 ///|
+pub fn Document::agent_id(self : Document) -> String {
+  self.agent_id
+}
+
+///|
 /// Get the current frontier
 pub fn Document::get_frontier(self : Document) -> @core.Frontier {
   self.oplog.get_frontier()
@@ -225,6 +230,57 @@ pub fn Document::delete(
   // Invalidate cache after modification
   self.invalidate_cache()
   op
+}
+
+///|
+/// Delete the half-open range `[start, end)`.
+pub fn Document::delete_range(
+  self : Document,
+  start : Int,
+  end : Int,
+) -> Unit raise DocumentError {
+  if start < 0 {
+    raise DocumentError::InvalidPosition(pos=start)
+  }
+  if end < start {
+    raise DocumentError::InvalidPosition(pos=end)
+  }
+
+  let items_list = self.get_position_cache()
+  if end > items_list.length() {
+    raise DocumentError::InvalidPosition(pos=end)
+  }
+  if start == end {
+    return
+  }
+
+  // Invalidate before the first mutation so exception paths cannot leave a
+  // stale cache behind.
+  self.invalidate_cache()
+  for i = start; i < end; i = i + 1 {
+    let (target_lv, _) = items_list[i]
+    let _ = self.oplog.delete(target_lv.0) catch {
+      e => raise DocumentError::OpLog(e)
+    }
+    self.tree.delete(target_lv) catch {
+      e => raise DocumentError::Fugue(e)
+    }
+  }
+}
+
+///|
+/// Replace the half-open range `[start, end)` with `text`.
+pub fn Document::replace_range(
+  self : Document,
+  start : Int,
+  end : Int,
+  text : String,
+) -> Unit raise DocumentError {
+  self.delete_range(start, end)
+  if text.length() == 0 {
+    return
+  }
+  let _ = self.insert(start, text)
 }
 
 ///|

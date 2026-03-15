@@ -54,3 +54,42 @@ pub fn TextDoc::delete_and_record(
     None => ()
   }
 }
+
+///|
+/// Delete a range and record the deleted LVs into the current undo group.
+pub fn TextDoc::delete_range_and_record(
+  self : TextDoc,
+  range : Range,
+  mgr : @undo.UndoManager,
+  timestamp_ms~ : Int,
+) -> Unit raise TextError {
+  let doc_len = self.len()
+  let (start, end) = checked_range_bounds(range, doc_len)
+  if start == end {
+    return
+  }
+  let items = self.inner.get_visible_items()
+  try {
+    self.inner.delete_range(start, end)
+  } catch {
+    err => raise TextError::from_document_error(err, doc_len)
+  }
+  let agent = self.inner.agent_id()
+  for i = start; i < end; i = i + 1 {
+    let (target_lv, item) = items[i]
+    mgr.record_delete(target_lv.0, agent, timestamp_ms, content=Some(item.content))
+  }
+}
+
+///|
+/// Replace a range and record the delete+insert operations into one undo group.
+pub fn TextDoc::replace_range_and_record(
+  self : TextDoc,
+  range : Range,
+  text : String,
+  mgr : @undo.UndoManager,
+  timestamp_ms~ : Int,
+) -> Unit raise TextError {
+  self.delete_range_and_record(range, mgr, timestamp_ms~)
+  self.insert_and_record(range.start, text, mgr, timestamp_ms~)
+}

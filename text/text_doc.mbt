@@ -66,6 +66,37 @@ pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Unit raise TextError {
 }
 
 ///|
+/// Delete the half-open range `[start, end)`.
+pub fn TextDoc::delete_range(
+  self : TextDoc,
+  range : Range,
+) -> Unit raise TextError {
+  let doc_len = self.len()
+  let (start, end) = checked_range_bounds(range, doc_len)
+  try {
+    self.inner.delete_range(start, end)
+  } catch {
+    err => raise TextError::from_document_error(err, doc_len)
+  }
+}
+
+///|
+/// Replace the half-open range `[start, end)` with `text`.
+pub fn TextDoc::replace_range(
+  self : TextDoc,
+  range : Range,
+  text : String,
+) -> Unit raise TextError {
+  let doc_len = self.len()
+  let (start, end) = checked_range_bounds(range, doc_len)
+  try {
+    self.inner.replace_range(start, end, text)
+  } catch {
+    err => raise TextError::from_document_error(err, doc_len)
+  }
+}
+
+///|
 /// Get the current version of the document
 pub fn TextDoc::version(self : TextDoc) -> Version {
   Version::from_frontier(self.inner.get_frontier())
@@ -98,4 +129,14 @@ pub impl Show for TextDoc with output(self, logger) {
   logger.write_string("\", version: ")
   self.version().to_frontier().output(logger)
   logger.write_string(" }")
+}
+
+///|
+fn checked_range_bounds(range : Range, doc_len : Int) -> (Int, Int) raise TextError {
+  let start = range.start.value()
+  let end = range.end.value()
+  if end < start || end > doc_len {
+    raise TextError::InvalidPosition(pos=end, len=doc_len)
+  }
+  (start, end)
 }
