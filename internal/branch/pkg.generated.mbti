@@ -6,6 +6,7 @@ import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/oplog",
+  "dowdiness/rle",
 }
 
 // Values
@@ -44,9 +45,9 @@ pub impl Show for Branch
 pub struct MergeContext {
   // private fields
 }
-pub fn MergeContext::apply_operations(Self, Array[Int]) -> Unit raise BranchError
+pub fn MergeContext::apply_operations(Self, @rle.Rle[@core.LvRange]) -> Unit raise BranchError
 pub fn MergeContext::new(@fugue.FugueTree[String], @oplog.OpLog) -> Self
-pub fn MergeContext::retreat_operations(Self, Array[Int]) -> Unit raise BranchError
+pub fn MergeContext::retreat_operations(Self, @rle.Rle[@core.LvRange]) -> Unit raise BranchError
 
 // Type aliases
 

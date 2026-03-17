@@ -4,6 +4,7 @@ package "dowdiness/event-graph-walker/internal/oplog"
 import {
   "dowdiness/event-graph-walker/internal/causal_graph",
   "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/rle",
 }
 
 // Values
@@ -31,6 +32,7 @@ pub fn OpLog::get_frontier(Self) -> @core.Frontier
 pub fn OpLog::get_frontier_raw(Self) -> Array[@core.RawVersion] raise OpLogError
 pub fn OpLog::get_op(Self, Int) -> @core.Op?
 pub fn OpLog::get_ops(Self, Array[Int]) -> Array[@core.Op]
+pub fn OpLog::get_ops_rle(Self, @rle.Rle[@core.LvRange]) -> Array[@core.Op]
 pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::new(String) -> Self
 pub fn OpLog::op_count(Self) -> Int

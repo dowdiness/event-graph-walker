@@ -3,6 +3,7 @@ import {
   "dowdiness/event-graph-walker/internal/causal_graph",
   "dowdiness/event-graph-walker/internal/oplog",
   "dowdiness/event-graph-walker/internal/fugue",
+  "dowdiness/rle",
   "moonbitlang/core/bench",
 }
 

@@ -5,7 +5,7 @@ test "walk empty frontier" {
   let graph = CausalGraph::new()
   let frontier = @core.Frontier::from_array([])
   let result = graph.walk_from_frontier(frontier)
-  inspect(result.length(), content="0")
+  inspect(@rle.Spanning::span(result), content="0")
 }
 
 ///|
@@ -15,8 +15,9 @@ test "walk single operation" {
   // Add single operation with no parents
   let lv0 = try! graph.add_version([], "agent-1")
   let result = graph.walk_from_frontier(@core.Frontier::from_array([lv0]))
-  inspect(result.length(), content="1")
-  inspect(result[0], content="0")
+  let expanded = result.iter_units().collect()
+  inspect(expanded.length(), content="1")
+  inspect(expanded[0], content="0")
 }
 
 ///|
@@ -30,12 +31,15 @@ test "walk linear history" {
   let lv3 = try! graph.add_version([lv2], "agent-1")
   let result = graph.walk_from_frontier(@core.Frontier::from_array([lv3]))
 
-  // Should get all operations in order
-  inspect(result.length(), content="4")
-  inspect(result[0], content="0")
-  inspect(result[1], content="1")
-  inspect(result[2], content="2")
-  inspect(result[3], content="3")
+  // Linear history should compress to 1 run
+  inspect(@rle.HasLength::length(result), content="1")
+  inspect(@rle.Spanning::span(result), content="4")
+
+  let expanded = result.iter_units().collect()
+  inspect(expanded[0], content="0")
+  inspect(expanded[1], content="1")
+  inspect(expanded[2], content="2")
+  inspect(expanded[3], content="3")
 }
 
 ///|
@@ -53,17 +57,18 @@ test "walk diamond pattern (concurrent operations)" {
   let lv2 = try! graph.add_version([lv0], "agent-2")
   let lv3 = try! graph.add_version([lv1, lv2], "agent-1")
   let result = graph.walk_from_frontier(@core.Frontier::from_array([lv3]))
+  let expanded = result.iter_units().collect()
 
   // Should get all 4 operations
-  inspect(result.length(), content="4")
+  inspect(expanded.length(), content="4")
 
   // lv0 must come first
-  inspect(result[0], content="0")
+  inspect(expanded[0], content="0")
 
   // lv1 and lv2 can be in any order (concurrent)
   // but both must come after lv0 and before lv3
-  let has_lv1 = result.contains(1)
-  let has_lv2 = result.contains(2)
+  let has_lv1 = expanded.contains(1)
+  let has_lv2 = expanded.contains(2)
   if not(has_lv1) {
     abort("Result should contain lv1")
   }
@@ -72,7 +77,7 @@ test "walk diamond pattern (concurrent operations)" {
   }
 
   // lv3 must come last
-  inspect(result[3], content="3")
+  inspect(expanded[3], content="3")
 }
 
 ///|
@@ -95,35 +100,36 @@ test "walk complex branching" {
   let _lv5 = try! graph.add_version([lv2], "agent-3")
   let lv6 = try! graph.add_version([lv3, lv4], "agent-1")
   let result = graph.walk_from_frontier(@core.Frontier::from_array([lv6]))
+  let expanded = result.iter_units().collect()
 
   // Should get operations 0,1,2,3,4,6 (not 5, as it's not in the path to 6)
-  inspect(result.length(), content="6")
+  inspect(expanded.length(), content="6")
 
   // Verify lv0 is first
-  inspect(result[0], content="0")
+  inspect(expanded[0], content="0")
 
   // Verify lv6 is last
-  inspect(result[5], content="6")
+  inspect(expanded[5], content="6")
 
   // Verify all expected versions are present
-  if not(result.contains(0)) {
+  if not(expanded.contains(0)) {
     abort("Should contain lv0")
   }
-  if not(result.contains(1)) {
+  if not(expanded.contains(1)) {
     abort("Should contain lv1")
   }
-  if not(result.contains(2)) {
+  if not(expanded.contains(2)) {
     abort("Should contain lv2")
   }
-  if not(result.contains(3)) {
+  if not(expanded.contains(3)) {
     abort("Should contain lv3")
   }
-  if not(result.contains(4)) {
+  if not(expanded.contains(4)) {
     abort("Should contain lv4")
   }
 
   // lv5 should NOT be present (not in path to lv6)
-  if result.contains(5) {
+  if expanded.contains(5) {
     abort("Should NOT contain lv5")
   }
 }
@@ -146,16 +152,17 @@ test "walk with multiple frontier versions" {
 
   // Walk from frontier [3, 4] (both branches)
   let result = graph.walk_from_frontier(@core.Frontier::from_array([lv3, lv4]))
+  let expanded = result.iter_units().collect()
 
   // Should get all operations
-  inspect(result.length(), content="5")
+  inspect(expanded.length(), content="5")
 
   // lv0 should be first
-  inspect(result[0], content="0")
+  inspect(expanded[0], content="0")
 
   // All versions should be present
   for i = 0; i < 5; i = i + 1 {
-    if not(result.contains(i)) {
+    if not(expanded.contains(i)) {
       abort("Should contain lv\{i}")
     }
   }
@@ -176,19 +183,21 @@ test "diff_frontiers_lvs for incremental update" {
   let frontier2 = graph.get_frontier()
 
   // Calculate diff
-  let (retreat_lvs, advance_lvs) = graph.diff_frontiers_lvs(
+  let (retreat_rle, advance_rle) = graph.diff_frontiers_lvs(
     frontier1, frontier2,
   )
 
   // No retreat LVs (moving forward)
-  inspect(retreat_lvs.length(), content="0")
+  inspect(@rle.Spanning::span(retreat_rle), content="0")
 
-  // Should have 2 advance LVs
-  inspect(advance_lvs.length(), content="2")
+  // Should have 2 advance LVs, compressed to 1 run (consecutive)
+  inspect(@rle.HasLength::length(advance_rle), content="1")
+  inspect(@rle.Spanning::span(advance_rle), content="2")
 
   // Verify advance LVs are correct (2 and 3)
-  inspect(advance_lvs[0], content="2")
-  inspect(advance_lvs[1], content="3")
+  let advance_expanded = advance_rle.iter_units().collect()
+  inspect(advance_expanded[0], content="2")
+  inspect(advance_expanded[1], content="3")
 }
 
 ///|
@@ -204,12 +213,50 @@ test "topological sort determinism" {
   let result = graph.walk_from_frontier(
     @core.Frontier::from_array([lv1, lv2, lv3]),
   )
+  let expanded = result.iter_units().collect()
 
   // lv0 must be first
-  inspect(result[0], content="0")
+  inspect(expanded[0], content="0")
 
   // Concurrent operations (1, 2, 3) should be sorted by LV for determinism
-  inspect(result[1], content="1")
-  inspect(result[2], content="2")
-  inspect(result[3], content="3")
+  inspect(expanded[1], content="1")
+  inspect(expanded[2], content="2")
+  inspect(expanded[3], content="3")
+}
+
+///|
+test "walk_from_frontier linear compression" {
+  let graph = CausalGraph::new()
+
+  // Create linear chain: 0 -> 1 -> 2 -> ... -> 9
+  let _lv0 = try! graph.add_version([], "agent-1")
+  for i = 1; i < 10; i = i + 1 {
+    let _ = try! graph.add_version([i - 1], "agent-1")
+  }
+  let result = graph.walk_from_frontier(graph.get_frontier())
+
+  // 10 consecutive LVs should compress to exactly 1 run
+  inspect(@rle.HasLength::length(result), content="1")
+  inspect(@rle.Spanning::span(result), content="10")
+}
+
+///|
+test "diff_frontiers_lvs compression ratio" {
+  let graph = CausalGraph::new()
+
+  // Build 100 linear operations
+  let _lv0 = try! graph.add_version([], "agent-1")
+  for i = 1; i < 100; i = i + 1 {
+    let _ = try! graph.add_version([i - 1], "agent-1")
+  }
+  let empty = @core.Frontier::from_array([])
+  let full = graph.get_frontier()
+  let (retreat_rle, advance_rle) = graph.diff_frontiers_lvs(empty, full)
+
+  // No retreat
+  inspect(@rle.Spanning::span(retreat_rle), content="0")
+
+  // 100 consecutive advance LVs -> 1 run
+  inspect(@rle.HasLength::length(advance_rle), content="1")
+  inspect(@rle.Spanning::span(advance_rle), content="100")
 }

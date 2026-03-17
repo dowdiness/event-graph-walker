@@ -168,6 +168,25 @@ pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int]) -> Array[@core.Op] {
 }
 
 ///|
+/// Collect operations for an RLE-compressed list of LV ranges.
+///
+/// Expands the compressed ranges and looks up each LV, silently skipping
+/// any invalid index. This is the compressed counterpart of `get_ops`.
+pub fn OpLog::get_ops_rle(
+  self : OpLog,
+  lvs : @rle.Rle[@core.LvRange],
+) -> Array[@core.Op] {
+  let result : Array[@core.Op] = []
+  for lv in lvs.iter_units() {
+    match self.get_op(lv) {
+      Some(op) => result.push(op)
+      None => ()
+    }
+  }
+  result
+}
+
+///|
 /// Get all operations (returns a copy for safety)
 pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
   self.ops_ref().copy()
