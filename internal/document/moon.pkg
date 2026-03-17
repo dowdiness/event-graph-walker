@@ -4,6 +4,7 @@ import {
   "dowdiness/event-graph-walker/internal/oplog",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/branch",
+  "dowdiness/rle",
 }
 
 options(

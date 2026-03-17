@@ -6,6 +6,7 @@ import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/oplog",
+  "dowdiness/rle",
 }
 
 // Values
@@ -46,6 +47,14 @@ pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::visible_count(Self) -> Int
 pub impl @core.RawToLv for Document
 pub impl Show for Document
+
+type VisibleRun
+pub impl @rle.HasLength for VisibleRun
+pub impl @rle.Mergeable for VisibleRun
+pub impl @rle.Sliceable for VisibleRun
+pub impl @rle.Spanning for VisibleRun
+pub impl Eq for VisibleRun
+pub impl Show for VisibleRun
 
 // Type aliases
 
