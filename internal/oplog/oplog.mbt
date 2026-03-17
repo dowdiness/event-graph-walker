@@ -177,10 +177,12 @@ pub fn OpLog::get_ops_rle(
   lvs : @rle.Rle[@core.LvRange],
 ) -> Array[@core.Op] {
   let result : Array[@core.Op] = []
-  for lv in lvs.iter_units() {
-    match self.get_op(lv) {
-      Some(op) => result.push(op)
-      None => ()
+  for range in lvs.iter() {
+    for lv = range.start; lv < range.end(); lv = lv + 1 {
+      match self.get_op(lv) {
+        Some(op) => result.push(op)
+        None => ()
+      }
     }
   }
   result

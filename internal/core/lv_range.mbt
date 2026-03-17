@@ -47,7 +47,7 @@ pub impl @rle.Addressable for LvRange with address(self, _global_start, offset) 
 ///|
 /// Check if a given LV falls within this range.
 pub fn LvRange::contains(self : LvRange, lv : Int) -> Bool {
-  lv >= self.start && lv < self.start + self.count
+  lv >= self.start && lv < self.end()
 }
 
 ///|
