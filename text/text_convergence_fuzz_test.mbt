@@ -253,3 +253,108 @@ test "known-bug: undo+sync multi-agent convergence counterexample" {
   // When fixed, change to: assert_true!(result)
   assert_false(result)
 }
+
+///|
+/// Property: Convergence is independent of sync order.
+/// Two agents make concurrent edits. Syncing A->B then B->A
+/// must produce the same result as B->A then A->B.
+fn prop_sync_order_independence(pair : (RealOps, RealOps)) -> Bool {
+  let (ops1, ops2) = pair
+  // Path 1: A->B then B->A
+  let a1 = @text.TextDoc::new("alice")
+  let b1 = @text.TextDoc::new("bob")
+  if not(apply_edits(a1, ops1.edits)) {
+    return true
+  }
+  if not(apply_edits(b1, ops2.edits)) {
+    return true
+  }
+  let msg_a1 = a1.sync().export_all() catch { _ => return true }
+  let msg_b1 = b1.sync().export_all() catch { _ => return true }
+  b1.sync().apply(msg_a1) catch {
+    _ => return true
+  }
+  a1.sync().apply(msg_b1) catch {
+    _ => return true
+  }
+
+  // Path 2: B->A then A->B (fresh docs)
+  let a2 = @text.TextDoc::new("alice")
+  let b2 = @text.TextDoc::new("bob")
+  if not(apply_edits(a2, ops1.edits)) {
+    return true
+  }
+  if not(apply_edits(b2, ops2.edits)) {
+    return true
+  }
+  let msg_a2 = a2.sync().export_all() catch { _ => return true }
+  let msg_b2 = b2.sync().export_all() catch { _ => return true }
+  a2.sync().apply(msg_b2) catch {
+    _ => return true
+  }
+  b2.sync().apply(msg_a2) catch {
+    _ => return true
+  }
+
+  // Both paths must produce same result
+  a1.text() == a2.text() && b1.text() == b2.text() && a1.text() == b1.text()
+}
+
+///|
+test "property: sync order independence" {
+  @qc.quick_check_fn(prop_sync_order_independence)
+}
+
+///|
+/// Property: Undo under concurrency still converges.
+/// Agent A types, agent B types concurrently, A undoes, then full sync.
+fn prop_undo_concurrent_convergence(pair : (RealOps, RealOps)) -> Bool {
+  let (ops1, ops2) = pair
+  let doc_a = @text.TextDoc::new("alice")
+  let doc_b = @text.TextDoc::new("bob")
+  let mgr_a = @undo.UndoManager::new("alice")
+
+  // A types with undo recording
+  for edit in ops1.edits {
+    match edit {
+      Insert(pos, ch) =>
+        doc_a.insert_and_record(@text.Pos::at(pos), ch, mgr_a, timestamp_ms=0) catch {
+          _ => continue
+        }
+      Delete(pos) =>
+        doc_a.delete_and_record(@text.Pos::at(pos), mgr_a, timestamp_ms=0) catch {
+          _ => continue
+        }
+    }
+  }
+
+  // B types concurrently (no undo tracking needed)
+  if not(apply_edits(doc_b, ops2.edits)) {
+    return true
+  }
+
+  // A undoes once (if possible)
+  if mgr_a.can_undo() {
+    mgr_a.undo(doc_a) catch {
+      _ => ()
+    }
+  }
+
+  // Full sync
+  let msg_a = doc_a.sync().export_all() catch { _ => return true }
+  let msg_b = doc_b.sync().export_all() catch { _ => return true }
+  doc_a.sync().apply(msg_b) catch {
+    _ => return true
+  }
+  doc_b.sync().apply(msg_a) catch {
+    _ => return true
+  }
+
+  // Must converge
+  doc_a.text() == doc_b.text()
+}
+
+///|
+test "property: undo under concurrency converges" {
+  @qc.quick_check_fn(prop_undo_concurrent_convergence)
+}
