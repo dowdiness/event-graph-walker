@@ -2,7 +2,8 @@
   "name": "dowdiness/event-graph-walker",
   "version": "0.1.0",
   "deps": {
-    "moonbitlang/quickcheck": "0.9.9"
+    "moonbitlang/quickcheck": "0.9.9",
+    "dowdiness/rle": { "path": "../rle" }
   },
   "readme": "README.md",
   "repository": "https://github.com/dowdiness/event-graph-walker",
