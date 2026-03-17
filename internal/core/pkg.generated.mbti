@@ -2,6 +2,7 @@
 package "dowdiness/event-graph-walker/internal/core"
 
 import {
+  "dowdiness/rle",
   "moonbitlang/core/json",
 }
 
@@ -28,6 +29,20 @@ pub(all) struct GraphEntry {
   timestamp : Int
 }
 pub impl Show for GraphEntry
+
+pub(all) struct LvRange {
+  start : Int
+  count : Int
+}
+pub fn LvRange::contains(Self, Int) -> Bool
+pub fn LvRange::end(Self) -> Int
+pub impl @rle.Addressable for LvRange
+pub impl @rle.FromRange for LvRange
+pub impl @rle.HasLength for LvRange
+pub impl @rle.Mergeable for LvRange
+pub impl @rle.Spanning for LvRange
+pub impl Eq for LvRange
+pub impl Show for LvRange
 
 pub struct Op {
   // private fields
