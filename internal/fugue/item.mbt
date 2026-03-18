@@ -42,6 +42,12 @@ pub(all) struct Item[T] {
   /// `true` if the item has been deleted (tombstone). Tombstones remain in the
   /// tree so concurrent operations that reference this item remain valid.
   deleted : Bool
+  /// Lamport timestamp of the winning Delete/Undelete op (0 = initial/no winner).
+  deleted_ts : Int
+  /// Agent ID of the winning Delete/Undelete op ("" = initial/no winner).
+  deleted_agent : String
+  /// `true` if the winner was an Undelete op, `false` if Delete or initial.
+  deleted_is_undelete : Bool
   /// Lamport timestamp used as the primary sort key when ordering siblings
   /// that share the same parent and side.
   timestamp : Timestamp
@@ -99,7 +105,18 @@ fn[T] Item::new(
   timestamp : Timestamp,
   agent : ReplicaId,
 ) -> Item[T] {
-  { id, content, parent, side, deleted: false, timestamp, agent }
+  {
+    id,
+    content,
+    parent,
+    side,
+    deleted: false,
+    deleted_ts: 0,
+    deleted_agent: "",
+    deleted_is_undelete: false,
+    timestamp,
+    agent,
+  }
 }
 
 ///|
