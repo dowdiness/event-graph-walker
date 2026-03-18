@@ -5,6 +5,15 @@
 ///| Manages the FugueTree, OpLog, and CausalGraph together
 
 ///|
+/// Cursor for fast sequential append. Caches the last insert position
+/// and LV to skip position_to_lv() on the next sequential insert.
+struct InsertCursor {
+  position : Int // last insert position (0-based)
+  lv : Int // LV of last inserted item
+  at_end : Bool // whether origin_right was None (end of document)
+} derive(Show)
+
+///|
 /// Provides position-based operations (insert/delete at cursor position)
 pub struct Document {
   priv tree : @fugue.FugueTree[String]
@@ -13,6 +22,8 @@ pub struct Document {
   // Compressed position cache: maps position -> VisibleRun via O(log n) lookup.
   // Invalidated on any modification (set to None). Rebuilt lazily on demand.
   priv mut position_cache : @rle.Rle[VisibleRun]?
+  // Insert cursor: caches last insert position/LV for sequential append fast-path.
+  priv mut cursor : InsertCursor?
 } derive(Show)
 
 ///|
@@ -20,7 +31,7 @@ pub struct Document {
 pub fn Document::new(agent_id : String) -> Document {
   let oplog = @oplog.OpLog::new(agent_id)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  { tree, oplog, agent_id, position_cache: None }
+  { tree, oplog, agent_id, position_cache: None, cursor: None }
 }
 
 ///|
@@ -139,13 +150,31 @@ pub fn Document::insert(
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_string()
 
-    // Map position to LV using compressed cache (O(log n))
-    let origin_left = self.position_to_lv(current_pos)
-
-    // Find origin_right (the item at the cursor position, i.e. after the insert point)
-    let origin_right = match self.lv_at_position(current_pos) {
-      Some(lv) => lv
-      None => -1
+    // Cursor fast-path: skip cache lookup for sequential append
+    let (origin_left, origin_right) = match self.cursor {
+      Some(c) if current_pos == c.position + 1 => {
+        let ol = c.lv
+        let or = if c.at_end {
+          -1 // origin_right = None (end of document)
+        } else {
+          // Partial hit: invalidate stale cache before reading
+          self.invalidate_cache()
+          match self.lv_at_position(current_pos) {
+            Some(lv) => lv
+            None => -1
+          }
+        }
+        (ol, or)
+      }
+      _ => {
+        // Cursor miss: full cache lookup (existing code)
+        let ol = self.position_to_lv(current_pos)
+        let or = match self.lv_at_position(current_pos) {
+          Some(lv) => lv
+          None => -1
+        }
+        (ol, or)
+      }
     }
 
     let op = self.oplog.insert(ch, origin_left, origin_right) catch {
@@ -177,6 +206,12 @@ pub fn Document::insert(
       agent: @fugue.ReplicaId(agent),
     })
     self.invalidate_cache()
+    // Update cursor
+    self.cursor = Some({
+      position: current_pos,
+      lv: op.lv(),
+      at_end: origin_right == -1,
+    })
 
     last_op = Some(op)
     current_pos = current_pos + 1
@@ -199,6 +234,7 @@ pub fn Document::delete(
   self : Document,
   position : Int,
 ) -> @core.Op raise DocumentError {
+  self.cursor = None
   if position < 0 {
     raise DocumentError::InvalidPosition(pos=position)
   }
@@ -240,6 +276,7 @@ pub fn Document::delete_range(
   start : Int,
   end : Int,
 ) -> Unit raise DocumentError {
+  self.cursor = None
   if start < 0 {
     raise DocumentError::InvalidPosition(pos=start)
   }
@@ -306,6 +343,7 @@ pub fn Document::undelete(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.cursor = None
   let op = self.oplog.undelete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -331,6 +369,7 @@ pub fn Document::delete_by_lv(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.cursor = None
   let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -355,6 +394,7 @@ pub fn Document::apply_remote(
   self : Document,
   op : @core.Op,
 ) -> Unit raise DocumentError {
+  self.cursor = None
   // Add to oplog (buffering if parents are missing)
   let applied_ops = self.oplog.apply_remote(op) catch {
     e => raise DocumentError::OpLog(e)
@@ -446,6 +486,7 @@ pub fn Document::merge_remote(
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
+  self.cursor = None
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }

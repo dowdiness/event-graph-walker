@@ -49,6 +49,9 @@ pub fn Document::visible_count(Self) -> Int
 pub impl @core.RawToLv for Document
 pub impl Show for Document
 
+type InsertCursor
+pub impl Show for InsertCursor
+
 type VisibleRun
 pub impl @rle.HasLength for VisibleRun
 pub impl @rle.Mergeable for VisibleRun

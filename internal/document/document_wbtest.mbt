@@ -139,3 +139,47 @@ test "cache coherent: position_to_lv matches get_visible_items after each op" {
   let _ = try! doc.insert(1, "X")
   inspect(check_consistency(doc), content="true")
 }
+
+///|
+test "cursor fast-path: sequential append matches cache lookup" {
+  let doc = Document::new("alice")
+  for i = 0; i < 10; i = i + 1 {
+    ignore(try! doc.insert(i, "x"))
+  }
+  inspect(doc.to_text(), content="xxxxxxxxxx")
+  match doc.cursor {
+    Some(c) => {
+      inspect(c.position, content="9")
+      inspect(c.at_end, content="true")
+    }
+    None => fail("Expected cursor to be set after sequential append")
+  }
+}
+
+///|
+test "cursor invalidated on delete" {
+  let doc = Document::new("alice")
+  for i = 0; i < 5; i = i + 1 {
+    ignore(try! doc.insert(i, "x"))
+  }
+  inspect(doc.cursor is Some(_), content="true")
+  try! doc.delete_range(2, 3)
+  inspect(doc.cursor is None, content="true")
+}
+
+///|
+test "cursor partial hit: mid-document sequential insert" {
+  let doc = Document::new("alice")
+  ignore(try! doc.insert(0, "a"))
+  ignore(try! doc.insert(1, "b"))
+  ignore(try! doc.insert(2, "c"))
+  ignore(try! doc.insert(3, "d"))
+  ignore(try! doc.insert(4, "e"))
+  inspect(doc.to_text(), content="abcde")
+  try! doc.delete_range(3, 4)
+  inspect(doc.to_text(), content="abce")
+  ignore(try! doc.insert(2, "X"))
+  inspect(doc.to_text(), content="abXce")
+  ignore(try! doc.insert(3, "Y"))
+  inspect(doc.to_text(), content="abXYce")
+}
