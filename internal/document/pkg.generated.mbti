@@ -33,6 +33,7 @@ pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_range(Self, Int, Int) -> Unit raise DocumentError
 pub fn Document::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
 pub fn Document::get_all_ops(Self) -> Array[@core.Op]
+pub fn Document::get_all_runs(Self) -> Array[@core.OpRun]
 pub fn Document::get_frontier(Self) -> @core.Frontier
 pub fn Document::get_frontier_array(Self) -> Array[Int]
 pub fn Document::get_frontier_raw(Self) -> Array[@core.RawVersion] raise DocumentError

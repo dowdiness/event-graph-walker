@@ -471,6 +471,12 @@ pub fn Document::get_all_ops(self : Document) -> Array[@core.Op] {
 }
 
 ///|
+/// Get all operation runs without decompression (for sync export).
+pub fn Document::get_all_runs(self : Document) -> Array[@core.OpRun] {
+  self.oplog.get_all_runs()
+}
+
+///|
 /// Compute the diff between two frontiers and collect operations.
 /// Returns (retreat_ops, advance_ops).
 pub fn Document::diff_and_collect(

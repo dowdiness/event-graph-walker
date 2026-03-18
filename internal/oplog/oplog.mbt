@@ -209,6 +209,17 @@ pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
 }
 
 ///|
+/// Get all operation runs without decompression.
+/// Used by sync export_all for zero-copy serialization.
+pub fn OpLog::get_all_runs(self : OpLog) -> Array[@core.OpRun] {
+  let result : Array[@core.OpRun] = []
+  for run in self.operations.iter() {
+    result.push(run)
+  }
+  result
+}
+
+///|
 /// Get operation count
 pub fn OpLog::op_count(self : OpLog) -> Int {
   self.operations.span()
