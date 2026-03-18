@@ -69,15 +69,18 @@ pub fn TextDoc::delete_range_and_record(
     return
   }
   let items = self.inner.get_visible_items()
-  try {
-    self.inner.delete_range(start, end)
-  } catch {
+  self.inner.delete_range(start, end) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
   let agent = self.inner.agent_id()
   for i = start; i < end; i = i + 1 {
     let (target_lv, item) = items[i]
-    mgr.record_delete(target_lv.0, agent, timestamp_ms, content=Some(item.content))
+    mgr.record_delete(
+      target_lv.0,
+      agent,
+      timestamp_ms,
+      content=Some(item.content),
+    )
   }
 }
 

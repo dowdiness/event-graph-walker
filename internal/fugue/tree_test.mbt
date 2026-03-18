@@ -393,8 +393,12 @@ test "delete_with_ts: higher timestamp wins" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
   tree.insert({
-    id: lv, content: "x", origin_left: None, origin_right: None,
-    timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+    id: lv,
+    content: "x",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("alice"),
   })
   try! tree.delete_with_ts(lv, 2, "alice")
   inspect(tree.visible_count(), content="0")
@@ -411,8 +415,12 @@ test "delete_with_ts: add-wins at same timestamp" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
   tree.insert({
-    id: lv, content: "x", origin_left: None, origin_right: None,
-    timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+    id: lv,
+    content: "x",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("alice"),
   })
   try! tree.delete_with_ts(lv, 5, "alice")
   inspect(tree.visible_count(), content="0")
@@ -429,8 +437,12 @@ test "delete_with_ts: commutativity" {
   let make_tree = fn() {
     let tree = @fugue.FugueTree::new()
     tree.insert({
-      id: @fugue.Lv(0), content: "x", origin_left: None, origin_right: None,
-      timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+      id: @fugue.Lv(0),
+      content: "x",
+      origin_left: None,
+      origin_right: None,
+      timestamp: @fugue.Timestamp(1),
+      agent: @fugue.ReplicaId("alice"),
     })
     tree
   }
@@ -453,8 +465,12 @@ test "set_delete_winner: restores winner state" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
   tree.insert({
-    id: lv, content: "x", origin_left: None, origin_right: None,
-    timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+    id: lv,
+    content: "x",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("alice"),
   })
   // Set winner to Delete(ts=5, alice)
   try! tree.set_delete_winner(lv, true, 5, "alice", false)

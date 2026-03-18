@@ -73,9 +73,7 @@ pub fn TextDoc::delete_range(
 ) -> Unit raise TextError {
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
-  try {
-    self.inner.delete_range(start, end)
-  } catch {
+  self.inner.delete_range(start, end) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
 }
@@ -89,9 +87,7 @@ pub fn TextDoc::replace_range(
 ) -> Unit raise TextError {
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
-  try {
-    self.inner.replace_range(start, end, text)
-  } catch {
+  self.inner.replace_range(start, end, text) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
 }
@@ -132,7 +128,10 @@ pub impl Show for TextDoc with output(self, logger) {
 }
 
 ///|
-fn checked_range_bounds(range : Range, doc_len : Int) -> (Int, Int) raise TextError {
+fn checked_range_bounds(
+  range : Range,
+  doc_len : Int,
+) -> (Int, Int) raise TextError {
   let start = range.start.value()
   let end = range.end.value()
   if end < start || end > doc_len {

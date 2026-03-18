@@ -83,7 +83,11 @@ pub fn MergeContext::apply_operations(
                       Some(entry) => (entry.timestamp, entry.agent)
                       None => raise BranchError::MissingOp(lv~)
                     }
-                    self.tree.delete_with_ts(@fugue.Lv(mapped), del_ts, del_agent) catch {
+                    self.tree.delete_with_ts(
+                      @fugue.Lv(mapped),
+                      del_ts,
+                      del_agent,
+                    ) catch {
                       e => raise BranchError::Fugue(e)
                     }
                   }
@@ -100,7 +104,11 @@ pub fn MergeContext::apply_operations(
                       Some(entry) => (entry.timestamp, entry.agent)
                       None => raise BranchError::MissingOp(lv~)
                     }
-                    self.tree.undelete_with_ts(@fugue.Lv(mapped), undel_ts, undel_agent) catch {
+                    self.tree.undelete_with_ts(
+                      @fugue.Lv(mapped),
+                      undel_ts,
+                      undel_agent,
+                    ) catch {
                       e => raise BranchError::Fugue(e)
                     }
                   }
@@ -187,13 +195,9 @@ pub fn MergeContext::retreat_operations(
                     _ => false
                   }
                   if @fugue.should_win_delete(
-                    other_ts,
-                    other_agent,
-                    other_is_undelete,
-                    best_ts,
-                    best_agent,
-                    best_is_undelete,
-                  ) {
+                      other_ts, other_agent, other_is_undelete, best_ts, best_agent,
+                      best_is_undelete,
+                    ) {
                     best_ts = other_ts
                     best_agent = other_agent
                     best_is_undelete = other_is_undelete

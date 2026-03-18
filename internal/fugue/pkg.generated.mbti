@@ -8,6 +8,8 @@ import {
 // Values
 pub let root_lv : Lv
 
+pub fn should_win_delete(Int, String, Bool, Int, String, Bool) -> Bool
+
 // Errors
 pub(all) suberror FugueError {
   MissingItem(id~ : Lv)
@@ -20,6 +22,7 @@ pub struct FugueTree[T] {
   mut visible : Int
 }
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
+pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
 pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
 #alias("_[_]")
 pub fn[T] FugueTree::get(Self[T], Lv) -> Item[T]?
@@ -31,8 +34,10 @@ pub fn[T : Eq] FugueTree::iter(Self[T]) -> Iter[(Lv, Item[T])]
 pub fn[T : Eq] FugueTree::lv_to_position(Self[T], Lv) -> Int?
 pub fn[T] FugueTree::make(T) -> Self[T]
 pub fn[T : Default] FugueTree::new() -> Self[T]
+pub fn[T] FugueTree::set_delete_winner(Self[T], Lv, Bool, Int, String, Bool) -> Unit raise FugueError
 pub fn FugueTree::to_text(Self[String]) -> String
 pub fn[T] FugueTree::undelete(Self[T], Lv) -> Unit raise FugueError
+pub fn[T] FugueTree::undelete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
 pub fn[T] FugueTree::visible_count(Self[T]) -> Int
 pub impl[T : Show] Show for FugueTree[T]
 
@@ -52,6 +57,9 @@ pub(all) struct Item[T] {
   parent : Lv?
   side : Side
   deleted : Bool
+  deleted_ts : Int
+  deleted_agent : String
+  deleted_is_undelete : Bool
   timestamp : Timestamp
   agent : ReplicaId
 }

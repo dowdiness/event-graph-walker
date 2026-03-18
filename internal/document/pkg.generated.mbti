@@ -24,10 +24,12 @@ pub struct Document {
   agent_id : String
   // private fields
 }
+pub fn Document::agent_id(Self) -> String
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::delete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError
+pub fn Document::delete_range(Self, Int, Int) -> Unit raise DocumentError
 pub fn Document::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
 pub fn Document::get_all_ops(Self) -> Array[@core.Op]
 pub fn Document::get_frontier(Self) -> @core.Frontier
@@ -38,6 +40,7 @@ pub fn Document::insert(Self, Int, String) -> @core.Op raise DocumentError
 pub fn Document::lv_to_position(Self, Int) -> Int?
 pub fn Document::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self
+pub fn Document::replace_range(Self, Int, Int, String) -> Unit raise DocumentError
 pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::visible_count(Self) -> Int
@@ -47,9 +50,4 @@ pub impl Show for Document
 // Type aliases
 
 // Traits
-pub(open) trait Undoable {
-  lv_to_position(Self, Int) -> Int?
-  undelete_lv(Self, Int) -> @core.Op raise DocumentError
-  delete_lv(Self, Int) -> @core.Op raise DocumentError
-}
 

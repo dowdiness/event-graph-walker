@@ -245,7 +245,7 @@ test "regression: undo+sync multi-agent convergence (was known-bug)" {
     ],
   }
   let result = run_trace_and_check_convergence(trace)
-  assert_true!(result)
+  assert_true(result)
 }
 
 ///|
