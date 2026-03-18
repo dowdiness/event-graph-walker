@@ -270,9 +270,7 @@ pub fn Document::delete_range(
   self.invalidate_cache()
   let cg = self.oplog.causal_graph()
   for lv in target_lvs {
-    let op = self.oplog.delete(lv) catch {
-      e => raise DocumentError::OpLog(e)
-    }
+    let op = self.oplog.delete(lv) catch { e => raise DocumentError::OpLog(e) }
     let (del_ts, del_agent) = match cg[op.lv()] {
       Some(entry) => (entry.timestamp, entry.agent)
       None =>
