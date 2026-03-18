@@ -94,6 +94,45 @@ pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
 }
 
 ///|
+/// Decompress all Ops in this run into the given array.
+///
+/// More efficient than calling `decompress(offset)` for each offset:
+/// - Iterates insert chars once (O(n) total, not O(n) per call)
+/// - Avoids Option wrapping per op
+pub fn OpRun::decompress_into(self : OpRun, result : Array[Op]) -> Unit {
+  for offset = 0; offset < self.count; offset = offset + 1 {
+    let lv = self.start_lv + offset
+    let seq = self.start_seq + offset
+    let parents = if offset == 0 {
+      self.parents.copy()
+    } else {
+      [RawVersion::new(self.agent, self.start_seq + offset - 1)]
+    }
+    let origin_left = if offset == 0 {
+      self.origin_left
+    } else {
+      Some(RawVersion::new(self.agent, self.start_seq + offset - 1))
+    }
+    let content = match self.content {
+      Inserts(chars) => Insert(chars[offset].to_string())
+      Deletes => Delete
+      Undeletes => Undelete
+    }
+    result.push(
+      Op::new_from_parts(
+        lv~,
+        parents~,
+        agent=self.agent,
+        seq~,
+        content~,
+        origin_left~,
+        origin_right=self.origin_right,
+      ),
+    )
+  }
+}
+
+///|
 /// Two OpRuns can merge when they represent a contiguous linear typing run.
 pub impl @rle.Mergeable for OpRun with can_merge(a : OpRun, b : OpRun) -> Bool {
   if a.agent != b.agent {

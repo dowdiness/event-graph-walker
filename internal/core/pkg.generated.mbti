@@ -89,6 +89,7 @@ pub struct OpRun {
   count : Int
 }
 pub fn OpRun::decompress(Self, Int) -> Op?
+pub fn OpRun::decompress_into(Self, Array[Op]) -> Unit
 pub fn OpRun::from_op(Op) -> Self
 pub impl @rle.HasLength for OpRun
 pub impl @rle.Mergeable for OpRun
@@ -97,7 +98,7 @@ pub impl Eq for OpRun
 pub impl Show for OpRun
 
 pub enum OpRunContent {
-  Inserts(String)
+  Inserts(Array[Char])
   Deletes
   Undeletes
 }

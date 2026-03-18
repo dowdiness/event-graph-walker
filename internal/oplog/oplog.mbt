@@ -203,12 +203,7 @@ pub fn OpLog::get_ops_rle(
 pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
   let result : Array[@core.Op] = []
   for run in self.operations.iter() {
-    for offset = 0; offset < run.count; offset = offset + 1 {
-      match run.decompress(offset) {
-        Some(op) => result.push(op)
-        None => ()
-      }
-    }
+    run.decompress_into(result)
   }
   result
 }
