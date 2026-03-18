@@ -3,7 +3,7 @@
 ///|
 /// Compressed content for a run of operations.
 pub enum OpRunContent {
-  Inserts(String)
+  Inserts(Array[Char]) // One char per op, O(1) index access, O(1) amortized append
   Deletes
   Undeletes
 } derive(Show, Eq)
@@ -32,7 +32,13 @@ pub struct OpRun {
 /// Create a single-element OpRun from an Op.
 pub fn OpRun::from_op(op : Op) -> OpRun {
   let content = match op.content() {
-    Insert(text) => Inserts(text)
+    Insert(text) => {
+      let chars : Array[Char] = []
+      for ch in text {
+        chars.push(ch)
+      }
+      Inserts(chars)
+    }
     Delete => Deletes
     Undelete => Undeletes
   }
@@ -70,18 +76,7 @@ pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
   }
   let origin_right = self.origin_right
   let content = match self.content {
-    Inserts(text) => {
-      let mut char_idx = 0
-      let mut result_char = ""
-      for ch in text {
-        if char_idx == offset {
-          result_char = ch.to_string()
-          break
-        }
-        char_idx = char_idx + 1
-      }
-      Insert(result_char)
-    }
+    Inserts(chars) => Insert(chars[offset].to_string())
     Deletes => Delete
     Undeletes => Undelete
   }
@@ -148,7 +143,13 @@ pub impl @rle.Mergeable for OpRun with can_merge(a : OpRun, b : OpRun) -> Bool {
 ///|
 pub impl @rle.Mergeable for OpRun with merge(a : OpRun, b : OpRun) -> OpRun {
   let content = match (a.content, b.content) {
-    (Inserts(text_a), Inserts(text_b)) => Inserts(text_a + text_b)
+    (Inserts(chars_a), Inserts(chars_b)) => {
+      // Mutate a's array in place (a is consumed by merge)
+      for ch in chars_b {
+        chars_a.push(ch)
+      }
+      Inserts(chars_a)
+    }
     (Deletes, Deletes) => Deletes
     (Undeletes, Undeletes) => Undeletes
     _ => a.content

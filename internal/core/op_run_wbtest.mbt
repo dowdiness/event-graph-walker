@@ -101,7 +101,10 @@ test "can_merge: linear insert typing run merges" {
   inspect(merged.count, content="2")
   inspect(merged.start_lv, content="0")
   match merged.content {
-    Inserts(text) => inspect(text, content="ab")
+    Inserts(chars) => {
+      let text = String::from_array(chars)
+      inspect(text, content="ab")
+    }
     _ => fail("expected Inserts")
   }
 }
@@ -242,7 +245,7 @@ test "decompress: multi-op insert run at various offsets" {
     start_lv: 10,
     agent: "alice",
     start_seq: 5,
-    content: Inserts("abc"),
+    content: Inserts(['a', 'b', 'c']),
     parents: [RawVersion::new("bob", 3)],
     origin_left: Some(RawVersion::new("bob", 3)),
     origin_right: Some(RawVersion::new("carol", 0)),
