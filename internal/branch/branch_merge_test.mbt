@@ -406,7 +406,8 @@ test "retreat then apply with missing item" {
   inspect(tree.to_text(), content="AB")
   let ctx = MergeContext::new(tree, oplog)
 
-  // Try to retreat a non-existent item - should raise Fugue(MissingItem)
+  // Try to retreat a non-existent item - should raise MissingOp
+  // (retreat now looks up the op in the oplog first)
   let result : Result[Unit, BranchError] = try {
     ctx.retreat_operations([999])
     Ok(())
@@ -414,7 +415,7 @@ test "retreat then apply with missing item" {
     e => Err(e)
   }
   match result {
-    Err(Fugue(@fugue.MissingItem(id~))) => inspect(id, content="Lv(999)")
-    _ => fail("Expected Fugue(MissingItem) error")
+    Err(MissingOp(lv~)) => inspect(lv, content="999")
+    _ => fail("Expected MissingOp error")
   }
 }

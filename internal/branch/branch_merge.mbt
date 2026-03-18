@@ -78,10 +78,15 @@ pub fn MergeContext::apply_operations(
               None => ()
               Some(raw) =>
                 match cg.raw_to_lv(raw) {
-                  Some(mapped) =>
-                    self.tree.delete(@fugue.Lv(mapped)) catch {
+                  Some(mapped) => {
+                    let (del_ts, del_agent) = match cg[lv] {
+                      Some(entry) => (entry.timestamp, entry.agent)
+                      None => raise BranchError::MissingOp(lv~)
+                    }
+                    self.tree.delete_with_ts(@fugue.Lv(mapped), del_ts, del_agent) catch {
                       e => raise BranchError::Fugue(e)
                     }
+                  }
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
@@ -90,10 +95,15 @@ pub fn MergeContext::apply_operations(
               None => ()
               Some(raw) =>
                 match cg.raw_to_lv(raw) {
-                  Some(mapped) =>
-                    self.tree.undelete(@fugue.Lv(mapped)) catch {
+                  Some(mapped) => {
+                    let (undel_ts, undel_agent) = match cg[lv] {
+                      Some(entry) => (entry.timestamp, entry.agent)
+                      None => raise BranchError::MissingOp(lv~)
+                    }
+                    self.tree.undelete_with_ts(@fugue.Lv(mapped), undel_ts, undel_agent) catch {
                       e => raise BranchError::Fugue(e)
                     }
+                  }
                   None => raise BranchError::MissingOrigin(raw~)
                 }
             }
@@ -106,17 +116,106 @@ pub fn MergeContext::apply_operations(
 ///|
 /// Remove operations from the retreat set.
 ///
-/// Marks retreated items as deleted in the tree so that their positions
-/// are vacated before advance operations are applied.
+/// For Insert ops: hides the item (force-delete).
+/// For Delete/Undelete ops: recomputes the LWW winner from the oplog
+/// by scanning for all Delete/Undelete ops targeting the same item
+/// that remain in the common ancestor (not in the retreat set).
 pub fn MergeContext::retreat_operations(
   self : MergeContext,
   operations : Array[Int],
 ) -> Unit raise BranchError {
-  // For simplicity, we mark retreated items as deleted
-  // A more sophisticated implementation would actually remove them
+  let cg = self.oplog.causal_graph()
+
   for lv in operations {
-    self.tree.delete(@fugue.Lv(lv)) catch {
-      e => raise BranchError::Fugue(e)
+    match self.oplog.get_op(lv) {
+      Some(op) =>
+        match op.content() {
+          @core.Insert(_) =>
+            // Retreat Insert: hide the item
+            self.tree.delete(@fugue.Lv(lv)) catch {
+              e => raise BranchError::Fugue(e)
+            }
+          @core.Delete | @core.Undelete => {
+            // Retreat Delete/Undelete: recompute winner from remaining ops
+            let target_lv = match op.origin_left() {
+              None => continue
+              Some(raw) =>
+                match cg.raw_to_lv(raw) {
+                  Some(mapped) => mapped
+                  None => raise BranchError::MissingOrigin(raw~)
+                }
+            }
+            // Scan oplog for all Delete/Undelete ops targeting this item
+            // that are NOT in the retreat set (i.e., remain in common ancestor)
+            let mut best_ts = 0
+            let mut best_agent = ""
+            let mut best_is_undelete = false
+            let mut best_deleted = false
+            let op_count = self.oplog.op_count()
+            for i = 0; i < op_count; i = i + 1 {
+              if operations.contains(i) {
+                continue // Skip retreated ops
+              }
+              match self.oplog.get_op(i) {
+                Some(other_op) => {
+                  let is_del_or_undel = match other_op.content() {
+                    @core.Delete | @core.Undelete => true
+                    _ => false
+                  }
+                  if not(is_del_or_undel) {
+                    continue
+                  }
+                  // Check if this op targets the same item
+                  let other_target = match other_op.origin_left() {
+                    None => continue
+                    Some(raw) =>
+                      match cg.raw_to_lv(raw) {
+                        Some(t) => t
+                        None => continue
+                      }
+                  }
+                  if other_target != target_lv {
+                    continue
+                  }
+                  // This op targets the same item and is in the common ancestor
+                  let (other_ts, other_agent) = match cg[i] {
+                    Some(entry) => (entry.timestamp, entry.agent)
+                    None => continue
+                  }
+                  let other_is_undelete = match other_op.content() {
+                    @core.Undelete => true
+                    _ => false
+                  }
+                  if @fugue.should_win_delete(
+                    other_ts,
+                    other_agent,
+                    other_is_undelete,
+                    best_ts,
+                    best_agent,
+                    best_is_undelete,
+                  ) {
+                    best_ts = other_ts
+                    best_agent = other_agent
+                    best_is_undelete = other_is_undelete
+                    best_deleted = not(other_is_undelete)
+                  }
+                }
+                None => continue
+              }
+            }
+            // Set the item to the recomputed winner state
+            self.tree.set_delete_winner(
+              @fugue.Lv(target_lv),
+              best_deleted,
+              best_ts,
+              best_agent,
+              best_is_undelete,
+            ) catch {
+              e => raise BranchError::Fugue(e)
+            }
+          }
+        }
+      None => raise BranchError::MissingOp(lv~)
     }
   }
 }

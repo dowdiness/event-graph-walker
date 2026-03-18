@@ -288,20 +288,28 @@ fn apply_operation_to_tree(
     }
     @core.Delete =>
       match origin_left {
-        Some(lv) =>
-          // Mark item as deleted
-          tree.delete(lv) catch {
+        Some(lv) => {
+          let (del_ts, del_agent) = match cg[op.lv()] {
+            Some(entry) => (entry.timestamp, entry.agent)
+            None => raise BranchError::MissingOp(lv=op.lv())
+          }
+          tree.delete_with_ts(lv, del_ts, del_agent) catch {
             e => raise BranchError::Fugue(e)
           }
+        }
         None => ()
       }
     @core.Undelete =>
       match origin_left {
-        Some(lv) =>
-          // Revive a previously deleted item
-          tree.undelete(lv) catch {
+        Some(lv) => {
+          let (undel_ts, undel_agent) = match cg[op.lv()] {
+            Some(entry) => (entry.timestamp, entry.agent)
+            None => raise BranchError::MissingOp(lv=op.lv())
+          }
+          tree.undelete_with_ts(lv, undel_ts, undel_agent) catch {
             e => raise BranchError::Fugue(e)
           }
+        }
         None => ()
       }
   }
