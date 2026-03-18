@@ -383,3 +383,86 @@ test "undelete on missing item raises MissingItem" {
     Ok(_) => fail("Expected MissingItem error")
   }
 }
+
+// =============================================================================
+// LWW Delete/Undelete convergent method tests
+// =============================================================================
+
+///|
+test "delete_with_ts: higher timestamp wins" {
+  let tree = @fugue.FugueTree::new()
+  let lv = @fugue.Lv(0)
+  tree.insert({
+    id: lv, content: "x", origin_left: None, origin_right: None,
+    timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+  })
+  try! tree.delete_with_ts(lv, 2, "alice")
+  inspect(tree.visible_count(), content="0")
+  // Undelete with ts=3 wins
+  try! tree.undelete_with_ts(lv, 3, "bob")
+  inspect(tree.visible_count(), content="1")
+  // Delete with ts=1 loses
+  try! tree.delete_with_ts(lv, 1, "charlie")
+  inspect(tree.visible_count(), content="1")
+}
+
+///|
+test "delete_with_ts: add-wins at same timestamp" {
+  let tree = @fugue.FugueTree::new()
+  let lv = @fugue.Lv(0)
+  tree.insert({
+    id: lv, content: "x", origin_left: None, origin_right: None,
+    timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+  })
+  try! tree.delete_with_ts(lv, 5, "alice")
+  inspect(tree.visible_count(), content="0")
+  // Undelete at same ts=5 wins (add-wins)
+  try! tree.undelete_with_ts(lv, 5, "bob")
+  inspect(tree.visible_count(), content="1")
+  // Delete at same ts=5 cannot override undelete (add-wins)
+  try! tree.delete_with_ts(lv, 5, "zack")
+  inspect(tree.visible_count(), content="1")
+}
+
+///|
+test "delete_with_ts: commutativity" {
+  let make_tree = fn() {
+    let tree = @fugue.FugueTree::new()
+    tree.insert({
+      id: @fugue.Lv(0), content: "x", origin_left: None, origin_right: None,
+      timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+    })
+    tree
+  }
+  let lv = @fugue.Lv(0)
+  // Order 1: delete(ts=3) then undelete(ts=2)
+  let t1 = make_tree()
+  try! t1.delete_with_ts(lv, 3, "alice")
+  try! t1.undelete_with_ts(lv, 2, "bob")
+  // Order 2: undelete(ts=2) then delete(ts=3)
+  let t2 = make_tree()
+  try! t2.undelete_with_ts(lv, 2, "bob")
+  try! t2.delete_with_ts(lv, 3, "alice")
+  // Both agree: delete at ts=3 wins
+  inspect(t1.visible_count(), content="0")
+  inspect(t2.visible_count(), content="0")
+}
+
+///|
+test "set_delete_winner: restores winner state" {
+  let tree = @fugue.FugueTree::new()
+  let lv = @fugue.Lv(0)
+  tree.insert({
+    id: lv, content: "x", origin_left: None, origin_right: None,
+    timestamp: @fugue.Timestamp(1), agent: @fugue.ReplicaId("alice"),
+  })
+  // Set winner to Delete(ts=5, alice)
+  try! tree.set_delete_winner(lv, true, 5, "alice", false)
+  inspect(tree.visible_count(), content="0")
+  // Set winner to Undelete(ts=3, bob)
+  try! tree.set_delete_winner(lv, false, 3, "bob", true)
+  inspect(tree.visible_count(), content="1")
+  // Set winner to initial (no op)
+  try! tree.set_delete_winner(lv, false, 0, "", false)
+  inspect(tree.visible_count(), content="1") // item starts visible
+}

@@ -129,7 +129,123 @@ pub fn[T] FugueTree::insert(self : FugueTree[T], op : InsertOp[T]) -> Unit {
 }
 
 ///|
-/// Delete an item (mark as deleted)
+/// LWW comparison for Delete/Undelete conflict resolution.
+/// Returns true if the new op wins over the current winner.
+///
+/// Rule: higher timestamp wins. Same timestamp: Undelete beats Delete (add-wins).
+/// Same timestamp and type: higher agent ID wins.
+pub fn should_win_delete(
+  new_ts : Int,
+  new_agent : String,
+  new_is_undelete : Bool,
+  cur_ts : Int,
+  cur_agent : String,
+  cur_is_undelete : Bool,
+) -> Bool {
+  if cur_ts == 0 && cur_agent == "" {
+    return true // No previous winner, always apply
+  }
+  if new_ts != cur_ts {
+    return new_ts > cur_ts
+  }
+  // Same timestamp: Undelete beats Delete (add-wins)
+  if new_is_undelete != cur_is_undelete {
+    return new_is_undelete
+  }
+  // Same timestamp, same type: agent tiebreaker
+  new_agent > cur_agent
+}
+
+///|
+/// Convergent delete: only applies if this op wins the LWW comparison.
+pub fn[T] FugueTree::delete_with_ts(
+  self : FugueTree[T],
+  id : Lv,
+  ts : Int,
+  agent : String,
+) -> Unit raise FugueError {
+  if id == root_lv {
+    return
+  }
+  match self[id] {
+    Some(item) =>
+      if should_win_delete(
+        ts, agent, false, item.deleted_ts, item.deleted_agent, item.deleted_is_undelete,
+      ) {
+        if not(item.deleted) {
+          self.visible = self.visible - 1
+        }
+        self.items = self.items.add(
+          id,
+          { ..item, deleted: true, deleted_ts: ts, deleted_agent: agent, deleted_is_undelete: false },
+        )
+      }
+    None => raise FugueError::MissingItem(id~)
+  }
+}
+
+///|
+/// Convergent undelete: only applies if this op wins the LWW comparison.
+pub fn[T] FugueTree::undelete_with_ts(
+  self : FugueTree[T],
+  id : Lv,
+  ts : Int,
+  agent : String,
+) -> Unit raise FugueError {
+  match self[id] {
+    Some(item) =>
+      if should_win_delete(
+        ts, agent, true, item.deleted_ts, item.deleted_agent, item.deleted_is_undelete,
+      ) {
+        if item.deleted {
+          self.visible = self.visible + 1
+        }
+        self.items = self.items.add(
+          id,
+          { ..item, deleted: false, deleted_ts: ts, deleted_agent: agent, deleted_is_undelete: true },
+        )
+      }
+    None => raise FugueError::MissingItem(id~)
+  }
+}
+
+///|
+/// Force-set the delete winner state. Used by retreat to restore a recomputed winner.
+/// No LWW comparison -- directly sets the state.
+pub fn[T] FugueTree::set_delete_winner(
+  self : FugueTree[T],
+  id : Lv,
+  deleted : Bool,
+  ts : Int,
+  agent : String,
+  is_undelete : Bool,
+) -> Unit raise FugueError {
+  match self[id] {
+    Some(item) => {
+      if item.deleted && not(deleted) {
+        self.visible = self.visible + 1
+      } else if not(item.deleted) && deleted {
+        self.visible = self.visible - 1
+      }
+      self.items = self.items.add(
+        id,
+        {
+          ..item,
+          deleted,
+          deleted_ts: ts,
+          deleted_agent: agent,
+          deleted_is_undelete: is_undelete,
+        },
+      )
+    }
+    None => raise FugueError::MissingItem(id~)
+  }
+}
+
+///|
+/// Delete an item (mark as deleted).
+/// Force-delete: always applies. Updates winner record to zero state.
+/// Used for retreat of Insert ops and local edits.
 pub fn[T] FugueTree::delete(
   self : FugueTree[T],
   id : Lv,
@@ -145,8 +261,10 @@ pub fn[T] FugueTree::delete(
       if not(item.deleted) {
         self.visible = self.visible - 1
       }
-      let deleted_item = item.mark_deleted()
-      self.items = self.items.add(id, deleted_item)
+      self.items = self.items.add(
+        id,
+        { ..item, deleted: true, deleted_ts: 0, deleted_agent: "", deleted_is_undelete: false },
+      )
     }
     None => raise FugueError::MissingItem(id~)
   }
@@ -154,6 +272,7 @@ pub fn[T] FugueTree::delete(
 
 ///|
 /// Undelete an item (revive tombstone). Idempotent for already-visible items.
+/// Force-undelete: always applies when item is deleted. Updates winner record to zero state.
 pub fn[T] FugueTree::undelete(
   self : FugueTree[T],
   id : Lv,
@@ -162,8 +281,10 @@ pub fn[T] FugueTree::undelete(
     Some(item) =>
       if item.deleted {
         self.visible = self.visible + 1
-        let visible_item = item.mark_visible()
-        self.items = self.items.add(id, visible_item)
+        self.items = self.items.add(
+          id,
+          { ..item, deleted: false, deleted_ts: 0, deleted_agent: "", deleted_is_undelete: true },
+        )
       }
     None => raise FugueError::MissingItem(id~)
   }

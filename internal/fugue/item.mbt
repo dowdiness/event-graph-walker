@@ -120,18 +120,6 @@ fn[T] Item::new(
 }
 
 ///|
-/// Mark item as deleted
-fn[T] Item::mark_deleted(self : Item[T]) -> Item[T] {
-  { ..self, deleted: true }
-}
-
-///|
-/// Mark item as visible (revive tombstone)
-fn[T] Item::mark_visible(self : Item[T]) -> Item[T] {
-  { ..self, deleted: false }
-}
-
-///|
 /// Check if item is visible (not deleted)
 fn[T] Item::is_visible(self : Item[T]) -> Bool {
   not(self.deleted)
