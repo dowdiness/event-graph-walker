@@ -3,7 +3,7 @@
 ///|
 /// OpLog - stores operations with causal graph
 pub struct OpLog {
-  priv operations : Array[@core.Op] // All operations in LV order
+  priv operations : @rle.Rle[@core.OpRun] // All operations in LV order, RLE-compressed
   priv mut pending : Array[@core.Op] // Remote ops waiting for missing parents
   priv graph : @causal_graph.CausalGraph // The causal graph
   priv agent_id : String // This agent's ID
@@ -13,7 +13,7 @@ pub struct OpLog {
 /// Create a new OpLog
 pub fn OpLog::new(agent_id : String) -> OpLog {
   {
-    operations: [],
+    operations: @rle.Rle::new(),
     pending: [],
     graph: @causal_graph.CausalGraph::new(),
     agent_id,
@@ -29,7 +29,11 @@ pub fn OpLog::causal_graph(self : OpLog) -> @causal_graph.CausalGraph {
 ///|
 /// Add a new operation to the log
 fn OpLog::add_op(self : OpLog, op : @core.Op) -> Unit {
-  self.operations.push(op)
+  let run = @core.OpRun::from_op(op)
+  match self.operations.append(run) {
+    Ok(_) => ()
+    Err(_) => () // OpRun with count=1 always has span > 0
+  }
 }
 
 ///|
@@ -149,10 +153,16 @@ pub fn OpLog::undelete(
 /// beyond the end of the log. All valid LVs in `[0, op_count())` are
 /// guaranteed to return `Some`.
 pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
-  if lv >= 0 && lv < self.operations.length() {
-    Some(self.operations[lv])
-  } else {
-    None
+  if lv < 0 {
+    return None
+  }
+  match self.operations.find(lv) {
+    Some(pos) =>
+      match self.operations.get(pos.run) {
+        Some(run) => run.decompress(pos.offset)
+        None => None
+      }
+    None => None
   }
 }
 
@@ -189,22 +199,24 @@ pub fn OpLog::get_ops_rle(
 }
 
 ///|
-/// Get all operations (returns a copy for safety)
+/// Get all operations by expanding all runs.
 pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
-  self.ops_ref().copy()
-}
-
-///|
-/// Get all operations without copying (for internal/read-only use)
-/// Callers must not mutate the returned array.
-fn OpLog::ops_ref(self : OpLog) -> Array[@core.Op] {
-  self.operations
+  let result : Array[@core.Op] = []
+  for run in self.operations.iter() {
+    for offset = 0; offset < run.count; offset = offset + 1 {
+      match run.decompress(offset) {
+        Some(op) => result.push(op)
+        None => ()
+      }
+    }
+  }
+  result
 }
 
 ///|
 /// Get operation count
 pub fn OpLog::op_count(self : OpLog) -> Int {
-  self.operations.length()
+  self.operations.span()
 }
 
 ///|

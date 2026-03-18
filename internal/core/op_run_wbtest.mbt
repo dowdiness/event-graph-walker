@@ -200,7 +200,27 @@ test "can_merge: multiple parents does not merge" {
 }
 
 ///|
-test "can_merge: consecutive deletes merge" {
+test "can_merge: consecutive deletes with sequential origin_left merge" {
+  // Deletes of consecutive items (origin_left chains sequentially)
+  let run_a = OpRun::from_op(
+    Op::new_delete(0, [], "alice", 0, Some(RawVersion::new("bob", 0))),
+  )
+  // origin_left must be RawVersion("alice", 0) — the previous op in the run
+  let run_b = OpRun::from_op(
+    Op::new_delete(
+      1,
+      [RawVersion::new("alice", 0)],
+      "alice",
+      1,
+      Some(RawVersion::new("alice", 0)),
+    ),
+  )
+  inspect(@rle.Mergeable::can_merge(run_a, run_b), content="true")
+}
+
+///|
+test "can_merge: consecutive deletes with non-sequential origin_left do not merge" {
+  // Undo deletes target different items — origin_left doesn't chain
   let run_a = OpRun::from_op(
     Op::new_delete(0, [], "alice", 0, Some(RawVersion::new("bob", 0))),
   )
@@ -213,7 +233,7 @@ test "can_merge: consecutive deletes merge" {
       Some(RawVersion::new("bob", 1)),
     ),
   )
-  inspect(@rle.Mergeable::can_merge(run_a, run_b), content="true")
+  inspect(@rle.Mergeable::can_merge(run_a, run_b), content="false")
 }
 
 ///|

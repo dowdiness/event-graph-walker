@@ -127,8 +127,20 @@ pub impl @rle.Mergeable for OpRun with can_merge(a : OpRun, b : OpRun) -> Bool {
       }
       true
     }
-    (Deletes, Deletes) => true
-    (Undeletes, Undeletes) => true
+    (Deletes, Deletes) => {
+      // Delete origin_left is the target item being deleted — only merge
+      // when targets chain sequentially (consecutive item deletions).
+      let expected_origin_left = Some(
+        RawVersion::new(a.agent, a.start_seq + a.count - 1),
+      )
+      b.origin_left == expected_origin_left
+    }
+    (Undeletes, Undeletes) => {
+      let expected_origin_left = Some(
+        RawVersion::new(a.agent, a.start_seq + a.count - 1),
+      )
+      b.origin_left == expected_origin_left
+    }
     _ => false
   }
 }
