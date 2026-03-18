@@ -3,10 +3,9 @@
 // Property-based tests that verify N-agent CRDT convergence under arbitrary
 // interleaving of inserts, deletes, undo/redo, and partial syncs.
 //
-// KNOWN BUG: Multi-agent convergence fails when undo/redo operations are
-// combined with partial syncs. See the reproduction test below for the minimal
-// counterexample found by QuickCheck. The insert/delete-only variant (without
-// undo/redo) passes, confirming the issue is specific to undo+sync interaction.
+// The Delete/Undelete divergence bug has been FIXED via LWW conflict resolution
+// with Lamport timestamps (add-wins semantics). All property tests including
+// undo/redo now pass.
 
 ///|
 /// Actions an agent can take during a fuzz trace.
@@ -211,12 +210,9 @@ test "property: multi-agent convergence (insert/delete/sync, no undo)" {
 }
 
 ///|
-/// KNOWN BUG: Convergence fails when undo/redo is interleaved with partial syncs.
-/// This is the minimal counterexample found by QuickCheck.
-/// Once the undo+sync convergence bug is fixed, this test should be changed
-/// to assert convergence (result == true) and the full property test can be
-/// re-enabled.
-test "known-bug: undo+sync multi-agent convergence counterexample" {
+/// FIXED: LWW conflict resolution on Delete/Undelete ops.
+/// Previously failed due to non-commutative boolean setters.
+test "regression: undo+sync multi-agent convergence (was known-bug)" {
   let trace : MultiAgentTrace = {
     num_agents: 2,
     actions: [
@@ -249,9 +245,16 @@ test "known-bug: undo+sync multi-agent convergence counterexample" {
     ],
   }
   let result = run_trace_and_check_convergence(trace)
-  // Currently false due to undo+sync convergence bug.
-  // When fixed, change to: assert_true!(result)
-  assert_false(result)
+  assert_true!(result)
+}
+
+///|
+/// Property: multi-agent convergence with undo/redo.
+/// Now enabled after LWW Delete/Undelete fix.
+test "property: multi-agent convergence with undo/redo" {
+  @qc.quick_check_fn(fn(trace : MultiAgentTrace) -> Bool {
+    run_trace_and_check_convergence(trace)
+  })
 }
 
 ///|
