@@ -9,6 +9,8 @@ pub struct FugueTree[T] {
   mut length : Int // Total items (including deleted)
   mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
   mut children : @immut/hashmap.HashMap[Lv, Array[Lv]] // Children index: parent → [child LVs]
+  mut lca_index : LcaIndex? // Euler Tour + Sparse Table for O(1) ancestor queries
+  mut batch_inserting : Bool // True during batch operations (use naive walk instead of LCA)
 } derive(Show)
 
 ///|
@@ -44,7 +46,14 @@ pub fn[T] FugueTree::make(root_content : T) -> FugueTree[T] {
   items = items.add(root_lv, root_item)
   let mut children = @immut/hashmap.HashMap::new()
   children = children.add(root_lv, [])
-  { items, length: 0, visible: 0, children }
+  {
+    items,
+    length: 0,
+    visible: 0,
+    children,
+    lca_index: None,
+    batch_inserting: false,
+  }
 }
 
 ///|
@@ -337,26 +346,21 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
   self.items = self.items.add(item.id, item)
   self.length = self.length + 1
   self.visible = self.visible + 1
-  // Update children index: add item.id to its parent's children list
+  // Update children index: add item.id to its parent's children list.
+  // In-place push is safe: get_children_index() returns .copy() for external
+  // callers, and no code retains old hashmap snapshots during mutation.
   match item.parent {
-    Some(parent_lv) => {
-      let parent_children = match self.children.get(parent_lv) {
-        Some(arr) => {
-          let new_arr = arr.copy()
-          new_arr.push(item.id)
-          new_arr
-        }
-        None => [item.id]
+    Some(parent_lv) =>
+      match self.children.get(parent_lv) {
+        Some(arr) => arr.push(item.id)
+        None => self.children = self.children.add(parent_lv, [item.id])
       }
-      self.children = self.children.add(parent_lv, parent_children)
-    }
     None => ()
   }
-  // Ensure the new item itself has an entry in children index
-  match self.children.get(item.id) {
-    Some(_) => ()
-    None => self.children = self.children.add(item.id, [])
-  }
+  // New items always need an empty children entry
+  self.children = self.children.add(item.id, [])
+  // Invalidate LCA index — tree structure has changed
+  self.lca_index = None
 }
 
 ///|
@@ -375,8 +379,28 @@ fn[T : Eq] compare_children(a : (Lv, Item[T]), b : (Lv, Item[T])) -> Int {
 }
 
 ///|
-/// Check whether `ancestor_id` is an ancestor of `descendant_id`.
-pub fn[T] FugueTree::is_ancestor(
+/// Build or rebuild the LCA index from the current tree state.
+pub fn[T] FugueTree::build_lca_index(self : FugueTree[T]) -> Unit {
+  self.lca_index = Some(LcaIndex::build(self))
+}
+
+///|
+/// Set/clear the batch-inserting flag.
+/// When cleared, the stale LCA index is discarded so the next
+/// `is_ancestor` call will lazily rebuild it.
+pub fn[T] FugueTree::set_batch_inserting(
+  self : FugueTree[T],
+  value : Bool,
+) -> Unit {
+  self.batch_inserting = value
+  if not(value) {
+    self.lca_index = None // Clear stale index when batch ends
+  }
+}
+
+///|
+/// Naive parent-walk ancestor check. O(tree height).
+pub fn[T] FugueTree::is_ancestor_naive(
   self : FugueTree[T],
   ancestor_id : Lv,
   descendant_id : Lv,
@@ -396,6 +420,32 @@ pub fn[T] FugueTree::is_ancestor(
         None => break false // Reached root without finding ancestor
       }
     None => break false
+  }
+}
+
+///|
+/// Check whether `ancestor_id` is an ancestor of `descendant_id`.
+/// Uses LCA index for O(1) when available, falls back to naive walk during batch inserts.
+pub fn[T] FugueTree::is_ancestor(
+  self : FugueTree[T],
+  ancestor_id : Lv,
+  descendant_id : Lv,
+) -> Bool {
+  if ancestor_id == descendant_id {
+    return true
+  }
+  if self.batch_inserting {
+    return self.is_ancestor_naive(ancestor_id, descendant_id)
+  }
+  match self.lca_index {
+    Some(idx) => idx.is_ancestor(ancestor_id, descendant_id)
+    None => {
+      self.build_lca_index()
+      match self.lca_index {
+        Some(idx) => idx.is_ancestor(ancestor_id, descendant_id)
+        None => self.is_ancestor_naive(ancestor_id, descendant_id)
+      }
+    }
   }
 }
 
@@ -500,25 +550,26 @@ test "find parent and side with origin_left" {
 }
 
 ///|
-/// Get all children of a node (excluding cycles)
-fn[T] FugueTree::get_children(
-  self : FugueTree[T],
-  parent_id : Lv,
-) -> @immut/hashmap.HashMap[Lv, Item[T]] {
-  self.items.filter(fn(id, item) {
-    item.parent == Some(parent_id) && id != parent_id
-  })
-}
-
-///|
 /// Get children LVs for a node using the children index (O(1) lookup).
-/// Returns a copy of the array to prevent mutation during traversal.
+/// Returns a copy of the array to prevent mutation by callers.
 pub fn[T] FugueTree::get_children_index(
   self : FugueTree[T],
   parent_id : Lv,
 ) -> Array[Lv] {
   match self.children.get(parent_id) {
     Some(arr) => arr.copy()
+    None => []
+  }
+}
+
+///|
+/// Get children LVs without copying. Internal use only — callers must not mutate.
+fn[T] FugueTree::get_children_raw(
+  self : FugueTree[T],
+  parent_id : Lv,
+) -> Array[Lv] {
+  match self.children.get(parent_id) {
+    Some(arr) => arr
     None => []
   }
 }
@@ -550,7 +601,7 @@ fn[T : Eq] FugueTree::traverse_tree(
   visible_only~ : Bool,
 ) -> Unit {
   // Use children index instead of filtering entire HashMap (O(1) vs O(n))
-  let child_lvs = self.get_children_index(node_id)
+  let child_lvs = self.get_children_raw(node_id)
   let children_with_items : Array[(Lv, Item[T])] = []
   for lv in child_lvs {
     match self[lv] {

@@ -21,7 +21,10 @@ pub struct FugueTree[T] {
   mut length : Int
   mut visible : Int
   mut children : @hashmap.HashMap[Lv, Array[Lv]]
+  mut lca_index : LcaIndex?
+  mut batch_inserting : Bool
 }
+pub fn[T] FugueTree::build_lca_index(Self[T]) -> Unit
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
 pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
 pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
@@ -32,10 +35,12 @@ pub fn[T] FugueTree::get_children_index(Self[T], Lv) -> Array[Lv]
 pub fn[T : Eq] FugueTree::get_visible_items(Self[T]) -> Array[(Lv, Item[T])]
 pub fn[T] FugueTree::insert(Self[T], InsertOp[T]) -> Unit
 pub fn[T] FugueTree::is_ancestor(Self[T], Lv, Lv) -> Bool
+pub fn[T] FugueTree::is_ancestor_naive(Self[T], Lv, Lv) -> Bool
 pub fn[T : Eq] FugueTree::iter(Self[T]) -> Iter[(Lv, Item[T])]
 pub fn[T : Eq] FugueTree::lv_to_position(Self[T], Lv) -> Int?
 pub fn[T] FugueTree::make(T) -> Self[T]
 pub fn[T : Default] FugueTree::new() -> Self[T]
+pub fn[T] FugueTree::set_batch_inserting(Self[T], Bool) -> Unit
 pub fn[T] FugueTree::set_delete_winner(Self[T], Lv, Bool, Int, String, Bool) -> Unit raise FugueError
 pub fn FugueTree::to_text(Self[String]) -> String
 pub fn[T] FugueTree::undelete(Self[T], Lv) -> Unit raise FugueError
@@ -67,6 +72,9 @@ pub(all) struct Item[T] {
 }
 pub impl[T : Eq] Eq for Item[T]
 pub impl[T : Show] Show for Item[T]
+
+type LcaIndex
+pub impl Show for LcaIndex
 
 pub(all) struct Lv(Int)
 #deprecated

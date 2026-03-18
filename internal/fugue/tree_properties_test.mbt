@@ -215,6 +215,46 @@ pub impl @qc.Shrink for ChainLen with shrink(self) {
 }
 
 ///|
+/// Property: LCA-based is_ancestor matches naive parent-walk for every pair in a chain.
+fn prop_lca_matches_naive(chain : ChainLen) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("agent0"),
+  })
+  for i = 1; i < chain.len; i = i + 1 {
+    tree.insert({
+      id: @fugue.Lv(i),
+      content: "A",
+      origin_left: Some(@fugue.Lv(i - 1)),
+      origin_right: None,
+      timestamp: @fugue.Timestamp(i),
+      agent: @fugue.ReplicaId("agent0"),
+    })
+  }
+  tree.build_lca_index()
+  for a = 0; a < chain.len; a = a + 1 {
+    for b = a; b < chain.len; b = b + 1 {
+      let lca_result = tree.is_ancestor(@fugue.Lv(a), @fugue.Lv(b))
+      let naive_result = tree.is_ancestor_naive(@fugue.Lv(a), @fugue.Lv(b))
+      if lca_result != naive_result {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+test "property: LCA is_ancestor matches naive walk" {
+  @qc.quick_check_fn(prop_lca_matches_naive)
+}
+
+///|
 /// Property (L5.2): ancestor is reflexive for all items.
 /// Guarantees is_ancestor(x, x) is true for every node.
 fn prop_fugue_ancestor_reflexive(chain : ChainLen) -> Bool {

@@ -409,7 +409,9 @@ pub fn Document::apply_remote(
 
   // Apply any newly-resolved operations to the tree
   let cg = self.oplog.causal_graph()
-  for applied in applied_ops {
+  self.tree.set_batch_inserting(true)
+  let batch_result : Result[Unit, DocumentError] = try? (for
+    applied in applied_ops {
     let origin_left : @fugue.Lv? = match applied.origin_left() {
       None => None
       Some(raw) =>
@@ -478,6 +480,11 @@ pub fn Document::apply_remote(
           None => ()
         }
     }
+  })
+  self.tree.set_batch_inserting(false)
+  match batch_result {
+    Ok(_) => ()
+    Err(e) => raise e
   }
 }
 
