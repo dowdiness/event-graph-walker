@@ -167,7 +167,8 @@ pub fn Document::insert(
         (ol, or)
       }
       _ => {
-        // Cursor miss: full cache lookup (existing code)
+        // Cursor miss: invalidate stale cache before reading, then do full lookup
+        self.invalidate_cache()
         let ol = self.position_to_lv(current_pos)
         let or = match self.lv_at_position(current_pos) {
           Some(lv) => lv
@@ -205,8 +206,7 @@ pub fn Document::insert(
       timestamp: @fugue.Timestamp(timestamp),
       agent: @fugue.ReplicaId(agent),
     })
-    self.invalidate_cache()
-    // Update cursor
+    // Update cursor (no invalidation here — done per-branch above or once after loop)
     self.cursor = Some({
       position: current_pos,
       lv: op.lv(),
@@ -216,6 +216,8 @@ pub fn Document::insert(
     last_op = Some(op)
     current_pos = current_pos + 1
   }
+  // Final invalidation: ensures the cache reflects all inserts from this call.
+  self.invalidate_cache()
 
   match last_op {
     Some(op) => op

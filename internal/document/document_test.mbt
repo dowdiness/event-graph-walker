@@ -122,6 +122,19 @@ test "cache coherent after merge_remote: positions reflect merged state" {
 }
 
 ///|
+test "multi-char insert at non-end position" {
+  let doc = @document.Document::new("alice")
+  for i = 0; i < 5; i = i + 1 {
+    let ch = "hello"[i:i + 1].to_string()
+    ignore(try! doc.insert(i, ch))
+  }
+  inspect(doc.to_text(), content="hello")
+  ignore(try! doc.insert(2, "X"))
+  ignore(try! doc.insert(3, "Y"))
+  inspect(doc.to_text(), content="heXYllo")
+}
+
+///|
 test "cache coherent: interleaved local and remote edits maintain consistency" {
   let alice = Document::new("alice")
   let bob = Document::new("bob")
