@@ -8,6 +8,7 @@ pub struct FugueTree[T] {
   mut items : @immut/hashmap.HashMap[Lv, Item[T]] // Map from LV to Item
   mut length : Int // Total items (including deleted)
   mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
+  mut children : @immut/hashmap.HashMap[Lv, Array[Lv]] // Children index: parent → [child LVs]
 } derive(Show)
 
 ///|
@@ -41,7 +42,9 @@ pub fn[T] FugueTree::make(root_content : T) -> FugueTree[T] {
   )
   let mut items = @immut/hashmap.new()
   items = items.add(root_lv, root_item)
-  { items, length: 0, visible: 0 }
+  let mut children = @immut/hashmap.HashMap::new()
+  children = children.add(root_lv, [])
+  { items, length: 0, visible: 0, children }
 }
 
 ///|
@@ -334,6 +337,26 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
   self.items = self.items.add(item.id, item)
   self.length = self.length + 1
   self.visible = self.visible + 1
+  // Update children index: add item.id to its parent's children list
+  match item.parent {
+    Some(parent_lv) => {
+      let parent_children = match self.children.get(parent_lv) {
+        Some(arr) => {
+          let new_arr = arr.copy()
+          new_arr.push(item.id)
+          new_arr
+        }
+        None => [item.id]
+      }
+      self.children = self.children.add(parent_lv, parent_children)
+    }
+    None => ()
+  }
+  // Ensure the new item itself has an entry in children index
+  match self.children.get(item.id) {
+    Some(_) => ()
+    None => self.children = self.children.add(item.id, [])
+  }
 }
 
 ///|
@@ -488,18 +511,32 @@ fn[T] FugueTree::get_children(
 }
 
 ///|
+/// Get children LVs for a node using the children index (O(1) lookup).
+/// Returns a copy of the array to prevent mutation during traversal.
+pub fn[T] FugueTree::get_children_index(
+  self : FugueTree[T],
+  parent_id : Lv,
+) -> Array[Lv] {
+  match self.children.get(parent_id) {
+    Some(arr) => arr.copy()
+    None => []
+  }
+}
+
+///|
 /// Partition children into left and right sides
 fn[T] partition_children(
-  children : @immut/hashmap.HashMap[Lv, Item[T]],
+  children : Array[(Lv, Item[T])],
 ) -> (Array[(Lv, Item[T])], Array[(Lv, Item[T])]) {
   let left = []
   let right = []
-  children.each((id, item) => {
+  for child in children {
+    let (_, item) = child
     match item.side {
-      Left => left.push((id, item))
-      Right => right.push((id, item))
+      Left => left.push(child)
+      Right => right.push(child)
     }
-  })
+  }
   (left, right)
 }
 
@@ -512,11 +549,18 @@ fn[T : Eq] FugueTree::traverse_tree(
   result : Array[(Lv, Item[T])],
   visible_only~ : Bool,
 ) -> Unit {
-  // Get children of current node (excluding the node itself to prevent cycles)
-  let children = self.get_children(node_id)
+  // Use children index instead of filtering entire HashMap (O(1) vs O(n))
+  let child_lvs = self.get_children_index(node_id)
+  let children_with_items : Array[(Lv, Item[T])] = []
+  for lv in child_lvs {
+    match self[lv] {
+      Some(item) => children_with_items.push((lv, item))
+      None => ()
+    }
+  }
 
   // Split into left and right children
-  let (left_children, right_children) = partition_children(children)
+  let (left_children, right_children) = partition_children(children_with_items)
 
   // Traverse left children (sorted by timestamp, then ID)
   let sorted_left = left_children

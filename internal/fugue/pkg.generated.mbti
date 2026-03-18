@@ -20,6 +20,7 @@ pub struct FugueTree[T] {
   mut items : @hashmap.HashMap[Lv, Item[T]]
   mut length : Int
   mut visible : Int
+  mut children : @hashmap.HashMap[Lv, Array[Lv]]
 }
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
 pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
@@ -27,6 +28,7 @@ pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
 #alias("_[_]")
 pub fn[T] FugueTree::get(Self[T], Lv) -> Item[T]?
 pub fn[T : Eq] FugueTree::get_all_items(Self[T]) -> Array[(Lv, Item[T])]
+pub fn[T] FugueTree::get_children_index(Self[T], Lv) -> Array[Lv]
 pub fn[T : Eq] FugueTree::get_visible_items(Self[T]) -> Array[(Lv, Item[T])]
 pub fn[T] FugueTree::insert(Self[T], InsertOp[T]) -> Unit
 pub fn[T] FugueTree::is_ancestor(Self[T], Lv, Lv) -> Bool

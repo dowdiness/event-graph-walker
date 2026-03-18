@@ -482,3 +482,29 @@ test "set_delete_winner: restores winner state" {
   try! tree.set_delete_winner(lv, false, 0, "", false)
   inspect(tree.visible_count(), content="1") // item starts visible
 }
+
+///|
+test "children index matches filtered scan" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
+  tree.insert(ins(2, "C", 1, -1, 2, "agent0"))
+  tree.insert(ins(3, "D", 0, -1, 3, "agent1"))
+  let children_of_a = tree.get_children_index(@fugue.Lv(0))
+  inspect(children_of_a.length(), content="2")
+  let children_of_b = tree.get_children_index(@fugue.Lv(1))
+  inspect(children_of_b.length(), content="1")
+  let children_of_c = tree.get_children_index(@fugue.Lv(2))
+  inspect(children_of_c.length(), content="0")
+}
+
+///|
+test "children index: same parent, different sides" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  tree.insert(ins(2, "C", 0, -1, 2, "agent0"))
+  tree.insert(ins(1, "B", 0, 2, 1, "agent1"))
+  inspect(tree.to_text(), content="ABC")
+  let children_of_c = tree.get_children_index(@fugue.Lv(2))
+  inspect(children_of_c.length(), content="1")
+}
