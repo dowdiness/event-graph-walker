@@ -344,12 +344,13 @@ test "merge - context apply operations (50 ops)" (b : @bench.T) {
 
   // Create 50 operations
   let mut prev = -1
-  let lvs = []
+  let lv_ints = []
   for i = 0; i < 50; i = i + 1 {
     let op = try! oplog.insert("a", prev, -1)
-    lvs.push(op.lv())
+    lv_ints.push(op.lv())
     prev = op.lv()
   }
+  let lvs : @rle.Rle[@core.LvRange] = @rle.Rle::from_sorted_ints(lv_ints)
   b.bench(fn() {
     let ctx = MergeContext::new(tree, oplog)
     try! ctx.apply_operations(lvs)

@@ -2,6 +2,7 @@
 package "dowdiness/event-graph-walker/internal/core"
 
 import {
+  "dowdiness/rle",
   "moonbitlang/core/json",
 }
 
@@ -29,6 +30,20 @@ pub(all) struct GraphEntry {
 }
 pub impl Show for GraphEntry
 
+pub(all) struct LvRange {
+  start : Int
+  count : Int
+}
+pub fn LvRange::contains(Self, Int) -> Bool
+pub fn LvRange::end(Self) -> Int
+pub impl @rle.Addressable for LvRange
+pub impl @rle.FromRange for LvRange
+pub impl @rle.HasLength for LvRange
+pub impl @rle.Mergeable for LvRange
+pub impl @rle.Spanning for LvRange
+pub impl Eq for LvRange
+pub impl Show for LvRange
+
 pub struct Op {
   // private fields
 }
@@ -41,6 +56,7 @@ pub fn Op::is_insert(Self) -> Bool
 pub fn Op::is_undelete(Self) -> Bool
 pub fn Op::lv(Self) -> Int
 pub fn Op::new_delete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
+pub fn Op::new_from_parts(lv~ : Int, parents~ : Array[RawVersion], agent~ : String, seq~ : Int, content~ : OpContent, origin_left~ : RawVersion?, origin_right~ : RawVersion?) -> Self
 pub fn Op::new_insert(Int, Array[RawVersion], String, Int, String, RawVersion?, RawVersion?) -> Self
 pub fn Op::new_undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
 pub fn Op::origin_left(Self) -> RawVersion?
@@ -61,6 +77,32 @@ pub impl Eq for OpContent
 pub impl Show for OpContent
 pub impl ToJson for OpContent
 pub impl @json.FromJson for OpContent
+
+pub struct OpRun {
+  start_lv : Int
+  agent : String
+  start_seq : Int
+  content : OpRunContent
+  parents : Array[RawVersion]
+  origin_left : RawVersion?
+  origin_right : RawVersion?
+  count : Int
+}
+pub fn OpRun::decompress(Self, Int) -> Op?
+pub fn OpRun::from_op(Op) -> Self
+pub impl @rle.HasLength for OpRun
+pub impl @rle.Mergeable for OpRun
+pub impl @rle.Spanning for OpRun
+pub impl Eq for OpRun
+pub impl Show for OpRun
+
+pub enum OpRunContent {
+  Inserts(String)
+  Deletes
+  Undeletes
+}
+pub impl Eq for OpRunContent
+pub impl Show for OpRunContent
 
 pub struct RawVersion {
   agent : String

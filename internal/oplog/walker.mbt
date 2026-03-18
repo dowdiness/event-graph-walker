@@ -13,8 +13,8 @@ pub fn OpLog::walk_and_collect(
   self : OpLog,
   frontier : @core.Frontier,
 ) -> Array[@core.Op] {
-  // Use the causal graph walker
-  self.get_ops(self.graph.walk_from_frontier(frontier))
+  // Use the causal graph walker (returns Rle[LvRange], expanded by get_ops_rle)
+  self.get_ops_rle(self.graph.walk_from_frontier(frontier))
 }
 
 ///|
@@ -58,5 +58,5 @@ pub fn OpLog::diff_and_collect(
   )
 
   // (in reverse order, in forward order)
-  (self.get_ops(retreat_lvs), self.get_ops(advance_lvs))
+  (self.get_ops_rle(retreat_lvs), self.get_ops_rle(advance_lvs))
 }

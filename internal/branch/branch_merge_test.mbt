@@ -257,7 +257,9 @@ test "merge error - missing op during apply" {
 
   // Try to apply operations including a non-existent LV
   let result : Result[Unit, BranchError] = try {
-    ctx.apply_operations([999])
+    ctx.apply_operations(
+      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1 }]),
+    )
     Ok(())
   } catch {
     e => Err(e)
@@ -303,7 +305,9 @@ test "merge error - apply operations succeeds for valid ops" {
 
   // Apply op2 through merge context - should succeed
   let result : Result[Unit, BranchError] = try {
-    ctx.apply_operations([op2.lv()])
+    ctx.apply_operations(
+      @rle.Rle::from_array([@core.LvRange::{ start: op2.lv(), count: 1 }]),
+    )
     Ok(())
   } catch {
     e => Err(e)
@@ -356,7 +360,9 @@ test "merge error - state unchanged after failure" {
 
   // Try an operation that will fail
   let result : Result[Unit, BranchError] = try {
-    ctx.apply_operations([999])
+    ctx.apply_operations(
+      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1 }]),
+    )
     Ok(())
   } catch {
     e => Err(e)
@@ -409,7 +415,9 @@ test "retreat then apply with missing item" {
   // Try to retreat a non-existent item - should raise MissingOp
   // (retreat now looks up the op in the oplog first)
   let result : Result[Unit, BranchError] = try {
-    ctx.retreat_operations([999])
+    ctx.retreat_operations(
+      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1 }]),
+    )
     Ok(())
   } catch {
     e => Err(e)

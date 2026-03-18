@@ -10,9 +10,9 @@ pub struct Document {
   priv tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
   agent_id : String
-  // Position cache: maps position -> (Lv, Item[String]) for O(1) lookup
-  // Invalidated on any modification (set to None)
-  priv mut position_cache : Array[(@fugue.Lv, @fugue.Item[String])]?
+  // Compressed position cache: maps position -> VisibleRun via O(log n) lookup.
+  // Invalidated on any modification (set to None). Rebuilt lazily on demand.
+  priv mut position_cache : @rle.Rle[VisibleRun]?
 } derive(Show)
 
 ///|
@@ -57,17 +57,42 @@ pub fn Document::get_frontier_raw(
 }
 
 ///|
-/// Get or build the position cache (lazy initialization)
-fn Document::get_position_cache(
-  self : Document,
-) -> Array[(@fugue.Lv, @fugue.Item[String])] {
+/// Build the compressed position cache from visible tree items.
+fn Document::build_position_cache(self : Document) -> @rle.Rle[VisibleRun] {
+  let items = self.tree.get_visible_items()
+  let rle : @rle.Rle[VisibleRun] = @rle.Rle::new()
+  for i = 0; i < items.length(); i = i + 1 {
+    let (lv, item) = items[i]
+    let _ = rle.append({ start_lv: lv.0, text: item.content, count: 1 })
+  }
+  rle
+}
+
+///|
+/// Get or build the compressed position cache (lazy initialization).
+fn Document::get_compressed_cache(self : Document) -> @rle.Rle[VisibleRun] {
   match self.position_cache {
     Some(cache) => cache
     None => {
-      let cache = self.tree.get_visible_items()
+      let cache = self.build_position_cache()
       self.position_cache = Some(cache)
       cache
     }
+  }
+}
+
+///|
+/// Get the LV at a specific 0-based visible position.
+/// Uses O(log n) binary search via Rle::find on the compressed cache.
+fn Document::lv_at_position(self : Document, position : Int) -> Int? {
+  let cache = self.get_compressed_cache()
+  match cache.find(position) {
+    Some(rp) =>
+      match cache.get(rp.run) {
+        Some(run) => Some(run.start_lv + rp.offset)
+        None => None
+      }
+    None => None
   }
 }
 
@@ -86,22 +111,16 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
   if position == 0 {
     return -1
   }
-
-  // Use cached visible items for O(1) lookup after first access
-  let items_list = self.get_position_cache()
-
-  // Find the LV at position - 1
-  if position > items_list.length() {
-    // Position beyond end, use last item
-    if items_list.length() > 0 {
-      let (id, _) = items_list[items_list.length() - 1]
-      return id.0
-    } else {
-      return -1
-    }
+  let cache = self.get_compressed_cache()
+  let total = @rle.Spanning::span(cache)
+  let target = if position > total { total - 1 } else { position - 1 }
+  if target < 0 {
+    return -1
   }
-  let (id, _) = items_list[position - 1]
-  id.0
+  match self.lv_at_position(target) {
+    Some(lv) => lv
+    None => -1
+  }
 }
 
 ///|
@@ -114,43 +133,25 @@ pub fn Document::insert(
   position : Int,
   text : String,
 ) -> @core.Op raise DocumentError {
-  // Insert each character one by one
   let mut current_pos = position
   let mut last_op : @core.Op? = None
 
-  // Get initial cache for position lookups (will be invalidated after first insert)
-  let mut items_list = self.get_position_cache()
-
-  // Iterate through each character in the string
   for i = 0; i < text.length(); i = i + 1 {
-    // Extract single character as string
     let ch = text[i:i + 1].to_string()
 
-    // Map position to LV using cached items
+    // Map position to LV using compressed cache (O(log n))
     let origin_left = self.position_to_lv(current_pos)
 
-    // Find origin_right (the item after the cursor)
-    let origin_right = if current_pos == 0 {
-      // At start, find first visible item
-      if items_list.length() > 0 {
-        let (id, _) = items_list[0]
-        id.0
-      } else {
-        -1
-      }
-    } else if current_pos < items_list.length() {
-      let (id, _) = items_list[current_pos]
-      id.0
-    } else {
-      -1
+    // Find origin_right (the item at the cursor position, i.e. after the insert point)
+    let origin_right = match self.lv_at_position(current_pos) {
+      Some(lv) => lv
+      None => -1
     }
 
-    // Create and apply the operation for this character
     let op = self.oplog.insert(ch, origin_left, origin_right) catch {
       e => raise DocumentError::OpLog(e)
     }
 
-    // Get Lamport timestamp and agent from causal graph for proper ordering
     let (timestamp, agent) = match self.oplog.causal_graph()[op.lv()] {
       Some(entry) => (entry.timestamp, entry.agent)
       None =>
@@ -159,7 +160,6 @@ pub fn Document::insert(
         )
     }
 
-    // Apply to tree and invalidate cache
     self.tree.insert({
       id: @fugue.Lv(op.lv()),
       content: ch,
@@ -178,20 +178,13 @@ pub fn Document::insert(
     })
     self.invalidate_cache()
 
-    // Rebuild cache for next iteration if there are more characters
-    if i + 1 < text.length() {
-      items_list = self.get_position_cache()
-    }
     last_op = Some(op)
     current_pos = current_pos + 1
   }
 
-  // Return the last operation (or create a dummy one if text was empty)
   match last_op {
     Some(op) => op
     None =>
-      // Empty string inserted - create a no-op
-      // This shouldn't happen in practice, but we need to return something
       self.oplog.insert("", -1, -1) catch {
         e => raise DocumentError::OpLog(e)
       }
@@ -210,17 +203,18 @@ pub fn Document::delete(
     raise DocumentError::InvalidPosition(pos=position)
   }
 
-  // Use cached visible items for O(1) lookup
-  let items_list = self.get_position_cache()
-  if position >= items_list.length() {
+  let cache = self.get_compressed_cache()
+  let total = @rle.Spanning::span(cache)
+  if position >= total {
     raise DocumentError::InvalidPosition(pos=position)
   }
 
-  // Get the LV of the item to delete
-  let (target_lv, _) = items_list[position]
+  let target_lv = match self.lv_at_position(position) {
+    Some(lv) => lv
+    None => raise DocumentError::InvalidPosition(pos=position)
+  }
 
-  // Create and apply delete operation
-  let op = self.oplog.delete(target_lv.0) catch {
+  let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
   let cg = self.oplog.causal_graph()
@@ -231,11 +225,10 @@ pub fn Document::delete(
         @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
       )
   }
-  self.tree.delete_with_ts(target_lv, del_ts, del_agent) catch {
+  self.tree.delete_with_ts(@fugue.Lv(target_lv), del_ts, del_agent) catch {
     e => raise DocumentError::Fugue(e)
   }
 
-  // Invalidate cache after modification
   self.invalidate_cache()
   op
 }
@@ -254,21 +247,30 @@ pub fn Document::delete_range(
     raise DocumentError::InvalidPosition(pos=end)
   }
 
-  let items_list = self.get_position_cache()
-  if end > items_list.length() {
+  let cache = self.get_compressed_cache()
+  let total = @rle.Spanning::span(cache)
+  if end > total {
     raise DocumentError::InvalidPosition(pos=end)
   }
   if start == end {
     return
   }
 
+  // Collect all target LVs before mutating (cache is invalidated after first delete)
+  let target_lvs : Array[Int] = []
+  for i = start; i < end; i = i + 1 {
+    match self.lv_at_position(i) {
+      Some(lv) => target_lvs.push(lv)
+      None => raise DocumentError::InvalidPosition(pos=i)
+    }
+  }
+
   // Invalidate before the first mutation so exception paths cannot leave a
   // stale cache behind.
   self.invalidate_cache()
   let cg = self.oplog.causal_graph()
-  for i = start; i < end; i = i + 1 {
-    let (target_lv, _) = items_list[i]
-    let op = self.oplog.delete(target_lv.0) catch {
+  for lv in target_lvs {
+    let op = self.oplog.delete(lv) catch {
       e => raise DocumentError::OpLog(e)
     }
     let (del_ts, del_agent) = match cg[op.lv()] {
@@ -278,7 +280,7 @@ pub fn Document::delete_range(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
-    self.tree.delete_with_ts(target_lv, del_ts, del_agent) catch {
+    self.tree.delete_with_ts(@fugue.Lv(lv), del_ts, del_agent) catch {
       e => raise DocumentError::Fugue(e)
     }
   }
@@ -497,12 +499,27 @@ pub fn Document::checkout_branch(
 pub fn Document::get_visible_items(
   self : Document,
 ) -> Array[(@fugue.Lv, @fugue.Item[String])] {
-  // Return a copy to prevent callers from mutating internal cache
-  self.get_position_cache().copy()
+  // Delegate to tree traversal — VisibleRun doesn't store enough
+  // information to reconstruct full Item structs.
+  self.tree.get_visible_items()
 }
 
 ///|
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
-  self.tree.lv_to_position(@fugue.Lv(lv))
+  let cache = self.get_compressed_cache()
+  let num_runs = @rle.HasLength::length(cache)
+  let mut pos = 0
+  for i = 0; i < num_runs; i = i + 1 {
+    match cache.get(i) {
+      Some(run) => {
+        if lv >= run.start_lv && lv < run.start_lv + run.count {
+          return Some(pos + (lv - run.start_lv))
+        }
+        pos = pos + run.count
+      }
+      None => ()
+    }
+  }
+  None
 }

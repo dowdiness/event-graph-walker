@@ -12,11 +12,11 @@
 /// * `frontier` - Starting frontier (versions to walk from)
 ///
 /// # Returns
-/// Array of LVs (local versions) in topological order, from oldest to newest
+/// RLE-compressed LVs in topological order, from oldest to newest
 pub fn CausalGraph::walk_from_frontier(
   self : CausalGraph,
   frontier : @core.Frontier,
-) -> Array[Int] {
+) -> @rle.Rle[@core.LvRange] {
   // Get all versions reachable from frontier
   let reachable = collect_reachable_versions(self, frontier.0)
 
@@ -88,7 +88,7 @@ fn collect_reachable_versions(
 fn topological_sort(
   graph : CausalGraph,
   versions : @immut/hashset.HashSet[Int],
-) -> Array[Int] {
+) -> @rle.Rle[@core.LvRange] {
   // Build children map: parent -> [children]
   // This is O(n + edges) instead of O(n²) for repeated scanning
   let mut children : @immut/hashmap.HashMap[Int, Array[Int]] = @immut/hashmap.new()
@@ -173,7 +173,7 @@ fn topological_sort(
       None => break
     }
   }
-  result
+  @rle.Rle::from_sorted_ints(result)
 }
 
 ///|
@@ -189,30 +189,36 @@ pub fn CausalGraph::diff_frontiers_lvs(
   self : CausalGraph,
   from_frontier : @core.Frontier,
   to_frontier : @core.Frontier,
-) -> (Array[Int], Array[Int]) {
-  // Use existing graph_diff to get the sets
+) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange]) {
+  // Use existing graph_diff to get the unsorted sets
   let (retreat_set, advance_set) = self.graph_diff(from_frontier, to_frontier)
 
-  // Walk (topological sort) the retreat set
-  let retreat_lvs = if retreat_set.length() > 0 {
+  // Walk (topological sort) the retreat set, then reverse for undo order
+  let retreat_rle = if retreat_set.length() > 0 {
     let reachable = @immut/hashset.from_array(retreat_set)
-    topological_sort(self, reachable)
+    let sorted = topological_sort(self, reachable)
+    // Reverse the retreat LVs for undo order:
+    // expand, reverse, re-compress as singleton ranges
+    let expanded = sorted.iter_units().collect()
+    let reversed : Array[Int] = []
+    for i = expanded.length() - 1; i >= 0; i = i - 1 {
+      reversed.push(expanded[i])
+    }
+    // Reversed LVs are descending so they won't merge (each is a singleton).
+    // This is acceptable: retreat sets are typically small.
+    @rle.Rle::from_array(
+      reversed.map(fn(lv) { @core.LvRange::{ start: lv, count: 1 } }),
+    )
   } else {
-    []
-  }
-
-  // Reverse the retreat LVs for undo order
-  let reversed_retreat : Array[Int] = []
-  for i = retreat_lvs.length() - 1; i >= 0; i = i - 1 {
-    reversed_retreat.push(retreat_lvs[i])
+    @rle.Rle::new()
   }
 
   // Walk (topological sort) the advance set
-  let advance_lvs = if advance_set.length() > 0 {
+  let advance_rle = if advance_set.length() > 0 {
     let reachable = @immut/hashset.from_array(advance_set)
     topological_sort(self, reachable)
   } else {
-    []
+    @rle.Rle::new()
   }
-  (reversed_retreat, advance_lvs)
+  (retreat_rle, advance_rle)
 }

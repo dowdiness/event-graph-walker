@@ -3,6 +3,7 @@ package "dowdiness/event-graph-walker/internal/causal_graph"
 
 import {
   "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/rle",
   "moonbitlang/core/json",
   "moonbitlang/core/quickcheck/splitmix",
 }
@@ -22,7 +23,7 @@ pub struct CausalGraph {
 }
 pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
 pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
-pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (Array[Int], Array[Int])
+pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange])
 #alias("_[_]")
 pub fn CausalGraph::get_entry(Self, Int) -> @core.GraphEntry?
 pub fn CausalGraph::get_frontier(Self) -> @core.Frontier
@@ -31,7 +32,7 @@ pub fn CausalGraph::is_ancestor(Self, Int, Int) -> Bool
 pub fn CausalGraph::lv_to_raw(Self, Int) -> @core.RawVersion?
 pub fn CausalGraph::new() -> Self
 pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
-pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> Array[Int]
+pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
 pub impl Show for CausalGraph
 
 pub struct VersionVector(Map[String, Int])

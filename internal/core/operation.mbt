@@ -156,3 +156,18 @@ pub fn Op::get_insert_text(self : Op) -> String? {
     Delete | Undelete => None
   }
 }
+
+///|
+/// Internal constructor for Op from all parts.
+/// Used by OpRun::decompress to reconstruct individual operations.
+pub fn Op::new_from_parts(
+  lv~ : Int,
+  parents~ : Array[RawVersion],
+  agent~ : String,
+  seq~ : Int,
+  content~ : OpContent,
+  origin_left~ : RawVersion?,
+  origin_right~ : RawVersion?,
+) -> Op {
+  { lv, parents, agent, seq, content, origin_left, origin_right }
+}

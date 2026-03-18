@@ -1,149 +1,112 @@
 # Event Graph Walker - Usage Guide
 
-## ✅ Implementation Complete!
+## Core API
 
-The event graph walker has been successfully implemented in MoonBit. This is the **core eg-walker algorithm** for traversing operations in causal order.
-
-## 📁 Files Created
-
-1. **`/causal_graph/walker.mbt`** - Core graph walking algorithms
-2. **`/causal_graph/walker_test.mbt`** - Comprehensive test suite (all passing)
-3. **`/oplog/walker.mbt`** - OpLog-specific wrappers
-
-## 🎯 Core API
-
-### Graph-Level Methods (in `causal_graph/walker.mbt`)
+### Graph-Level Methods (`causal_graph/walker.mbt`)
 
 ```moonbit
-/// Walk from a frontier, returning LVs in topological order
+/// Walk from a frontier, returning RLE-compressed LVs in topological order.
+/// Linear histories compress to a single run.
 pub fn CausalGraph::walk_from_frontier(
-  self: CausalGraph,
-  frontier: Array[Int]
-) -> Array[Int]
+  self : CausalGraph,
+  frontier : Frontier,
+) -> Rle[LvRange]
 
-/// Diff two frontiers for incremental updates
+/// Diff two frontiers for incremental updates.
+/// Returns (retreat_lvs, advance_lvs) as RLE-compressed ranges.
+/// retreat_lvs are in reverse topological order (for undo).
+/// advance_lvs are in topological order (for redo).
 pub fn CausalGraph::diff_frontiers_lvs(
-  self: CausalGraph,
-  from_frontier: Array[Int],
-  to_frontier: Array[Int]
-) -> (Array[Int], Array[Int])  // (retreat_lvs, advance_lvs)
+  self : CausalGraph,
+  from_frontier : Frontier,
+  to_frontier : Frontier,
+) -> (Rle[LvRange], Rle[LvRange])
+
+/// Raw symmetric difference (unsorted). Prefer diff_frontiers_lvs for replay.
+pub fn CausalGraph::graph_diff(
+  self : CausalGraph,
+  from : Frontier,
+  to : Frontier,
+) -> (Array[Int], Array[Int])
 ```
 
-### OpLog-Level Methods (in `oplog/walker.mbt`)
+### OpLog-Level Methods (`oplog/walker.mbt`)
 
 ```moonbit
 /// Walk and collect operations in causal order
 pub fn OpLog::walk_and_collect(
-  self: OpLog,
-  frontier: Array[Int]
+  self : OpLog,
+  frontier : Frontier,
 ) -> Array[Op]
 
 /// Walk with filtering
 pub fn OpLog::walk_filtered(
-  self: OpLog,
-  frontier: Array[Int],
-  predicate: (Op) -> Bool
+  self : OpLog,
+  frontier : Frontier,
+  predicate : (Op) -> Bool,
 ) -> Array[Op]
 
 /// Diff frontiers and collect operations
 pub fn OpLog::diff_and_collect(
-  self: OpLog,
-  from_frontier: Frontier,
-  to_frontier: Frontier
+  self : OpLog,
+  from_frontier : Frontier,
+  to_frontier : Frontier,
 ) -> (Array[Op], Array[Op])  // (retreat_ops, advance_ops)
+
+/// Collect operations from RLE-compressed LV ranges
+pub fn OpLog::get_ops_rle(
+  self : OpLog,
+  lvs : Rle[LvRange],
+) -> Array[Op]
 ```
 
-## 📖 Usage Examples
+## Usage Examples
 
-### Example 1: Replay All Operations
+### Replay All Operations
 
 ```moonbit
 let oplog = OpLog::new("agent-1")
 
 // Create some operations
-let _op1 = oplog.insert("hello", -1, -1)
-let _op2 = oplog.insert(" ", 5, -1)
-let _op3 = oplog.insert("world", 6, -1)
-
-// Get current frontier
-let frontier = oplog.get_frontier()
+let _op1 = oplog.insert("h", -1, -1)
+let _op2 = oplog.insert("i", 0, -1)
 
 // Walk and collect all operations in causal order
-let ops = oplog.walk_and_collect(frontier)
+let ops = oplog.walk_and_collect(oplog.get_frontier())
 
-// ops is now [op1, op2, op3] in the correct order
 for op in ops {
   // Apply operation to reconstruct document
 }
 ```
 
-### Example 2: Incremental Update (Fast-Forward)
+### Incremental Update (Fast-Forward)
 
 ```moonbit
-let oplog = OpLog::new("agent-1")
-
-// Initial state
-let _op1 = oplog.insert("a", -1, -1)
-let _op2 = oplog.insert("b", 0, -1)
 let frontier1 = oplog.get_frontier()
 
-// User makes more edits
-let _op3 = oplog.insert("c", 1, -1)
-let _op4 = oplog.insert("d", 2, -1)
+// User makes more edits...
 let frontier2 = oplog.get_frontier()
 
 // Get only the NEW operations
 let (retreat, advance) = oplog.diff_and_collect(frontier1, frontier2)
-
-// retreat is empty (moving forward)
-// advance is [op3, op4]
-for op in advance {
-  // Apply only the new operations
-}
+// retreat is empty when moving forward
+// advance contains the new operations in causal order
 ```
 
-### Example 3: Merge Concurrent Branches
+### Merge via Branch
 
 ```moonbit
-let oplog = OpLog::new("agent-1")
+// Branch::checkout uses walk_and_collect internally
+let branch = Branch::checkout(oplog, frontier)
 
-// Shared base
-let _op1 = oplog.insert("hello", -1, -1)
-let base_frontier = oplog.get_frontier()
+// Branch::advance uses diff_and_collect internally
+let updated = branch.advance(target_frontier)
 
-// Branch A: local edits
-let _op2 = oplog.insert(" world", 5, -1)
-let frontier_a = oplog.get_frontier()
-
-// Meanwhile, Branch B: remote edits arrive via sync
-// Use doc.sync().apply(msg) to integrate remote operations
-// After applying, get the updated frontier
-let frontier_b = oplog.get_frontier()
-
-// Now merge: walk from both frontiers
-let combined = frontier_a.0.copy()
-combined.append(frontier_b.0)
-let ops = oplog.walk_and_collect(Frontier::from_array(combined))
-
-// ops contains all operations from both branches in causal order
+// merge() uses diff_frontiers_lvs (RLE-compressed, topologically sorted)
+merge(tree, oplog, current_frontier, target_frontier)
 ```
 
-### Example 4: Filtered Replay
-
-```moonbit
-// Get only insert operations (skip deletes)
-let inserts = oplog.walk_inserts(frontier)
-
-// Or custom filter
-let recent_ops = oplog.walk_filtered(frontier, fn(op) {
-  match oplog.graph.get_entry(op.lv) {
-    Some(entry) => entry.lamport > 100
-    None => false
-  }
-})
-```
-
-## 🔬 Algorithm Details
+## Algorithm Details
 
 ### Topological Sort
 
@@ -153,130 +116,23 @@ The walker uses **Kahn's algorithm** for topological sorting:
 2. Start with versions that have in-degree 0
 3. Process versions, decrementing in-degrees of children
 4. Add newly-zero-in-degree versions to queue
+5. Compress output into `Rle[LvRange]` via `from_sorted_ints`
 
 **Determinism**: Concurrent operations (same parent, no dependencies between them) are sorted by LV to ensure deterministic ordering across replicas.
+
+### RLE Compression
+
+Graph traversal results are compressed using `Rle[LvRange]`:
+- Linear history of 10,000 ops compresses to 1 run
+- Concurrent edits produce multiple runs (one per contiguous sequence)
+- `iter()` iterates runs directly; `iter_units()` expands to individual LVs
 
 ### Complexity
 
 - **Time**: O(V + E) where V = versions, E = edges (parent relationships)
-- **Space**: O(V) for visited set and result array
+- **Space**: O(V) for visited set; compressed output is O(runs)
 
-## ✅ Test Coverage
-
-All tests passing (330 total):
-
-- ✅ Empty frontier
-- ✅ Single operation
-- ✅ Linear history
-- ✅ Diamond pattern (concurrent ops)
-- ✅ Complex branching
-- ✅ Multiple frontier versions
-- ✅ Incremental diff
-- ✅ Deterministic sorting
-
-## 🚀 Next Steps
-
-With the walker implemented, you can now:
-
-### 1. Implement Branch/Snapshot System
-
-Create `/branch/branch.mbt`:
-
-```moonbit
-pub struct Branch {
-  frontier: Array[Int]
-  tree: @fugue.FugueTree
-}
-
-pub fn checkout(
-  oplog: OpLog,
-  frontier: Array[Int]
-) -> Branch {
-  // Use walker to get operations
-  let ops = oplog.walk_and_collect(frontier)
-
-  // Apply to tree
-  let tree = @fugue.FugueTree::new()
-  for op in ops {
-    apply_op_to_tree(tree, op)
-  }
-
-  { frontier, tree }
-}
-```
-
-### 2. Implement Efficient Merge
-
-Create `/merge/merge.mbt`:
-
-```moonbit
-pub fn merge_branches(
-  oplog: OpLog,
-  branch_a: Branch,
-  branch_b: Branch
-) -> Branch {
-  // Get operations to apply
-  let (_, advance) = oplog.diff_and_collect(
-    branch_a.frontier,
-    [branch_a.frontier, branch_b.frontier]
-  )
-
-  // Apply to tree
-  for op in advance {
-    apply_op_to_tree(branch_a.tree, op)
-  }
-
-  { frontier: [branch_a.frontier, branch_b.frontier], tree: branch_a.tree }
-}
-```
-
-### 3. Add Network Sync (TypeScript)
-
-```typescript
-// web/src/sync.ts
-class Sync {
-  sendOps() {
-    // Export all operations via the sync API
-    const msg = this.doc.sync().export_all();
-    this.ws.send(msg);
-  }
-
-  sendOpsSince(peerVersion: Version) {
-    // Export only new operations since the peer's last known version
-    const msg = this.doc.sync().export_since(peerVersion);
-    this.ws.send(msg);
-  }
-
-  receiveOps(data: string) {
-    // Merge remote operations via the sync API
-    this.doc.sync().apply(data);
-
-    // Walker automatically ensures correct replay order!
-    this.updateUI();
-  }
-}
-```
-
-## 🎯 Performance Characteristics
-
-Compared to naive approaches:
-
-| Operation | Naive | With Walker |
-|-----------|-------|-------------|
-| Full replay | O(n²) | O(n log n) |
-| Incremental update | O(n) | O(k) where k = new ops |
-| Merge branches | O(n²) | O(n log n) |
-| Memory | O(n²) | O(n) |
-
-The walker enables **efficient incremental updates** - the key innovation of eg-walker!
-
-## 📚 References
+## References
 
 - [Eg-walker paper](https://arxiv.org/abs/2409.14252)
 - [Topological sorting (Kahn's algorithm)](https://en.wikipedia.org/wiki/Topological_sorting)
-- Implementation follows the principles described in Joseph Gentle's eg-walker design
-
----
-
-**Status**: ✅ Core walker implementation complete and tested
-**Next**: Implement branch system and merge algorithm (see EG_WALKER_IMPLEMENTATION.md)

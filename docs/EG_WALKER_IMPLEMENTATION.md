@@ -142,22 +142,22 @@ pub fn merge_remote_ops(
   remote_ops : Array[@oplog.Op]
 ) -> Unit
 
-/// Apply operations from the advance set
+/// Apply operations from the advance set (RLE-compressed, topologically sorted)
 pub fn MergeContext::apply_operations(
   self : MergeContext,
-  operations : Array[Int]
+  operations : Rle[LvRange]
 ) -> Unit
 
-/// Remove operations from the retreat set
+/// Remove operations from the retreat set (RLE-compressed, reverse topo order)
 pub fn MergeContext::retreat_operations(
   self : MergeContext,
-  operations : Array[Int]
+  operations : Rle[LvRange]
 ) -> Unit
 ```
 
 **Features:**
 - Three-phase merge: retreat-advance-apply
-- Uses `graph_diff()` to compute retreat and advance sets
+- Uses `diff_frontiers_lvs()` to compute topologically sorted, RLE-compressed retreat and advance sets
 - `merge_remote_ops()` leverages Branch system and walker
 - 3 comprehensive tests covering concurrent inserts, deletes, and frontier transitions
 - All tests passing
