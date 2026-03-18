@@ -223,7 +223,15 @@ pub fn Document::delete(
   let op = self.oplog.delete(target_lv.0) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.tree.delete(target_lv) catch {
+  let cg = self.oplog.causal_graph()
+  let (del_ts, del_agent) = match cg[op.lv()] {
+    Some(entry) => (entry.timestamp, entry.agent)
+    None =>
+      raise DocumentError::OpLog(
+        @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
+      )
+  }
+  self.tree.delete_with_ts(target_lv, del_ts, del_agent) catch {
     e => raise DocumentError::Fugue(e)
   }
 
@@ -257,12 +265,20 @@ pub fn Document::delete_range(
   // Invalidate before the first mutation so exception paths cannot leave a
   // stale cache behind.
   self.invalidate_cache()
+  let cg = self.oplog.causal_graph()
   for i = start; i < end; i = i + 1 {
     let (target_lv, _) = items_list[i]
-    let _ = self.oplog.delete(target_lv.0) catch {
+    let op = self.oplog.delete(target_lv.0) catch {
       e => raise DocumentError::OpLog(e)
     }
-    self.tree.delete(target_lv) catch {
+    let (del_ts, del_agent) = match cg[op.lv()] {
+      Some(entry) => (entry.timestamp, entry.agent)
+      None =>
+        raise DocumentError::OpLog(
+          @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
+        )
+    }
+    self.tree.delete_with_ts(target_lv, del_ts, del_agent) catch {
       e => raise DocumentError::Fugue(e)
     }
   }
@@ -293,7 +309,15 @@ pub fn Document::undelete(
   let op = self.oplog.undelete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.tree.undelete(@fugue.Lv(target_lv)) catch {
+  let cg = self.oplog.causal_graph()
+  let (undel_ts, undel_agent) = match cg[op.lv()] {
+    Some(entry) => (entry.timestamp, entry.agent)
+    None =>
+      raise DocumentError::OpLog(
+        @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
+      )
+  }
+  self.tree.undelete_with_ts(@fugue.Lv(target_lv), undel_ts, undel_agent) catch {
     e => raise DocumentError::Fugue(e)
   }
   self.invalidate_cache()
@@ -310,7 +334,15 @@ pub fn Document::delete_by_lv(
   let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.tree.delete(@fugue.Lv(target_lv)) catch {
+  let cg = self.oplog.causal_graph()
+  let (del_ts, del_agent) = match cg[op.lv()] {
+    Some(entry) => (entry.timestamp, entry.agent)
+    None =>
+      raise DocumentError::OpLog(
+        @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
+      )
+  }
+  self.tree.delete_with_ts(@fugue.Lv(target_lv), del_ts, del_agent) catch {
     e => raise DocumentError::Fugue(e)
   }
   self.invalidate_cache()
@@ -373,18 +405,34 @@ pub fn Document::apply_remote(
       }
       @core.Delete =>
         match origin_left {
-          Some(lv) =>
-            self.tree.delete(lv) catch {
+          Some(lv) => {
+            let (del_ts, del_agent) = match cg[applied.lv()] {
+              Some(entry) => (entry.timestamp, entry.agent)
+              None =>
+                raise DocumentError::OpLog(
+                  @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
+                )
+            }
+            self.tree.delete_with_ts(lv, del_ts, del_agent) catch {
               e => raise DocumentError::Fugue(e)
             }
+          }
           None => ()
         }
       @core.Undelete =>
         match origin_left {
-          Some(lv) =>
-            self.tree.undelete(lv) catch {
+          Some(lv) => {
+            let (undel_ts, undel_agent) = match cg[applied.lv()] {
+              Some(entry) => (entry.timestamp, entry.agent)
+              None =>
+                raise DocumentError::OpLog(
+                  @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
+                )
+            }
+            self.tree.undelete_with_ts(lv, undel_ts, undel_agent) catch {
               e => raise DocumentError::Fugue(e)
             }
+          }
           None => ()
         }
     }
