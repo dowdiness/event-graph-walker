@@ -8,7 +8,11 @@
 
 ///| The sync API is asymmetric by design:
 
+///|
+
 ///| - **Export**: Use `export_all()` for initial sync, `export_since(peer_version)` for deltas
+
+///|
 
 ///| - **Import**: Use `apply(message)` for all incoming messages
 
@@ -32,32 +36,36 @@
 
 ///| ```
 
-///| A message containing operations and version info for syncing between peers.
+///| A message containing operation runs and version info for syncing between peers.
 
 ///|
-/// This is an opaque container - use accessor methods to inspect contents.
+/// Operations are stored as compressed OpRun arrays for efficient serialization.
 pub(all) struct SyncMessage {
-  priv ops : Array[@core.Op]
+  priv runs : Array[@core.OpRun]
   priv heads : Array[@core.RawVersion]
 } derive(Show)
 
 ///|
 /// Check if this message contains no operations.
 pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
-  self.ops.is_empty()
+  self.runs.is_empty()
 }
 
 ///|
-/// Get the number of operations in this message.
+/// Get the total number of individual operations across all runs.
 pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
-  self.ops.length()
+  let mut total = 0
+  for run in self.runs {
+    total = total + run.count
+  }
+  total
 }
 
 ///|
 /// Encode this message as a JSON string for cross-boundary transport (e.g. JS FFI).
 pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
   let obj : Map[String, Json] = {
-    "ops": self.ops.to_json(),
+    "runs": self.runs.to_json(),
     "heads": self.heads.to_json(),
   }
   Json::object(obj).stringify()
@@ -74,17 +82,25 @@ pub fn SyncMessage::from_json_string(
       Json::Object(m) => m
       _ => raise TextError::Internal(detail="Invalid SyncMessage JSON")
     }
-    let ops_json = match obj.get("ops") {
-      Some(v) => v
-      None => Json::null()
-    }
     let heads_json = match obj.get("heads") {
       Some(v) => v
       None => Json::null()
     }
-    let ops : Array[@core.Op] = @json.from_json(ops_json)
     let heads : Array[@core.RawVersion] = @json.from_json(heads_json)
-    { ops, heads }
+    // Support both new "runs" format and legacy "ops" format
+    let runs : Array[@core.OpRun] = match obj.get("runs") {
+      Some(v) => @json.from_json(v)
+      None =>
+        match obj.get("ops") {
+          Some(v) => {
+            // Legacy format: Array[Op] — wrap each as a singleton OpRun
+            let ops : Array[@core.Op] = @json.from_json(v)
+            ops.map(fn(op) { @core.OpRun::from_op(op) })
+          }
+          None => []
+        }
+    }
+    { runs, heads }
   } catch {
     _ => raise TextError::Internal(detail="Invalid SyncMessage JSON")
   }
@@ -99,15 +115,15 @@ pub(all) struct SyncSession {
 }
 
 ///|
-/// Export all operations as a sync message
+/// Export all operations as a sync message (zero-copy — no decompression).
 pub fn SyncSession::export_all(
   self : SyncSession,
 ) -> SyncMessage raise TextError {
   let inner = self.doc.inner
-  let ops = inner.get_all_ops()
+  let runs = inner.get_all_runs()
   try {
     let heads = inner.get_frontier_raw()
-    SyncMessage::{ ops, heads }
+    SyncMessage::{ runs, heads }
   } catch {
     err => raise TextError::from_document_error(err, self.doc.len())
   }
@@ -123,9 +139,18 @@ pub fn SyncSession::export_since(
   let peer_frontier = peer_version.to_frontier()
   let current_frontier = inner.get_frontier()
   let (_, advance_ops) = inner.diff_and_collect(peer_frontier, current_frontier)
+  // Re-compress individual ops into runs via Rle::append (auto-merges adjacent)
+  let rle : @rle.Rle[@core.OpRun] = @rle.Rle::new()
+  for op in advance_ops {
+    let _ = rle.append(@core.OpRun::from_op(op))
+  }
+  let runs : Array[@core.OpRun] = []
+  for run in rle.iter() {
+    runs.push(run)
+  }
   try {
     let heads = inner.get_frontier_raw()
-    SyncMessage::{ ops: advance_ops, heads }
+    SyncMessage::{ runs, heads }
   } catch {
     err => raise TextError::from_document_error(err, self.doc.len())
   }
@@ -140,7 +165,12 @@ pub fn SyncSession::apply(
   if message.is_empty() {
     return
   }
-  self.doc.inner.merge_remote(message.ops, message.heads) catch {
+  // Expand runs to individual ops for merge_remote
+  let ops : Array[@core.Op] = Array::new(capacity=message.op_count())
+  for run in message.runs {
+    run.decompress_into(ops)
+  }
+  self.doc.inner.merge_remote(ops, message.heads) catch {
     err => raise TextError::from_document_error(err, self.doc.len())
   }
 }

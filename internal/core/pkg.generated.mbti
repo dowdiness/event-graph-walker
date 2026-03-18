@@ -96,6 +96,8 @@ pub impl @rle.Mergeable for OpRun
 pub impl @rle.Spanning for OpRun
 pub impl Eq for OpRun
 pub impl Show for OpRun
+pub impl ToJson for OpRun
+pub impl @json.FromJson for OpRun
 
 pub enum OpRunContent {
   Inserts(Array[Char])
@@ -104,6 +106,8 @@ pub enum OpRunContent {
 }
 pub impl Eq for OpRunContent
 pub impl Show for OpRunContent
+pub impl ToJson for OpRunContent
+pub impl @json.FromJson for OpRunContent
 
 pub struct RawVersion {
   agent : String
