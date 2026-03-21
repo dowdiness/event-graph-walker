@@ -97,7 +97,9 @@ pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
 ) -> Unit raise UndoError {
-  guard self.undo_stack.length() > 0
+  if self.undo_stack.length() == 0 {
+    raise UndoError::Internal(detail="nothing to undo")
+  }
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
@@ -148,7 +150,9 @@ pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
 ) -> Unit raise UndoError {
-  guard self.redo_stack.length() > 0
+  if self.redo_stack.length() == 0 {
+    raise UndoError::Internal(detail="nothing to redo")
+  }
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
