@@ -593,60 +593,71 @@ fn[T] partition_children(
 
 ///|
 /// In-order tree traversal: Left children → Node → Right children
-/// For nodes with same parent and side, sort by timestamp then ID
+/// For nodes with same parent and side, sort by timestamp then ID.
+/// Uses an explicit stack to avoid call-stack overflow on deep trees (500+ nodes).
+///
+/// Stack frame phases:
+///   0 = first visit: compute sorted left/right children, push left children
+///   1 = left children done: emit current node, push right children
+///   2 = right children done: pop frame
 fn[T : Eq] FugueTree::traverse_tree(
   self : FugueTree[T],
-  node_id : Lv,
+  start_id : Lv,
   result : Array[(Lv, Item[T])],
   visible_only~ : Bool,
 ) -> Unit {
-  // Use children index instead of filtering entire HashMap (O(1) vs O(n))
-  let child_lvs = self.get_children_raw(node_id)
-  let children_with_items : Array[(Lv, Item[T])] = []
-  for lv in child_lvs {
-    match self[lv] {
-      Some(item) => children_with_items.push((lv, item))
-      None => ()
-    }
-  }
-
-  // Split into left and right children
-  let (left_children, right_children) = partition_children(children_with_items)
-
-  // Traverse left children (sorted by timestamp, then ID)
-  let sorted_left = left_children
-  sorted_left.sort_by(compare_children)
-  sorted_left
-  .iter()
-  .each(fn(child) {
-    let (child_id, _) = child
-    // Don't traverse back to parent (prevents cycles)
-    if child_id != node_id {
-      self.traverse_tree(child_id, result, visible_only~)
-    }
-  })
-
-  // Visit current node (if not root)
-  if node_id != root_lv {
-    match self[node_id] {
-      Some(item) =>
-        if not(visible_only) || item.is_visible() {
-          result.push((node_id, item))
+  // Stack entries: (node_id, phase, sorted_left, sorted_right)
+  // We store the sorted children arrays to avoid recomputing them between phases.
+  let stack : Array[(Lv, Int, Array[(Lv, Item[T])], Array[(Lv, Item[T])])] = []
+  stack.push((start_id, 0, [], []))
+  while stack.length() > 0 {
+    let top = stack.length() - 1
+    let (node_id, phase, sorted_left, sorted_right) = stack[top]
+    if phase == 0 {
+      // Phase 0: first visit — compute children and push left subtrees
+      let child_lvs = self.get_children_raw(node_id)
+      let children_with_items : Array[(Lv, Item[T])] = []
+      for lv in child_lvs {
+        match self[lv] {
+          Some(item) => children_with_items.push((lv, item))
+          None => ()
         }
-      None => ()
+      }
+      let (left, right) = partition_children(children_with_items)
+      left.sort_by(compare_children)
+      right.sort_by(compare_children)
+      // Advance to phase 1 and store sorted children
+      stack[top] = (node_id, 1, left, right)
+      // Push left children in reverse order so first child is processed first
+      for i = left.length() - 1; i >= 0; i = i - 1 {
+        let (child_id, _) = left[i]
+        if child_id != node_id {
+          stack.push((child_id, 0, [], []))
+        }
+      }
+    } else if phase == 1 {
+      // Phase 1: left subtrees done — emit current node, push right subtrees
+      if node_id != root_lv {
+        match self[node_id] {
+          Some(item) =>
+            if not(visible_only) || item.is_visible() {
+              result.push((node_id, item))
+            }
+          None => ()
+        }
+      }
+      // Advance to phase 2
+      stack[top] = (node_id, 2, sorted_left, sorted_right)
+      // Push right children in reverse order
+      for i = sorted_right.length() - 1; i >= 0; i = i - 1 {
+        let (child_id, _) = sorted_right[i]
+        if child_id != node_id {
+          stack.push((child_id, 0, [], []))
+        }
+      }
+    } else {
+      // Phase 2: all done — pop this frame
+      let _ = stack.pop()
     }
   }
-
-  // Traverse right children (sorted by timestamp, then ID)
-  let sorted_right = right_children
-  sorted_right.sort_by(compare_children)
-  sorted_right
-  .iter()
-  .each(child => {
-    let (child_id, _) = child
-    // Don't traverse back to parent (prevents cycles)
-    if child_id != node_id {
-      self.traverse_tree(child_id, result, visible_only~)
-    }
-  })
 }
