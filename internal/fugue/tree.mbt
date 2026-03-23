@@ -61,6 +61,7 @@ fn[T] FugueTree::get_children(self : FugueTree[T], id : Lv) -> Array[Lv] {
 ///|
 /// Index operator for looking up an item by LV.
 /// Returns the item for the given LV, or None if missing.
+/// Returns None for `root_lv` — root is a virtual sentinel, not a data node.
 ///
 #alias("_[_]")
 pub fn[T] FugueTree::get(self : FugueTree[T], id : Lv) -> Item[T]? {

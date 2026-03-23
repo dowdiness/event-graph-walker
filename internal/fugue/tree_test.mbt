@@ -540,6 +540,16 @@ test "LCA: empty document — root only" {
 }
 
 ///|
+test "get(root_lv) returns None — root is a virtual sentinel" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  // Root (LV=-1) is not stored in the items array. It is a virtual sentinel
+  // used only for parent/children relationships. Traversal, LCA, and all
+  // operations handle root via root_children and special-case guards.
+  inspect(tree[@fugue.root_lv], content="None")
+  inspect(tree[@fugue.Lv(99)], content="None") // out-of-range also None
+}
+
+///|
 test "LCA: not invalidated by delete/undelete" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   tree.insert({
