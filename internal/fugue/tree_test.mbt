@@ -540,6 +540,32 @@ test "LCA: empty document — root only" {
 }
 
 ///|
+test "LCA: not invalidated by delete/undelete" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  tree.insert({
+    id: @fugue.Lv(1),
+    content: "B",
+    origin_left: Some(@fugue.Lv(0)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("a"),
+  })
+  tree.build_lca_index()
+  try! tree.delete(@fugue.Lv(1))
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(1)), content="true")
+  try! tree.undelete(@fugue.Lv(1))
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(1)), content="true")
+}
+
+///|
 test "spike: struct mut field in array modifies in-place" {
   // Gate test for Phase 2b: verify MoonBit arrays store struct references
   // so that mutating a `mut` field on arr[i] changes the stored value.

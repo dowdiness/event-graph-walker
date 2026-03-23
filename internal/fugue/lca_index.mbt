@@ -89,6 +89,28 @@ fn[T] LcaIndex::build(tree : FugueTree[T]) -> LcaIndex {
 }
 
 ///|
+/// Resolve an Lv to its first-occurrence index in the Euler tour.
+/// Returns None if the Lv was never visited during the DFS.
+fn LcaIndex::lv_to_tour_idx(self : LcaIndex, id : Lv) -> Int? {
+  if id == root_lv {
+    if self.root_first == -1 {
+      None
+    } else {
+      Some(self.root_first)
+    }
+  } else if id.0 >= 0 && id.0 < self.first.length() {
+    let idx = self.first[id.0]
+    if idx == -1 {
+      None
+    } else {
+      Some(idx)
+    }
+  } else {
+    None
+  }
+}
+
+///|
 fn LcaIndex::is_ancestor(
   self : LcaIndex,
   ancestor_id : Lv,
@@ -97,37 +119,13 @@ fn LcaIndex::is_ancestor(
   if ancestor_id == descendant_id {
     return true
   }
-  let a_idx = if ancestor_id == root_lv {
-    if self.root_first == -1 {
-      return false
-    } else {
-      self.root_first
-    }
-  } else if ancestor_id.0 >= 0 && ancestor_id.0 < self.first.length() {
-    let idx = self.first[ancestor_id.0]
-    if idx == -1 {
-      return false
-    } else {
-      idx
-    }
-  } else {
-    return false
+  let a_idx = match self.lv_to_tour_idx(ancestor_id) {
+    Some(idx) => idx
+    None => return false
   }
-  let b_idx = if descendant_id == root_lv {
-    if self.root_first == -1 {
-      return false
-    } else {
-      self.root_first
-    }
-  } else if descendant_id.0 >= 0 && descendant_id.0 < self.first.length() {
-    let idx = self.first[descendant_id.0]
-    if idx == -1 {
-      return false
-    } else {
-      idx
-    }
-  } else {
-    return false
+  let b_idx = match self.lv_to_tour_idx(descendant_id) {
+    Some(idx) => idx
+    None => return false
   }
   let lo = if a_idx < b_idx { a_idx } else { b_idx }
   let hi = if a_idx > b_idx { a_idx } else { b_idx }

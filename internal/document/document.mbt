@@ -280,7 +280,11 @@ pub fn Document::delete(
 
   // Incremental cache update: delete at known position
   match self.position_cache {
-    Some(cache) => cache.delete_at(position) |> ignore
+    Some(cache) =>
+      match cache.delete_at(position) {
+        Some(_) => ()
+        None => self.invalidate_cache()
+      }
     None => ()
   }
   op

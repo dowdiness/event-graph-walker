@@ -152,6 +152,28 @@ test "delete: position cache incrementally updated" {
 }
 
 ///|
+test "cursor fast-path to non-sequential insert invalidates cache" {
+  let doc = @document.Document::new("test")
+  let _ = doc.insert(0, "abc")
+  inspect(doc.to_text(), content="abc")
+  let _ = doc.insert(1, "X")
+  inspect(doc.to_text(), content="aXbc")
+  let _ = doc.delete(2)
+  inspect(doc.to_text(), content="aXc")
+}
+
+///|
+test "delete_range across split VisibleRuns" {
+  let doc = @document.Document::new("test")
+  let _ = doc.insert(0, "abcde")
+  inspect(doc.to_text(), content="abcde")
+  let _ = doc.delete(2)
+  inspect(doc.to_text(), content="abde")
+  doc.delete_range(1, 3)
+  inspect(doc.to_text(), content="ae")
+}
+
+///|
 test "cache coherent: interleaved local and remote edits maintain consistency" {
   let alice = Document::new("alice")
   let bob = Document::new("bob")
