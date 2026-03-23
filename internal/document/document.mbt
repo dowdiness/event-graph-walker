@@ -574,14 +574,11 @@ pub fn Document::get_visible_items(
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
   let cache = self.get_position_cache()
   let mut pos = 0
-  let mut result : Int? = None
-  cache.each(fn(run) {
-    if result is None &&
-      lv >= run.start_lv &&
-      lv < run.start_lv + run.count {
-      result = Some(pos + (lv - run.start_lv))
+  for run in cache.iter() {
+    if lv >= run.start_lv && lv < run.start_lv + run.count {
+      return Some(pos + (lv - run.start_lv))
     }
     pos = pos + run.count
-  })
-  result
+  }
+  None
 }

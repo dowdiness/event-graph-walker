@@ -206,13 +206,14 @@ test "incremental insert: sequential append preserves cache" {
 test "incremental insert: non-sequential invalidates cache" {
   let doc = Document::new("test")
   let _ = try! doc.insert(0, "abc")
-  // Build cache
+  // Build cache by reading
   inspect(doc.lv_at_position(0), content="Some(0)")
   assert_true(doc.position_cache is Some(_))
   // Insert at middle (not sequential append) — cache should be invalidated
   let _ = try! doc.insert(1, "x")
-  // Cache was invalidated (rebuilt lazily)
-  // Verify positions are correct after rebuild
+  // Verify cache was invalidated immediately after non-sequential insert
+  assert_true(doc.position_cache is None)
+  // Verify positions are correct after lazy rebuild
   inspect(doc.lv_at_position(0), content="Some(0)")
   inspect(doc.lv_at_position(1), content="Some(3)") // 'x' has LV 3
   inspect(doc.lv_at_position(2), content="Some(1)")
@@ -222,13 +223,15 @@ test "incremental insert: non-sequential invalidates cache" {
 ///|
 test "lv_to_position after incremental append" {
   let doc = Document::new("test")
-  let _ = try! doc.insert(0, "hello")
-  // Each character has LV 0-4, positions 0-4
+  let _ = try! doc.insert(0, "a")
+  // Prime cache so incremental path can fire
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  assert_true(doc.position_cache is Some(_))
+  // Sequential append — incremental path preserves cache
+  let _ = try! doc.insert(1, "b")
+  assert_true(doc.position_cache is Some(_))
+  // lv_to_position should work on the preserved cache
   inspect(doc.lv_to_position(0), content="Some(0)")
   inspect(doc.lv_to_position(1), content="Some(1)")
-  inspect(doc.lv_to_position(2), content="Some(2)")
-  inspect(doc.lv_to_position(3), content="Some(3)")
-  inspect(doc.lv_to_position(4), content="Some(4)")
-  // Non-existent LV
   inspect(doc.lv_to_position(99), content="None")
 }
