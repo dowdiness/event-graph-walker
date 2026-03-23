@@ -183,3 +183,52 @@ test "cursor partial hit: mid-document sequential insert" {
   ignore(try! doc.insert(3, "Y"))
   inspect(doc.to_text(), content="abXYce")
 }
+
+///|
+test "incremental insert: sequential append preserves cache" {
+  let doc = Document::new("test")
+  // Insert first char (cursor miss -> builds cache during lookup, then invalidates)
+  let _ = try! doc.insert(0, "a")
+  // Build cache explicitly by reading a position
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  // Now cache exists
+  assert_true(doc.position_cache is Some(_))
+  // Sequential single-char insert at end — should use incremental path
+  let _ = try! doc.insert(1, "b")
+  // Cache should still exist (not invalidated) because incremental insert updated it
+  assert_true(doc.position_cache is Some(_))
+  // Verify correctness through the preserved cache
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  inspect(doc.lv_at_position(1), content="Some(1)")
+}
+
+///|
+test "incremental insert: non-sequential invalidates cache" {
+  let doc = Document::new("test")
+  let _ = try! doc.insert(0, "abc")
+  // Build cache
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  assert_true(doc.position_cache is Some(_))
+  // Insert at middle (not sequential append) — cache should be invalidated
+  let _ = try! doc.insert(1, "x")
+  // Cache was invalidated (rebuilt lazily)
+  // Verify positions are correct after rebuild
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  inspect(doc.lv_at_position(1), content="Some(3)") // 'x' has LV 3
+  inspect(doc.lv_at_position(2), content="Some(1)")
+  inspect(doc.lv_at_position(3), content="Some(2)")
+}
+
+///|
+test "lv_to_position after incremental append" {
+  let doc = Document::new("test")
+  let _ = try! doc.insert(0, "hello")
+  // Each character has LV 0-4, positions 0-4
+  inspect(doc.lv_to_position(0), content="Some(0)")
+  inspect(doc.lv_to_position(1), content="Some(1)")
+  inspect(doc.lv_to_position(2), content="Some(2)")
+  inspect(doc.lv_to_position(3), content="Some(3)")
+  inspect(doc.lv_to_position(4), content="Some(4)")
+  // Non-existent LV
+  inspect(doc.lv_to_position(99), content="None")
+}
