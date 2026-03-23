@@ -1,10 +1,6 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "dowdiness/event-graph-walker/internal/fugue"
 
-import {
-  "moonbitlang/core/immut/hashmap",
-}
-
 // Values
 pub let root_lv : Lv
 
@@ -17,10 +13,11 @@ pub(all) suberror FugueError {
 
 // Types and methods
 pub struct FugueTree[T] {
-  mut items : @hashmap.HashMap[Lv, Item[T]]
+  items : Array[Item[T]?]
   mut length : Int
   mut visible : Int
-  mut children : @hashmap.HashMap[Lv, Array[Lv]]
+  root_children : Array[Lv]
+  children : Array[Array[Lv]]
   mut lca_index : LcaIndex?
   mut batch_inserting : Bool
 }

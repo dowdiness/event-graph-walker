@@ -5,10 +5,11 @@
 ///|
 /// FugueTree - maintains ordered sequence with CRDT properties
 pub struct FugueTree[T] {
-  mut items : @immut/hashmap.HashMap[Lv, Item[T]] // Map from LV to Item
+  items : Array[Item[T]?] // Sparse array indexed by LV (item LV = index)
   mut length : Int // Total items (including deleted)
   mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
-  mut children : @immut/hashmap.HashMap[Lv, Array[Lv]] // Children index: parent → [child LVs]
+  root_children : Array[Lv] // Root's children (root not in items array)
+  children : Array[Array[Lv]] // Children index, sparse array indexed by LV
   mut lca_index : LcaIndex? // Euler Tour + Sparse Table for O(1) ancestor queries
   mut batch_inserting : Bool // True during batch operations (use naive walk instead of LCA)
 } derive(Show)
@@ -33,26 +34,27 @@ pub fn[T : Default] FugueTree::new() -> FugueTree[T] {
 /// Creates an empty FugueTree with a specified root content value.
 ///
 /// This is the more general constructor that doesn't require the Default trait.
-pub fn[T] FugueTree::make(root_content : T) -> FugueTree[T] {
-  let root_item = Item::new(
-    root_lv,
-    root_content,
-    None,
-    Left,
-    Timestamp(0),
-    ReplicaId("root"),
-  )
-  let mut items = @immut/hashmap.new()
-  items = items.add(root_lv, root_item)
-  let mut children = @immut/hashmap.HashMap::new()
-  children = children.add(root_lv, [])
+pub fn[T] FugueTree::make(_root_content : T) -> FugueTree[T] {
   {
-    items,
+    items: Array::new(capacity=1024),
     length: 0,
     visible: 0,
-    children,
+    root_children: [],
+    children: Array::new(capacity=1024),
     lca_index: None,
     batch_inserting: false,
+  }
+}
+
+///|
+/// Get children for a node. Handles root (LV=-1) separately.
+fn[T] FugueTree::get_children(self : FugueTree[T], id : Lv) -> Array[Lv] {
+  if id == root_lv {
+    self.root_children
+  } else if id.0 >= 0 && id.0 < self.children.length() {
+    self.children[id.0]
+  } else {
+    []
   }
 }
 
@@ -62,7 +64,12 @@ pub fn[T] FugueTree::make(root_content : T) -> FugueTree[T] {
 ///
 #alias("_[_]")
 pub fn[T] FugueTree::get(self : FugueTree[T], id : Lv) -> Item[T]? {
-  self.items.get(id)
+  let lv = id.0
+  if lv >= 0 && lv < self.items.length() {
+    self.items[lv]
+  } else {
+    None
+  }
 }
 
 ///|
@@ -192,7 +199,7 @@ pub fn[T] FugueTree::delete_with_ts(
         if not(item.deleted) {
           self.visible = self.visible - 1
         }
-        self.items = self.items.add(id, {
+        self.items[id.0] = Some({
           ..item,
           deleted: true,
           deleted_ts: ts,
@@ -212,6 +219,9 @@ pub fn[T] FugueTree::undelete_with_ts(
   ts : Int,
   agent : String,
 ) -> Unit raise FugueError {
+  if id == root_lv {
+    return
+  }
   match self[id] {
     Some(item) =>
       if should_win_delete(
@@ -225,7 +235,7 @@ pub fn[T] FugueTree::undelete_with_ts(
         if item.deleted {
           self.visible = self.visible + 1
         }
-        self.items = self.items.add(id, {
+        self.items[id.0] = Some({
           ..item,
           deleted: false,
           deleted_ts: ts,
@@ -248,6 +258,9 @@ pub fn[T] FugueTree::set_delete_winner(
   agent : String,
   is_undelete : Bool,
 ) -> Unit raise FugueError {
+  if id == root_lv {
+    return
+  }
   match self[id] {
     Some(item) => {
       if item.deleted && not(deleted) {
@@ -255,7 +268,7 @@ pub fn[T] FugueTree::set_delete_winner(
       } else if not(item.deleted) && deleted {
         self.visible = self.visible - 1
       }
-      self.items = self.items.add(id, {
+      self.items[id.0] = Some({
         ..item,
         deleted,
         deleted_ts: ts,
@@ -286,7 +299,7 @@ pub fn[T] FugueTree::delete(
       if not(item.deleted) {
         self.visible = self.visible - 1
       }
-      self.items = self.items.add(id, {
+      self.items[id.0] = Some({
         ..item,
         deleted: true,
         deleted_ts: 0,
@@ -305,11 +318,14 @@ pub fn[T] FugueTree::undelete(
   self : FugueTree[T],
   id : Lv,
 ) -> Unit raise FugueError {
+  if id == root_lv {
+    return
+  }
   match self[id] {
     Some(item) =>
       if item.deleted {
         self.visible = self.visible + 1
-        self.items = self.items.add(id, {
+        self.items[id.0] = Some({
           ..item,
           deleted: false,
           deleted_ts: 0,
@@ -341,24 +357,25 @@ pub fn[T : Eq] FugueTree::lv_to_position(self : FugueTree[T], id : Lv) -> Int? {
 /// **Invariant**: The item's `id` must be unique within the tree. Duplicate IDs
 /// will overwrite existing items, which violates CRDT convergence guarantees.
 ///
-/// **Complexity**: O(log n) for immutable hashmap insertion.
+/// **Complexity**: O(1) amortized for array append.
 fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
-  self.items = self.items.add(item.id, item)
+  let lv = item.id.0
+  // Grow items array and store item at its LV index
+  while self.items.length() <= lv {
+    self.items.push(None)
+  }
+  self.items[lv] = Some(item)
   self.length = self.length + 1
   self.visible = self.visible + 1
-  // Update children index: add item.id to its parent's children list.
-  // In-place push is safe: get_children_index() returns .copy() for external
-  // callers, and no code retains old hashmap snapshots during mutation.
+  // Register as child of parent
   match item.parent {
-    Some(parent_lv) =>
-      match self.children.get(parent_lv) {
-        Some(arr) => arr.push(item.id)
-        None => self.children = self.children.add(parent_lv, [item.id])
-      }
+    Some(parent_lv) => self.get_children(parent_lv).push(item.id)
     None => ()
   }
-  // New items always need an empty children entry
-  self.children = self.children.add(item.id, [])
+  // Grow children array and initialize empty entry for the new item
+  while self.children.length() <= lv {
+    self.children.push([])
+  }
   // Invalidate LCA index — tree structure has changed
   self.lca_index = None
 }
@@ -556,10 +573,7 @@ pub fn[T] FugueTree::get_children_index(
   self : FugueTree[T],
   parent_id : Lv,
 ) -> Array[Lv] {
-  match self.children.get(parent_id) {
-    Some(arr) => arr.copy()
-    None => []
-  }
+  self.get_children(parent_id).copy()
 }
 
 ///|
@@ -568,10 +582,7 @@ fn[T] FugueTree::get_children_raw(
   self : FugueTree[T],
   parent_id : Lv,
 ) -> Array[Lv] {
-  match self.children.get(parent_id) {
-    Some(arr) => arr
-    None => []
-  }
+  self.get_children(parent_id)
 }
 
 ///|
