@@ -48,6 +48,12 @@ pub(all) struct Item[T] {
   mut deleted_agent : String
   /// `true` if the winner was an Undelete op, `false` if Delete or initial.
   mut deleted_is_undelete : Bool
+  /// Explicit state for two-count merge tracking. Mirrors `deleted` for now;
+  /// will replace it in Phase 2b.
+  mut state : ItemState
+  /// Number of active delete operations targeting this item (two-count merge).
+  /// Managed exclusively by the merge code — FugueTree mutation methods do not touch it.
+  mut delete_count : Int
   /// Lamport timestamp used as the primary sort key when ordering siblings
   /// that share the same parent and side.
   timestamp : Timestamp
@@ -114,6 +120,8 @@ fn[T] Item::new(
     deleted_ts: 0,
     deleted_agent: "",
     deleted_is_undelete: false,
+    state: Inserted,
+    delete_count: 0,
     timestamp,
     agent,
   }
@@ -122,5 +130,5 @@ fn[T] Item::new(
 ///|
 /// Check if item is visible (not deleted)
 fn[T] Item::is_visible(self : Item[T]) -> Bool {
-  not(self.deleted)
+  self.state.is_visible(delete_count=self.delete_count)
 }

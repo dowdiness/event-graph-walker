@@ -32,3 +32,33 @@ test "ItemState - update_from_delete_count" {
   // Retreated is unaffected by delete_count
   inspect(ItemState::Retreated.update_from_delete_count(0), content="Retreated")
 }
+
+///|
+test "Item - new fields initialized correctly" {
+  let item = Item::new(Lv(0), "A", None, Left, Timestamp(0), ReplicaId("a"))
+  inspect(item.state, content="Inserted")
+  inspect(item.delete_count, content="0")
+}
+
+///|
+test "Item - delete_count and state after operations" {
+  let item = Item::new(Lv(0), "A", None, Left, Timestamp(0), ReplicaId("a"))
+  // Simulate retreat_insert
+  item.state = item.state.retreat_insert()
+  inspect(item.state, content="Retreated")
+  inspect(item.is_visible(), content="false")
+  // Simulate advance_insert
+  item.state = item.state.advance_insert()
+  inspect(item.state, content="Inserted")
+  inspect(item.is_visible(), content="true")
+  // Simulate advance_delete
+  item.delete_count = item.delete_count + 1
+  item.state = item.state.update_from_delete_count(item.delete_count)
+  inspect(item.state, content="Deleted")
+  inspect(item.is_visible(), content="false")
+  // Simulate retreat_delete
+  item.delete_count = item.delete_count - 1
+  item.state = item.state.update_from_delete_count(item.delete_count)
+  inspect(item.state, content="Inserted")
+  inspect(item.is_visible(), content="true")
+}

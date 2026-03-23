@@ -64,6 +64,8 @@ pub(all) struct Item[T] {
   mut deleted_ts : Int
   mut deleted_agent : String
   mut deleted_is_undelete : Bool
+  mut state : ItemState
+  mut delete_count : Int
   timestamp : Timestamp
   agent : ReplicaId
 }
