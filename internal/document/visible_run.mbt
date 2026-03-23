@@ -1,6 +1,6 @@
 ///| VisibleRun — compressed representation of consecutive visible items
-/// in document order. Used as the element type for Rle[VisibleRun] in
-/// the position cache.
+/// in document order. Used as the element type for OrderTree[VisibleRun]
+/// in the position cache.
 
 ///|
 /// A run of consecutive visible items in document order.
@@ -23,7 +23,7 @@ pub impl @rle.HasLength for VisibleRun with length(self) -> Int {
 
 ///|
 /// span = count (one item per position in the item space).
-/// This is the coordinate space for Rle::find — position-based lookup.
+/// This is the coordinate space for OrderTree::find — position-based lookup.
 pub impl @rle.Spanning for VisibleRun with span(self) -> Int {
   self.count
 }
@@ -52,7 +52,7 @@ pub impl @rle.Mergeable for VisibleRun with merge(self, other) -> VisibleRun {
 }
 
 ///|
-/// Sliceable enables split/insert/delete on Rle[VisibleRun].
+/// Sliceable enables split/insert/delete on OrderTree[VisibleRun].
 pub impl @rle.Sliceable for VisibleRun with slice(
   self,
   start~ : Int,

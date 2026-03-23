@@ -19,9 +19,9 @@ pub struct Document {
   priv tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
   agent_id : String
-  // Compressed position cache: maps position -> VisibleRun via O(log n) lookup.
+  // Position cache: maps position -> VisibleRun via O(log n) OrderTree lookup.
   // Invalidated on any modification (set to None). Rebuilt lazily on demand.
-  priv mut position_cache : @rle.Rle[VisibleRun]?
+  priv mut position_cache : @order_tree.OrderTree[VisibleRun]?
   // Insert cursor: caches last insert position/LV for sequential append fast-path.
   priv mut cursor : InsertCursor?
 } derive(Show)
@@ -68,20 +68,24 @@ pub fn Document::get_frontier_raw(
 }
 
 ///|
-/// Build the compressed position cache from visible tree items.
-fn Document::build_position_cache(self : Document) -> @rle.Rle[VisibleRun] {
+/// Build the position cache from visible tree items using OrderTree.
+fn Document::build_position_cache(
+  self : Document,
+) -> @order_tree.OrderTree[VisibleRun] {
   let items = self.tree.get_visible_items()
-  let rle : @rle.Rle[VisibleRun] = @rle.Rle::new()
+  let runs : Array[VisibleRun] = Array::new(capacity=items.length())
   for i = 0; i < items.length(); i = i + 1 {
     let (lv, item) = items[i]
-    let _ = rle.append({ start_lv: lv.0, text: item.content, count: 1 })
+    runs.push({ start_lv: lv.0, text: item.content, count: 1 })
   }
-  rle
+  @order_tree.OrderTree::from_array(runs)
 }
 
 ///|
-/// Get or build the compressed position cache (lazy initialization).
-fn Document::get_compressed_cache(self : Document) -> @rle.Rle[VisibleRun] {
+/// Get or build the position cache (lazy initialization).
+fn Document::get_compressed_cache(
+  self : Document,
+) -> @order_tree.OrderTree[VisibleRun] {
   match self.position_cache {
     Some(cache) => cache
     None => {
@@ -94,15 +98,11 @@ fn Document::get_compressed_cache(self : Document) -> @rle.Rle[VisibleRun] {
 
 ///|
 /// Get the LV at a specific 0-based visible position.
-/// Uses O(log n) binary search via Rle::find on the compressed cache.
+/// Uses O(log n) lookup via OrderTree::find on the position cache.
 fn Document::lv_at_position(self : Document, position : Int) -> Int? {
   let cache = self.get_compressed_cache()
   match cache.find(position) {
-    Some(rp) =>
-      match cache.get(rp.run) {
-        Some(run) => Some(run.start_lv + rp.offset)
-        None => None
-      }
+    Some(fr) => Some(fr.elem.start_lv + fr.offset)
     None => None
   }
 }
@@ -146,6 +146,7 @@ pub fn Document::insert(
 ) -> @core.Op raise DocumentError {
   let mut current_pos = position
   let mut last_op : @core.Op? = None
+  let mut cache_valid = self.position_cache is Some(_)
 
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_string()
@@ -159,6 +160,7 @@ pub fn Document::insert(
         } else {
           // Partial hit: invalidate stale cache before reading
           self.invalidate_cache()
+          cache_valid = false
           match self.lv_at_position(current_pos) {
             Some(lv) => lv
             None => -1
@@ -169,6 +171,7 @@ pub fn Document::insert(
       _ => {
         // Cursor miss: invalidate stale cache before reading, then do full lookup
         self.invalidate_cache()
+        cache_valid = false
         let ol = self.position_to_lv(current_pos)
         let or = match self.lv_at_position(current_pos) {
           Some(lv) => lv
@@ -206,6 +209,14 @@ pub fn Document::insert(
       timestamp: @fugue.Timestamp(timestamp),
       agent: @fugue.ReplicaId(agent),
     })
+    // Incremental cache update for sequential append at end
+    if cache_valid {
+      match self.position_cache {
+        Some(cache) =>
+          cache.insert_at(current_pos, { start_lv: op.lv(), text: ch, count: 1 })
+        None => cache_valid = false
+      }
+    }
     // Update cursor (no invalidation here — done per-branch above or once after loop)
     self.cursor = Some({
       position: current_pos,
@@ -216,8 +227,10 @@ pub fn Document::insert(
     last_op = Some(op)
     current_pos = current_pos + 1
   }
-  // Final invalidation: ensures the cache reflects all inserts from this call.
-  self.invalidate_cache()
+  // Final invalidation: only needed when cache wasn't incrementally maintained.
+  if not(cache_valid) {
+    self.invalidate_cache()
+  }
 
   match last_op {
     Some(op) => op
@@ -562,18 +575,12 @@ pub fn Document::get_visible_items(
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
   let cache = self.get_compressed_cache()
-  let num_runs = @rle.HasLength::length(cache)
   let mut pos = 0
-  for i = 0; i < num_runs; i = i + 1 {
-    match cache.get(i) {
-      Some(run) => {
-        if lv >= run.start_lv && lv < run.start_lv + run.count {
-          return Some(pos + (lv - run.start_lv))
-        }
-        pos = pos + run.count
-      }
-      None => ()
+  for run in cache.iter() {
+    if lv >= run.start_lv && lv < run.start_lv + run.count {
+      return Some(pos + (lv - run.start_lv))
     }
+    pos = pos + run.count
   }
   None
 }
