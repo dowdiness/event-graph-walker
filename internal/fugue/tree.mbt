@@ -199,13 +199,10 @@ pub fn[T] FugueTree::delete_with_ts(
         if not(item.deleted) {
           self.visible = self.visible - 1
         }
-        self.items[id.0] = Some({
-          ..item,
-          deleted: true,
-          deleted_ts: ts,
-          deleted_agent: agent,
-          deleted_is_undelete: false,
-        })
+        item.deleted = true
+        item.deleted_ts = ts
+        item.deleted_agent = agent
+        item.deleted_is_undelete = false
       }
     None => raise FugueError::MissingItem(id~)
   }
@@ -235,13 +232,10 @@ pub fn[T] FugueTree::undelete_with_ts(
         if item.deleted {
           self.visible = self.visible + 1
         }
-        self.items[id.0] = Some({
-          ..item,
-          deleted: false,
-          deleted_ts: ts,
-          deleted_agent: agent,
-          deleted_is_undelete: true,
-        })
+        item.deleted = false
+        item.deleted_ts = ts
+        item.deleted_agent = agent
+        item.deleted_is_undelete = true
       }
     None => raise FugueError::MissingItem(id~)
   }
@@ -268,13 +262,10 @@ pub fn[T] FugueTree::set_delete_winner(
       } else if not(item.deleted) && deleted {
         self.visible = self.visible - 1
       }
-      self.items[id.0] = Some({
-        ..item,
-        deleted,
-        deleted_ts: ts,
-        deleted_agent: agent,
-        deleted_is_undelete: is_undelete,
-      })
+      item.deleted = deleted
+      item.deleted_ts = ts
+      item.deleted_agent = agent
+      item.deleted_is_undelete = is_undelete
     }
     None => raise FugueError::MissingItem(id~)
   }
@@ -299,13 +290,10 @@ pub fn[T] FugueTree::delete(
       if not(item.deleted) {
         self.visible = self.visible - 1
       }
-      self.items[id.0] = Some({
-        ..item,
-        deleted: true,
-        deleted_ts: 0,
-        deleted_agent: "",
-        deleted_is_undelete: false,
-      })
+      item.deleted = true
+      item.deleted_ts = 0
+      item.deleted_agent = ""
+      item.deleted_is_undelete = false
     }
     None => raise FugueError::MissingItem(id~)
   }
@@ -325,13 +313,10 @@ pub fn[T] FugueTree::undelete(
     Some(item) =>
       if item.deleted {
         self.visible = self.visible + 1
-        self.items[id.0] = Some({
-          ..item,
-          deleted: false,
-          deleted_ts: 0,
-          deleted_agent: "",
-          deleted_is_undelete: true,
-        })
+        item.deleted = false
+        item.deleted_ts = 0
+        item.deleted_agent = ""
+        item.deleted_is_undelete = true
       }
     None => raise FugueError::MissingItem(id~)
   }
