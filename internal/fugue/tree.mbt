@@ -270,6 +270,9 @@ pub fn[T] FugueTree::set_delete_winner(
       item.deleted_agent = agent
       item.deleted_is_undelete = is_undelete
       item.state = if deleted { Deleted } else { Inserted }
+      // Reset delete_count to match authoritative state.
+      // Retreat dirty-tracking may leave it negative; reconcile here.
+      item.delete_count = if deleted { 1 } else { 0 }
     }
     None => raise FugueError::MissingItem(id~)
   }

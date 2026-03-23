@@ -538,14 +538,10 @@ test "merge - frontier retreat exercises two-count path" {
   let frontier_with_delete = oplog.get_frontier()
   inspect(tree.to_text(), content="AC")
 
-  // Retreat the delete via merge() — this calls retreat_operations directly
+  // Retreat the delete via merge() — this calls retreat_operations directly.
+  // Retreating the delete should restore "B" to visible.
   merge(tree, oplog, frontier_with_delete, frontier_abc)
-  inspect(
-    tree.to_text(),
-    content=(
-      #|AC
-    ),
-  )
+  inspect(tree.to_text(), content="ABC")
 }
 
 ///|
