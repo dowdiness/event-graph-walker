@@ -70,6 +70,20 @@ pub(all) struct Item[T] {
 pub impl[T : Eq] Eq for Item[T]
 pub impl[T : Show] Show for Item[T]
 
+pub enum ItemState {
+  NotInserted
+  Inserted
+  Deleted
+  Retreated
+}
+pub fn ItemState::advance_insert(Self) -> Self
+pub fn ItemState::is_visible(Self, delete_count~ : Int) -> Bool
+pub fn ItemState::retreat_insert(Self) -> Self
+pub fn ItemState::update_from_delete_count(Self, Int) -> Self
+pub impl Default for ItemState
+pub impl Eq for ItemState
+pub impl Show for ItemState
+
 type LcaIndex
 pub impl Show for LcaIndex
 
