@@ -6,6 +6,7 @@ import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/oplog",
+  "dowdiness/order-tree",
   "dowdiness/rle",
 }
 
@@ -51,6 +52,15 @@ pub impl Show for Document
 
 type InsertCursor
 pub impl Show for InsertCursor
+
+pub struct MergeCache {
+  cache : @order-tree.OrderTree[VisibleRun]?
+  mut dirty : Bool
+}
+pub fn MergeCache::insert_at(Self, Int, VisibleRun) -> Unit
+pub fn MergeCache::new(@order-tree.OrderTree[VisibleRun]?, Int, Int) -> Self
+pub fn MergeCache::remove_at(Self, Int) -> Unit
+pub fn MergeCache::take(Self) -> @order-tree.OrderTree[VisibleRun]?
 
 type VisibleRun
 pub impl @rle.HasLength for VisibleRun
