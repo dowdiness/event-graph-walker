@@ -60,10 +60,10 @@ pub(all) struct Item[T] {
   content : T
   parent : Lv?
   side : Side
-  deleted : Bool
-  deleted_ts : Int
-  deleted_agent : String
-  deleted_is_undelete : Bool
+  mut deleted : Bool
+  mut deleted_ts : Int
+  mut deleted_agent : String
+  mut deleted_is_undelete : Bool
   timestamp : Timestamp
   agent : ReplicaId
 }

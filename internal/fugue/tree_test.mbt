@@ -519,6 +519,27 @@ test "children index: same parent, different sides" {
 }
 
 ///|
+test "LCA: root is ancestor of all items" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  inspect(tree.is_ancestor(@fugue.Lv(-1), @fugue.Lv(0)), content="true")
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(-1)), content="false")
+}
+
+///|
+test "LCA: empty document — root only" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  inspect(tree.is_ancestor(@fugue.Lv(-1), @fugue.Lv(-1)), content="true")
+}
+
+///|
 test "spike: struct mut field in array modifies in-place" {
   // Gate test for Phase 2b: verify MoonBit arrays store struct references
   // so that mutating a `mut` field on arr[i] changes the stored value.
