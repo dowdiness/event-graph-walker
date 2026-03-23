@@ -8,3 +8,4 @@ dist/
 .env
 _build
 .grepai/
+.claude/worktrees/
