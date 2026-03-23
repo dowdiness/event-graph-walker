@@ -135,6 +135,23 @@ test "multi-char insert at non-end position" {
 }
 
 ///|
+test "delete: position cache incrementally updated" {
+  let doc = @document.Document::new("test")
+  let _ = doc.insert(0, "abc")
+  inspect(doc.visible_count(), content="3")
+  inspect(doc.to_text(), content="abc")
+
+  // Delete middle character — cache should be incrementally updated
+  let _ = doc.delete(1) // delete 'b'
+  inspect(doc.to_text(), content="ac")
+  inspect(doc.visible_count(), content="2")
+
+  // Verify position lookups still work after incremental delete
+  let _ = doc.delete(0) // delete 'a'
+  inspect(doc.to_text(), content="c")
+}
+
+///|
 test "cache coherent: interleaved local and remote edits maintain consistency" {
   let alice = Document::new("alice")
   let bob = Document::new("bob")
