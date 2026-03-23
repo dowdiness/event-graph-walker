@@ -337,6 +337,73 @@ test "merge - repeated small (10 iterations x 5 ops)" (b : @bench.T) {
 }
 
 ///|
+/// Benchmark: retreat with concurrent deletes.
+test "merge - retreat concurrent deletes (500 items, 50 deletes)" (b : @bench.T) {
+  // Setup: 500-item document with 50 deletes
+  let oplog_a = @oplog.OpLog::new("agent_a")
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+
+  // Insert 500 chars
+  let mut prev_lv = -1
+  for i = 0; i < 500; i = i + 1 {
+    let op = try! oplog_a.insert("x", prev_lv, -1)
+    tree.insert({
+      id: @fugue.Lv(op.lv()),
+      content: "x",
+      origin_left: if prev_lv == -1 {
+        None
+      } else {
+        Some(@fugue.Lv(prev_lv))
+      },
+      origin_right: None,
+      timestamp: @fugue.Timestamp(i),
+      agent: @fugue.ReplicaId("agent_a"),
+    })
+    prev_lv = op.lv()
+  }
+  let frontier_base = oplog_a.get_frontier()
+
+  // Agent A deletes 50 items (every 10th)
+  for i = 0; i < 50; i = i + 1 {
+    let _ = try! oplog_a.delete(i * 10)
+    try! tree.delete_with_ts(@fugue.Lv(i * 10), 500 + i, "agent_a")
+  }
+  let frontier_with_deletes = oplog_a.get_frontier()
+
+  // Pre-build template insert ops (avoid rebuilding 500 items per iteration)
+  let template_inserts : Array[@fugue.InsertOp[String]] = Array::new(
+    capacity=500,
+  )
+  for i = 0; i < 500; i = i + 1 {
+    template_inserts.push({
+      id: @fugue.Lv(i),
+      content: "x",
+      origin_left: if i == 0 {
+        None
+      } else {
+        Some(@fugue.Lv(i - 1))
+      },
+      origin_right: None,
+      timestamp: @fugue.Timestamp(i),
+      agent: @fugue.ReplicaId("agent_a"),
+    })
+  }
+  b.bench(fn() {
+    // Build fresh tree from template
+    let tree_copy : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+    for ins in template_inserts {
+      tree_copy.insert(ins)
+    }
+    for i = 0; i < 50; i = i + 1 {
+      try! tree_copy.delete_with_ts(@fugue.Lv(i * 10), 500 + i, "agent_a")
+    }
+    // Retreat the 50 deletes (merge from frontier_with_deletes to frontier_base)
+    try! merge(tree_copy, oplog_a, frontier_with_deletes, frontier_base)
+    b.keep(tree_copy.to_text())
+  })
+}
+
+///|
 /// Benchmark: Merge context creation and application
 test "merge - context apply operations (50 ops)" (b : @bench.T) {
   let oplog = @oplog.OpLog::new("agent_a")

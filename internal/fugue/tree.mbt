@@ -204,6 +204,7 @@ pub fn[T] FugueTree::delete_with_ts(
         item.deleted_ts = ts
         item.deleted_agent = agent
         item.deleted_is_undelete = false
+        item.state = Deleted
       }
     None => raise FugueError::MissingItem(id~)
   }
@@ -237,6 +238,7 @@ pub fn[T] FugueTree::undelete_with_ts(
         item.deleted_ts = ts
         item.deleted_agent = agent
         item.deleted_is_undelete = true
+        item.state = Inserted
       }
     None => raise FugueError::MissingItem(id~)
   }
@@ -267,6 +269,10 @@ pub fn[T] FugueTree::set_delete_winner(
       item.deleted_ts = ts
       item.deleted_agent = agent
       item.deleted_is_undelete = is_undelete
+      item.state = if deleted { Deleted } else { Inserted }
+      // Reset delete_count to match authoritative state.
+      // Retreat dirty-tracking may leave it negative; reconcile here.
+      item.delete_count = if deleted { 1 } else { 0 }
     }
     None => raise FugueError::MissingItem(id~)
   }
@@ -295,6 +301,8 @@ pub fn[T] FugueTree::delete(
       item.deleted_ts = 0
       item.deleted_agent = ""
       item.deleted_is_undelete = false
+      item.state = Retreated
+      item.delete_count = 0
     }
     None => raise FugueError::MissingItem(id~)
   }
@@ -318,6 +326,7 @@ pub fn[T] FugueTree::undelete(
         item.deleted_ts = 0
         item.deleted_agent = ""
         item.deleted_is_undelete = true
+        item.state = Inserted
       }
     None => raise FugueError::MissingItem(id~)
   }

@@ -519,6 +519,9 @@ pub fn Document::merge_remote(
     e => raise DocumentError::OpLog(e)
   }
   // Invalidate before merge so partial-merge failures can't leave stale cache.
+  // TODO(phase3): Replace invalidate_cache() with MergeCache for incremental
+  // position cache updates during merge. MergeCache::new() decides whether to
+  // do incremental updates or drop-and-rebuild based on merge_size vs doc_size.
   self.invalidate_cache()
   // Use the branch module's merge convenience function
   @branch.merge_remote_ops(self.tree, self.oplog, remote_ops) catch {

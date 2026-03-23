@@ -427,3 +427,226 @@ test "retreat then apply with missing item" {
     _ => fail("Expected MissingOp error")
   }
 }
+
+///|
+test "merge - concurrent delete retreat convergence" {
+  let oplog_a = @oplog.OpLog::new("agent_a")
+  let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let oplog_b = @oplog.OpLog::new("agent_b")
+  let tree_b : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+
+  // Both agents start with "ABC"
+  let op1 = try! oplog_a.insert("A", -1, -1)
+  tree_a.insert({
+    id: @fugue.Lv(op1.lv()),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op2 = try! oplog_a.insert("B", op1.lv(), -1)
+  tree_a.insert({
+    id: @fugue.Lv(op2.lv()),
+    content: "B",
+    origin_left: Some(@fugue.Lv(op1.lv())),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op3 = try! oplog_a.insert("C", op2.lv(), -1)
+  tree_a.insert({
+    id: @fugue.Lv(op3.lv()),
+    content: "C",
+    origin_left: Some(@fugue.Lv(op2.lv())),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(2),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+
+  // Sync A -> B
+  let ops_a = [op1, op2, op3]
+  try! merge_remote_ops(tree_b, oplog_b, ops_a)
+  inspect(tree_b.to_text(), content="ABC")
+
+  // Agent A deletes "B"
+  let del_a = try! oplog_a.delete(op2.lv())
+  try! tree_a.delete(@fugue.Lv(op2.lv()))
+  inspect(tree_a.to_text(), content="AC")
+
+  // Agent B also deletes "B" concurrently
+  let b_lv_for_op2 = match
+    oplog_b.causal_graph().raw_to_lv(@core.RawVersion::new("agent_a", 1)) {
+    Some(lv) => lv
+    None => fail("missing op2 in B")
+  }
+  let del_b = try! oplog_b.delete(b_lv_for_op2)
+  try! tree_b.delete(@fugue.Lv(b_lv_for_op2))
+  inspect(tree_b.to_text(), content="AC")
+
+  // Merge: A gets B's concurrent delete via merge_remote_ops (advance path)
+  try! merge_remote_ops(tree_a, oplog_a, [del_b])
+  inspect(tree_a.to_text(), content="AC")
+
+  // Merge: B gets A's concurrent delete via merge_remote_ops (advance path)
+  try! merge_remote_ops(tree_b, oplog_b, [del_a])
+  inspect(tree_b.to_text(), content="AC")
+}
+
+///|
+/// Test: frontier-based merge exercises MergeContext::retreat_operations directly.
+/// Agent A has "ABC" + delete "B". We merge from A's current frontier back to
+/// the pre-delete frontier, which retreats the delete and restores "B".
+test "merge - frontier retreat exercises two-count path" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+
+  // Insert "ABC"
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert({
+    id: @fugue.Lv(op1.lv()),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op2 = try! oplog.insert("B", op1.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(op2.lv()),
+    content: "B",
+    origin_left: Some(@fugue.Lv(op1.lv())),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op3 = try! oplog.insert("C", op2.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(op3.lv()),
+    content: "C",
+    origin_left: Some(@fugue.Lv(op2.lv())),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(2),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let frontier_abc = oplog.get_frontier()
+  inspect(tree.to_text(), content="ABC")
+
+  // Delete "B"
+  let _ = try! oplog.delete(op2.lv())
+  try! tree.delete_with_ts(@fugue.Lv(op2.lv()), 3, "agent_a")
+  let frontier_with_delete = oplog.get_frontier()
+  inspect(tree.to_text(), content="AC")
+
+  // Retreat the delete via merge() — this calls retreat_operations directly.
+  // Retreating the delete should restore "B" to visible.
+  merge(tree, oplog, frontier_with_delete, frontier_abc)
+  inspect(tree.to_text(), content="ABC")
+}
+
+///|
+test "merge - retreat insert hides items correctly" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+
+  // Insert "ABCDE"
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op2 = try! oplog.insert("B", op1.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(1),
+    content: "B",
+    origin_left: Some(@fugue.Lv(0)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op3 = try! oplog.insert("C", op2.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(2),
+    content: "C",
+    origin_left: Some(@fugue.Lv(1)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(2),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let _ = op3
+  let frontier_abc = oplog.get_frontier()
+
+  let op4 = try! oplog.insert("D", op3.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(3),
+    content: "D",
+    origin_left: Some(@fugue.Lv(2)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(3),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op5 = try! oplog.insert("E", op4.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(4),
+    content: "E",
+    origin_left: Some(@fugue.Lv(3)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(4),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let _ = op5
+  let frontier_abcde = oplog.get_frontier()
+
+  inspect(tree.to_text(), content="ABCDE")
+
+  // Build tree2 at ABCDE state
+  let tree2 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree2.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  tree2.insert({
+    id: @fugue.Lv(1),
+    content: "B",
+    origin_left: Some(@fugue.Lv(0)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  tree2.insert({
+    id: @fugue.Lv(2),
+    content: "C",
+    origin_left: Some(@fugue.Lv(1)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(2),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  tree2.insert({
+    id: @fugue.Lv(3),
+    content: "D",
+    origin_left: Some(@fugue.Lv(2)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(3),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  tree2.insert({
+    id: @fugue.Lv(4),
+    content: "E",
+    origin_left: Some(@fugue.Lv(3)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(4),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+
+  // Retreat from ABCDE to ABC (retreat ops 3,4 — hides D and E)
+  merge(tree2, oplog, frontier_abcde, frontier_abc)
+  inspect(tree2.to_text(), content="ABC")
+}
