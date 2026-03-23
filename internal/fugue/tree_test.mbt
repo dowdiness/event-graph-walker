@@ -517,3 +517,19 @@ test "children index: same parent, different sides" {
   let children_of_c = tree.get_children_index(@fugue.Lv(2))
   inspect(children_of_c.length(), content="1")
 }
+
+///|
+test "spike: struct mut field in array modifies in-place" {
+  // Gate test for Phase 2b: verify MoonBit arrays store struct references
+  // so that mutating a `mut` field on arr[i] changes the stored value.
+  //
+  // Item[T] will gain `mut deleted` etc. — if this test fails, all
+  // delete/undelete code needs explicit read-modify-write.
+  struct MutSpike {
+    mut flag : Bool
+  }
+  let arr : Array[MutSpike] = [{ flag: false }, { flag: false }]
+  arr[0].flag = true
+  inspect(arr[0].flag, content="true")
+  inspect(arr[1].flag, content="false")
+}
