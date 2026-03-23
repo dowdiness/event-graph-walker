@@ -42,6 +42,20 @@ pub fn Branch::to_text(Self) -> String
 pub fn Branch::visible_count(Self) -> Int
 pub impl Show for Branch
 
+pub struct DeleteIndex {
+  index : Map[Int, Array[Int]]
+}
+pub fn DeleteIndex::build(@oplog.OpLog) -> Self
+pub fn DeleteIndex::get_delete_ops(Self, Int) -> Array[Int]
+pub fn DeleteIndex::recompute_winner(Self, Int, @oplog.OpLog, @rle.Rle[@core.LvRange]) -> DeleteWinner
+
+pub(all) struct DeleteWinner {
+  deleted : Bool
+  ts : Int
+  agent : String
+  is_undelete : Bool
+}
+
 pub struct MergeContext {
   // private fields
 }
