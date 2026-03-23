@@ -177,7 +177,10 @@ pub fn MergeContext::retreat_operations(
                   item.delete_count = item.delete_count - 1
                   dirty_items.push(target_lv)
                 }
-                None => ()
+                None =>
+                  raise BranchError::Fugue(
+                    @fugue.FugueError::MissingItem(id=@fugue.Lv(target_lv)),
+                  )
               }
             }
             @core.Undelete => {
@@ -195,7 +198,10 @@ pub fn MergeContext::retreat_operations(
                   item.delete_count = item.delete_count + 1
                   dirty_items.push(target_lv)
                 }
-                None => ()
+                None =>
+                  raise BranchError::Fugue(
+                    @fugue.FugueError::MissingItem(id=@fugue.Lv(target_lv)),
+                  )
               }
             }
           }

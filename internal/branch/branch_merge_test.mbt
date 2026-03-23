@@ -484,13 +484,68 @@ test "merge - concurrent delete retreat convergence" {
   try! tree_b.delete(@fugue.Lv(b_lv_for_op2))
   inspect(tree_b.to_text(), content="AC")
 
-  // Merge: A gets B's concurrent delete
+  // Merge: A gets B's concurrent delete via merge_remote_ops (advance path)
   try! merge_remote_ops(tree_a, oplog_a, [del_b])
   inspect(tree_a.to_text(), content="AC")
 
-  // Merge: B gets A's concurrent delete
+  // Merge: B gets A's concurrent delete via merge_remote_ops (advance path)
   try! merge_remote_ops(tree_b, oplog_b, [del_a])
   inspect(tree_b.to_text(), content="AC")
+}
+
+///|
+/// Test: frontier-based merge exercises MergeContext::retreat_operations directly.
+/// Agent A has "ABC" + delete "B". We merge from A's current frontier back to
+/// the pre-delete frontier, which retreats the delete and restores "B".
+test "merge - frontier retreat exercises two-count path" {
+  let oplog = @oplog.OpLog::new("agent_a")
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+
+  // Insert "ABC"
+  let op1 = try! oplog.insert("A", -1, -1)
+  tree.insert({
+    id: @fugue.Lv(op1.lv()),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op2 = try! oplog.insert("B", op1.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(op2.lv()),
+    content: "B",
+    origin_left: Some(@fugue.Lv(op1.lv())),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let op3 = try! oplog.insert("C", op2.lv(), -1)
+  tree.insert({
+    id: @fugue.Lv(op3.lv()),
+    content: "C",
+    origin_left: Some(@fugue.Lv(op2.lv())),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(2),
+    agent: @fugue.ReplicaId("agent_a"),
+  })
+  let frontier_abc = oplog.get_frontier()
+  inspect(tree.to_text(), content="ABC")
+
+  // Delete "B"
+  let _ = try! oplog.delete(op2.lv())
+  try! tree.delete_with_ts(@fugue.Lv(op2.lv()), 3, "agent_a")
+  let frontier_with_delete = oplog.get_frontier()
+  inspect(tree.to_text(), content="AC")
+
+  // Retreat the delete via merge() — this calls retreat_operations directly
+  merge(tree, oplog, frontier_with_delete, frontier_abc)
+  inspect(
+    tree.to_text(),
+    content=(
+      #|AC
+    ),
+  )
 }
 
 ///|

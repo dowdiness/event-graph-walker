@@ -57,7 +57,7 @@ pub fn MergeCache::insert_at(
 pub fn MergeCache::take(
   self : MergeCache,
 ) -> @order_tree.OrderTree[VisibleRun]? {
-  if self.dirty && self.cache is None {
+  if self.dirty {
     None
   } else {
     self.cache
