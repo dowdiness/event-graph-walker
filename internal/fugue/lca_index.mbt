@@ -4,7 +4,8 @@
 struct LcaIndex {
   euler_tour : Array[Lv]
   depth : Array[Int]
-  first : @immut/hashmap.HashMap[Lv, Int]
+  first : Array[Int] // first[lv] = first occurrence index in euler_tour (non-root items). -1 = not seen.
+  root_first : Int // First occurrence of root in euler_tour
   sparse : Array[Array[Int]]
   tour_len : Int
 } derive(Show)
@@ -24,35 +25,36 @@ fn log2_floor(n : Int) -> Int {
 fn[T] LcaIndex::build(tree : FugueTree[T]) -> LcaIndex {
   let euler_tour : Array[Lv] = []
   let depth_arr : Array[Int] = []
-  let mut first = @immut/hashmap.HashMap::new()
+  let first : Array[Int] = Array::make(tree.items.length(), -1)
+  let mut root_first = -1
 
-  // Iterative DFS using explicit stack (avoids stack overflow on deep trees)
-  // Stack entries: (node_id, depth, child_index)
   let stack : Array[(Lv, Int, Int)] = [(root_lv, 0, -1)]
   while stack.length() > 0 {
     let (node_id, d, child_idx) = stack[stack.length() - 1]
     if child_idx == -1 {
-      // First visit: record in euler tour
       euler_tour.push(node_id)
       depth_arr.push(d)
-      match first.get(node_id) {
-        None => first = first.add(node_id, euler_tour.length() - 1)
-        Some(_) => ()
+      // Record first occurrence (inlined, not a closure)
+      let tour_idx = euler_tour.length() - 1
+      if node_id == root_lv {
+        if root_first == -1 {
+          root_first = tour_idx
+        }
+      } else if node_id.0 >= 0 &&
+        node_id.0 < first.length() &&
+        first[node_id.0] == -1 {
+        first[node_id.0] = tour_idx
       }
-      // Update to start processing children
       stack[stack.length() - 1] = (node_id, d, 0)
     } else {
       let child_lvs = tree.get_children_raw(node_id)
       if child_idx < child_lvs.length() {
-        // Process next child
         stack[stack.length() - 1] = (node_id, d, child_idx + 1)
         let child_lv = child_lvs[child_idx]
         stack.push((child_lv, d + 1, -1))
       } else {
-        // All children processed, backtrack
         let _ = stack.pop()
         if stack.length() > 0 {
-          // Record return to parent in euler tour
           let (parent_id, parent_d, _) = stack[stack.length() - 1]
           euler_tour.push(parent_id)
           depth_arr.push(parent_d)
@@ -61,19 +63,14 @@ fn[T] LcaIndex::build(tree : FugueTree[T]) -> LcaIndex {
     }
   }
 
-  // Build sparse table for RMQ
   let tour_len = euler_tour.length()
   let log_n = if tour_len <= 1 { 1 } else { log2_floor(tour_len) + 1 }
   let sparse : Array[Array[Int]] = []
-
-  // Level 0: each element is its own minimum
   let level0 : Array[Int] = Array::make(tour_len, 0)
   for i = 0; i < tour_len; i = i + 1 {
     level0[i] = i
   }
   sparse.push(level0)
-
-  // Higher levels
   for k = 1; k < log_n; k = k + 1 {
     let prev = sparse[k - 1]
     let range = 1 << k
@@ -88,7 +85,29 @@ fn[T] LcaIndex::build(tree : FugueTree[T]) -> LcaIndex {
     sparse.push(level)
   }
 
-  { euler_tour, depth: depth_arr, first, sparse, tour_len }
+  { euler_tour, depth: depth_arr, first, root_first, sparse, tour_len }
+}
+
+///|
+/// Resolve an Lv to its first-occurrence index in the Euler tour.
+/// Returns None if the Lv was never visited during the DFS.
+fn LcaIndex::lv_to_tour_idx(self : LcaIndex, id : Lv) -> Int? {
+  if id == root_lv {
+    if self.root_first == -1 {
+      None
+    } else {
+      Some(self.root_first)
+    }
+  } else if id.0 >= 0 && id.0 < self.first.length() {
+    let idx = self.first[id.0]
+    if idx == -1 {
+      None
+    } else {
+      Some(idx)
+    }
+  } else {
+    None
+  }
 }
 
 ///|
@@ -100,11 +119,11 @@ fn LcaIndex::is_ancestor(
   if ancestor_id == descendant_id {
     return true
   }
-  let a_idx = match self.first.get(ancestor_id) {
+  let a_idx = match self.lv_to_tour_idx(ancestor_id) {
     Some(idx) => idx
     None => return false
   }
-  let b_idx = match self.first.get(descendant_id) {
+  let b_idx = match self.lv_to_tour_idx(descendant_id) {
     Some(idx) => idx
     None => return false
   }

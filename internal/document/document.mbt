@@ -278,7 +278,15 @@ pub fn Document::delete(
     e => raise DocumentError::Fugue(e)
   }
 
-  self.invalidate_cache()
+  // Incremental cache update: delete at known position
+  match self.position_cache {
+    Some(cache) =>
+      match cache.delete_at(position) {
+        Some(_) => ()
+        None => self.invalidate_cache()
+      }
+    None => ()
+  }
   op
 }
 

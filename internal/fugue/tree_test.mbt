@@ -517,3 +517,90 @@ test "children index: same parent, different sides" {
   let children_of_c = tree.get_children_index(@fugue.Lv(2))
   inspect(children_of_c.length(), content="1")
 }
+
+///|
+test "LCA: root is ancestor of all items" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  inspect(tree.is_ancestor(@fugue.Lv(-1), @fugue.Lv(0)), content="true")
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(-1)), content="false")
+}
+
+///|
+test "LCA: empty document — root only" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  inspect(tree.is_ancestor(@fugue.Lv(-1), @fugue.Lv(-1)), content="true")
+}
+
+///|
+test "get(root_lv) returns None — root is a virtual sentinel" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  // Root (LV=-1) is not stored in the items array. It is a virtual sentinel
+  // used only for parent/children relationships. Traversal, LCA, and all
+  // operations handle root via root_children and special-case guards.
+  inspect(tree[@fugue.root_lv], content="None")
+  inspect(tree[@fugue.Lv(99)], content="None") // out-of-range also None
+}
+
+///|
+test "LCA: not invalidated by delete/undelete" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  tree.insert({
+    id: @fugue.Lv(1),
+    content: "B",
+    origin_left: Some(@fugue.Lv(0)),
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("a"),
+  })
+  tree.build_lca_index()
+  try! tree.delete(@fugue.Lv(1))
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(1)), content="true")
+  try! tree.undelete(@fugue.Lv(1))
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(1)), content="true")
+}
+
+///|
+test "spike: struct mut field in Option-wrapped array modifies in-place" {
+  // Gate test for Phase 2b: verify that mutating a `mut` field through a
+  // pattern-matched binding from Array[T?] modifies the stored value.
+  // This mirrors the production path: items : Array[Item[T]?], and
+  // delete/undelete do `match self[id] { Some(item) => item.deleted = true }`.
+  struct MutSpike {
+    mut flag : Bool
+  }
+  let arr : Array[MutSpike?] = [Some({ flag: false }), Some({ flag: false })]
+  match arr[0] {
+    Some(item) => item.flag = true
+    None => ()
+  }
+  inspect(
+    match arr[0] {
+      Some(item) => item.flag
+      None => false
+    },
+    content="true",
+  )
+  inspect(
+    match arr[1] {
+      Some(item) => item.flag
+      None => false
+    },
+    content="false",
+  )
+}

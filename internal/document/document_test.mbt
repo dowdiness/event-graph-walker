@@ -135,6 +135,48 @@ test "multi-char insert at non-end position" {
 }
 
 ///|
+test "delete: position cache incrementally updated" {
+  let doc = @document.Document::new("test")
+  let _ = doc.insert(0, "abc")
+  inspect(doc.visible_count(), content="3")
+  inspect(doc.to_text(), content="abc")
+
+  // Delete middle character — cache should be incrementally updated
+  let _ = doc.delete(1) // delete 'b'
+  inspect(doc.to_text(), content="ac")
+  inspect(doc.visible_count(), content="2")
+
+  // Verify position lookups still work after incremental delete
+  let _ = doc.delete(0) // delete 'a'
+  inspect(doc.to_text(), content="c")
+}
+
+///|
+test "cursor fast-path to non-sequential insert invalidates cache" {
+  let doc = @document.Document::new("test")
+  let _ = doc.insert(0, "abc")
+  // Prime the position cache so the next insert actually tests stale-cache invalidation.
+  // Without this, position_cache remains None and the invalidation path is never exercised.
+  let _ = doc.lv_to_position(0)
+  // Non-sequential insert (cursor miss) — must invalidate the warm cache
+  let _ = doc.insert(1, "X")
+  inspect(doc.to_text(), content="aXbc")
+  let _ = doc.delete(2)
+  inspect(doc.to_text(), content="aXc")
+}
+
+///|
+test "delete_range across split VisibleRuns" {
+  let doc = @document.Document::new("test")
+  let _ = doc.insert(0, "abcde")
+  inspect(doc.to_text(), content="abcde")
+  let _ = doc.delete(2)
+  inspect(doc.to_text(), content="abde")
+  doc.delete_range(1, 3)
+  inspect(doc.to_text(), content="ae")
+}
+
+///|
 test "cache coherent: interleaved local and remote edits maintain consistency" {
   let alice = Document::new("alice")
   let bob = Document::new("bob")

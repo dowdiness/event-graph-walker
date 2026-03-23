@@ -41,13 +41,13 @@ pub(all) struct Item[T] {
   side : Side
   /// `true` if the item has been deleted (tombstone). Tombstones remain in the
   /// tree so concurrent operations that reference this item remain valid.
-  deleted : Bool
+  mut deleted : Bool
   /// Lamport timestamp of the winning Delete/Undelete op (0 = initial/no winner).
-  deleted_ts : Int
+  mut deleted_ts : Int
   /// Agent ID of the winning Delete/Undelete op ("" = initial/no winner).
-  deleted_agent : String
+  mut deleted_agent : String
   /// `true` if the winner was an Undelete op, `false` if Delete or initial.
-  deleted_is_undelete : Bool
+  mut deleted_is_undelete : Bool
   /// Lamport timestamp used as the primary sort key when ordering siblings
   /// that share the same parent and side.
   timestamp : Timestamp
