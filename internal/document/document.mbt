@@ -83,7 +83,7 @@ fn Document::build_position_cache(
 
 ///|
 /// Get or build the position cache (lazy initialization).
-fn Document::get_compressed_cache(
+fn Document::get_position_cache(
   self : Document,
 ) -> @order_tree.OrderTree[VisibleRun] {
   match self.position_cache {
@@ -100,7 +100,7 @@ fn Document::get_compressed_cache(
 /// Get the LV at a specific 0-based visible position.
 /// Uses O(log n) lookup via OrderTree::find on the position cache.
 fn Document::lv_at_position(self : Document, position : Int) -> Int? {
-  let cache = self.get_compressed_cache()
+  let cache = self.get_position_cache()
   match cache.find(position) {
     Some(fr) => Some(fr.elem.start_lv + fr.offset)
     None => None
@@ -122,7 +122,7 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
   if position == 0 {
     return -1
   }
-  let cache = self.get_compressed_cache()
+  let cache = self.get_position_cache()
   let total = @rle.Spanning::span(cache)
   let target = if position > total { total - 1 } else { position - 1 }
   if target < 0 {
@@ -209,7 +209,6 @@ pub fn Document::insert(
       timestamp: @fugue.Timestamp(timestamp),
       agent: @fugue.ReplicaId(agent),
     })
-    // Incremental cache update for sequential append at end
     if cache_valid {
       match self.position_cache {
         Some(cache) =>
@@ -227,7 +226,6 @@ pub fn Document::insert(
     last_op = Some(op)
     current_pos = current_pos + 1
   }
-  // Final invalidation: only needed when cache wasn't incrementally maintained.
   if not(cache_valid) {
     self.invalidate_cache()
   }
@@ -254,7 +252,7 @@ pub fn Document::delete(
     raise DocumentError::InvalidPosition(pos=position)
   }
 
-  let cache = self.get_compressed_cache()
+  let cache = self.get_position_cache()
   let total = @rle.Spanning::span(cache)
   if position >= total {
     raise DocumentError::InvalidPosition(pos=position)
@@ -299,7 +297,7 @@ pub fn Document::delete_range(
     raise DocumentError::InvalidPosition(pos=end)
   }
 
-  let cache = self.get_compressed_cache()
+  let cache = self.get_position_cache()
   let total = @rle.Spanning::span(cache)
   if end > total {
     raise DocumentError::InvalidPosition(pos=end)
@@ -574,13 +572,16 @@ pub fn Document::get_visible_items(
 ///|
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
-  let cache = self.get_compressed_cache()
+  let cache = self.get_position_cache()
   let mut pos = 0
-  for run in cache.iter() {
-    if lv >= run.start_lv && lv < run.start_lv + run.count {
-      return Some(pos + (lv - run.start_lv))
+  let mut result : Int? = None
+  cache.each(fn(run) {
+    if result is None &&
+      lv >= run.start_lv &&
+      lv < run.start_lv + run.count {
+      result = Some(pos + (lv - run.start_lv))
     }
     pos = pos + run.count
-  }
-  None
+  })
+  result
 }
