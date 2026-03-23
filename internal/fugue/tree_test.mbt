@@ -566,17 +566,31 @@ test "LCA: not invalidated by delete/undelete" {
 }
 
 ///|
-test "spike: struct mut field in array modifies in-place" {
-  // Gate test for Phase 2b: verify MoonBit arrays store struct references
-  // so that mutating a `mut` field on arr[i] changes the stored value.
-  //
-  // Item[T] will gain `mut deleted` etc. — if this test fails, all
-  // delete/undelete code needs explicit read-modify-write.
+test "spike: struct mut field in Option-wrapped array modifies in-place" {
+  // Gate test for Phase 2b: verify that mutating a `mut` field through a
+  // pattern-matched binding from Array[T?] modifies the stored value.
+  // This mirrors the production path: items : Array[Item[T]?], and
+  // delete/undelete do `match self[id] { Some(item) => item.deleted = true }`.
   struct MutSpike {
     mut flag : Bool
   }
-  let arr : Array[MutSpike] = [{ flag: false }, { flag: false }]
-  arr[0].flag = true
-  inspect(arr[0].flag, content="true")
-  inspect(arr[1].flag, content="false")
+  let arr : Array[MutSpike?] = [Some({ flag: false }), Some({ flag: false })]
+  match arr[0] {
+    Some(item) => item.flag = true
+    None => ()
+  }
+  inspect(
+    match arr[0] {
+      Some(item) => item.flag
+      None => false
+    },
+    content="true",
+  )
+  inspect(
+    match arr[1] {
+      Some(item) => item.flag
+      None => false
+    },
+    content="false",
+  )
 }

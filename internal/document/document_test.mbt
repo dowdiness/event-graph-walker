@@ -155,7 +155,10 @@ test "delete: position cache incrementally updated" {
 test "cursor fast-path to non-sequential insert invalidates cache" {
   let doc = @document.Document::new("test")
   let _ = doc.insert(0, "abc")
-  inspect(doc.to_text(), content="abc")
+  // Prime the position cache so the next insert actually tests stale-cache invalidation.
+  // Without this, position_cache remains None and the invalidation path is never exercised.
+  let _ = doc.lv_to_position(0)
+  // Non-sequential insert (cursor miss) — must invalidate the warm cache
   let _ = doc.insert(1, "X")
   inspect(doc.to_text(), content="aXbc")
   let _ = doc.delete(2)
