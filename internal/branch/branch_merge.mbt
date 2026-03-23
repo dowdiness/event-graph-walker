@@ -138,17 +138,19 @@ fn rle_contains_lv(rle : @rle.Rle[@core.LvRange], lv : Int) -> Bool {
 }
 
 ///|
-/// Remove operations from the retreat set.
+/// Remove operations from the retreat set using two-count approach.
 ///
-/// For Insert ops: hides the item (force-delete).
-/// For Delete/Undelete ops: recomputes the LWW winner from the oplog
-/// by scanning for all Delete/Undelete ops targeting the same item
-/// that remain in the common ancestor (not in the retreat set).
+/// For Insert ops: mark item as Retreated, decrement visible count.
+/// For Delete/Undelete ops: adjust delete_count on target item as dirty tracker.
+///
+/// After all retreat operations, recompute LWW winners for dirty items
+/// using DeleteIndex (O(d) per item instead of O(total_ops)).
 pub fn MergeContext::retreat_operations(
   self : MergeContext,
   operations : @rle.Rle[@core.LvRange],
 ) -> Unit raise BranchError {
   let cg = self.oplog.causal_graph()
+  let dirty_items : Array[Int] = []
 
   for range in operations.iter() {
     for lv = range.start; lv < range.end(); lv = lv + 1 {
@@ -156,12 +158,12 @@ pub fn MergeContext::retreat_operations(
         Some(op) =>
           match op.content() {
             @core.Insert(_) =>
-              // Retreat Insert: hide the item
+              // Retreat Insert: hide the item (force-delete)
               self.tree.delete(@fugue.Lv(lv)) catch {
                 e => raise BranchError::Fugue(e)
               }
-            @core.Delete | @core.Undelete => {
-              // Retreat Delete/Undelete: recompute winner from remaining ops
+            @core.Delete => {
+              // Retreat Delete: track as dirty for post-retreat LWW sweep
               let target_lv = match op.origin_left() {
                 None => continue
                 Some(raw) =>
@@ -170,73 +172,55 @@ pub fn MergeContext::retreat_operations(
                     None => raise BranchError::MissingOrigin(raw~)
                   }
               }
-              // Scan oplog for all Delete/Undelete ops targeting this item
-              // that are NOT in the retreat set (i.e., remain in common ancestor)
-              let mut best_ts = 0
-              let mut best_agent = ""
-              let mut best_is_undelete = false
-              let mut best_deleted = false
-              let op_count = self.oplog.op_count()
-              for i = 0; i < op_count; i = i + 1 {
-                if rle_contains_lv(operations, i) {
-                  continue // Skip retreated ops
+              match self.tree[@fugue.Lv(target_lv)] {
+                Some(item) => {
+                  item.delete_count = item.delete_count - 1
+                  dirty_items.push(target_lv)
                 }
-                match self.oplog.get_op(i) {
-                  Some(other_op) => {
-                    let is_del_or_undel = match other_op.content() {
-                      @core.Delete | @core.Undelete => true
-                      _ => false
-                    }
-                    if not(is_del_or_undel) {
-                      continue
-                    }
-                    // Check if this op targets the same item
-                    let other_target = match other_op.origin_left() {
-                      None => continue
-                      Some(raw) =>
-                        match cg.raw_to_lv(raw) {
-                          Some(t) => t
-                          None => continue
-                        }
-                    }
-                    if other_target != target_lv {
-                      continue
-                    }
-                    // This op targets the same item and is in the common ancestor
-                    let (other_ts, other_agent) = match cg[i] {
-                      Some(entry) => (entry.timestamp, entry.agent)
-                      None => continue
-                    }
-                    let other_is_undelete = match other_op.content() {
-                      @core.Undelete => true
-                      _ => false
-                    }
-                    if @fugue.should_win_delete(
-                        other_ts, other_agent, other_is_undelete, best_ts, best_agent,
-                        best_is_undelete,
-                      ) {
-                      best_ts = other_ts
-                      best_agent = other_agent
-                      best_is_undelete = other_is_undelete
-                      best_deleted = not(other_is_undelete)
-                    }
-                  }
-                  None => continue
-                }
+                None => ()
               }
-              // Set the item to the recomputed winner state
-              self.tree.set_delete_winner(
-                @fugue.Lv(target_lv),
-                best_deleted,
-                best_ts,
-                best_agent,
-                best_is_undelete,
-              ) catch {
-                e => raise BranchError::Fugue(e)
+            }
+            @core.Undelete => {
+              // Retreat Undelete: re-apply the delete it cancelled
+              let target_lv = match op.origin_left() {
+                None => continue
+                Some(raw) =>
+                  match cg.raw_to_lv(raw) {
+                    Some(mapped) => mapped
+                    None => raise BranchError::MissingOrigin(raw~)
+                  }
+              }
+              match self.tree[@fugue.Lv(target_lv)] {
+                Some(item) => {
+                  item.delete_count = item.delete_count + 1
+                  dirty_items.push(target_lv)
+                }
+                None => ()
               }
             }
           }
         None => raise BranchError::MissingOp(lv~)
+      }
+    }
+  }
+
+  // Post-retreat: recompute LWW winners for dirty items
+  if dirty_items.length() > 0 {
+    let delete_index = DeleteIndex::build(self.oplog)
+    for target_lv in dirty_items {
+      let winner = delete_index.recompute_winner(
+        target_lv,
+        self.oplog,
+        operations,
+      )
+      self.tree.set_delete_winner(
+        @fugue.Lv(target_lv),
+        winner.deleted,
+        winner.ts,
+        winner.agent,
+        winner.is_undelete,
+      ) catch {
+        e => raise BranchError::Fugue(e)
       }
     }
   }
