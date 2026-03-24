@@ -1,5 +1,7 @@
 # Performance Optimization Roadmap
 
+> **Status (2026-03-24):** Phases 1, 2b, 3, and binary lifting LCA are all complete. This roadmap was written during Phase 1 and has not been updated with details of later phases. See the archived plans in the parent repo's `docs/archive/completed-phases/` for implementation details of each phase.
+
 **Status**: Phase 1 **COMPLETED** ✅ (2026-01-09)
 **For detailed performance data**: See [PERFORMANCE_ANALYSIS.md](./PERFORMANCE_ANALYSIS.md)
 
