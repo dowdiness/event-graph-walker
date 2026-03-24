@@ -215,7 +215,35 @@ pub impl @qc.Shrink for ChainLen with shrink(self) {
 }
 
 ///|
-/// Property: LCA-based is_ancestor matches naive parent-walk for every pair in a chain.
+/// Naive parent-walk ancestor check (test-only reference).
+fn is_ancestor_naive(
+  tree : @fugue.FugueTree[String],
+  ancestor_id : @fugue.Lv,
+  descendant_id : @fugue.Lv,
+) -> Bool {
+  if ancestor_id == descendant_id {
+    return true
+  }
+  if ancestor_id == @fugue.root_lv {
+    return true
+  }
+  loop tree[descendant_id] {
+    Some(item) =>
+      match item.parent {
+        Some(parent_lv) => {
+          if parent_lv == ancestor_id {
+            return true
+          }
+          continue tree[parent_lv]
+        }
+        None => break false
+      }
+    None => break false
+  }
+}
+
+///|
+/// Property: binary-lifting is_ancestor matches naive parent-walk for every pair in a chain.
 fn prop_lca_matches_naive(chain : ChainLen) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   tree.insert({
@@ -239,7 +267,7 @@ fn prop_lca_matches_naive(chain : ChainLen) -> Bool {
   for a = 0; a < chain.len; a = a + 1 {
     for b = a; b < chain.len; b = b + 1 {
       let lca_result = tree.is_ancestor(@fugue.Lv(a), @fugue.Lv(b))
-      let naive_result = tree.is_ancestor_naive(@fugue.Lv(a), @fugue.Lv(b))
+      let naive_result = is_ancestor_naive(tree, @fugue.Lv(a), @fugue.Lv(b))
       if lca_result != naive_result {
         return false
       }

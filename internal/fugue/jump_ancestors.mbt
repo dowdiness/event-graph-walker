@@ -24,11 +24,7 @@ fn JumpAncestors::add(self : JumpAncestors, lv : Lv, parent : Lv) -> Unit {
     self.jump.push([])
   }
   guard parent == root_lv || self.depth[parent.0] != -1
-  self.depth[idx] = if parent == root_lv {
-    1
-  } else {
-    self.depth[parent.0] + 1
-  }
+  self.depth[idx] = if parent == root_lv { 1 } else { self.depth[parent.0] + 1 }
   let jumps : Array[Lv] = [parent]
   while true {
     let k = jumps.length()
@@ -70,7 +66,7 @@ fn JumpAncestors::is_ancestor(
   let mut current = descendant
   let mut k = self.jump[current.0].length() - 1
   while diff > 0 && k >= 0 {
-    if diff >= (1 << k) && k < self.jump[current.0].length() {
+    if diff >= 1 << k && k < self.jump[current.0].length() {
       current = self.jump[current.0][k]
       diff = diff - (1 << k)
     }

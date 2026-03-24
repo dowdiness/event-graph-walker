@@ -392,31 +392,6 @@ fn[T : Eq] compare_children(a : (Lv, Item[T]), b : (Lv, Item[T])) -> Int {
 }
 
 ///|
-/// Naive parent-walk ancestor check. O(tree height).
-pub fn[T] FugueTree::is_ancestor_naive(
-  self : FugueTree[T],
-  ancestor_id : Lv,
-  descendant_id : Lv,
-) -> Bool {
-  if ancestor_id == descendant_id {
-    return true
-  }
-  loop self[descendant_id] {
-    Some(item) =>
-      match item.parent {
-        Some(parent_lv) => {
-          if parent_lv == ancestor_id {
-            return true
-          }
-          continue self[parent_lv]
-        }
-        None => break false // Reached root without finding ancestor
-      }
-    None => break false
-  }
-}
-
-///|
 /// Check whether `ancestor_id` is an ancestor of `descendant_id`.
 /// Uses binary lifting jump pointers for O(log depth) queries.
 pub fn[T] FugueTree::is_ancestor(
