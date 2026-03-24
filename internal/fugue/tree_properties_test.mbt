@@ -843,9 +843,11 @@ fn prop_jump_matches_naive_branching(bt : BranchingTree) -> Bool {
   })
   parents.push(-1)
   for i = 1; i < bt.len; i = i + 1 {
-    let parent_idx = i % parents.length()
-    let parent_lv = if parent_idx == 0 && i % 3 == 0 {
-      None
+    // Distribute children across existing nodes to create branching topology.
+    // Use (i * 7 + 3) % i to spread parents, not i % parents.length() which is always 0.
+    let parent_idx = (i * 7 + 3) % i
+    let parent_lv = if parent_idx == 0 && i % 5 == 0 {
+      None // occasionally insert at root level
     } else {
       Some(@fugue.Lv(parent_idx))
     }
@@ -889,11 +891,12 @@ fn prop_jump_depth_consistency(bt : BranchingTree) -> Bool {
     agent: @fugue.ReplicaId("a"),
   })
   for i = 1; i < bt.len; i = i + 1 {
-    let parent_idx = i % i
+    // Spread across existing nodes for branching depth variety
+    let parent_idx = (i * 3 + 1) % i
     tree.insert({
       id: @fugue.Lv(i),
       content: "A",
-      origin_left: if parent_idx == 0 && i % 3 == 0 {
+      origin_left: if parent_idx == 0 && i % 4 == 0 {
         None
       } else {
         Some(@fugue.Lv(parent_idx))
@@ -945,7 +948,14 @@ fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
     })
   }
   let base = chain.len
-  for i = 0; i < 5 && i + 1 < chain.len; i = i + 1 {
+  let max_concurrent = if chain.len <= 1 {
+    0
+  } else if chain.len - 1 < 5 {
+    chain.len - 1
+  } else {
+    5
+  }
+  for i = 0; i < max_concurrent; i = i + 1 {
     tree.insert({
       id: @fugue.Lv(base + i),
       content: "X",
@@ -955,7 +965,7 @@ fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
       agent: @fugue.ReplicaId("b"),
     })
   }
-  let total = base + (if chain.len > 1 { 5 } else { 0 })
+  let total = base + max_concurrent
   for a = 0; a < total; a = a + 1 {
     for b = a; b < total; b = b + 1 {
       let jump_result = tree.is_ancestor(@fugue.Lv(a), @fugue.Lv(b))

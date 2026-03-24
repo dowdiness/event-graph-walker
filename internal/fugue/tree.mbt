@@ -350,7 +350,7 @@ pub fn[T : Eq] FugueTree::lv_to_position(self : FugueTree[T], id : Lv) -> Int? {
 /// **Invariant**: The item's `id` must be unique within the tree. Duplicate IDs
 /// will overwrite existing items, which violates CRDT convergence guarantees.
 ///
-/// **Complexity**: O(1) amortized for array append.
+/// **Complexity**: O(log depth) — dominated by jump pointer computation.
 fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
   let lv = item.id.0
   // Grow items array and store item at its LV index
