@@ -487,7 +487,6 @@ test "set_delete_winner: restores winner state" {
 test "LCA: missing node returns false" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.build_lca_index()
   inspect(tree.is_ancestor(@fugue.Lv(999), @fugue.Lv(0)), content="false")
   inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(999)), content="false")
 }
@@ -568,7 +567,6 @@ test "LCA: not invalidated by delete/undelete" {
     timestamp: @fugue.Timestamp(1),
     agent: @fugue.ReplicaId("a"),
   })
-  tree.build_lca_index()
   try! tree.delete(@fugue.Lv(1))
   inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(1)), content="true")
   try! tree.undelete(@fugue.Lv(1))

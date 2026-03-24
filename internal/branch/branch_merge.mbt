@@ -31,9 +31,7 @@ pub fn MergeContext::apply_operations(
   let cg = self.oplog.causal_graph()
 
   // Apply each operation in order (Rle is already topologically sorted)
-  self.tree.set_batch_inserting(true)
-  let batch_result : Result[Unit, BranchError] = try? (for
-    range in operations.iter() {
+  for range in operations.iter() {
     for lv = range.start; lv < range.end(); lv = lv + 1 {
       match self.oplog.get_op(lv) {
         Some(op) =>
@@ -118,11 +116,6 @@ pub fn MergeContext::apply_operations(
         None => raise BranchError::MissingOp(lv~)
       }
     }
-  })
-  self.tree.set_batch_inserting(false)
-  match batch_result {
-    Ok(_) => ()
-    Err(e) => raise e
   }
 }
 

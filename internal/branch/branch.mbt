@@ -64,14 +64,8 @@ pub fn Branch::checkout(
 
   // Apply each operation to the tree
   let cg = oplog.causal_graph()
-  tree.set_batch_inserting(true)
-  let batch_result : Result[Unit, BranchError] = try? (for op in ops {
+  for op in ops {
     apply_operation_to_tree(tree, op, cg)
-  })
-  tree.set_batch_inserting(false)
-  match batch_result {
-    Ok(_) => ()
-    Err(e) => raise e
   }
 
   // Return branch with reconstructed state
@@ -113,14 +107,8 @@ pub fn Branch::advance(
     // Fast path: advance only — apply k new ops incrementally
     let tree = self.tree
     let cg = self.oplog.causal_graph()
-    tree.set_batch_inserting(true)
-    let batch_result : Result[Unit, BranchError] = try? (for op in advance_ops {
+    for op in advance_ops {
       apply_operation_to_tree(tree, op, cg)
-    })
-    tree.set_batch_inserting(false)
-    match batch_result {
-      Ok(_) => ()
-      Err(e) => raise e
     }
     // Defensive copy to prevent aliasing with caller-owned array
     {
