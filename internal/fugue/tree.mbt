@@ -10,8 +10,7 @@ pub struct FugueTree[T] {
   mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
   root_children : Array[Lv] // Root's children (root not in items array)
   children : Array[Array[Lv]] // Children index, sparse array indexed by LV
-  mut lca_index : LcaIndex? // Euler Tour + Sparse Table for O(1) ancestor queries
-  mut batch_inserting : Bool // True during batch operations (use naive walk instead of LCA)
+  jump_ancestors : JumpAncestors // Binary lifting for O(log n) ancestor queries
 } derive(Show)
 
 ///|
@@ -41,8 +40,7 @@ pub fn[T] FugueTree::make(_root_content : T) -> FugueTree[T] {
     visible: 0,
     root_children: [],
     children: Array::new(capacity=1024),
-    lca_index: None,
-    batch_inserting: false,
+    jump_ancestors: JumpAncestors::new(),
   }
 }
 
@@ -371,8 +369,11 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
   while self.children.length() <= lv {
     self.children.push([])
   }
-  // Invalidate LCA index — tree structure has changed
-  self.lca_index = None
+  // Register jump pointers for the new item (O(log depth), permanent)
+  match item.parent {
+    Some(p) => self.jump_ancestors.add(item.id, p)
+    None => () // No parent — skip jump pointer setup
+  }
 }
 
 ///|
@@ -388,26 +389,6 @@ fn[T : Eq] compare_children(a : (Lv, Item[T]), b : (Lv, Item[T])) -> Int {
   let (_, item_a) = a
   let (_, item_b) = b
   item_a.compare(item_b)
-}
-
-///|
-/// Build or rebuild the LCA index from the current tree state.
-pub fn[T] FugueTree::build_lca_index(self : FugueTree[T]) -> Unit {
-  self.lca_index = Some(LcaIndex::build(self))
-}
-
-///|
-/// Set/clear the batch-inserting flag.
-/// When cleared, the stale LCA index is discarded so the next
-/// `is_ancestor` call will lazily rebuild it.
-pub fn[T] FugueTree::set_batch_inserting(
-  self : FugueTree[T],
-  value : Bool,
-) -> Unit {
-  self.batch_inserting = value
-  if not(value) {
-    self.lca_index = None // Clear stale index when batch ends
-  }
 }
 
 ///|
@@ -437,7 +418,7 @@ pub fn[T] FugueTree::is_ancestor_naive(
 
 ///|
 /// Check whether `ancestor_id` is an ancestor of `descendant_id`.
-/// Uses LCA index for O(1) when available, falls back to naive walk during batch inserts.
+/// Uses binary lifting jump pointers for O(log depth) queries.
 pub fn[T] FugueTree::is_ancestor(
   self : FugueTree[T],
   ancestor_id : Lv,
@@ -446,19 +427,13 @@ pub fn[T] FugueTree::is_ancestor(
   if ancestor_id == descendant_id {
     return true
   }
-  if self.batch_inserting {
-    return self.is_ancestor_naive(ancestor_id, descendant_id)
+  if ancestor_id == root_lv {
+    return true
   }
-  match self.lca_index {
-    Some(idx) => idx.is_ancestor(ancestor_id, descendant_id)
-    None => {
-      self.build_lca_index()
-      match self.lca_index {
-        Some(idx) => idx.is_ancestor(ancestor_id, descendant_id)
-        None => self.is_ancestor_naive(ancestor_id, descendant_id)
-      }
-    }
+  if descendant_id == root_lv {
+    return false
   }
+  self.jump_ancestors.is_ancestor(ancestor_id, descendant_id)
 }
 
 ///|
