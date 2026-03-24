@@ -236,7 +236,6 @@ fn prop_lca_matches_naive(chain : ChainLen) -> Bool {
       agent: @fugue.ReplicaId("agent0"),
     })
   }
-  tree.build_lca_index()
   for a = 0; a < chain.len; a = a + 1 {
     for b = a; b < chain.len; b = b + 1 {
       let lca_result = tree.is_ancestor(@fugue.Lv(a), @fugue.Lv(b))
