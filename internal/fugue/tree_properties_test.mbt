@@ -803,3 +803,172 @@ fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
 test "property: fugue tie-breaking (agent then id)" {
   @qc.quick_check_fn(prop_fugue_tie_breaking)
 }
+
+///|
+/// Generated branching tree size for binary lifting property tests
+pub(all) struct BranchingTree {
+  len : Int
+} derive(Show)
+
+///|
+pub impl @quickcheck.Arbitrary for BranchingTree with arbitrary(size, rs) {
+  let len = if size < 3 { 3 } else if size > 50 { 50 } else { size }
+  { len: rs.next_positive_int() % len + 3 }
+}
+
+///|
+pub impl @qc.Shrink for BranchingTree with shrink(self) {
+  let results : Array[BranchingTree] = []
+  if self.len > 3 {
+    results.push({ len: 3 })
+    results.push({ len: self.len / 2 })
+    results.push({ len: self.len - 1 })
+  }
+  results.iter()
+}
+
+///|
+/// Property: binary lifting matches naive parent-walk on branching trees.
+/// Uses modular parent assignment to create diverse tree topologies.
+fn prop_jump_matches_naive_branching(bt : BranchingTree) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let parents : Array[Int] = []
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  parents.push(-1)
+  for i = 1; i < bt.len; i = i + 1 {
+    let parent_idx = i % parents.length()
+    let parent_lv = if parent_idx == 0 && i % 3 == 0 {
+      None
+    } else {
+      Some(@fugue.Lv(parent_idx))
+    }
+    tree.insert({
+      id: @fugue.Lv(i),
+      content: "A",
+      origin_left: parent_lv,
+      origin_right: None,
+      timestamp: @fugue.Timestamp(i),
+      agent: @fugue.ReplicaId("a"),
+    })
+    parents.push(parent_idx)
+  }
+  for a = 0; a < bt.len; a = a + 1 {
+    for b = a; b < bt.len; b = b + 1 {
+      let jump_result = tree.is_ancestor(@fugue.Lv(a), @fugue.Lv(b))
+      let naive_result = is_ancestor_naive(tree, @fugue.Lv(a), @fugue.Lv(b))
+      if jump_result != naive_result {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+test "property: binary lifting matches naive on branching trees" {
+  @qc.quick_check_fn(prop_jump_matches_naive_branching)
+}
+
+///|
+/// Property: depth consistency — every node's parent is its ancestor.
+fn prop_jump_depth_consistency(bt : BranchingTree) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  for i = 1; i < bt.len; i = i + 1 {
+    let parent_idx = i % i
+    tree.insert({
+      id: @fugue.Lv(i),
+      content: "A",
+      origin_left: if parent_idx == 0 && i % 3 == 0 {
+        None
+      } else {
+        Some(@fugue.Lv(parent_idx))
+      },
+      origin_right: None,
+      timestamp: @fugue.Timestamp(i),
+      agent: @fugue.ReplicaId("a"),
+    })
+  }
+  for i = 0; i < bt.len; i = i + 1 {
+    let item = tree[@fugue.Lv(i)]
+    match item {
+      Some(it) =>
+        match it.parent {
+          Some(p) => if not(tree.is_ancestor(p, @fugue.Lv(i))) { return false }
+          None => ()
+        }
+      None => ()
+    }
+  }
+  true
+}
+
+///|
+test "property: depth consistency — parent is always ancestor" {
+  @qc.quick_check_fn(prop_jump_depth_consistency)
+}
+
+///|
+/// Property: binary lifting correct with concurrent inserts (origin_right set).
+fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert({
+    id: @fugue.Lv(0),
+    content: "A",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(0),
+    agent: @fugue.ReplicaId("a"),
+  })
+  for i = 1; i < chain.len; i = i + 1 {
+    tree.insert({
+      id: @fugue.Lv(i),
+      content: "A",
+      origin_left: Some(@fugue.Lv(i - 1)),
+      origin_right: None,
+      timestamp: @fugue.Timestamp(i),
+      agent: @fugue.ReplicaId("a"),
+    })
+  }
+  let base = chain.len
+  for i = 0; i < 5 && i + 1 < chain.len; i = i + 1 {
+    tree.insert({
+      id: @fugue.Lv(base + i),
+      content: "X",
+      origin_left: Some(@fugue.Lv(i)),
+      origin_right: Some(@fugue.Lv(i + 1)),
+      timestamp: @fugue.Timestamp(base + i),
+      agent: @fugue.ReplicaId("b"),
+    })
+  }
+  let total = base + (if chain.len > 1 { 5 } else { 0 })
+  for a = 0; a < total; a = a + 1 {
+    for b = a; b < total; b = b + 1 {
+      let jump_result = tree.is_ancestor(@fugue.Lv(a), @fugue.Lv(b))
+      let naive_result = is_ancestor_naive(tree, @fugue.Lv(a), @fugue.Lv(b))
+      if jump_result != naive_result {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+test "property: binary lifting correct with concurrent inserts" {
+  @qc.quick_check_fn(prop_jump_via_concurrent_insert)
+}
