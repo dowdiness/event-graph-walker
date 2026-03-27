@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+} for "test"
+
+options(
+  is_main: false,
+)
