@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/tree"
+
+import {
+  "dowdiness/event-graph-walker/internal/movable_tree",
+}
+
+// Values
+pub let root_id : @movable_tree.TreeNodeId
+
+pub let trash_id : @movable_tree.TreeNodeId
+
+// Errors
+
+// Types and methods
+pub struct TreeDoc {
+  // private fields
+}
+pub fn TreeDoc::apply_remote_op(Self, @movable_tree.TreeMoveOp) -> Unit
+pub fn TreeDoc::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
+pub fn TreeDoc::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId
+pub fn TreeDoc::delete_node(Self, @movable_tree.TreeNodeId) -> Unit
+pub fn TreeDoc::export_ops(Self) -> Array[@movable_tree.TreeMoveOp]
+pub fn TreeDoc::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
+pub fn TreeDoc::is_alive(Self, @movable_tree.TreeNodeId) -> Bool
+pub fn TreeDoc::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~ : @movable_tree.TreeNodeId) -> Unit
+pub fn TreeDoc::new(String) -> Self
+pub fn TreeDoc::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
+
+// Type aliases
+
+// Traits
+
