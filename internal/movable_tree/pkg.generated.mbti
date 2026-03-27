@@ -58,6 +58,13 @@ pub impl Hash for TreeNodeId
 pub impl Show for TreeNodeId
 pub impl @debug.Debug for TreeNodeId
 
+pub struct TreeOpLog {
+  // private fields
+}
+pub fn TreeOpLog::all_ops(Self) -> Array[TreeMoveOp]
+pub fn TreeOpLog::apply(Self, MovableTree, TreeMoveOp) -> Unit
+pub fn TreeOpLog::new() -> Self
+
 // Type aliases
 
 // Traits
