@@ -28,6 +28,7 @@ pub fn TreeDoc::new(String) -> Self
 pub fn TreeDoc::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
 
 // Type aliases
+pub using @movable_tree {type TreeNodeId}
 
 // Traits
 

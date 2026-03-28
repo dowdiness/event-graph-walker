@@ -4,6 +4,10 @@
 /// Lamport timestamps, version tracking, and multi-peer synchronization.
 
 ///|
+/// Re-export TreeNodeId so consumers don't need the internal package.
+pub using @mt {type TreeNodeId}
+
+///|
 /// Re-export the root sentinel so consumers don't need the internal package.
 pub let root_id : @mt.TreeNodeId = @mt.root_id
 
