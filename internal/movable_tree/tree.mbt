@@ -24,6 +24,21 @@ pub struct MovableTree {
 }
 
 ///|
+/// Return a copy of `children` with every occurrence of `exclude` removed.
+fn without_child(
+  children : Array[TreeNodeId],
+  exclude : TreeNodeId,
+) -> Array[TreeNodeId] {
+  let result : Array[TreeNodeId] = []
+  for i = 0; i < children.length(); i = i + 1 {
+    if children[i] != exclude {
+      result.push(children[i])
+    }
+  }
+  result
+}
+
+///|
 /// Create a new empty MovableTree with root and trash caches initialized.
 pub fn MovableTree::new() -> MovableTree {
   let children_cache : Map[TreeNodeId, Array[TreeNodeId]] = Map::new()
@@ -69,15 +84,8 @@ pub fn MovableTree::remove_node(self : MovableTree, id : TreeNodeId) -> Unit {
       // Remove from parent's children cache
       let parent = node.parent
       match self.children_cache.get(parent) {
-        Some(children) => {
-          let new_children : Array[TreeNodeId] = []
-          for i = 0; i < children.length(); i = i + 1 {
-            if children[i] != id {
-              new_children.push(children[i])
-            }
-          }
-          self.children_cache.set(parent, new_children)
-        }
+        Some(children) =>
+          self.children_cache.set(parent, without_child(children, id))
         None => ()
       }
       // Remove node's own children cache entry
@@ -104,15 +112,8 @@ pub fn MovableTree::apply_move(
       let old_parent = node.parent
       // Remove from old parent's children cache
       match self.children_cache.get(old_parent) {
-        Some(children) => {
-          let new_children : Array[TreeNodeId] = []
-          for i = 0; i < children.length(); i = i + 1 {
-            if children[i] != target {
-              new_children.push(children[i])
-            }
-          }
-          self.children_cache.set(old_parent, new_children)
-        }
+        Some(children) =>
+          self.children_cache.set(old_parent, without_child(children, target))
         None => ()
       }
       // Update node

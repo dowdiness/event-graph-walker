@@ -144,28 +144,7 @@ fn apply_in_order(
       log.apply(tree, ops[idx])
     }
   }
-  // Build snapshot
-  let result : Array[String] = []
-  for i = 0; i < node_ids.length(); i = i + 1 {
-    let id = node_ids[i]
-    if tree.contains(id) {
-      match tree.parent(id) {
-        Some(p) =>
-          result.push(
-            id.agent +
-            ":" +
-            id.counter.to_string() +
-            " -> " +
-            p.agent +
-            ":" +
-            p.counter.to_string(),
-          )
-        None => ()
-      }
-    }
-  }
-  result.sort()
-  result
+  tree_snapshot(tree, node_ids)
 }
 
 ///|
