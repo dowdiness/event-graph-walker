@@ -10,6 +10,10 @@ pub let root_id : @movable_tree.TreeNodeId
 
 pub let trash_id : @movable_tree.TreeNodeId
 
+pub fn tree_node_id_eq(@movable_tree.TreeNodeId, @movable_tree.TreeNodeId) -> Bool
+
+pub fn tree_node_id_key(@movable_tree.TreeNodeId) -> String
+
 // Errors
 
 // Types and methods

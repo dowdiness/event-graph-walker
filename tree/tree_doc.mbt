@@ -16,6 +16,20 @@ pub let root_id : @mt.TreeNodeId = @mt.root_id
 pub let trash_id : @mt.TreeNodeId = @mt.trash_id
 
 ///|
+/// Stable string key for a node id, safe to use as a Map key.
+/// Format: "agent:counter".
+pub fn tree_node_id_key(id : @mt.TreeNodeId) -> String {
+  id.agent + ":" + id.counter.to_string()
+}
+
+///|
+/// Equality check for node ids.
+/// Use this instead of `==` when TreeNodeId's Eq impl is not visible.
+pub fn tree_node_id_eq(a : @mt.TreeNodeId, b : @mt.TreeNodeId) -> Bool {
+  a.agent == b.agent && a.counter == b.counter
+}
+
+///|
 /// A collaborative tree document backed by the movable-tree CRDT.
 ///
 /// Each local mutation generates a Lamport-timestamped operation that can be
