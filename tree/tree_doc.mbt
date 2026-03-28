@@ -333,7 +333,6 @@ fn TreeDoc::position_after_sibling(
   after : @mt.TreeNodeId,
 ) -> @fi.FractionalIndex {
   let children = self.tree.children(parent)
-  // Find the index of `after` in the sorted children list
   let mut after_idx = -1
   for i = 0; i < children.length(); i = i + 1 {
     if children[i] == after {
@@ -361,7 +360,10 @@ fn TreeDoc::position_after_sibling(
         } else {
           @fi.FractionalIndex::between(left=Some(ap), right=Some(np))
         }
-      _ => @fi.FractionalIndex::between(left=after_pos, right=next_pos)
+      _ =>
+        abort(
+          "position_after_sibling: unreachable — children must have positions",
+        )
     }
   }
 }
