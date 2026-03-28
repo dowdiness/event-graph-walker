@@ -1,6 +1,6 @@
 # Roadmap to v1.0 Stable
 
-The library has all core algorithms implemented, 330 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
+The library has all core algorithms implemented, 395 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
 
 ## Phase 1: Error Handling & API Hardening ✅
 

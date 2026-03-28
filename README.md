@@ -4,135 +4,95 @@
 - Used as a git submodule in [dowdiness/crdt](https://github.com/dowdiness/crdt)
 - [Demo App](https://lambda-editor.koji-ishimoto.workers.dev/) as Collaborative Editor
 
-> **Note:** This project is approaching v1.0 stability. The public API surface has been hardened — see `docs/STABILIZATION_ROADMAP.md` for remaining work.
-
-A MoonBit implementation of the **eg-walker** CRDT algorithm with **FugueMax** sequence CRDT for collaborative editing.
+A MoonBit implementation of the **eg-walker** CRDT algorithm with **FugueMax** sequence CRDT for collaborative text editing, and **Kleppmann's movable-tree CRDT** for collaborative tree editing.
 
 ## Overview
 
-This module provides a complete implementation of efficient collaborative editing with automatic conflict resolution. The event graph walker algorithm enables efficient replay of operations in causal order, while the Fugue tree maintains a CRDT-compliant ordered sequence of document content.
+This module provides two independent collaborative editing CRDTs:
+
+- **Text CRDT** — eg-walker + FugueMax for collaborative text editing. The event graph walker replays operations in causal order; FugueMax maintains a conflict-free ordered sequence.
+- **Movable Tree CRDT** — Kleppmann's undo-do-redo algorithm with fractional indexing for collaborative tree editing (documents, outlines, block editors).
 
 ## Architecture
 
-### Core Components
+### Package Structure
 
 ```
 event-graph-walker/
-├── text/                     # User-friendly facade API (recommended)
-├── undo/                     # Undo/redo support
+├── text/                          # Text CRDT facade (recommended)
+├── tree/                          # Tree CRDT facade (recommended)
+├── undo/                          # Undo/redo support for text
 ├── internal/
-│   ├── document/             # Low-level document API
-│   ├── oplog/                # Operation log and walker
-│   ├── causal_graph/         # Causal graph and topological sorting
-│   ├── branch/               # Document snapshots at any frontier
-│   ├── fugue/                # FugueMax sequence CRDT tree
-│   └── core/                 # Shared core types
-└── moon.mod.json             # Module metadata
+│   ├── fractional_index/          # Dense sibling ordering for tree
+│   ├── movable_tree/              # Movable tree + Kleppmann conflict resolution
+│   ├── document/                  # Low-level text document API
+│   ├── oplog/                     # Operation log and eg-walker
+│   ├── causal_graph/              # Causal graph and topological sorting
+│   ├── branch/                    # Document snapshots at any frontier
+│   ├── fugue/                     # FugueMax sequence CRDT
+│   └── core/                      # Shared core types
+└── moon.mod.json
 ```
 
 ### Package Layers
 
 ```
-┌─────────────────────────────────────────┐
-│  text (Facade - Recommended)            │
-│  TextDoc, SyncMessage, Version, etc.    │
-├─────────────────────────────────────────┤
-│  internal/document                      │
-│  Document, DocumentError                │
-├──────────────┬──────────────────────────┤
-│  internal/   │  internal/               │
-│  branch      │  oplog                   │
-│  Branch      │  OpLog, Op               │
-├──────────────┴──────────────────────────┤
-│  internal/causal_graph                  │
-│  CausalGraph, Frontier, VersionVector   │
-├─────────────────────────────────────────┤
-│  internal/fugue                         │
-│  FugueTree, Item                        │
-├─────────────────────────────────────────┤
-│  internal/core                          │
-│  Shared core types                      │
-└─────────────────────────────────────────┘
+┌───────────────────────┬─────────────────────────────┐
+│  text (Facade)        │  tree (Facade)               │
+│  TextDoc, SyncMessage │  TreeDoc                     │
+├───────────────────────┤                              │
+│  undo                 │                              │
+│  UndoManager          │                              │
+├───────────────────────┤─────────────────────────────┤
+│  internal/document    │  internal/movable_tree       │
+│  Document             │  MovableTree, TreeOpLog      │
+├───────────┬───────────┤─────────────────────────────┤
+│ internal/ │ internal/ │  internal/fractional_index  │
+│ branch    │ oplog     │  FractionalIndex             │
+├───────────┴───────────┴─────────────────────────────┤
+│  internal/causal_graph                               │
+│  CausalGraph, Frontier, VersionVector                │
+├──────────────────────────────────────────────────────┤
+│  internal/fugue         │  internal/core             │
+│  FugueTree              │  Shared types              │
+└──────────────────────────────────────────────────────┘
 ```
 
 ### Key Data Structures
 
-#### Document
-The high-level API for collaborative editing. Manages text operations with position-based (cursor) API. Internal fields (`tree`, `oplog`, `position_cache`) are encapsulated; use public methods instead.
+All internal fields are encapsulated (`priv`). Use the public methods documented below or in the `.mbti` interface files.
 
-```moonbit
-pub struct Document {
-  priv tree : @fugue.FugueTree[String]                        // CRDT tree state (encapsulated)
-  priv oplog : @oplog.OpLog                                   // Operation log (encapsulated)
-  agent_id : String                                           // Unique peer identifier
-  priv mut position_cache : Array[(@fugue.Lv, @fugue.Item[String])]?  // Lazy cache (invalidated on mutation)
-}
-```
+#### TextDoc (text package)
+User-friendly facade for collaborative text editing. Wraps `Document`, `OpLog`, `CausalGraph`, and `FugueTree` behind a clean API.
 
-The position cache provides O(1) position-to-LV lookups after first access. It is automatically invalidated on any mutation (insert, delete).
+- `insert(Pos::at(n), text)` — insert text at position
+- `delete(Pos::at(n))` — delete character at position
+- `text()` — current document string
+- `version()` — current `Version` (version vector)
+- `sync().export_all()` / `sync().export_since(version)` — export ops for peers
+- `sync().apply(msg)` — apply ops from a peer
+- `checkout(version)` — read-only view at a historical version
 
-**Operations:**
-- `insert(position, text) -> Unit` - Insert text at cursor position
-- `delete(position) -> Unit` - Delete character at cursor position
-- `to_text()` - Get current document text
-- `visible_count()` - Get visible character count
-- `diff_and_collect(from, to)` - Compute diff between two frontiers
-- `checkout_branch(frontier)` - Checkout a branch at a given frontier
-- `get_visible_items()` - Get visible items from the tree
-- `lv_to_position(lv)` - Map local version to visible position
-- `get_frontier()` - Get local LVs for internal operations
+#### TreeDoc (tree package)
+Facade for collaborative movable-tree editing. Each structural mutation (create/move/delete) is a Lamport-timestamped operation that can be replicated to any number of peers.
 
-#### OpLog
-Maintains append-only operation history with causal dependency tracking.
+- `create_node(parent~)` — create a child node, returns its `TreeNodeId`
+- `move_node(target~, new_parent~)` — move a node to a new parent
+- `delete_node(id)` — move a node to the trash sentinel
+- `children(id)` — sorted children of a node (by `FractionalIndex`)
+- `is_alive(id)` — true if the node is reachable from root (not in trash)
+- `set_property(id, key, value)` / `get_property(id, key)` — LWW properties
+- `export_ops()` — all ops in timestamp order for peer sync
+- `apply_remote_op(op)` — apply a remote op, handles out-of-order delivery
 
-```moonbit
-pub struct OpLog {
-  mut operations : Array[@core.Op]          // All operations in LV order
-  mut pending : Array[@core.Op]             // Remote ops waiting for missing parents
-  graph : @causal_graph.CausalGraph         // Causal graph
-  agent_id : String                         // This agent's ID
-}
-```
+#### CausalGraph (internal/causal_graph)
+Tracks causality between operations. Assigns local versions (LV) and maintains the Frontier (set of heads not yet referenced as a parent by any later op).
 
-**Note:** Operations should carry globally stable IDs (RawVersion) for
-parents and FugueMax anchors; OpLog maps those IDs to local LVs on receipt.
+#### FugueTree (internal/fugue)
+FugueMax sequence CRDT. Stores all items including tombstones, indexed by LV. Ensures deterministic ordering of concurrent insertions without requiring coordination.
 
-#### CausalGraph
-Tracks causality between operations using parents and version information.
-
-```moonbit
-pub struct CausalGraph {
-  mut entries : HashMap[Int, GraphEntry]       // Graph entries indexed by LV
-  mut version_map : HashMap[RawVersion, Int]   // RawVersion → LV index
-  mut next_lv : Int                            // Next available local version
-  mut frontier : Frontier                      // Current frontier
-  mut agent_seqs : HashMap[String, Int]        // Highest seq per agent
-}
-```
-
-#### FugueTree
-CRDT tree implementing FugueMax algorithm for ordered sequences with conflict-free insertions.
-
-```moonbit
-pub struct FugueTree[T] {
-  mut items : HashMap[Lv, Item[T]]  // Items indexed by LV (includes tombstones)
-  mut length : Int                  // Total items, including deleted
-}
-```
-
-#### Branch
-Document snapshot at a specific frontier. Enables efficient checkout and advance operations.
-
-```moonbit
-pub struct Branch {
-  frontier : @core.Frontier          // Version frontier this branch represents
-  tree : @fugue.FugueTree[String]    // CRDT tree state at this frontier
-  oplog : @oplog.OpLog               // Reference to the operation log
-}
-```
-
-**Methods:**
-- `get_frontier()` - Returns a defensive copy of the frontier (safe for external use)
+#### MovableTree + TreeOpLog (internal/movable_tree)
+Low-level tree structure and Kleppmann's undo-do-redo conflict resolution log. `TreeOpLog::apply` maintains entries sorted by (timestamp, agent) and replays ops in total order to guarantee convergence under arbitrary delivery reordering.
 
 ## Algorithm Components
 
@@ -192,6 +152,37 @@ pub fn merge_remote_ops(
 ## Usage
 
 For complete worked examples (sync with error handling, undo/redo, historical checkout), see **[docs/EXAMPLES.md](docs/EXAMPLES.md)**.
+
+### Tree Quick Start
+
+```moonbit
+import "dowdiness/event-graph-walker/tree"
+
+// Create a document — replica_id must be unique per device/session
+let doc = @tree.TreeDoc::new("alice-laptop-001")
+
+// Build a tree
+let project = doc.create_node(parent=@tree.root_id)
+let src     = doc.create_node(parent=project)
+let test    = doc.create_node(parent=project)
+doc.set_property(project, "name", "my-project")
+doc.set_property(src, "name", "src")
+doc.set_property(test, "name", "test")
+
+// Sync to another peer
+let bob = @tree.TreeDoc::new("bob-laptop-001")
+for op in doc.export_ops() {
+  bob.apply_remote_op(op)
+}
+
+// Bob sees the same tree
+println(bob.get_property(project, "name"))  // "my-project"
+println(bob.children(project).length())     // 2
+
+// Delete a node
+doc.delete_node(test)
+println(doc.is_alive(test))  // false
+```
 
 ### Quick Start (Recommended API)
 
@@ -343,12 +334,12 @@ parents and anchors to local LVs before inserting into the causal graph.
 
 ## Key Features
 
-- ✅ **Causal Consistency** - Operations ordered by causal dependencies
-- ✅ **Conflict-Free** - FugueMax ensures deterministic ordering of concurrent inserts
-- ✅ **Efficient** - Walker and branch systems avoid full tree reconstruction
-- ✅ **Network Optimized** - Version vectors minimize sync overhead
-- ✅ **Peer-to-Peer** - Works with any number of collaborators
-- ✅ **Incremental** - Branch advance only applies new operations when possible
+- ✅ **Text CRDT** — FugueMax ensures deterministic ordering of concurrent inserts
+- ✅ **Movable Tree CRDT** — Kleppmann's undo-do-redo guarantees convergent, acyclic trees
+- ✅ **Causal Consistency** — Operations ordered by causal dependencies
+- ✅ **Efficient** — Walker and branch systems avoid full tree reconstruction
+- ✅ **Network Optimized** — Version vectors minimize sync overhead
+- ✅ **Peer-to-Peer** — Works with any number of collaborators
 
 ## Properties
 
@@ -368,8 +359,8 @@ moon test
 ```
 
 The module includes:
-- 330 unit tests across all components
-- Property-based tests with Arbitrary/Shrink traits
+- 395 unit and property-based tests across all components
+- QuickCheck convergence properties for both the text CRDT and the movable-tree CRDT
 - Benchmarks for performance profiling
 
 ## Performance
@@ -410,12 +401,6 @@ Operations indexed by LV (array index) rather than agent/sequence pairs for:
 - Simple frontier representation
 - Efficient walker traversal
 
-### Immutable Collections
-Uses immutable HashMaps and Arrays for:
-- Thread-safe concurrent access
-- Easier reasoning about state
-- Functional composition
-
 ## Contributing
 
 When modifying this module:
@@ -423,7 +408,7 @@ When modifying this module:
 1. Keep components independent (internal/document, internal/oplog, internal/causal_graph, internal/fugue, internal/branch)
 2. Update tests alongside implementation changes
 3. Run `moon test` to verify CRDT properties
-4. Use `moon benchmark` for performance-critical changes
+4. Use `moon bench --release` for performance-critical changes (always `--release`)
 
 ## License
 
