@@ -177,9 +177,9 @@ pub struct TreeDoc {
 /// supply a distinct `replica_id` (e.g. a UUID or a "user/device" compound).
 /// Reusing the same id on two replicas causes node-id collisions and silent op
 /// loss during synchronization.
-pub fn TreeDoc::new(replica_id : String) -> TreeDoc {
+pub fn TreeDoc::new(replica_id : String) -> TreeDoc raise TreeDocError {
   if replica_id == "" {
-    abort("TreeDoc::new: replica_id must be non-empty")
+    raise EmptyReplicaId
   }
   {
     tree: @mt.MovableTree::new(),
@@ -331,7 +331,7 @@ fn TreeDoc::position_after_sibling(
   self : TreeDoc,
   parent : @mt.TreeNodeId,
   after : @mt.TreeNodeId,
-) -> @fi.FractionalIndex {
+) -> @fi.FractionalIndex raise TreeDocError {
   let children = self.tree.children(parent)
   let mut after_idx = -1
   for i = 0; i < children.length(); i = i + 1 {
@@ -361,8 +361,8 @@ fn TreeDoc::position_after_sibling(
           @fi.FractionalIndex::between(left=Some(ap), right=Some(np))
         }
       _ =>
-        abort(
-          "position_after_sibling: unreachable — children must have positions",
+        raise Internal(
+          detail="position_after_sibling: children must have positions",
         )
     }
   }
@@ -375,9 +375,9 @@ fn TreeDoc::position_after_sibling(
 pub fn TreeDoc::create_node(
   self : TreeDoc,
   parent~ : @mt.TreeNodeId,
-) -> @mt.TreeNodeId {
+) -> @mt.TreeNodeId raise TreeDocError {
   if not(self.is_local_parent_valid(parent)) {
-    abort("TreeDoc::create_node: parent does not exist locally")
+    raise ParentNotFound
   }
   let id = self.alloc_id()
   let timestamp = self.next_timestamp()
@@ -403,9 +403,9 @@ pub fn TreeDoc::create_node_after(
   self : TreeDoc,
   parent~ : @mt.TreeNodeId,
   after~ : @mt.TreeNodeId,
-) -> @mt.TreeNodeId {
+) -> @mt.TreeNodeId raise TreeDocError {
   if not(self.is_local_parent_valid(parent)) {
-    abort("TreeDoc::create_node_after: parent does not exist locally")
+    raise ParentNotFound
   }
   let id = self.alloc_id()
   let timestamp = self.next_timestamp()
@@ -428,15 +428,15 @@ pub fn TreeDoc::move_node(
   self : TreeDoc,
   target~ : @mt.TreeNodeId,
   new_parent~ : @mt.TreeNodeId,
-) -> Unit {
+) -> Unit raise TreeDocError {
   if not(self.tree.contains(target)) {
-    abort("TreeDoc::move_node: target does not exist locally")
+    raise TargetNotFound
   }
   if not(self.is_local_parent_valid(new_parent)) {
-    abort("TreeDoc::move_node: new parent does not exist locally")
+    raise ParentNotFound
   }
   if self.tree.would_create_cycle(target, new_parent) {
-    abort("TreeDoc::move_node: move would create a cycle")
+    raise CycleDetected
   }
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(new_parent)
@@ -453,9 +453,12 @@ pub fn TreeDoc::move_node(
 
 ///|
 /// Delete a node by moving it to the trash.
-pub fn TreeDoc::delete_node(self : TreeDoc, target : @mt.TreeNodeId) -> Unit {
+pub fn TreeDoc::delete_node(
+  self : TreeDoc,
+  target : @mt.TreeNodeId,
+) -> Unit raise TreeDocError {
   if not(self.tree.contains(target)) {
-    abort("TreeDoc::delete_node: target does not exist locally")
+    raise TargetNotFound
   }
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(@mt.trash_id)
