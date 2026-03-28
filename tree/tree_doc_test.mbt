@@ -281,7 +281,7 @@ test "panic TreeDoc: move to missing parent" {
 test "panic TreeDoc: move would create a cycle" {
   let doc = @tree.TreeDoc::new("alice")
   let parent = doc.create_node(parent=@tree.root_id)
-  let child = doc.create_node(parent=parent)
+  let child = doc.create_node(parent~)
   doc.move_node(target=parent, new_parent=child)
 }
 

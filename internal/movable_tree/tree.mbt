@@ -96,7 +96,10 @@ pub fn MovableTree::remove_node(self : MovableTree, id : TreeNodeId) -> Unit {
       // disappears from traversal.  Keeping a non-empty cache lets the redo
       // path re-attach the surviving children correctly.
       match self.children_cache.get(id) {
-        Some(children) => if children.length() == 0 { self.children_cache.remove(id) }
+        Some(children) =>
+          if children.length() == 0 {
+            self.children_cache.remove(id)
+          }
         None => ()
       }
       // Remove from nodes map
