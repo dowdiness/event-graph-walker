@@ -158,7 +158,7 @@ pub fn MovableTree::children(
   match self.children_cache.get(parent) {
     None => []
     Some(child_ids) => {
-      // Build (position, id) pairs and sort by position
+      // Sort by position first, then by node id as a deterministic tie-breaker.
       let pairs : Array[(@fi.FractionalIndex, TreeNodeId)] = []
       for i = 0; i < child_ids.length(); i = i + 1 {
         let child_id = child_ids[i]
@@ -167,7 +167,14 @@ pub fn MovableTree::children(
           None => ()
         }
       }
-      pairs.sort_by(fn(a, b) { a.0.compare(b.0) })
+      pairs.sort_by(fn(a, b) {
+        let pos_cmp = a.0.compare(b.0)
+        if pos_cmp != 0 {
+          pos_cmp
+        } else {
+          a.1.compare(b.1)
+        }
+      })
       let result : Array[TreeNodeId] = []
       for i = 0; i < pairs.length(); i = i + 1 {
         result.push(pairs[i].1)

@@ -58,12 +58,29 @@ pub impl Hash for TreeNodeId
 pub impl Show for TreeNodeId
 pub impl @debug.Debug for TreeNodeId
 
+pub(all) enum TreeOp {
+  Move(TreeMoveOp)
+  SetProperty(TreePropertyOp)
+}
+pub impl Show for TreeOp
+pub impl @debug.Debug for TreeOp
+
 pub struct TreeOpLog {
   // private fields
 }
 pub fn TreeOpLog::all_ops(Self) -> Array[TreeMoveOp]
 pub fn TreeOpLog::apply(Self, MovableTree, TreeMoveOp) -> Unit
 pub fn TreeOpLog::new() -> Self
+
+pub(all) struct TreePropertyOp {
+  timestamp : Int
+  target : TreeNodeId
+  key : String
+  value : String
+  agent : String
+}
+pub impl Show for TreePropertyOp
+pub impl @debug.Debug for TreePropertyOp
 
 // Type aliases
 

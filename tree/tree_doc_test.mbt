@@ -1,4 +1,11 @@
-///| Integration tests for TreeDoc
+///|
+/// Integration tests for TreeDoc
+fn op_timestamp(op : @mt.TreeOp) -> Int {
+  match op {
+    @mt.Move(move_op) => move_op.timestamp
+    @mt.SetProperty(prop_op) => prop_op.timestamp
+  }
+}
 
 ///|
 /// Test 1: Create nodes and query tree structure
@@ -98,6 +105,10 @@ test "TreeDoc: two peers converge" {
   inspect(doc_a.is_alive(b1), content="true")
   inspect(doc_b.is_alive(a1), content="true")
   inspect(doc_b.is_alive(b1), content="true")
+  inspect(doc_a.get_property(a1, "label"), content="Some(\"A1\")")
+  inspect(doc_a.get_property(b1, "label"), content="Some(\"B1\")")
+  inspect(doc_b.get_property(a1, "label"), content="Some(\"A1\")")
+  inspect(doc_b.get_property(b1, "label"), content="Some(\"B1\")")
 }
 
 ///|
@@ -130,7 +141,70 @@ test "TreeDoc: consistent children order across peers" {
 }
 
 ///|
-/// Test 8: Move and delete across peers
+/// Test 8: Concurrent equal positions converge to the same sibling order
+test "TreeDoc: concurrent equal positions converge" {
+  let doc_a = @tree.TreeDoc::new("alice")
+  let doc_b = @tree.TreeDoc::new("bob")
+  let a1 = doc_a.create_node(parent=@tree.root_id)
+  let b1 = doc_b.create_node(parent=@tree.root_id)
+  let alice_ops = doc_a.export_ops()
+  let bob_ops = doc_b.export_ops()
+  for op in alice_ops {
+    doc_b.apply_remote_op(op)
+  }
+  for op in bob_ops {
+    doc_a.apply_remote_op(op)
+  }
+  let children_a = doc_a.children(@tree.root_id)
+  let children_b = doc_b.children(@tree.root_id)
+  inspect(children_a.length(), content="2")
+  inspect(children_b.length(), content="2")
+  inspect(children_a[0] == children_b[0], content="true")
+  inspect(children_a[1] == children_b[1], content="true")
+  inspect(children_a[0] == a1 || children_a[1] == a1, content="true")
+  inspect(children_a[0] == b1 || children_a[1] == b1, content="true")
+}
+
+///|
+/// Test 9: Property ops survive out-of-order delivery
+test "TreeDoc: property ops replay after out-of-order create" {
+  let doc_a = @tree.TreeDoc::new("alice")
+  let doc_b = @tree.TreeDoc::new("bob")
+  let node = doc_a.create_node(parent=@tree.root_id)
+  doc_a.set_property(node, "label", "ready")
+  let ops = doc_a.export_ops()
+  doc_b.apply_remote_op(ops[1])
+  doc_b.apply_remote_op(ops[0])
+  inspect(doc_b.is_alive(node), content="true")
+  inspect(doc_b.get_property(node, "label"), content="Some(\"ready\")")
+}
+
+///|
+/// Test 10: Remote timestamps seed subsequent local timestamps
+test "TreeDoc: local timestamps advance past remote history" {
+  let doc_b = @tree.TreeDoc::new("bob")
+  let doc_c = @tree.TreeDoc::new("carol")
+  let remote_id : @mt.TreeNodeId = { agent: "alice", counter: 0 }
+  let remote_create : @mt.TreeOp = @mt.Move({
+    timestamp: 10,
+    target: remote_id,
+    new_parent: @tree.root_id,
+    position: @fi.FractionalIndex::between(left=None, right=None),
+    agent: "alice",
+  })
+  doc_b.apply_remote_op(remote_create)
+  doc_b.delete_node(remote_id)
+  let ops = doc_b.export_ops()
+  inspect(ops.length(), content="2")
+  inspect(op_timestamp(ops[1]) > 10, content="true")
+  for op in ops {
+    doc_c.apply_remote_op(op)
+  }
+  inspect(doc_c.is_alive(remote_id), content="false")
+}
+
+///|
+/// Test 11: Move and delete across peers
 test "TreeDoc: move and delete across peers" {
   let doc_a = @tree.TreeDoc::new("alice")
   let doc_b = @tree.TreeDoc::new("bob")
@@ -161,24 +235,26 @@ test "TreeDoc: move and delete across peers" {
 }
 
 ///|
-/// Test 9: Export ops returns operations in timestamp order
+/// Test 12: Export ops returns operations in timestamp order
 test "TreeDoc: export ops in order" {
   let doc = @tree.TreeDoc::new("alice")
+  let node = doc.create_node(parent=@tree.root_id)
+  doc.set_property(node, "color", "red")
   let _ = doc.create_node(parent=@tree.root_id)
-  let _ = doc.create_node(parent=@tree.root_id)
-  let _ = doc.create_node(parent=@tree.root_id)
+  doc.delete_node(node)
   let ops = doc.export_ops()
-  inspect(ops.length(), content="3")
+  inspect(ops.length(), content="4")
   // Timestamps should be monotonically non-decreasing
   let mut prev_ts = -1
   for op in ops {
-    inspect(op.timestamp >= prev_ts, content="true")
-    prev_ts = op.timestamp
+    let current_ts = op_timestamp(op)
+    inspect(current_ts >= prev_ts, content="true")
+    prev_ts = current_ts
   }
 }
 
 ///|
-/// Test 10: Node ids are unique per agent
+/// Test 13: Node ids are unique per agent
 test "TreeDoc: unique node ids" {
   let doc = @tree.TreeDoc::new("alice")
   let a = doc.create_node(parent=@tree.root_id)

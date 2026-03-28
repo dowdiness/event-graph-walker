@@ -30,3 +30,20 @@ pub(all) struct TreeMoveOp {
   position : @fi.FractionalIndex
   agent : String
 } derive(Show, Debug)
+
+///|
+/// A timestamped property mutation on a tree node.
+pub(all) struct TreePropertyOp {
+  timestamp : Int
+  target : TreeNodeId
+  key : String
+  value : String
+  agent : String
+} derive(Show, Debug)
+
+///|
+/// A replicated tree operation.
+pub(all) enum TreeOp {
+  Move(TreeMoveOp)
+  SetProperty(TreePropertyOp)
+} derive(Show, Debug)

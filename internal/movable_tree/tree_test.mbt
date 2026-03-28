@@ -165,7 +165,27 @@ test "properties: set and get" {
 }
 
 ///|
-/// Test 10: get_position returns correct fractional index
+/// Test 10: Equal positions break ties by node id
+test "children: equal positions break ties by node id" {
+  let tree_a = @movable_tree.MovableTree::new()
+  let tree_b = @movable_tree.MovableTree::new()
+  let pos = @fi.FractionalIndex::between(left=None, right=None)
+  let bob : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
+  let alice : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  tree_a.apply_create(bob, @movable_tree.root_id, pos)
+  tree_a.apply_create(alice, @movable_tree.root_id, pos)
+  tree_b.apply_create(alice, @movable_tree.root_id, pos)
+  tree_b.apply_create(bob, @movable_tree.root_id, pos)
+  let children_a = tree_a.children(@movable_tree.root_id)
+  let children_b = tree_b.children(@movable_tree.root_id)
+  inspect(children_a.length(), content="2")
+  inspect(children_b.length(), content="2")
+  inspect(children_a[0] == children_b[0], content="true")
+  inspect(children_a[1] == children_b[1], content="true")
+}
+
+///|
+/// Test 11: get_position returns correct fractional index
 test "get_position: returns correct position" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::new([42])
