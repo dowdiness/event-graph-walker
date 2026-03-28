@@ -286,7 +286,34 @@ test "panic TreeDoc: move would create a cycle" {
 }
 
 ///|
-/// Test 17: Node ids are unique per agent
+/// Test 17: Empty replica_id is rejected
+test "panic TreeDoc: empty replica_id" {
+  ignore(@tree.TreeDoc::new(""))
+}
+
+///|
+/// Test 18: create_node rejects a deleted node as parent
+test "panic TreeDoc: create node under deleted parent" {
+  let doc = @tree.TreeDoc::new("alice")
+  let node = doc.create_node(parent=@tree.root_id)
+  doc.delete_node(node)
+  // node is now in trash — creating a child under it should abort
+  ignore(doc.create_node(parent=node))
+}
+
+///|
+/// Test 19: move_node rejects a deleted node as new parent
+test "panic TreeDoc: move node to deleted parent" {
+  let doc = @tree.TreeDoc::new("alice")
+  let a = doc.create_node(parent=@tree.root_id)
+  let b = doc.create_node(parent=@tree.root_id)
+  doc.delete_node(a)
+  // a is now in trash — moving b under it should abort
+  doc.move_node(target=b, new_parent=a)
+}
+
+///|
+/// Test 20: Node ids are unique per agent
 test "TreeDoc: unique node ids" {
   let doc = @tree.TreeDoc::new("alice")
   let a = doc.create_node(parent=@tree.root_id)

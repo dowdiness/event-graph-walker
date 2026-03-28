@@ -117,13 +117,22 @@ pub struct TreeDoc {
 }
 
 ///|
-/// Create a new empty TreeDoc owned by the given agent.
-pub fn TreeDoc::new(agent_id : String) -> TreeDoc {
+/// Create a new empty TreeDoc owned by the given replica.
+///
+/// `replica_id` must be **globally unique per replica instance** — not just per
+/// user. If the same user opens the document on two devices, each device must
+/// supply a distinct `replica_id` (e.g. a UUID or a "user/device" compound).
+/// Reusing the same id on two replicas causes node-id collisions and silent op
+/// loss during synchronization.
+pub fn TreeDoc::new(replica_id : String) -> TreeDoc {
+  if replica_id == "" {
+    abort("TreeDoc::new: replica_id must be non-empty")
+  }
   {
     tree: @mt.MovableTree::new(),
     log: @mt.TreeOpLog::new(),
     graph: @cg.CausalGraph::new(),
-    agent_id,
+    agent_id: replica_id,
     next_counter: 0,
     lamport_clock: -1,
     ops: [],
@@ -231,11 +240,15 @@ fn TreeDoc::observe_remote_op(self : TreeDoc, op : @mt.TreeOp) -> Unit {
 
 ///|
 /// Check whether a parent id is valid for a local structural mutation.
+///
+/// Only root (always live) and live tree nodes are accepted.
+/// Deleted nodes (in the trash subtree) and trash_id itself are rejected —
+/// callers must use `delete_node` to move nodes to trash.
 fn TreeDoc::is_local_parent_valid(
   self : TreeDoc,
   parent : @mt.TreeNodeId,
 ) -> Bool {
-  parent == @mt.root_id || parent == @mt.trash_id || self.tree.contains(parent)
+  parent == @mt.root_id || self.tree.is_alive(parent)
 }
 
 ///|
