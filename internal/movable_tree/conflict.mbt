@@ -75,9 +75,15 @@ fn dedup_key(op : TreeMoveOp) -> String {
 /// - Otherwise, move the node and record old parent/position → `Moved`
 fn do_op(tree : MovableTree, op : TreeMoveOp) -> UndoInfo {
   if not(tree.contains(op.target)) {
-    // Node doesn't exist yet — create it
-    tree.apply_create(op.target, op.new_parent, op.position)
-    Created
+    // Node doesn't exist yet — forward-create at the specified location.
+    // Still skip self-moves: creating A with parent=A causes an infinite
+    // loop in is_ancestor_of because the parent walk never reaches a sentinel.
+    if op.target == op.new_parent {
+      Skipped
+    } else {
+      tree.apply_create(op.target, op.new_parent, op.position)
+      Created
+    }
   } else if tree.would_create_cycle(op.target, op.new_parent) {
     // Move would create a cycle — skip
     Skipped
