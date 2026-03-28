@@ -34,6 +34,25 @@ pub fn tree_node_id_eq(a : @mt.TreeNodeId, b : @mt.TreeNodeId) -> Bool {
 }
 
 ///|
+/// Construct a TreeNodeId from agent and counter.
+/// Inverse of `tree_node_id_key`.
+pub fn tree_node_id_new(agent : String, counter : Int) -> @mt.TreeNodeId {
+  { agent, counter }
+}
+
+///|
+/// Extract the agent field from a TreeNodeId.
+pub fn tree_node_id_agent(id : @mt.TreeNodeId) -> String {
+  id.agent
+}
+
+///|
+/// Extract the counter field from a TreeNodeId.
+pub fn tree_node_id_counter(id : @mt.TreeNodeId) -> Int {
+  id.counter
+}
+
+///|
 /// A collaborative tree document backed by the movable-tree CRDT.
 ///
 /// Each local mutation generates a Lamport-timestamped operation that can be
