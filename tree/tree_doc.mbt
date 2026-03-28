@@ -230,6 +230,15 @@ fn TreeDoc::observe_remote_op(self : TreeDoc, op : @mt.TreeOp) -> Unit {
 }
 
 ///|
+/// Check whether a parent id is valid for a local structural mutation.
+fn TreeDoc::is_local_parent_valid(
+  self : TreeDoc,
+  parent : @mt.TreeNodeId,
+) -> Bool {
+  parent == @mt.root_id || parent == @mt.trash_id || self.tree.contains(parent)
+}
+
+///|
 /// Compute a fractional index that sorts after the last child of the given parent.
 fn TreeDoc::position_after_last_child(
   self : TreeDoc,
@@ -253,6 +262,9 @@ pub fn TreeDoc::create_node(
   self : TreeDoc,
   parent~ : @mt.TreeNodeId,
 ) -> @mt.TreeNodeId {
+  if not(self.is_local_parent_valid(parent)) {
+    abort("TreeDoc::create_node: parent does not exist locally")
+  }
   let id = self.alloc_id()
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(parent)
@@ -275,6 +287,12 @@ pub fn TreeDoc::move_node(
   target~ : @mt.TreeNodeId,
   new_parent~ : @mt.TreeNodeId,
 ) -> Unit {
+  if not(self.tree.contains(target)) {
+    abort("TreeDoc::move_node: target does not exist locally")
+  }
+  if not(self.is_local_parent_valid(new_parent)) {
+    abort("TreeDoc::move_node: new parent does not exist locally")
+  }
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(new_parent)
   let move_op : @mt.TreeMoveOp = {
@@ -291,6 +309,9 @@ pub fn TreeDoc::move_node(
 ///|
 /// Delete a node by moving it to the trash.
 pub fn TreeDoc::delete_node(self : TreeDoc, target : @mt.TreeNodeId) -> Unit {
+  if not(self.tree.contains(target)) {
+    abort("TreeDoc::delete_node: target does not exist locally")
+  }
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(@mt.trash_id)
   let move_op : @mt.TreeMoveOp = {
