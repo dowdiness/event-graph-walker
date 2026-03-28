@@ -1,13 +1,30 @@
-///| Ancestor detection for the movable tree.
+///| Ancestor queries and cycle detection for the movable tree.
 ///
-/// Provides cycle detection to prevent invalid moves that would create
-/// loops in the tree structure.
+/// Kleppmann's algorithm relies on cycle detection to decide whether a move op
+/// should be applied or skipped: a move of `target` under `new_parent` is safe
+/// only if `target` is not already an ancestor of `new_parent`.  If it were,
+/// the move would create a cycle (target → … → new_parent → target → …).
+///
+/// The check is intentionally conservative: `would_create_cycle` is called both
+/// for normal moves and for forward-creates (where the target doesn't yet exist).
+/// For forward-creates it is still possible to have a cycle if an earlier
+/// out-of-order op stored a dangling parent pointer that makes the target appear
+/// as an ancestor of the intended new_parent.
 
 ///|
-/// Check if `ancestor` is an ancestor of `descendant` by walking the parent chain.
+/// Return true if `ancestor` is a strict ancestor of `descendant`.
 ///
-/// A node is NOT considered its own ancestor.
-/// Root and trash are ancestors of their respective subtrees.
+/// Walks the parent chain from `descendant` upward.  Returns true as soon as
+/// `ancestor` is encountered as a parent.  Returns false if:
+/// - `ancestor == descendant` (a node is not its own ancestor)
+/// - the chain reaches `root_id` or `trash_id` without passing through `ancestor`
+/// - a dangling parent pointer is encountered (node absent from the tree)
+///
+/// The walk terminates at sentinels rather than looping indefinitely because
+/// the algorithm's cycle-skip guarantee ensures no actual cycle exists in a
+/// well-formed tree.  The only way a cycle could be present here is in an
+/// intermediate undo state, which is handled by the undo phase before any
+/// ancestor query is made.
 pub fn MovableTree::is_ancestor_of(
   self : MovableTree,
   ancestor : TreeNodeId,
@@ -17,7 +34,6 @@ pub fn MovableTree::is_ancestor_of(
     return false
   }
   let mut current = descendant
-  // Walk up the parent chain until we hit root, trash, or the ancestor
   for ;; {
     match self.nodes.get(current) {
       None => return false
@@ -26,7 +42,7 @@ pub fn MovableTree::is_ancestor_of(
         if parent == ancestor {
           return true
         }
-        // Reached a sentinel (root or trash) without finding ancestor
+        // Reached a sentinel (root or trash) without finding ancestor.
         if parent == root_id || parent == trash_id {
           return false
         }
@@ -37,11 +53,15 @@ pub fn MovableTree::is_ancestor_of(
 }
 
 ///|
-/// Check if moving `target` under `new_parent` would create a cycle.
+/// Return true if moving `target` under `new_parent` would create a cycle.
 ///
-/// A cycle occurs when:
-/// - `target == new_parent` (node becomes its own parent)
-/// - `target` is an ancestor of `new_parent` (would create a loop)
+/// A cycle arises in two situations:
+/// 1. `target == new_parent` — the node would become its own parent.
+/// 2. `target` is already an ancestor of `new_parent` — the move would form a
+///    loop: new_parent → … → target → new_parent → …
+///
+/// Both cases are detected here.  When `would_create_cycle` returns true the
+/// caller (`do_op`) records the op as `Skipped`, leaving the tree unchanged.
 pub fn MovableTree::would_create_cycle(
   self : MovableTree,
   target : TreeNodeId,
