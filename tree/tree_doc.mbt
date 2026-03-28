@@ -18,6 +18,10 @@ pub let trash_id : @mt.TreeNodeId = @mt.trash_id
 ///|
 /// Stable string key for a node id, safe to use as a Map key.
 /// Format: "agent:counter".
+///
+/// **Important:** `agent` must not contain `:` — the JS bridge splits on the
+/// last `:` to recover `{agent, counter}`. Pass `TreeDoc::new` a replica_id
+/// without colons (e.g. a UUID or "user/device" with `/` separator).
 pub fn tree_node_id_key(id : @mt.TreeNodeId) -> String {
   id.agent + ":" + id.counter.to_string()
 }
