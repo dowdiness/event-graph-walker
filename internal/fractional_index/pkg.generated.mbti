@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/internal/fractional_index"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct FractionalIndex {
+  // private fields
+}
+pub fn FractionalIndex::between(left~ : Self?, right~ : Self?) -> Self
+pub fn FractionalIndex::elements(Self) -> Array[Int]
+pub fn FractionalIndex::length(Self) -> Int
+pub fn FractionalIndex::new(Array[Int]) -> Self
+pub impl Compare for FractionalIndex
+pub impl Eq for FractionalIndex
+pub impl Show for FractionalIndex
+pub impl @debug.Debug for FractionalIndex
+
+// Type aliases
+
+// Traits
+

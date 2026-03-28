@@ -1,0 +1,88 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/internal/movable_tree"
+
+import {
+  "dowdiness/event-graph-walker/internal/fractional_index",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub let root_id : TreeNodeId
+
+pub let trash_id : TreeNodeId
+
+// Errors
+
+// Types and methods
+pub struct MovableTree {
+  // private fields
+}
+pub fn MovableTree::apply_create(Self, TreeNodeId, TreeNodeId, @fractional_index.FractionalIndex) -> Unit
+pub fn MovableTree::apply_move(Self, TreeNodeId, TreeNodeId, @fractional_index.FractionalIndex) -> Unit
+pub fn MovableTree::children(Self, TreeNodeId) -> Array[TreeNodeId]
+pub fn MovableTree::contains(Self, TreeNodeId) -> Bool
+pub fn MovableTree::get_position(Self, TreeNodeId) -> @fractional_index.FractionalIndex?
+pub fn MovableTree::get_property(Self, TreeNodeId, String) -> String?
+pub fn MovableTree::is_alive(Self, TreeNodeId) -> Bool
+pub fn MovableTree::is_ancestor_of(Self, TreeNodeId, TreeNodeId) -> Bool
+pub fn MovableTree::new() -> Self
+pub fn MovableTree::parent(Self, TreeNodeId) -> TreeNodeId?
+pub fn MovableTree::remove_node(Self, TreeNodeId) -> Unit
+pub fn MovableTree::set_property(Self, TreeNodeId, String, String) -> Unit
+pub fn MovableTree::would_create_cycle(Self, TreeNodeId, TreeNodeId) -> Bool
+
+pub(all) struct TreeMoveOp {
+  timestamp : Int
+  target : TreeNodeId
+  new_parent : TreeNodeId
+  position : @fractional_index.FractionalIndex
+  agent : String
+}
+pub impl Show for TreeMoveOp
+pub impl @debug.Debug for TreeMoveOp
+
+pub(all) struct TreeNode {
+  id : TreeNodeId
+  mut parent : TreeNodeId
+  mut position : @fractional_index.FractionalIndex
+  properties : Map[String, String]
+}
+
+pub(all) struct TreeNodeId {
+  agent : String
+  counter : Int
+}
+pub impl Compare for TreeNodeId
+pub impl Eq for TreeNodeId
+pub impl Hash for TreeNodeId
+pub impl Show for TreeNodeId
+pub impl @debug.Debug for TreeNodeId
+
+pub(all) enum TreeOp {
+  Move(TreeMoveOp)
+  SetProperty(TreePropertyOp)
+}
+pub impl Show for TreeOp
+pub impl @debug.Debug for TreeOp
+
+pub struct TreeOpLog {
+  // private fields
+}
+pub fn TreeOpLog::all_ops(Self) -> Array[TreeMoveOp]
+pub fn TreeOpLog::apply(Self, MovableTree, TreeMoveOp) -> Unit
+pub fn TreeOpLog::new() -> Self
+
+pub(all) struct TreePropertyOp {
+  timestamp : Int
+  target : TreeNodeId
+  key : String
+  value : String
+  agent : String
+}
+pub impl Show for TreePropertyOp
+pub impl @debug.Debug for TreePropertyOp
+
+// Type aliases
+
+// Traits
+
