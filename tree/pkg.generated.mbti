@@ -23,6 +23,7 @@ pub struct TreeDoc {
 pub fn TreeDoc::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
 pub fn TreeDoc::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
 pub fn TreeDoc::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId
+pub fn TreeDoc::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId
 pub fn TreeDoc::delete_node(Self, @movable_tree.TreeNodeId) -> Unit
 pub fn TreeDoc::export_ops(Self) -> Array[@movable_tree.TreeOp]
 pub fn TreeDoc::get_property(Self, @movable_tree.TreeNodeId, String) -> String?

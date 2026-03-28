@@ -321,6 +321,39 @@ fn TreeDoc::position_after_last_child(
 }
 
 ///|
+/// Compute a fractional index that sorts immediately after a given sibling.
+///
+/// If `after` is the last child, the new position sorts after it.
+/// Otherwise, it sorts between `after` and the next sibling.
+fn TreeDoc::position_after_sibling(
+  self : TreeDoc,
+  parent : @mt.TreeNodeId,
+  after : @mt.TreeNodeId,
+) -> @fi.FractionalIndex {
+  let children = self.tree.children(parent)
+  let after_pos = self.tree.get_position(after)
+  // Find the index of `after` in the sorted children list
+  let mut after_idx = -1
+  for i = 0; i < children.length(); i = i + 1 {
+    if children[i] == after {
+      after_idx = i
+      break
+    }
+  }
+  if after_idx < 0 {
+    // `after` not found among children — fall back to end
+    @fi.FractionalIndex::between(left=after_pos, right=None)
+  } else if after_idx == children.length() - 1 {
+    // `after` is the last child — insert after it
+    @fi.FractionalIndex::between(left=after_pos, right=None)
+  } else {
+    // Insert between `after` and the next sibling
+    let next_pos = self.tree.get_position(children[after_idx + 1])
+    @fi.FractionalIndex::between(left=after_pos, right=next_pos)
+  }
+}
+
+///|
 /// Create a new node as the last child of the given parent.
 ///
 /// Returns the id of the newly created node.
@@ -334,6 +367,34 @@ pub fn TreeDoc::create_node(
   let id = self.alloc_id()
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(parent)
+  let move_op : @mt.TreeMoveOp = {
+    timestamp,
+    target: id,
+    new_parent: parent,
+    position,
+    agent: self.agent_id,
+  }
+  self.apply_move_op(move_op)
+  let _ = self.record_op(@mt.Move(move_op))
+  id
+}
+
+///|
+/// Create a new node immediately after a given sibling under the same parent.
+///
+/// The new node is inserted between `after` and the next sibling (if any).
+/// Returns the id of the newly created node.
+pub fn TreeDoc::create_node_after(
+  self : TreeDoc,
+  parent~ : @mt.TreeNodeId,
+  after~ : @mt.TreeNodeId,
+) -> @mt.TreeNodeId {
+  if not(self.is_local_parent_valid(parent)) {
+    abort("TreeDoc::create_node_after: parent does not exist locally")
+  }
+  let id = self.alloc_id()
+  let timestamp = self.next_timestamp()
+  let position = self.position_after_sibling(parent, after)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
     target: id,
