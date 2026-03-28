@@ -76,7 +76,8 @@ User-friendly facade for collaborative text editing. Wraps `Document`, `OpLog`, 
 #### TreeDoc (tree package)
 Facade for collaborative movable-tree editing. Each structural mutation (create/move/delete) is a Lamport-timestamped operation that can be replicated to any number of peers.
 
-- `create_node(parent~)` — create a child node, returns its `TreeNodeId`
+- `create_node(parent~)` — create a child node as last sibling, returns its `TreeNodeId`
+- `create_node_after(parent~, after~)` — create a child positioned after a given sibling
 - `move_node(target~, new_parent~)` — move a node to a new parent
 - `delete_node(id)` — move a node to the trash sentinel
 - `children(id)` — sorted children of a node (by `FractionalIndex`)
@@ -84,6 +85,8 @@ Facade for collaborative movable-tree editing. Each structural mutation (create/
 - `set_property(id, key, value)` / `get_property(id, key)` — LWW properties
 - `export_ops()` — all ops in timestamp order for peer sync
 - `apply_remote_op(op)` — apply a remote op, handles out-of-order delivery
+
+Mutating methods raise `TreeDocError` on invalid input (missing parent, missing target, cycle detected).
 
 #### CausalGraph (internal/causal_graph)
 Tracks causality between operations. Assigns local versions (LV) and maintains the Frontier (set of heads not yet referenced as a parent by any later op).
