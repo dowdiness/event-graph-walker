@@ -323,3 +323,92 @@ test "TreeDoc: unique node ids" {
   inspect(b == c, content="false")
   inspect(a == c, content="false")
 }
+
+///|
+/// Test 21: create_node_after inserts between siblings
+test "TreeDoc: create_node_after inserts between siblings" {
+  let doc = @tree.TreeDoc::new("alice")
+  let a = doc.create_node(parent=@tree.root_id)
+  let b = doc.create_node(parent=@tree.root_id)
+  let c = doc.create_node_after(parent=@tree.root_id, after=a)
+  let children = doc.children(@tree.root_id)
+  inspect(children.length(), content="3")
+  inspect(children[0] == a, content="true")
+  inspect(children[1] == c, content="true")
+  inspect(children[2] == b, content="true")
+}
+
+///|
+/// Test 22: create_node_after appends when after_id is last child
+test "TreeDoc: create_node_after appends after last" {
+  let doc = @tree.TreeDoc::new("alice")
+  let a = doc.create_node(parent=@tree.root_id)
+  let b = doc.create_node(parent=@tree.root_id)
+  let c = doc.create_node_after(parent=@tree.root_id, after=b)
+  let children = doc.children(@tree.root_id)
+  inspect(children.length(), content="3")
+  inspect(children[0] == a, content="true")
+  inspect(children[1] == b, content="true")
+  inspect(children[2] == c, content="true")
+}
+
+///|
+/// Test 23: create_node_after with nested parent
+test "TreeDoc: create_node_after nested" {
+  let doc = @tree.TreeDoc::new("alice")
+  let parent = doc.create_node(parent=@tree.root_id)
+  let x = doc.create_node(parent~)
+  let y = doc.create_node(parent~)
+  let z = doc.create_node_after(parent~, after=x)
+  let children = doc.children(parent)
+  inspect(children.length(), content="3")
+  inspect(children[0] == x, content="true")
+  inspect(children[1] == z, content="true")
+  inspect(children[2] == y, content="true")
+}
+
+///|
+/// Test 24: create_node_after falls back to append when after is not a child
+test "TreeDoc: create_node_after fallback on missing after" {
+  let doc = @tree.TreeDoc::new("alice")
+  let a = doc.create_node(parent=@tree.root_id)
+  let orphan : @mt.TreeNodeId = { agent: "ghost", counter: 99 }
+  let b = doc.create_node_after(parent=@tree.root_id, after=orphan)
+  let children = doc.children(@tree.root_id)
+  inspect(children.length(), content="2")
+  inspect(children[0] == a, content="true")
+  inspect(children[1] == b, content="true")
+}
+
+///|
+/// Test 25: create_node_after survives concurrent equal-position siblings
+test "TreeDoc: create_node_after with equal positions from concurrent inserts" {
+  let doc_a = @tree.TreeDoc::new("alice")
+  let doc_b = @tree.TreeDoc::new("bob")
+  // Both peers create a node under root concurrently (same fractional position)
+  let a1 = doc_a.create_node(parent=@tree.root_id)
+  let b1 = doc_b.create_node(parent=@tree.root_id)
+  // Sync both ways so both docs see both nodes
+  let alice_ops = doc_a.export_ops()
+  let bob_ops = doc_b.export_ops()
+  for op in alice_ops {
+    doc_b.apply_remote_op(op)
+  }
+  for op in bob_ops {
+    doc_a.apply_remote_op(op)
+  }
+  // Both peers see 2 children — these have equal fractional positions
+  let children = doc_a.children(@tree.root_id)
+  inspect(children.length(), content="2")
+  // create_node_after on the first child must not crash
+  let first = children[0]
+  let new_node = doc_a.create_node_after(parent=@tree.root_id, after=first)
+  inspect(doc_a.is_alive(new_node), content="true")
+  let updated = doc_a.children(@tree.root_id)
+  inspect(updated.length(), content="3")
+  // Verify a1 and b1 are both still present
+  let has_a1 = updated[0] == a1 || updated[1] == a1 || updated[2] == a1
+  let has_b1 = updated[0] == b1 || updated[1] == b1 || updated[2] == b1
+  inspect(has_a1, content="true")
+  inspect(has_b1, content="true")
+}

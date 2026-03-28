@@ -323,15 +323,16 @@ fn TreeDoc::position_after_last_child(
 ///|
 /// Compute a fractional index that sorts immediately after a given sibling.
 ///
-/// If `after` is the last child, the new position sorts after it.
-/// Otherwise, it sorts between `after` and the next sibling.
+/// Falls back to appending after the last child when `after` is not found
+/// among `parent`'s children (e.g. deleted or moved to another parent).
+/// Handles equal fractional positions (from concurrent inserts) by treating
+/// the sibling pair as if `after` is the last child.
 fn TreeDoc::position_after_sibling(
   self : TreeDoc,
   parent : @mt.TreeNodeId,
   after : @mt.TreeNodeId,
 ) -> @fi.FractionalIndex {
   let children = self.tree.children(parent)
-  let after_pos = self.tree.get_position(after)
   // Find the index of `after` in the sorted children list
   let mut after_idx = -1
   for i = 0; i < children.length(); i = i + 1 {
@@ -341,15 +342,27 @@ fn TreeDoc::position_after_sibling(
     }
   }
   if after_idx < 0 {
-    // `after` not found among children — fall back to end
-    @fi.FractionalIndex::between(left=after_pos, right=None)
-  } else if after_idx == children.length() - 1 {
+    // `after` not found among children — fall back to appending at end
+    return self.position_after_last_child(parent)
+  }
+  let after_pos = self.tree.get_position(after)
+  if after_idx == children.length() - 1 {
     // `after` is the last child — insert after it
     @fi.FractionalIndex::between(left=after_pos, right=None)
   } else {
-    // Insert between `after` and the next sibling
     let next_pos = self.tree.get_position(children[after_idx + 1])
-    @fi.FractionalIndex::between(left=after_pos, right=next_pos)
+    // Guard against equal positions (concurrent inserts resolved by node id).
+    // FractionalIndex::between aborts when left >= right, so fall back to
+    // inserting after `after` with an open right bound.
+    match (after_pos, next_pos) {
+      (Some(ap), Some(np)) =>
+        if ap.compare(np) >= 0 {
+          @fi.FractionalIndex::between(left=Some(ap), right=None)
+        } else {
+          @fi.FractionalIndex::between(left=Some(ap), right=Some(np))
+        }
+      _ => @fi.FractionalIndex::between(left=after_pos, right=next_pos)
+    }
   }
 }
 
