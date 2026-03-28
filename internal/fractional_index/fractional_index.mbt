@@ -148,6 +148,12 @@ fn between_impl(
   left : FractionalIndex,
   right : FractionalIndex,
 ) -> FractionalIndex {
+  // Precondition: left < right. Violating this (e.g. passing the empty key as
+  // `right` when it is already the minimum) produces a result equal to one of
+  // the bounds and breaks the density invariant.
+  if left.compare(right) >= 0 {
+    abort("FractionalIndex::between: left must be strictly less than right")
+  }
   let result : Array[Int] = []
   let max_len = if left.elements.length() > right.elements.length() {
     left.elements.length()

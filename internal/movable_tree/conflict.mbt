@@ -54,7 +54,7 @@ pub fn TreeOpLog::all_ops(self : TreeOpLog) -> Array[TreeMoveOp] {
 /// Compare two operations by (timestamp, agent) for total ordering.
 /// Returns negative if a < b, zero if equal, positive if a > b.
 fn compare_ops(a : TreeMoveOp, b : TreeMoveOp) -> Int {
-  let ts_cmp = a.timestamp - b.timestamp
+  let ts_cmp = a.timestamp.compare(b.timestamp)
   if ts_cmp != 0 {
     return ts_cmp
   }
