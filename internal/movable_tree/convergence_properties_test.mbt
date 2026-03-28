@@ -102,7 +102,7 @@ fn build_ops(
           agent: "qc",
         })
       }
-      Move(src, dst) => {
+      Move(src, dst) =>
         if src < node_ids.length() {
           let target = node_ids[src]
           let new_parent = if dst < node_ids.length() {
@@ -110,16 +110,9 @@ fn build_ops(
           } else {
             @movable_tree.root_id
           }
-          ops.push({
-            timestamp,
-            target,
-            new_parent,
-            position: pos,
-            agent: "qc",
-          })
+          ops.push({ timestamp, target, new_parent, position: pos, agent: "qc" })
         }
-      }
-      Delete(idx) => {
+      Delete(idx) =>
         if idx < node_ids.length() {
           let target = node_ids[idx]
           ops.push({
@@ -130,7 +123,6 @@ fn build_ops(
             agent: "qc",
           })
         }
-      }
     }
   }
   (ops, node_ids)
