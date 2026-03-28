@@ -215,6 +215,53 @@ test "convergence: move before create" {
 }
 
 ///|
+/// Test 5: Out-of-order replay must not materialize a transient cycle for
+/// create-like replays of missing targets.
+test "convergence: missing-target replay still checks cycles" {
+  let pos = @fi.FractionalIndex::new([100])
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
+  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0 }
+  let create_c : @movable_tree.TreeMoveOp = {
+    timestamp: 0,
+    target: c,
+    new_parent: @movable_tree.root_id,
+    position: pos,
+    agent: "carol",
+  }
+  let create_a_under_b : @movable_tree.TreeMoveOp = {
+    timestamp: 2,
+    target: a,
+    new_parent: b,
+    position: pos,
+    agent: "alice",
+  }
+  let move_b_under_a : @movable_tree.TreeMoveOp = {
+    timestamp: 3,
+    target: b,
+    new_parent: a,
+    position: pos,
+    agent: "bob",
+  }
+  let move_c_under_a : @movable_tree.TreeMoveOp = {
+    timestamp: 4,
+    target: c,
+    new_parent: a,
+    position: pos,
+    agent: "carol",
+  }
+  let tree = @movable_tree.MovableTree::new()
+  let log = @movable_tree.TreeOpLog::new()
+  log.apply(tree, create_c)
+  log.apply(tree, move_b_under_a)
+  log.apply(tree, create_a_under_b)
+  // This used to hang because the prior two ops could leave A <-> B.
+  log.apply(tree, move_c_under_a)
+  inspect(tree.parent(c), content="Some({agent: \"alice\", counter: 0})")
+  inspect(tree.would_create_cycle(b, a), content="true")
+}
+
+///|
 /// Test 5: Six orderings of 5 ops all produce same tree.
 test "convergence: six orderings all converge" {
   let pos = @fi.FractionalIndex::new([100])

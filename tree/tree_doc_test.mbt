@@ -254,7 +254,30 @@ test "TreeDoc: export ops in order" {
 }
 
 ///|
-/// Test 13: Node ids are unique per agent
+/// Test 13: create_node rejects missing local parent ids
+test "panic TreeDoc: create node with missing parent" {
+  let doc = @tree.TreeDoc::new("alice")
+  ignore(doc.create_node(parent={ agent: "missing", counter: 99 }))
+}
+
+///|
+/// Test 14: move_node rejects unknown targets
+test "panic TreeDoc: move missing target" {
+  let doc = @tree.TreeDoc::new("alice")
+  let parent = doc.create_node(parent=@tree.root_id)
+  doc.move_node(target={ agent: "missing", counter: 99 }, new_parent=parent)
+}
+
+///|
+/// Test 15: move_node rejects missing local parent ids
+test "panic TreeDoc: move to missing parent" {
+  let doc = @tree.TreeDoc::new("alice")
+  let node = doc.create_node(parent=@tree.root_id)
+  doc.move_node(target=node, new_parent={ agent: "missing", counter: 99 })
+}
+
+///|
+/// Test 16: Node ids are unique per agent
 test "TreeDoc: unique node ids" {
   let doc = @tree.TreeDoc::new("alice")
   let a = doc.create_node(parent=@tree.root_id)

@@ -174,6 +174,7 @@ test "between: left/None after max-ish key" {
   let l = @fractional_index.FractionalIndex::new([65535])
   let mid = @fractional_index.FractionalIndex::between(left=Some(l), right=None)
   inspect(l < mid, content="true")
+  inspect(mid, content="FractionalIndex([65535, 32768])")
 }
 
 ///|
@@ -188,4 +189,36 @@ test "between: [0] and [1]" {
   )
   inspect(a < mid, content="true")
   inspect(mid < b, content="true")
+}
+
+///|
+/// Appending repeatedly should not grow the key depth while the current level
+/// still has room.
+test "between: append-heavy keys stay shallow" {
+  let keys : Array[@fractional_index.FractionalIndex] = []
+  let mut max_len = 0
+  for i = 0; i < 20; i = i + 1 {
+    let left = if keys.length() == 0 {
+      None
+    } else {
+      Some(keys[keys.length() - 1])
+    }
+    let key = @fractional_index.FractionalIndex::between(left~, right=None)
+    if key.length() > max_len {
+      max_len = key.length()
+    }
+    keys.push(key)
+  }
+  inspect(max_len, content="1")
+  inspect(keys[19], content="FractionalIndex([32787])")
+}
+
+///|
+/// When the last component is saturated, appending can carry into an earlier
+/// component instead of always growing deeper.
+test "between: append can carry before growing deeper" {
+  let l = @fractional_index.FractionalIndex::new([10, 65535])
+  let mid = @fractional_index.FractionalIndex::between(left=Some(l), right=None)
+  inspect(l < mid, content="true")
+  inspect(mid, content="FractionalIndex([11])")
 }

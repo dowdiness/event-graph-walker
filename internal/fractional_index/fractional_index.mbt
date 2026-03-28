@@ -64,6 +64,24 @@ fn normalize(elements : Array[Int]) -> Array[Int] {
 }
 
 ///|
+/// Generate a compact successor after `left`.
+///
+/// Prefer incrementing an existing component so append-heavy workloads stay at
+/// the same depth while there is still numeric space. Only fall back to a
+/// deeper key when every existing component is saturated.
+fn successor_after(left : FractionalIndex) -> FractionalIndex {
+  let result = left.elements.copy()
+  for i = result.length() - 1; i >= 0; i = i - 1 {
+    if result[i] < max_value - 1 {
+      result[i] = result[i] + 1
+      return FractionalIndex::new(result[:i + 1].to_array())
+    }
+  }
+  result.push(max_value / 2)
+  FractionalIndex::new(result)
+}
+
+///|
 /// Lexicographic comparison with implicit zero-padding.
 pub impl Compare for FractionalIndex with compare(self, other) -> Int {
   let len = if self.elements.length() > other.elements.length() {
@@ -124,15 +142,7 @@ pub fn FractionalIndex::between(
     (None, None) => FractionalIndex::new([max_value / 2])
     (Some(l), Some(r)) => between_impl(l, r)
     (None, Some(r)) => between_impl(FractionalIndex::new([]), r)
-    (Some(l), None) => {
-      // Generate a key after l: add midpoint at the next level
-      let result : Array[Int] = []
-      for i = 0; i < l.elements.length(); i = i + 1 {
-        result.push(l.elements[i])
-      }
-      result.push(max_value / 2)
-      FractionalIndex::new(result)
-    }
+    (Some(l), None) => successor_after(l)
   }
 }
 
