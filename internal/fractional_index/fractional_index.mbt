@@ -21,7 +21,13 @@ pub struct FractionalIndex {
 ///|
 /// Create a new FractionalIndex from raw elements.
 /// Normalizes by stripping trailing zeros.
+/// Aborts if any element is outside `[0, max_value)`.
 pub fn FractionalIndex::new(elements : Array[Int]) -> FractionalIndex {
+  for i = 0; i < elements.length(); i = i + 1 {
+    if elements[i] < 0 || elements[i] >= max_value {
+      abort("FractionalIndex::new: element out of range [0, 65536)")
+    }
+  }
   let normalized = normalize(elements)
   { elements: normalized }
 }

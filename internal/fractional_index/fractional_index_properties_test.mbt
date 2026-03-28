@@ -108,8 +108,14 @@ test "property: between(a, b) is strictly between a and b" {
 
 ///|
 /// Property 2: between(None, b) is always < b.
+///
+/// Skip when b normalizes to the empty key (length 0) because the empty key
+/// is already the minimum — there is no valid key strictly less than it.
 test "property: between(None, b) is always < b" {
   @qc.quick_check_fn(fn(sk : SingleKey) -> Bool {
+    if sk.key.length() == 0 {
+      return true
+    }
     let mid = @fractional_index.FractionalIndex::between(
       left=None,
       right=Some(sk.key),

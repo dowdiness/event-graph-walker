@@ -4,8 +4,14 @@
 /// regardless of the order in which they are received by different peers.
 
 ///|
-/// Helper: collect the parent of every node (for comparing tree shapes).
-/// Returns a sorted array of "(agent:counter) -> parent(agent:counter)" strings.
+/// Helper: snapshot both parent linkage and sibling order for every node.
+///
+/// Returns a sorted array of strings of the form:
+///   "(agent:counter)@{sibling_index} -> parent(agent:counter)"
+///
+/// Including the sibling index ensures that two replicas with the same
+/// parent-child relationships but different fractional-index orderings
+/// produce different snapshots and fail the convergence check.
 fn tree_snapshot(
   tree : @movable_tree.MovableTree,
   ids : Array[@movable_tree.TreeNodeId],
@@ -15,16 +21,27 @@ fn tree_snapshot(
     let id = ids[i]
     if tree.contains(id) {
       match tree.parent(id) {
-        Some(p) =>
+        Some(p) => {
+          let siblings = tree.children(p)
+          let mut sibling_idx = -1
+          for j = 0; j < siblings.length(); j = j + 1 {
+            if siblings[j] == id {
+              sibling_idx = j
+              break
+            }
+          }
           result.push(
             id.agent +
             ":" +
             id.counter.to_string() +
+            "@" +
+            sibling_idx.to_string() +
             " -> " +
             p.agent +
             ":" +
             p.counter.to_string(),
           )
+        }
         None => ()
       }
     }

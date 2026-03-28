@@ -161,6 +161,14 @@ fn dedup_key(op : TreeMoveOp) -> String {
 ///   move it to (new_parent, position).
 fn do_op(tree : MovableTree, op : TreeMoveOp) -> UndoInfo {
   if not(tree.contains(op.target)) {
+    // Never forward-create a node directly into trash.  A delete op (new_parent
+    // == trash_id) that arrives before the corresponding create should be
+    // recorded as Skipped so the redo phase can apply it later, after the
+    // create op has been inserted.  Forward-creating a ghost node in trash would
+    // leave an orphan that never gets cleaned up if the create never arrives.
+    if op.new_parent == trash_id {
+      return Skipped
+    }
     // Forward-create: node doesn't exist yet.
     // Cycle check is still required: an earlier op may have placed op.target
     // as a dangling ancestor entry, making op.new_parent a descendant of it.

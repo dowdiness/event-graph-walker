@@ -88,8 +88,17 @@ pub fn MovableTree::remove_node(self : MovableTree, id : TreeNodeId) -> Unit {
           self.children_cache.set(parent, without_child(children, id))
         None => ()
       }
-      // Remove node's own children cache entry
-      self.children_cache.remove(id)
+      // Only remove the children cache if it is currently empty.
+      // When out-of-order ops place children under a not-yet-existing node,
+      // those children's apply_create calls already populated children_cache[id].
+      // If we remove the cache unconditionally here (during undo of the create),
+      // apply_create can't see them when the node is redone and the subtree
+      // disappears from traversal.  Keeping a non-empty cache lets the redo
+      // path re-attach the surviving children correctly.
+      match self.children_cache.get(id) {
+        Some(children) => if children.length() == 0 { self.children_cache.remove(id) }
+        None => ()
+      }
       // Remove from nodes map
       self.nodes.remove(id)
     }

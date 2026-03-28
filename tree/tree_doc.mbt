@@ -69,31 +69,43 @@ fn compare_ops(a : @mt.TreeOp, b : @mt.TreeOp) -> Int {
 }
 
 ///|
-/// Build a stable dedup key for a replicated tree op.
+/// Length-prefix-encode a string field so it cannot be confused with a
+/// separator or an adjacent field.  For example: `"foo"` → `"3:foo"`.
+fn encode_field(s : String) -> String {
+  s.length().to_string() + ":" + s
+}
+
+///|
+/// Build a collision-safe dedup key for a replicated tree op.
+///
+/// Each variable-length string field is length-prefix-encoded so that no
+/// combination of field values can produce the same key as a different op.
+/// For example, `key="a|b", value="c"` and `key="a", value="b|c"` would
+/// collide under a naive `|`-joined format but not here.
 fn op_key(op : @mt.TreeOp) -> String {
   match op {
     @mt.Move(move_op) =>
       "move|" +
-      move_op.agent +
+      encode_field(move_op.agent) +
       "|" +
       move_op.timestamp.to_string() +
       "|" +
-      move_op.target.to_string() +
+      encode_field(move_op.target.to_string()) +
       "|" +
-      move_op.new_parent.to_string() +
+      encode_field(move_op.new_parent.to_string()) +
       "|" +
-      move_op.position.to_string()
+      encode_field(move_op.position.to_string())
     @mt.SetProperty(prop_op) =>
       "prop|" +
-      prop_op.agent +
+      encode_field(prop_op.agent) +
       "|" +
       prop_op.timestamp.to_string() +
       "|" +
-      prop_op.target.to_string() +
+      encode_field(prop_op.target.to_string()) +
       "|" +
-      prop_op.key +
+      encode_field(prop_op.key) +
       "|" +
-      prop_op.value
+      encode_field(prop_op.value)
   }
 }
 
