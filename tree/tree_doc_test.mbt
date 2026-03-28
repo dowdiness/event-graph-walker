@@ -277,7 +277,16 @@ test "panic TreeDoc: move to missing parent" {
 }
 
 ///|
-/// Test 16: Node ids are unique per agent
+/// Test 16: move_node rejects cycle-forming local moves
+test "panic TreeDoc: move would create a cycle" {
+  let doc = @tree.TreeDoc::new("alice")
+  let parent = doc.create_node(parent=@tree.root_id)
+  let child = doc.create_node(parent=parent)
+  doc.move_node(target=parent, new_parent=child)
+}
+
+///|
+/// Test 17: Node ids are unique per agent
 test "TreeDoc: unique node ids" {
   let doc = @tree.TreeDoc::new("alice")
   let a = doc.create_node(parent=@tree.root_id)

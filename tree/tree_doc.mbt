@@ -293,6 +293,9 @@ pub fn TreeDoc::move_node(
   if not(self.is_local_parent_valid(new_parent)) {
     abort("TreeDoc::move_node: new parent does not exist locally")
   }
+  if self.tree.would_create_cycle(target, new_parent) {
+    abort("TreeDoc::move_node: move would create a cycle")
+  }
   let timestamp = self.next_timestamp()
   let position = self.position_after_last_child(new_parent)
   let move_op : @mt.TreeMoveOp = {

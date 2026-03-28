@@ -185,11 +185,23 @@ pub fn MovableTree::children(
 }
 
 ///|
-/// Check if a node is alive (exists and its parent is not trash).
+/// Check if a node is alive (exists and is reachable from root without
+/// passing through trash).
 pub fn MovableTree::is_alive(self : MovableTree, id : TreeNodeId) -> Bool {
-  match self.nodes.get(id) {
-    Some(node) => node.parent != trash_id
-    None => false
+  let mut current = id
+  for ;; {
+    match self.nodes.get(current) {
+      Some(node) => {
+        if node.parent == trash_id {
+          return false
+        }
+        if node.parent == root_id {
+          return true
+        }
+        current = node.parent
+      }
+      None => return false
+    }
   }
 }
 

@@ -52,7 +52,21 @@ test "delete: move to trash" {
 }
 
 ///|
-/// Test 4: Cycle detection — parent under child rejected
+/// Test 4: Deleting a subtree hides all descendants
+test "delete: descendants of trashed nodes are not alive" {
+  let tree = @movable_tree.MovableTree::new()
+  let pos = @fi.FractionalIndex::between(left=None, right=None)
+  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1 }
+  tree.apply_create(parent_id, @movable_tree.root_id, pos)
+  tree.apply_create(child_id, parent_id, pos)
+  tree.apply_move(parent_id, @movable_tree.trash_id, pos)
+  inspect(tree.is_alive(parent_id), content="false")
+  inspect(tree.is_alive(child_id), content="false")
+}
+
+///|
+/// Test 5: Cycle detection — parent under child rejected
 test "cycle: parent under child rejected" {
   let tree = @movable_tree.MovableTree::new()
   let pos1 = @fi.FractionalIndex::between(left=None, right=None)
@@ -73,7 +87,7 @@ test "cycle: parent under child rejected" {
 }
 
 ///|
-/// Test 5: Children sorted by fractional index
+/// Test 6: Children sorted by fractional index
 test "children: sorted by fractional index" {
   let tree = @movable_tree.MovableTree::new()
   // Create three nodes with specific positions: high, low, mid
@@ -96,7 +110,7 @@ test "children: sorted by fractional index" {
 }
 
 ///|
-/// Test 6: remove_node completely removes (for undo of create)
+/// Test 7: remove_node completely removes (for undo of create)
 test "remove_node: completely removes node" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
@@ -112,7 +126,7 @@ test "remove_node: completely removes node" {
 }
 
 ///|
-/// Test 7: is_ancestor_of — deep chain
+/// Test 8: is_ancestor_of — deep chain
 test "is_ancestor_of: deep chain" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
@@ -138,7 +152,7 @@ test "is_ancestor_of: deep chain" {
 }
 
 ///|
-/// Test 8: is_ancestor_of — node is not its own ancestor
+/// Test 9: is_ancestor_of — node is not its own ancestor
 test "is_ancestor_of: node is not its own ancestor" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
@@ -148,7 +162,7 @@ test "is_ancestor_of: node is not its own ancestor" {
 }
 
 ///|
-/// Test 9: Properties — set and get
+/// Test 10: Properties — set and get
 test "properties: set and get" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
@@ -165,7 +179,7 @@ test "properties: set and get" {
 }
 
 ///|
-/// Test 10: Equal positions break ties by node id
+/// Test 11: Equal positions break ties by node id
 test "children: equal positions break ties by node id" {
   let tree_a = @movable_tree.MovableTree::new()
   let tree_b = @movable_tree.MovableTree::new()
@@ -185,7 +199,7 @@ test "children: equal positions break ties by node id" {
 }
 
 ///|
-/// Test 11: get_position returns correct fractional index
+/// Test 12: get_position returns correct fractional index
 test "get_position: returns correct position" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::new([42])
