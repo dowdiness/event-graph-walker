@@ -39,7 +39,7 @@ event-graph-walker/
 ```
 ┌───────────────────────┬─────────────────────────────┐
 │  text (Facade)        │  tree (Facade)               │
-│  TextDoc, SyncMessage │  TreeDoc                     │
+│  TextState, SyncMessage │  TreeState                     │
 ├───────────────────────┤                              │
 │  undo                 │                              │
 │  UndoManager          │                              │
@@ -62,7 +62,7 @@ event-graph-walker/
 
 All internal fields are encapsulated (`priv`). Use the public methods documented below or in the `.mbti` interface files.
 
-#### TextDoc (text package)
+#### TextState (text package)
 User-friendly facade for collaborative text editing. Wraps `Document`, `OpLog`, `CausalGraph`, and `FugueTree` behind a clean API.
 
 - `insert(Pos::at(n), text)` — insert text at position
@@ -73,7 +73,7 @@ User-friendly facade for collaborative text editing. Wraps `Document`, `OpLog`, 
 - `sync().apply(msg)` — apply ops from a peer
 - `checkout(version)` — read-only view at a historical version
 
-#### TreeDoc (tree package)
+#### TreeState (tree package)
 Facade for collaborative movable-tree editing. Each structural mutation (create/move/delete) is a Lamport-timestamped operation that can be replicated to any number of peers.
 
 - `create_node(parent~)` — create a child node as last sibling, returns its `TreeNodeId`
@@ -86,7 +86,7 @@ Facade for collaborative movable-tree editing. Each structural mutation (create/
 - `export_ops()` — all ops in timestamp order for peer sync
 - `apply_remote_op(op)` — apply a remote op, handles out-of-order delivery
 
-Mutating methods raise `TreeDocError` on invalid input (missing parent, missing target, cycle detected).
+Mutating methods raise `TreeError` on invalid input (missing parent, missing target, cycle detected).
 
 #### CausalGraph (internal/causal_graph)
 Tracks causality between operations. Assigns local versions (LV) and maintains the Frontier (set of heads not yet referenced as a parent by any later op).
@@ -162,7 +162,7 @@ For complete worked examples (sync with error handling, undo/redo, historical ch
 import "dowdiness/event-graph-walker/tree"
 
 // Create a document — replica_id must be unique per device/session
-let doc = @tree.TreeDoc::new("alice-laptop-001")
+let doc = @tree.TreeState::new("alice-laptop-001")
 
 // Build a tree
 let project = doc.create_node(parent=@tree.root_id)
@@ -173,7 +173,7 @@ doc.set_property(src, "name", "src")
 doc.set_property(test, "name", "test")
 
 // Sync to another peer
-let bob = @tree.TreeDoc::new("bob-laptop-001")
+let bob = @tree.TreeState::new("bob-laptop-001")
 for op in doc.export_ops() {
   bob.apply_remote_op(op)
 }
@@ -195,7 +195,7 @@ The `text` package provides a user-friendly facade over the CRDT internals:
 import "dowdiness/event-graph-walker/text"
 
 // Create a document
-let doc = @text.TextDoc::new("alice")
+let doc = @text.TextState::new("alice")
 
 // Edit with type-safe positions
 doc.insert(@text.Pos::at(0), "Hello")
@@ -211,11 +211,11 @@ println(doc.text())  // "HelloWorld"
 
 ```moonbit
 // Alice's document
-let alice_doc = @text.TextDoc::new("alice")
+let alice_doc = @text.TextState::new("alice")
 alice_doc.insert(@text.Pos::at(0), "Hello")
 
 // Bob's document
-let bob_doc = @text.TextDoc::new("bob")
+let bob_doc = @text.TextState::new("bob")
 
 // Alice sends her changes to Bob
 let message = alice_doc.sync().export_all()
@@ -233,7 +233,7 @@ println(bob_doc.text())  // "Hello!"
 ### Historical Checkout (Time Travel)
 
 ```moonbit
-let doc = @text.TextDoc::new("alice")
+let doc = @text.TextState::new("alice")
 doc.insert(@text.Pos::at(0), "Hello")
 let v1 = doc.version()  // Save this version
 
@@ -249,7 +249,7 @@ println(doc.text())       // "Hello World" (unchanged)
 ### Error Handling
 
 ```moonbit
-let doc = @text.TextDoc::new("alice")
+let doc = @text.TextState::new("alice")
 try {
   doc.delete(@text.Pos::at(100))  // Invalid position
 } catch {
@@ -311,19 +311,19 @@ let new_branch = old_branch.advance(target_frontier)
 
 ## Migration Guide
 
-### From Document to TextDoc
+### From Document to TextState
 
-If you're using the low-level `Document` API, here's how to migrate to `TextDoc`:
+If you're using the low-level `Document` API, here's how to migrate to `TextState`:
 
-| Old (Document) | New (TextDoc) |
+| Old (Document) | New (TextState) |
 |---------------|---------------|
-| `Document::new(agent)` | `TextDoc::new(agent)` |
+| `Document::new(agent)` | `TextState::new(agent)` |
 | `doc.insert(pos, text)` | `doc.insert(Pos::at(pos), text)` |
 | `doc.delete(pos)` | `doc.delete(Pos::at(pos))` |
 | `doc.to_text()` | `doc.text()` |
 | `doc.get_frontier()` | `doc.version().to_frontier()` |
 
-**Key Benefits of TextDoc:**
+**Key Benefits of TextState:**
 
 1. **Type-safe positions** - `Pos` prevents accidental misuse of raw integers
 2. **Cleaner sync** - `SyncMessage` bundles ops and heads together

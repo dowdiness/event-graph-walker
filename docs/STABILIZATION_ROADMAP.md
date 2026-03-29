@@ -5,7 +5,7 @@ The library has all core algorithms implemented, 395 tests (including property t
 ## Phase 1: Error Handling & API Hardening ✅
 
 - ~~**Strongly type CausalGraph errors**~~ — `CausalGraphError` now has structured variants (`MissingParent`, `MissingEntry`). The text error layer pattern-matches on these variants instead of stringifying.
-- ~~**Seal internal APIs**~~ — `TextDoc::inner_document()` and `TextView::inner_branch()` removed from public API. `Document.tree` and `Document.oplog` are now `priv`. Public delegate methods added (`visible_count`, `get_all_ops`, `diff_and_collect`, `checkout_branch`, `get_visible_items`, `lv_to_position`). New `TextDoc::apply_remote()` method provides clean remote op application.
+- ~~**Seal internal APIs**~~ — `TextState::inner_document()` and `TextView::inner_branch()` removed from public API. `Document.tree` and `Document.oplog` are now `priv`. Public delegate methods added (`visible_count`, `get_all_ops`, `diff_and_collect`, `checkout_branch`, `get_visible_items`, `lv_to_position`). New `TextState::apply_remote()` method provides clean remote op application.
 - ~~**Add timeout/cancellation errors**~~ — `SyncFailure::Timeout` and `SyncFailure::Cancelled` variants added with proper `message()`, `help()`, and `is_retryable()` support.
 
 ## Phase 1.5: Code Quality & Correctness Issues

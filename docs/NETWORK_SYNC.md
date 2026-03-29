@@ -245,7 +245,7 @@ pm2 start signaling-server.js --name crdt-signaling
 
 ## Advanced: Custom Network Layer
 
-You can implement your own network layer using the `sync()` API on `TextDoc`:
+You can implement your own network layer using the `sync()` API on `TextState`:
 
 1. Export all operations: `doc.sync().export_all()`
 2. Export operations since a known version: `doc.sync().export_since(ver)`

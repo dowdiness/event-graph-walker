@@ -2,11 +2,11 @@
 
 ## Overview
 
-Add an LV-based UndoManager as a **separate `undo/` package** in `event-graph-walker/` that plugs into `TextDoc` via a small `Undoable` trait. Solves P2-1 (remote ops polluting undo stack) and P2-2 (stale positions after concurrent edits).
+Add an LV-based UndoManager as a **separate `undo/` package** in `event-graph-walker/` that plugs into `TextState` via a small `Undoable` trait. Solves P2-1 (remote ops polluting undo stack) and P2-2 (stale positions after concurrent edits).
 
 ## Key Design Decisions
 
-- **Separate package** — `event-graph-walker/undo/` as a plugin that imports `document/` + `oplog/` only. TextDoc adds a small `Undoable` impl, no direct access to `FugueTree` from undo.
+- **Separate package** — `event-graph-walker/undo/` as a plugin that imports `document/` + `oplog/` only. TextState adds a small `Undoable` impl, no direct access to `FugueTree` from undo.
 - **LV-based tracking** — Operations tracked by **target element LV** (the inserted/deleted item's ID), not cursor position or operation LV
 - **Tombstone revival** — Undoing a delete revives the tombstone (`deleted = false`). Character reappears at its exact original position even after concurrent edits.
 - **Global undo (Phase 2 implemented)** — Undo/redo generate real ops that sync to peers. Undo-insert creates a `Delete` op, undo-delete creates an `Undelete` op. Both are added to the oplog and can be synced via `SyncSession`.
@@ -36,7 +36,7 @@ event-graph-walker/
 │
 │   (core/: defines Change + RawToLv)
 │   (document/: defines Undoable, uses DocumentError + @oplog.Op + Int)
-│   (text/: implements Undoable for TextDoc, bridges Pos/@core.Change -> Int/Op and TextError -> DocumentError)
+│   (text/: implements Undoable for TextState, bridges Pos/@core.Change -> Int/Op and TextError -> DocumentError)
 │   (undo/: generic over Undoable, no text/ dependency)
 └── ...
 ```
@@ -173,26 +173,26 @@ pub fn Change::agent(self : Change) -> String {
 
 **Note:** `Change::target_lv(resolver)` is safe and returns `None` if the delete target cannot be resolved (missing origin or unknown RawVersion). The resolver is implemented by `Document` via `@core.RawToLv`.
 
-Add `Undoable` impl for `TextDoc` (exact internals may vary). This impl must live
-in `text/` because it accesses TextDoc private fields.
+Add `Undoable` impl for `TextState` (exact internals may vary). This impl must live
+in `text/` because it accesses TextState private fields.
 
 ```moonbit
-///| Undoable impl for TextDoc
-///  Lives in text/ package where TextDoc's private fields are accessible.
+///| Undoable impl for TextState
+///  Lives in text/ package where TextState's private fields are accessible.
 ///|
-pub impl @document.Undoable for TextDoc with lv_to_position(self, lv) {
+pub impl @document.Undoable for TextState with lv_to_position(self, lv) {
   self.inner.lv_to_position(lv)
 }
 
 ///|
-pub impl @document.Undoable for TextDoc with undelete_lv(self, lv) {
+pub impl @document.Undoable for TextState with undelete_lv(self, lv) {
   self.inner.undelete(lv) catch {
     e => raise e
   }
 }
 
 ///|
-pub impl @document.Undoable for TextDoc with delete_lv(self, lv) {
+pub impl @document.Undoable for TextState with delete_lv(self, lv) {
   self.inner.delete_by_lv(lv) catch {
     e => raise e
   }
@@ -263,10 +263,10 @@ pub struct UndoManager {
 
 The text integration layer (which sees `Change` and doc internals) is responsible for extracting the correct `target_lv` and calling `record_insert`/`record_delete`. This keeps `undo/` generic.
 
-**Multi-char insert handling:** `TextDoc::insert("Hello")` internally generates 5 separate ops (one per char) and returns `Unit`. To track all chars, the integration helper inserts one character at a time and records each LV individually.
+**Multi-char insert handling:** `TextState::insert("Hello")` internally generates 5 separate ops (one per char) and returns `Unit`. To track all chars, the integration helper inserts one character at a time and records each LV individually.
 
 Convenience methods (`insert_and_record`, `delete_and_record`) are not on
-UndoManager itself because they require TextDoc-specific methods (`insert`,
+UndoManager itself because they require TextState-specific methods (`insert`,
 `delete`) that are outside the `Undoable` trait. These live in `text/` (which
 imports both `text/` types and `undo/`).
 
@@ -278,8 +278,8 @@ imports both `text/` types and `undo/`).
 /// Each character is inserted individually so its LV is captured.
 /// Time grouping in UndoManager batches them into a single undo group
 /// based on time since the last edit.
-pub fn TextDoc::insert_and_record(
-  self : TextDoc,
+pub fn TextState::insert_and_record(
+  self : TextState,
   pos : Pos,
   text : String,
   mgr : @undo.UndoManager,
@@ -297,8 +297,8 @@ pub fn TextDoc::insert_and_record(
 ///|
 /// Delete a character and record its target LV for undo tracking.
 /// Looks up the deleted item's LV and content before deletion.
-pub fn TextDoc::delete_and_record(
-  self : TextDoc,
+pub fn TextState::delete_and_record(
+  self : TextState,
   pos : Pos,
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
@@ -317,7 +317,7 @@ pub fn TextDoc::delete_and_record(
 
 **Requires** `text/moon.pkg.json` to add `undo` to imports.
 
-**Note:** Per-character insertion via `TextDoc::insert` is equivalent to
+**Note:** Per-character insertion via `TextState::insert` is equivalent to
 `Document::insert("Hello")` in terms of origin tracking — `Document::insert`
 already resolves origins per-character in its internal loop (document.mbt:97-138).
 The per-character approach just makes each LV accessible for recording.
@@ -394,7 +394,7 @@ git diff *.mbti  # verify API changes: fugue/ gets undelete+lv_to_position, core
 ## Usage Example
 
 ```moonbit
-let doc = @text.TextDoc::new("alice")
+let doc = @text.TextState::new("alice")
 let mgr = @undo.UndoManager::new("alice")
 
 // Insert with tracking — helper records each char's LV
@@ -443,7 +443,7 @@ let msg = doc.sync().export_since(ver_before)
 | `event-graph-walker/fugue/tree.mbt` | Modify | +25 |
 | `event-graph-walker/core/change.mbt` | Create | ~40 |
 | `event-graph-walker/core/traits.mbt` | Create | ~8 |
-| `event-graph-walker/text/types.mbt` | Modify | +? (Undoable impl for TextDoc) |
+| `event-graph-walker/text/types.mbt` | Modify | +? (Undoable impl for TextState) |
 | `event-graph-walker/text/undo_helpers.mbt` | Create | ~40 (insert_and_record, delete_and_record) |
 | `event-graph-walker/text/moon.pkg.json` | Modify | +1 (add undo import) |
 
@@ -454,7 +454,7 @@ let msg = doc.sync().export_since(ver_before)
 - ✅ `document/undoable.mbt` trait added
 - ✅ `Document` implements `@core.RawToLv`
 - ✅ `fugue` tombstone revive + LV lookup (`mark_visible`, `undelete`, `lv_to_position`)
-- ✅ `text` implements `Undoable` for `TextDoc`
+- ✅ `text` implements `Undoable` for `TextState`
 - ✅ `text/undo_helpers.mbt` with `insert_and_record` + `delete_and_record`
 - ✅ `undo` package (`types.mbt`, `undo_manager.mbt`, `undo_manager_test.mbt`)
 - ✅ Time grouping uses **time since last edit** (continuous typing stays one group)

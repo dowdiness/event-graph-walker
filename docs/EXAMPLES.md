@@ -12,8 +12,8 @@ Real networks fail. This example shows how to handle each `TextError` variant fr
 import "dowdiness/event-graph-walker/text"
 
 fn sync_to_peer(
-  doc : @text.TextDoc,
-  peer : @text.TextDoc,
+  doc : @text.TextState,
+  peer : @text.TextState,
 ) -> Unit {
   let peer_version = peer.version()
 
@@ -69,11 +69,11 @@ fn sync_to_peer(
 }
 
 // Usage
-let alice = @text.TextDoc::new("alice")
+let alice = @text.TextState::new("alice")
 alice.insert(@text.Pos::at(0), "Hello")
 alice.insert(@text.Pos::at(5), " World")
 
-let bob = @text.TextDoc::new("bob")
+let bob = @text.TextState::new("bob")
 sync_to_peer(alice, bob)
 println(bob.text())  // "Hello World"
 
@@ -94,7 +94,7 @@ import "dowdiness/event-graph-walker/text"
 import "dowdiness/event-graph-walker/undo"
 
 // Create document and undo manager for alice
-let alice_doc = @text.TextDoc::new("alice")
+let alice_doc = @text.TextState::new("alice")
 let alice_mgr = @undo.UndoManager::new("alice")
 
 // Helpers track local operations in the undo manager
@@ -105,7 +105,7 @@ alice_doc.insert_and_record(@text.Pos::at(5), " World", alice_mgr, timestamp_ms=
 println(alice_doc.text())  // "Hello World"
 
 // Remote op from bob arrives — apply directly, do NOT record
-let bob_doc = @text.TextDoc::new("bob")
+let bob_doc = @text.TextState::new("bob")
 bob_doc.insert(@text.Pos::at(0), "Hi ")
 let bob_msg = bob_doc.sync().export_all()
 alice_doc.sync().apply(bob_msg)
@@ -147,12 +147,12 @@ if alice_mgr.can_redo() {
 
 ## Example 3: Historical Checkout and Incremental Catch-Up
 
-`TextDoc::checkout` returns a read-only `TextView` frozen at a past version. The live document is unaffected. This is useful for diffing, read-only preview, and letting a late-joining peer catch up incrementally.
+`TextState::checkout` returns a read-only `TextView` frozen at a past version. The live document is unaffected. This is useful for diffing, read-only preview, and letting a late-joining peer catch up incrementally.
 
 ```moonbit
 import "dowdiness/event-graph-walker/text"
 
-let doc = @text.TextDoc::new("alice")
+let doc = @text.TextState::new("alice")
 
 doc.insert(@text.Pos::at(0), "Hello")
 let v1 = doc.version()  // Snapshot version after "Hello"
@@ -178,7 +178,7 @@ try {
 }
 
 // Late-joining peer: catch up incrementally from a known version
-let carol = @text.TextDoc::new("carol")
+let carol = @text.TextState::new("carol")
 
 // Carol received the first batch up to v1 previously
 let batch1 = doc.sync().export_since(carol.version())
