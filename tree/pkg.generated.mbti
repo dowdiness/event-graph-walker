@@ -21,22 +21,29 @@ pub fn tree_node_id_key(@movable_tree.TreeNodeId) -> String
 pub fn tree_node_id_new(String, Int) -> @movable_tree.TreeNodeId
 
 // Errors
+pub(all) suberror TreeError {
+  EmptyReplicaId
+  TargetNotFound
+  ParentNotFound
+  CycleDetected
+  Internal(detail~ : String)
+}
 
 // Types and methods
-pub struct TreeDoc {
+pub struct TreeState {
   // private fields
 }
-pub fn TreeDoc::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
-pub fn TreeDoc::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
-pub fn TreeDoc::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId
-pub fn TreeDoc::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId
-pub fn TreeDoc::delete_node(Self, @movable_tree.TreeNodeId) -> Unit
-pub fn TreeDoc::export_ops(Self) -> Array[@movable_tree.TreeOp]
-pub fn TreeDoc::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
-pub fn TreeDoc::is_alive(Self, @movable_tree.TreeNodeId) -> Bool
-pub fn TreeDoc::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~ : @movable_tree.TreeNodeId) -> Unit
-pub fn TreeDoc::new(String) -> Self
-pub fn TreeDoc::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
+pub fn TreeState::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
+pub fn TreeState::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
+pub fn TreeState::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise TreeError
+pub fn TreeState::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise TreeError
+pub fn TreeState::delete_node(Self, @movable_tree.TreeNodeId) -> Unit raise TreeError
+pub fn TreeState::export_ops(Self) -> Array[@movable_tree.TreeOp]
+pub fn TreeState::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
+pub fn TreeState::is_alive(Self, @movable_tree.TreeNodeId) -> Bool
+pub fn TreeState::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~ : @movable_tree.TreeNodeId) -> Unit raise TreeError
+pub fn TreeState::new(String) -> Self raise TreeError
+pub fn TreeState::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
 
 // Type aliases
 pub using @movable_tree {type TreeNodeId}

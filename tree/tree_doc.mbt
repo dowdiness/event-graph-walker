@@ -1,4 +1,4 @@
-///| TreeDoc — public API for the movable-tree CRDT.
+///| TreeState — public API for the movable-tree CRDT.
 ///
 /// Integrates MovableTree + TreeOpLog with CausalGraph to provide
 /// Lamport timestamps, version tracking, and multi-peer synchronization.
@@ -20,7 +20,7 @@ pub let trash_id : @mt.TreeNodeId = @mt.trash_id
 /// Format: "agent:counter".
 ///
 /// **Important:** `agent` must not contain `:` — the JS bridge splits on the
-/// last `:` to recover `{agent, counter}`. Pass `TreeDoc::new` a replica_id
+/// last `:` to recover `{agent, counter}`. Pass `TreeState::new` a replica_id
 /// without colons (e.g. a UUID or "user/device" with `/` separator).
 pub fn tree_node_id_key(id : @mt.TreeNodeId) -> String {
   id.agent + ":" + id.counter.to_string()
@@ -157,7 +157,7 @@ fn compare_property_ops(a : @mt.TreePropertyOp, b : @mt.TreePropertyOp) -> Int {
 }
 
 ///|
-pub struct TreeDoc {
+pub struct TreeState {
   priv tree : @mt.MovableTree
   priv log : @mt.TreeOpLog
   priv graph : @cg.CausalGraph
@@ -170,14 +170,14 @@ pub struct TreeDoc {
 }
 
 ///|
-/// Create a new empty TreeDoc owned by the given replica.
+/// Create a new empty TreeState owned by the given replica.
 ///
 /// `replica_id` must be **globally unique per replica instance** — not just per
 /// user. If the same user opens the document on two devices, each device must
 /// supply a distinct `replica_id` (e.g. a UUID or a "user/device" compound).
 /// Reusing the same id on two replicas causes node-id collisions and silent op
 /// loss during synchronization.
-pub fn TreeDoc::new(replica_id : String) -> TreeDoc raise TreeDocError {
+pub fn TreeState::new(replica_id : String) -> TreeState raise TreeError {
   if replica_id == "" {
     raise EmptyReplicaId
   }
@@ -196,7 +196,7 @@ pub fn TreeDoc::new(replica_id : String) -> TreeDoc raise TreeDocError {
 
 ///|
 /// Allocate a fresh node id local to this agent and bump the counter.
-fn TreeDoc::alloc_id(self : TreeDoc) -> @mt.TreeNodeId {
+fn TreeState::alloc_id(self : TreeState) -> @mt.TreeNodeId {
   let id : @mt.TreeNodeId = { agent: self.agent_id, counter: self.next_counter }
   self.next_counter = self.next_counter + 1
   id
@@ -205,7 +205,7 @@ fn TreeDoc::alloc_id(self : TreeDoc) -> @mt.TreeNodeId {
 ///|
 /// Derive a Lamport timestamp by adding a version to the causal graph.
 /// Returns the timestamp from the newly created graph entry.
-fn TreeDoc::next_timestamp(self : TreeDoc) -> Int {
+fn TreeState::next_timestamp(self : TreeState) -> Int {
   let frontier = self.graph.get_frontier()
   let parents = frontier.0
   let mut graph_timestamp = self.lamport_clock + 1
@@ -223,7 +223,7 @@ fn TreeDoc::next_timestamp(self : TreeDoc) -> Int {
 
 ///|
 /// Insert a replicated op into the export history if it has not been seen yet.
-fn TreeDoc::record_op(self : TreeDoc, op : @mt.TreeOp) -> Bool {
+fn TreeState::record_op(self : TreeState, op : @mt.TreeOp) -> Bool {
   let key = op_key(op)
   match self.seen_ops.get(key) {
     Some(true) => false
@@ -244,7 +244,7 @@ fn TreeDoc::record_op(self : TreeDoc, op : @mt.TreeOp) -> Bool {
 
 ///|
 /// Re-apply the latest known property mutations to every currently-existing node.
-fn TreeDoc::reapply_properties(self : TreeDoc) -> Unit {
+fn TreeState::reapply_properties(self : TreeState) -> Unit {
   self.property_state.each(fn(_, op) {
     if self.tree.contains(op.target) {
       self.tree.set_property(op.target, op.key, op.value)
@@ -254,7 +254,10 @@ fn TreeDoc::reapply_properties(self : TreeDoc) -> Unit {
 
 ///|
 /// Apply a property op with last-writer-wins semantics by (timestamp, agent, payload).
-fn TreeDoc::apply_property_op(self : TreeDoc, op : @mt.TreePropertyOp) -> Unit {
+fn TreeState::apply_property_op(
+  self : TreeState,
+  op : @mt.TreePropertyOp,
+) -> Unit {
   let prop_key : PropertyKey = { id: op.target, key: op.key }
   let should_apply = match self.property_state.get(prop_key) {
     Some(current) => compare_property_ops(current, op) < 0
@@ -271,14 +274,14 @@ fn TreeDoc::apply_property_op(self : TreeDoc, op : @mt.TreePropertyOp) -> Unit {
 ///|
 /// Apply a structural move op and then restore replicated properties that may
 /// have been dropped by undo/redo.
-fn TreeDoc::apply_move_op(self : TreeDoc, op : @mt.TreeMoveOp) -> Unit {
+fn TreeState::apply_move_op(self : TreeState, op : @mt.TreeMoveOp) -> Unit {
   self.log.apply(self.tree, op)
   self.reapply_properties()
 }
 
 ///|
 /// Register a remote operation in the local Lamport clock and causal graph.
-fn TreeDoc::observe_remote_op(self : TreeDoc, op : @mt.TreeOp) -> Unit {
+fn TreeState::observe_remote_op(self : TreeState, op : @mt.TreeOp) -> Unit {
   let (timestamp, agent) = match op {
     @mt.Move(move_op) => (move_op.timestamp, move_op.agent)
     @mt.SetProperty(prop_op) => (prop_op.timestamp, prop_op.agent)
@@ -297,8 +300,8 @@ fn TreeDoc::observe_remote_op(self : TreeDoc, op : @mt.TreeOp) -> Unit {
 /// Only root (always live) and live tree nodes are accepted.
 /// Deleted nodes (in the trash subtree) and trash_id itself are rejected —
 /// callers must use `delete_node` to move nodes to trash.
-fn TreeDoc::is_local_parent_valid(
-  self : TreeDoc,
+fn TreeState::is_local_parent_valid(
+  self : TreeState,
   parent : @mt.TreeNodeId,
 ) -> Bool {
   parent == @mt.root_id || self.tree.is_alive(parent)
@@ -306,8 +309,8 @@ fn TreeDoc::is_local_parent_valid(
 
 ///|
 /// Compute a fractional index that sorts after the last child of the given parent.
-fn TreeDoc::position_after_last_child(
-  self : TreeDoc,
+fn TreeState::position_after_last_child(
+  self : TreeState,
   parent : @mt.TreeNodeId,
 ) -> @fi.FractionalIndex {
   let children = self.tree.children(parent)
@@ -327,11 +330,11 @@ fn TreeDoc::position_after_last_child(
 /// among `parent`'s children (e.g. deleted or moved to another parent).
 /// Handles equal fractional positions (from concurrent inserts) by treating
 /// the sibling pair as if `after` is the last child.
-fn TreeDoc::position_after_sibling(
-  self : TreeDoc,
+fn TreeState::position_after_sibling(
+  self : TreeState,
   parent : @mt.TreeNodeId,
   after : @mt.TreeNodeId,
-) -> @fi.FractionalIndex raise TreeDocError {
+) -> @fi.FractionalIndex raise TreeError {
   let children = self.tree.children(parent)
   let mut after_idx = -1
   for i = 0; i < children.length(); i = i + 1 {
@@ -372,10 +375,10 @@ fn TreeDoc::position_after_sibling(
 /// Create a new node as the last child of the given parent.
 ///
 /// Returns the id of the newly created node.
-pub fn TreeDoc::create_node(
-  self : TreeDoc,
+pub fn TreeState::create_node(
+  self : TreeState,
   parent~ : @mt.TreeNodeId,
-) -> @mt.TreeNodeId raise TreeDocError {
+) -> @mt.TreeNodeId raise TreeError {
   if not(self.is_local_parent_valid(parent)) {
     raise ParentNotFound
   }
@@ -399,11 +402,11 @@ pub fn TreeDoc::create_node(
 ///
 /// The new node is inserted between `after` and the next sibling (if any).
 /// Returns the id of the newly created node.
-pub fn TreeDoc::create_node_after(
-  self : TreeDoc,
+pub fn TreeState::create_node_after(
+  self : TreeState,
   parent~ : @mt.TreeNodeId,
   after~ : @mt.TreeNodeId,
-) -> @mt.TreeNodeId raise TreeDocError {
+) -> @mt.TreeNodeId raise TreeError {
   if not(self.is_local_parent_valid(parent)) {
     raise ParentNotFound
   }
@@ -424,11 +427,11 @@ pub fn TreeDoc::create_node_after(
 
 ///|
 /// Move a node to be the last child of a new parent.
-pub fn TreeDoc::move_node(
-  self : TreeDoc,
+pub fn TreeState::move_node(
+  self : TreeState,
   target~ : @mt.TreeNodeId,
   new_parent~ : @mt.TreeNodeId,
-) -> Unit raise TreeDocError {
+) -> Unit raise TreeError {
   if not(self.tree.contains(target)) {
     raise TargetNotFound
   }
@@ -453,10 +456,10 @@ pub fn TreeDoc::move_node(
 
 ///|
 /// Delete a node by moving it to the trash.
-pub fn TreeDoc::delete_node(
-  self : TreeDoc,
+pub fn TreeState::delete_node(
+  self : TreeState,
   target : @mt.TreeNodeId,
-) -> Unit raise TreeDocError {
+) -> Unit raise TreeError {
   if not(self.tree.contains(target)) {
     raise TargetNotFound
   }
@@ -475,8 +478,8 @@ pub fn TreeDoc::delete_node(
 
 ///|
 /// Get the children of a node, sorted by fractional index.
-pub fn TreeDoc::children(
-  self : TreeDoc,
+pub fn TreeState::children(
+  self : TreeState,
   parent : @mt.TreeNodeId,
 ) -> Array[@mt.TreeNodeId] {
   self.tree.children(parent)
@@ -484,14 +487,14 @@ pub fn TreeDoc::children(
 
 ///|
 /// Check whether a node is alive (exists and not in the trash).
-pub fn TreeDoc::is_alive(self : TreeDoc, id : @mt.TreeNodeId) -> Bool {
+pub fn TreeState::is_alive(self : TreeState, id : @mt.TreeNodeId) -> Bool {
   self.tree.is_alive(id)
 }
 
 ///|
 /// Set a property on a node.
-pub fn TreeDoc::set_property(
-  self : TreeDoc,
+pub fn TreeState::set_property(
+  self : TreeState,
   id : @mt.TreeNodeId,
   key : String,
   value : String,
@@ -513,8 +516,8 @@ pub fn TreeDoc::set_property(
 
 ///|
 /// Get a property from a node.
-pub fn TreeDoc::get_property(
-  self : TreeDoc,
+pub fn TreeState::get_property(
+  self : TreeState,
   id : @mt.TreeNodeId,
   key : String,
 ) -> String? {
@@ -523,7 +526,7 @@ pub fn TreeDoc::get_property(
 
 ///|
 /// Export all operations in timestamp order, suitable for sending to a remote peer.
-pub fn TreeDoc::export_ops(self : TreeDoc) -> Array[@mt.TreeOp] {
+pub fn TreeState::export_ops(self : TreeState) -> Array[@mt.TreeOp] {
   self.ops.copy()
 }
 
@@ -532,7 +535,7 @@ pub fn TreeDoc::export_ops(self : TreeDoc) -> Array[@mt.TreeOp] {
 ///
 /// The operation is recorded in the causal graph for local version tracking,
 /// then dispatched to the structural move log or the property replication layer.
-pub fn TreeDoc::apply_remote_op(self : TreeDoc, op : @mt.TreeOp) -> Unit {
+pub fn TreeState::apply_remote_op(self : TreeState, op : @mt.TreeOp) -> Unit {
   if not(self.record_op(op)) {
     return
   }

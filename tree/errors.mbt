@@ -1,7 +1,7 @@
-///| TreeDoc error types
+///| TreeState error types
 
 ///|
-pub(all) suberror TreeDocError {
+pub(all) suberror TreeError {
   /// replica_id must be non-empty
   EmptyReplicaId
   /// Target node does not exist locally

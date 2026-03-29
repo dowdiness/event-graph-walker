@@ -1,5 +1,5 @@
 ///|
-/// Integration tests for TreeDoc
+/// Integration tests for TreeState
 fn op_timestamp(op : @mt.TreeOp) -> Int {
   match op {
     @mt.Move(move_op) => move_op.timestamp
@@ -9,8 +9,8 @@ fn op_timestamp(op : @mt.TreeOp) -> Int {
 
 ///|
 /// Test 1: Create nodes and query tree structure
-test "TreeDoc: create nodes and query structure" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: create nodes and query structure" {
+  let doc = @tree.TreeState::new("alice")
   // Create two nodes under root
   let a = doc.create_node(parent=@tree.root_id)
   let b = doc.create_node(parent=@tree.root_id)
@@ -27,8 +27,8 @@ test "TreeDoc: create nodes and query structure" {
 
 ///|
 /// Test 2: Create nested nodes and query children
-test "TreeDoc: nested children" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: nested children" {
+  let doc = @tree.TreeState::new("alice")
   let parent = doc.create_node(parent=@tree.root_id)
   let child1 = doc.create_node(parent~)
   let child2 = doc.create_node(parent~)
@@ -42,8 +42,8 @@ test "TreeDoc: nested children" {
 
 ///|
 /// Test 3: Properties — set and get
-test "TreeDoc: properties" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: properties" {
+  let doc = @tree.TreeState::new("alice")
   let node = doc.create_node(parent=@tree.root_id)
   inspect(doc.get_property(node, "color"), content="None")
   doc.set_property(node, "color", "red")
@@ -54,8 +54,8 @@ test "TreeDoc: properties" {
 
 ///|
 /// Test 4: Move a node to a different parent
-test "TreeDoc: move node" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: move node" {
+  let doc = @tree.TreeState::new("alice")
   let a = doc.create_node(parent=@tree.root_id)
   let b = doc.create_node(parent=@tree.root_id)
   // Move b under a
@@ -67,8 +67,8 @@ test "TreeDoc: move node" {
 
 ///|
 /// Test 5: Delete a node (move to trash)
-test "TreeDoc: delete node" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: delete node" {
+  let doc = @tree.TreeState::new("alice")
   let node = doc.create_node(parent=@tree.root_id)
   inspect(doc.is_alive(node), content="true")
   doc.delete_node(node)
@@ -78,9 +78,9 @@ test "TreeDoc: delete node" {
 
 ///|
 /// Test 6: Two peers converge after exchanging ops
-test "TreeDoc: two peers converge" {
-  let doc_a = @tree.TreeDoc::new("alice")
-  let doc_b = @tree.TreeDoc::new("bob")
+test "TreeState: two peers converge" {
+  let doc_a = @tree.TreeState::new("alice")
+  let doc_b = @tree.TreeState::new("bob")
   // Alice creates a node
   let a1 = doc_a.create_node(parent=@tree.root_id)
   doc_a.set_property(a1, "label", "A1")
@@ -113,9 +113,9 @@ test "TreeDoc: two peers converge" {
 
 ///|
 /// Test 7: Children order is consistent across peers after sync
-test "TreeDoc: consistent children order across peers" {
-  let doc_a = @tree.TreeDoc::new("alice")
-  let doc_b = @tree.TreeDoc::new("bob")
+test "TreeState: consistent children order across peers" {
+  let doc_a = @tree.TreeState::new("alice")
+  let doc_b = @tree.TreeState::new("bob")
   // Alice creates three nodes
   let a1 = doc_a.create_node(parent=@tree.root_id)
   let a2 = doc_a.create_node(parent=@tree.root_id)
@@ -142,9 +142,9 @@ test "TreeDoc: consistent children order across peers" {
 
 ///|
 /// Test 8: Concurrent equal positions converge to the same sibling order
-test "TreeDoc: concurrent equal positions converge" {
-  let doc_a = @tree.TreeDoc::new("alice")
-  let doc_b = @tree.TreeDoc::new("bob")
+test "TreeState: concurrent equal positions converge" {
+  let doc_a = @tree.TreeState::new("alice")
+  let doc_b = @tree.TreeState::new("bob")
   let a1 = doc_a.create_node(parent=@tree.root_id)
   let b1 = doc_b.create_node(parent=@tree.root_id)
   let alice_ops = doc_a.export_ops()
@@ -167,9 +167,9 @@ test "TreeDoc: concurrent equal positions converge" {
 
 ///|
 /// Test 9: Property ops survive out-of-order delivery
-test "TreeDoc: property ops replay after out-of-order create" {
-  let doc_a = @tree.TreeDoc::new("alice")
-  let doc_b = @tree.TreeDoc::new("bob")
+test "TreeState: property ops replay after out-of-order create" {
+  let doc_a = @tree.TreeState::new("alice")
+  let doc_b = @tree.TreeState::new("bob")
   let node = doc_a.create_node(parent=@tree.root_id)
   doc_a.set_property(node, "label", "ready")
   let ops = doc_a.export_ops()
@@ -181,9 +181,9 @@ test "TreeDoc: property ops replay after out-of-order create" {
 
 ///|
 /// Test 10: Remote timestamps seed subsequent local timestamps
-test "TreeDoc: local timestamps advance past remote history" {
-  let doc_b = @tree.TreeDoc::new("bob")
-  let doc_c = @tree.TreeDoc::new("carol")
+test "TreeState: local timestamps advance past remote history" {
+  let doc_b = @tree.TreeState::new("bob")
+  let doc_c = @tree.TreeState::new("carol")
   let remote_id : @mt.TreeNodeId = { agent: "alice", counter: 0 }
   let remote_create : @mt.TreeOp = @mt.Move({
     timestamp: 10,
@@ -205,9 +205,9 @@ test "TreeDoc: local timestamps advance past remote history" {
 
 ///|
 /// Test 11: Move and delete across peers
-test "TreeDoc: move and delete across peers" {
-  let doc_a = @tree.TreeDoc::new("alice")
-  let doc_b = @tree.TreeDoc::new("bob")
+test "TreeState: move and delete across peers" {
+  let doc_a = @tree.TreeState::new("alice")
+  let doc_b = @tree.TreeState::new("bob")
   // Alice creates a parent and child
   let parent = doc_a.create_node(parent=@tree.root_id)
   let child = doc_a.create_node(parent~)
@@ -236,8 +236,8 @@ test "TreeDoc: move and delete across peers" {
 
 ///|
 /// Test 12: Export ops returns operations in timestamp order
-test "TreeDoc: export ops in order" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: export ops in order" {
+  let doc = @tree.TreeState::new("alice")
   let node = doc.create_node(parent=@tree.root_id)
   doc.set_property(node, "color", "red")
   let _ = doc.create_node(parent=@tree.root_id)
@@ -255,31 +255,31 @@ test "TreeDoc: export ops in order" {
 
 ///|
 /// Test 13: create_node rejects missing local parent ids
-test "panic TreeDoc: create node with missing parent" {
-  let doc = @tree.TreeDoc::new("alice")
+test "panic TreeState: create node with missing parent" {
+  let doc = @tree.TreeState::new("alice")
   ignore(doc.create_node(parent={ agent: "missing", counter: 99 }))
 }
 
 ///|
 /// Test 14: move_node rejects unknown targets
-test "panic TreeDoc: move missing target" {
-  let doc = @tree.TreeDoc::new("alice")
+test "panic TreeState: move missing target" {
+  let doc = @tree.TreeState::new("alice")
   let parent = doc.create_node(parent=@tree.root_id)
   doc.move_node(target={ agent: "missing", counter: 99 }, new_parent=parent)
 }
 
 ///|
 /// Test 15: move_node rejects missing local parent ids
-test "panic TreeDoc: move to missing parent" {
-  let doc = @tree.TreeDoc::new("alice")
+test "panic TreeState: move to missing parent" {
+  let doc = @tree.TreeState::new("alice")
   let node = doc.create_node(parent=@tree.root_id)
   doc.move_node(target=node, new_parent={ agent: "missing", counter: 99 })
 }
 
 ///|
 /// Test 16: move_node rejects cycle-forming local moves
-test "panic TreeDoc: move would create a cycle" {
-  let doc = @tree.TreeDoc::new("alice")
+test "panic TreeState: move would create a cycle" {
+  let doc = @tree.TreeState::new("alice")
   let parent = doc.create_node(parent=@tree.root_id)
   let child = doc.create_node(parent~)
   doc.move_node(target=parent, new_parent=child)
@@ -287,14 +287,14 @@ test "panic TreeDoc: move would create a cycle" {
 
 ///|
 /// Test 17: Empty replica_id is rejected
-test "panic TreeDoc: empty replica_id" {
-  ignore(@tree.TreeDoc::new(""))
+test "panic TreeState: empty replica_id" {
+  ignore(@tree.TreeState::new(""))
 }
 
 ///|
 /// Test 18: create_node rejects a deleted node as parent
-test "panic TreeDoc: create node under deleted parent" {
-  let doc = @tree.TreeDoc::new("alice")
+test "panic TreeState: create node under deleted parent" {
+  let doc = @tree.TreeState::new("alice")
   let node = doc.create_node(parent=@tree.root_id)
   doc.delete_node(node)
   // node is now in trash — creating a child under it should abort
@@ -303,8 +303,8 @@ test "panic TreeDoc: create node under deleted parent" {
 
 ///|
 /// Test 19: move_node rejects a deleted node as new parent
-test "panic TreeDoc: move node to deleted parent" {
-  let doc = @tree.TreeDoc::new("alice")
+test "panic TreeState: move node to deleted parent" {
+  let doc = @tree.TreeState::new("alice")
   let a = doc.create_node(parent=@tree.root_id)
   let b = doc.create_node(parent=@tree.root_id)
   doc.delete_node(a)
@@ -314,8 +314,8 @@ test "panic TreeDoc: move node to deleted parent" {
 
 ///|
 /// Test 20: Node ids are unique per agent
-test "TreeDoc: unique node ids" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: unique node ids" {
+  let doc = @tree.TreeState::new("alice")
   let a = doc.create_node(parent=@tree.root_id)
   let b = doc.create_node(parent=@tree.root_id)
   let c = doc.create_node(parent=@tree.root_id)
@@ -326,8 +326,8 @@ test "TreeDoc: unique node ids" {
 
 ///|
 /// Test 21: create_node_after inserts between siblings
-test "TreeDoc: create_node_after inserts between siblings" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: create_node_after inserts between siblings" {
+  let doc = @tree.TreeState::new("alice")
   let a = doc.create_node(parent=@tree.root_id)
   let b = doc.create_node(parent=@tree.root_id)
   let c = doc.create_node_after(parent=@tree.root_id, after=a)
@@ -340,8 +340,8 @@ test "TreeDoc: create_node_after inserts between siblings" {
 
 ///|
 /// Test 22: create_node_after appends when after_id is last child
-test "TreeDoc: create_node_after appends after last" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: create_node_after appends after last" {
+  let doc = @tree.TreeState::new("alice")
   let a = doc.create_node(parent=@tree.root_id)
   let b = doc.create_node(parent=@tree.root_id)
   let c = doc.create_node_after(parent=@tree.root_id, after=b)
@@ -354,8 +354,8 @@ test "TreeDoc: create_node_after appends after last" {
 
 ///|
 /// Test 23: create_node_after with nested parent
-test "TreeDoc: create_node_after nested" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: create_node_after nested" {
+  let doc = @tree.TreeState::new("alice")
   let parent = doc.create_node(parent=@tree.root_id)
   let x = doc.create_node(parent~)
   let y = doc.create_node(parent~)
@@ -369,8 +369,8 @@ test "TreeDoc: create_node_after nested" {
 
 ///|
 /// Test 24: create_node_after falls back to append when after is not a child
-test "TreeDoc: create_node_after fallback on missing after" {
-  let doc = @tree.TreeDoc::new("alice")
+test "TreeState: create_node_after fallback on missing after" {
+  let doc = @tree.TreeState::new("alice")
   let a = doc.create_node(parent=@tree.root_id)
   let orphan : @mt.TreeNodeId = { agent: "ghost", counter: 99 }
   let b = doc.create_node_after(parent=@tree.root_id, after=orphan)
@@ -382,9 +382,9 @@ test "TreeDoc: create_node_after fallback on missing after" {
 
 ///|
 /// Test 25: create_node_after survives concurrent equal-position siblings
-test "TreeDoc: create_node_after with equal positions from concurrent inserts" {
-  let doc_a = @tree.TreeDoc::new("alice")
-  let doc_b = @tree.TreeDoc::new("bob")
+test "TreeState: create_node_after with equal positions from concurrent inserts" {
+  let doc_a = @tree.TreeState::new("alice")
+  let doc_b = @tree.TreeState::new("bob")
   // Both peers create a node under root concurrently (same fractional position)
   let a1 = doc_a.create_node(parent=@tree.root_id)
   let b1 = doc_b.create_node(parent=@tree.root_id)
