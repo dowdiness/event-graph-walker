@@ -62,26 +62,26 @@ pub fn SyncSession::current_version(Self) -> Version
 pub fn SyncSession::export_all(Self) -> SyncMessage raise TextError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TextError
 
-pub(all) struct TextDoc {
+pub(all) struct TextState {
   // private fields
 }
-pub fn TextDoc::checkout(Self, Version) -> TextView raise TextError
-pub fn TextDoc::delete(Self, Pos) -> Unit raise TextError
-pub fn TextDoc::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
-pub fn TextDoc::delete_range(Self, Range) -> Unit raise TextError
-pub fn TextDoc::delete_range_and_record(Self, Range, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
-pub fn TextDoc::insert(Self, Pos, String) -> Unit raise TextError
-pub fn TextDoc::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
-pub fn TextDoc::is_empty(Self) -> Bool
-pub fn TextDoc::len(Self) -> Int
-pub fn TextDoc::new(String) -> Self
-pub fn TextDoc::replace_range(Self, Range, String) -> Unit raise TextError
-pub fn TextDoc::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
-pub fn TextDoc::sync(Self) -> SyncSession
-pub fn TextDoc::text(Self) -> String
-pub fn TextDoc::version(Self) -> Version
-pub impl @undo.Undoable for TextDoc
-pub impl Show for TextDoc
+pub fn TextState::checkout(Self, Version) -> TextView raise TextError
+pub fn TextState::delete(Self, Pos) -> Unit raise TextError
+pub fn TextState::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
+pub fn TextState::delete_range(Self, Range) -> Unit raise TextError
+pub fn TextState::delete_range_and_record(Self, Range, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
+pub fn TextState::insert(Self, Pos, String) -> Unit raise TextError
+pub fn TextState::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
+pub fn TextState::is_empty(Self) -> Bool
+pub fn TextState::len(Self) -> Int
+pub fn TextState::new(String) -> Self
+pub fn TextState::replace_range(Self, Range, String) -> Unit raise TextError
+pub fn TextState::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
+pub fn TextState::sync(Self) -> SyncSession
+pub fn TextState::text(Self) -> String
+pub fn TextState::version(Self) -> Version
+pub impl @undo.Undoable for TextState
+pub impl Show for TextState
 
 pub(all) struct TextView {
   // private fields

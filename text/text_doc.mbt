@@ -1,40 +1,40 @@
-///| TextDoc - Main entry point for user-friendly text CRDT API
+///| TextState - Main entry point for user-friendly text CRDT API
 
 ///|
 /// A collaborative text document with automatic conflict resolution
-pub(all) struct TextDoc {
+pub(all) struct TextState {
   priv inner : @document.Document
 }
 
 ///|
 /// Create a new empty document with the given agent ID
-pub fn TextDoc::new(agent_id : String) -> TextDoc {
-  TextDoc::{ inner: @document.Document::new(agent_id) }
+pub fn TextState::new(agent_id : String) -> TextState {
+  TextState::{ inner: @document.Document::new(agent_id) }
 }
 
 ///|
 /// Get the current text content
-pub fn TextDoc::text(self : TextDoc) -> String {
+pub fn TextState::text(self : TextState) -> String {
   self.inner.to_text()
 }
 
 ///|
 /// Get the current text length (number of visible characters).
 /// This is O(1) as it uses cached count, not string reconstruction.
-pub fn TextDoc::len(self : TextDoc) -> Int {
+pub fn TextState::len(self : TextState) -> Int {
   self.inner.visible_count()
 }
 
 ///|
 /// Check if document is empty
-pub fn TextDoc::is_empty(self : TextDoc) -> Bool {
+pub fn TextState::is_empty(self : TextState) -> Bool {
   self.len() == 0
 }
 
 ///|
 /// Insert text at the given position
-pub fn TextDoc::insert(
-  self : TextDoc,
+pub fn TextState::insert(
+  self : TextState,
   pos : Pos,
   text : String,
 ) -> Unit raise TextError {
@@ -52,7 +52,7 @@ pub fn TextDoc::insert(
 
 ///|
 /// Delete a single character at the given position
-pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Unit raise TextError {
+pub fn TextState::delete(self : TextState, pos : Pos) -> Unit raise TextError {
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val >= doc_len {
@@ -67,8 +67,8 @@ pub fn TextDoc::delete(self : TextDoc, pos : Pos) -> Unit raise TextError {
 
 ///|
 /// Delete the half-open range `[start, end)`.
-pub fn TextDoc::delete_range(
-  self : TextDoc,
+pub fn TextState::delete_range(
+  self : TextState,
   range : Range,
 ) -> Unit raise TextError {
   let doc_len = self.len()
@@ -80,8 +80,8 @@ pub fn TextDoc::delete_range(
 
 ///|
 /// Replace the half-open range `[start, end)` with `text`.
-pub fn TextDoc::replace_range(
-  self : TextDoc,
+pub fn TextState::replace_range(
+  self : TextState,
   range : Range,
   text : String,
 ) -> Unit raise TextError {
@@ -94,20 +94,20 @@ pub fn TextDoc::replace_range(
 
 ///|
 /// Get the current version of the document
-pub fn TextDoc::version(self : TextDoc) -> Version {
+pub fn TextState::version(self : TextState) -> Version {
   Version::from_frontier(self.inner.get_frontier())
 }
 
 ///|
 /// Get a sync session for this document
-pub fn TextDoc::sync(self : TextDoc) -> SyncSession {
+pub fn TextState::sync(self : TextState) -> SyncSession {
   SyncSession::{ doc: self }
 }
 
 ///|
 /// Checkout a historical view at a specific version
-pub fn TextDoc::checkout(
-  self : TextDoc,
+pub fn TextState::checkout(
+  self : TextState,
   version : Version,
 ) -> TextView raise TextError {
   try {
@@ -119,8 +119,8 @@ pub fn TextDoc::checkout(
 }
 
 ///|
-pub impl Show for TextDoc with output(self, logger) {
-  logger.write_string("TextDoc { text: \"")
+pub impl Show for TextState with output(self, logger) {
+  logger.write_string("TextState { text: \"")
   logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")
   self.version().to_frontier().output(logger)

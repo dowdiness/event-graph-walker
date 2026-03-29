@@ -1,4 +1,4 @@
-///| Sync operations for TextDoc.
+///| Sync operations for TextState.
 
 ///|
 
@@ -106,12 +106,12 @@ pub fn SyncMessage::from_json_string(
   }
 }
 
-///| A sync session providing methods to synchronize a TextDoc with peers.
+///| A sync session providing methods to synchronize a TextState with peers.
 
 ///|
-/// Obtain via `TextDoc::sync()`.
+/// Obtain via `TextState::sync()`.
 pub(all) struct SyncSession {
-  priv doc : TextDoc
+  priv doc : TextState
 }
 
 ///|

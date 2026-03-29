@@ -2,7 +2,7 @@
 
 ///|
 /// Implement this trait on a document type to make it compatible with UndoManager.
-/// TextDoc in the text package provides the canonical implementation.
+/// TextState in the text package provides the canonical implementation.
 pub(open) trait Undoable {
   lv_to_position(Self, Int) -> Int?
   delete_lv(Self, Int) -> Unit raise UndoError

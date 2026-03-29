@@ -1,4 +1,4 @@
-// Benchmarks for the user-facing TextDoc API
+// Benchmarks for the user-facing TextState API
 // Run with: moon bench --package text --release
 
 // =============================================================================
@@ -9,7 +9,7 @@
 /// Benchmark: Sequential append — simulates end-of-document typing (100 chars)
 test "text - insert append (100 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     for i = 0; i < 100; i = i + 1 {
       ignore(try! doc.insert(Pos::at(i), "x"))
     }
@@ -21,7 +21,7 @@ test "text - insert append (100 chars)" (b : @bench.T) {
 /// Benchmark: Sequential append — simulates end-of-document typing (1000 chars)
 test "text - insert append (1000 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     for i = 0; i < 1000; i = i + 1 {
       ignore(try! doc.insert(Pos::at(i), "x"))
     }
@@ -34,7 +34,7 @@ test "text - insert append (1000 chars)" (b : @bench.T) {
 /// Every insert triggers FugueMax conflict resolution against the head.
 test "text - insert prepend (100 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     for i = 0; i < 100; i = i + 1 {
       ignore(try! doc.insert(Pos::at(0), "x"))
     }
@@ -50,7 +50,7 @@ test "text - insert prepend (100 chars)" (b : @bench.T) {
 /// Benchmark: Delete every character from a 100-char document
 test "text - delete (100 deletes from 100-char doc)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     for i = 0; i < 100; i = i + 1 {
       ignore(try! doc.insert(Pos::at(i), "x"))
     }
@@ -68,7 +68,7 @@ test "text - delete (100 deletes from 100-char doc)" (b : @bench.T) {
 ///|
 /// Benchmark: Reconstruct text string from a 100-char document
 test "text - text() (100-char doc)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 100; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -81,7 +81,7 @@ test "text - text() (100-char doc)" (b : @bench.T) {
 ///|
 /// Benchmark: Reconstruct text string from a 1000-char document
 test "text - text() (1000-char doc)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 1000; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -94,7 +94,7 @@ test "text - text() (1000-char doc)" (b : @bench.T) {
 ///|
 /// Benchmark: len() — should be O(1) via tree's visible_count
 test "text - len() (1000-char doc)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 1000; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -111,7 +111,7 @@ test "text - len() (1000-char doc)" (b : @bench.T) {
 ///|
 /// Benchmark: SyncSession::export_all (100 ops)
 test "text - sync export_all (100 ops)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 100; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -124,7 +124,7 @@ test "text - sync export_all (100 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: SyncSession::export_all (1000 ops)
 test "text - sync export_all (1000 ops)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 1000; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -137,7 +137,7 @@ test "text - sync export_all (1000 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: SyncSession::export_since — 50-op delta over a 1000-op document
 test "text - sync export_since (50-op delta, 1000-op base)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 950; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -154,13 +154,13 @@ test "text - sync export_since (50-op delta, 1000-op base)" (b : @bench.T) {
 ///|
 /// Benchmark: SyncSession::apply — receive and apply 50 remote ops
 test "text - sync apply (50 remote ops)" (b : @bench.T) {
-  let bob = TextDoc::new("bob")
+  let bob = TextState::new("bob")
   for i = 0; i < 50; i = i + 1 {
     ignore(try! bob.insert(Pos::at(i), "b"))
   }
   let msg = try! bob.sync().export_all()
   b.bench(fn() {
-    let alice = TextDoc::new("alice")
+    let alice = TextState::new("alice")
     try! alice.sync().apply(msg)
     b.keep(alice)
   })
@@ -169,13 +169,13 @@ test "text - sync apply (50 remote ops)" (b : @bench.T) {
 ///|
 /// Benchmark: SyncSession::apply — receive and apply 500 remote ops
 test "text - sync apply (500 remote ops)" (b : @bench.T) {
-  let bob = TextDoc::new("bob")
+  let bob = TextState::new("bob")
   for i = 0; i < 500; i = i + 1 {
     ignore(try! bob.insert(Pos::at(i), "b"))
   }
   let msg = try! bob.sync().export_all()
   b.bench(fn() {
-    let alice = TextDoc::new("alice")
+    let alice = TextState::new("alice")
     try! alice.sync().apply(msg)
     b.keep(alice)
   })
@@ -185,22 +185,22 @@ test "text - sync apply (500 remote ops)" (b : @bench.T) {
 /// Benchmark: Bidirectional sync — two peers exchanging 50 concurrent ops each
 test "text - bidirectional sync (2 peers, 50 ops each)" (b : @bench.T) {
   let alice_msg = {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     for i = 0; i < 50; i = i + 1 {
       ignore(try! doc.insert(Pos::at(i), "a"))
     }
     try! doc.sync().export_all()
   }
   let bob_msg = {
-    let doc = TextDoc::new("bob")
+    let doc = TextState::new("bob")
     for i = 0; i < 50; i = i + 1 {
       ignore(try! doc.insert(Pos::at(i), "b"))
     }
     try! doc.sync().export_all()
   }
   b.bench(fn() {
-    let alice = TextDoc::new("alice")
-    let bob = TextDoc::new("bob")
+    let alice = TextState::new("alice")
+    let bob = TextState::new("bob")
     try! alice.sync().apply(bob_msg)
     try! bob.sync().apply(alice_msg)
     b.keep((alice, bob))
@@ -212,9 +212,9 @@ test "text - bidirectional sync (2 peers, 50 ops each)" (b : @bench.T) {
 // =============================================================================
 
 ///|
-/// Benchmark: TextDoc::checkout — reconstruct document at midpoint of 100-op history
+/// Benchmark: TextState::checkout — reconstruct document at midpoint of 100-op history
 test "text - checkout (midpoint of 100-op doc)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 50; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -229,9 +229,9 @@ test "text - checkout (midpoint of 100-op doc)" (b : @bench.T) {
 }
 
 ///|
-/// Benchmark: TextDoc::checkout — reconstruct document at midpoint of 1000-op history
+/// Benchmark: TextState::checkout — reconstruct document at midpoint of 1000-op history
 test "text - checkout (midpoint of 1000-op doc)" (b : @bench.T) {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   for i = 0; i < 500; i = i + 1 {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
@@ -280,7 +280,7 @@ test "text - undo record_insert (100 ops, 100 groups)" (b : @bench.T) {
 /// Benchmark: Undo a single group containing 10 insert ops
 test "text - undo undo() (10-op group)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=10000)
     for i = 0; i < 10; i = i + 1 {
       try! doc.insert_and_record(Pos::at(i), "x", mgr, timestamp_ms=i * 10)
@@ -294,7 +294,7 @@ test "text - undo undo() (10-op group)" (b : @bench.T) {
 /// Benchmark: Undo a single group containing 50 insert ops
 test "text - undo undo() (50-op group)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=10000)
     for i = 0; i < 50; i = i + 1 {
       try! doc.insert_and_record(Pos::at(i), "x", mgr, timestamp_ms=i * 10)
@@ -308,7 +308,7 @@ test "text - undo undo() (50-op group)" (b : @bench.T) {
 /// Benchmark: Undo + redo roundtrip for a 10-op group
 test "text - undo undo+redo roundtrip (10-op group)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=10000)
     for i = 0; i < 10; i = i + 1 {
       try! doc.insert_and_record(Pos::at(i), "x", mgr, timestamp_ms=i * 10)
@@ -323,7 +323,7 @@ test "text - undo undo+redo roundtrip (10-op group)" (b : @bench.T) {
 /// Benchmark: 10 consecutive undo+redo cycles on a 10-op group
 test "text - undo 10 undo+redo cycles (10-op group)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextDoc::new("alice")
+    let doc = TextState::new("alice")
     let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=10000)
     for i = 0; i < 10; i = i + 1 {
       try! doc.insert_and_record(Pos::at(i), "x", mgr, timestamp_ms=i * 10)

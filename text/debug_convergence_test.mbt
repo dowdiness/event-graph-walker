@@ -3,8 +3,8 @@
 
 ///|
 test "debug: minimal undo+sync divergence (fixed)" {
-  let doc0 = @text.TextDoc::new("agent_0")
-  let doc1 = @text.TextDoc::new("agent_1")
+  let doc0 = @text.TextState::new("agent_0")
+  let doc1 = @text.TextState::new("agent_1")
   let mgr0 = @undo.UndoManager::new("agent_0")
   let mgr1 = @undo.UndoManager::new("agent_1")
 
@@ -62,8 +62,8 @@ test "debug: minimal undo+sync divergence (fixed)" {
 test "debug: delete/undelete conflict - simplest case (fixed)" {
   // Both agents share item "x". Both delete it. One undoes (undeletes).
   // After sync, should they agree?
-  let doc_a = @text.TextDoc::new("alice")
-  let doc_b = @text.TextDoc::new("bob")
+  let doc_a = @text.TextState::new("alice")
+  let doc_b = @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // Alice inserts "x"

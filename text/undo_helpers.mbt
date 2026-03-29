@@ -1,9 +1,9 @@
-///| Integration helpers for TextDoc + UndoManager
+///| Integration helpers for TextState + UndoManager
 
 ///|
 /// Insert text and record each character's LV for undo tracking.
-pub fn TextDoc::insert_and_record(
-  self : TextDoc,
+pub fn TextState::insert_and_record(
+  self : TextState,
   pos : Pos,
   text : String,
   mgr : @undo.UndoManager,
@@ -25,8 +25,8 @@ pub fn TextDoc::insert_and_record(
 
 ///|
 /// Delete a character and record its target LV for undo tracking.
-pub fn TextDoc::delete_and_record(
-  self : TextDoc,
+pub fn TextState::delete_and_record(
+  self : TextState,
   pos : Pos,
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
@@ -57,8 +57,8 @@ pub fn TextDoc::delete_and_record(
 
 ///|
 /// Delete a range and record the deleted LVs into the current undo group.
-pub fn TextDoc::delete_range_and_record(
-  self : TextDoc,
+pub fn TextState::delete_range_and_record(
+  self : TextState,
   range : Range,
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
@@ -86,8 +86,8 @@ pub fn TextDoc::delete_range_and_record(
 
 ///|
 /// Replace a range and record the delete+insert operations into one undo group.
-pub fn TextDoc::replace_range_and_record(
-  self : TextDoc,
+pub fn TextState::replace_range_and_record(
+  self : TextState,
   range : Range,
   text : String,
   mgr : @undo.UndoManager,

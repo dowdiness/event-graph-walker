@@ -1,23 +1,23 @@
 ///|
 /// Tests for user-friendly text API
-test "TextDoc::new creates empty document" {
-  let doc = TextDoc::new("alice")
+test "TextState::new creates empty document" {
+  let doc = TextState::new("alice")
   inspect(doc.text(), content="")
   inspect(doc.len(), content="0")
   inspect(doc.is_empty(), content="true")
 }
 
 ///|
-test "TextDoc::insert adds text" {
-  let doc = TextDoc::new("alice")
+test "TextState::insert adds text" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   inspect(doc.text(), content="Hello")
   inspect(doc.len(), content="5")
 }
 
 ///|
-test "TextDoc::insert at position" {
-  let doc = TextDoc::new("alice")
+test "TextState::insert at position" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "W")
   let _ = doc.insert(Pos::at(1), "o")
   let _ = doc.insert(Pos::at(2), "r")
@@ -27,64 +27,64 @@ test "TextDoc::insert at position" {
 }
 
 ///|
-test "TextDoc::delete removes character" {
-  let doc = TextDoc::new("alice")
+test "TextState::delete removes character" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete(Pos::at(4))
   inspect(doc.text(), content="Hell")
 }
 
 ///|
-test "TextDoc::delete_range removes text at document start" {
-  let doc = TextDoc::new("alice")
+test "TextState::delete_range removes text at document start" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete_range(Range::from_ints(0, 2))
   inspect(doc.text(), content="llo")
 }
 
 ///|
-test "TextDoc::delete_range removes text in document middle" {
-  let doc = TextDoc::new("alice")
+test "TextState::delete_range removes text in document middle" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete_range(Range::from_ints(1, 4))
   inspect(doc.text(), content="Ho")
 }
 
 ///|
-test "TextDoc::delete_range removes text at document end" {
-  let doc = TextDoc::new("alice")
+test "TextState::delete_range removes text at document end" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete_range(Range::from_ints(3, 5))
   inspect(doc.text(), content="Hel")
 }
 
 ///|
-test "TextDoc::replace_range handles shorter replacement" {
-  let doc = TextDoc::new("alice")
+test "TextState::replace_range handles shorter replacement" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(Range::from_ints(1, 4), "Z")
   inspect(doc.text(), content="aZef")
 }
 
 ///|
-test "TextDoc::replace_range handles equal-length replacement" {
-  let doc = TextDoc::new("alice")
+test "TextState::replace_range handles equal-length replacement" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(Range::from_ints(1, 3), "XY")
   inspect(doc.text(), content="aXYdef")
 }
 
 ///|
-test "TextDoc::replace_range handles longer replacement" {
-  let doc = TextDoc::new("alice")
+test "TextState::replace_range handles longer replacement" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(Range::from_ints(1, 2), "WXYZ")
   inspect(doc.text(), content="aWXYZcdef")
 }
 
 ///|
-test "TextDoc::version changes after edit" {
-  let doc = TextDoc::new("alice")
+test "TextState::version changes after edit" {
+  let doc = TextState::new("alice")
   let v1 = doc.version()
   let _ = doc.insert(Pos::at(0), "Hello")
   let v2 = doc.version()
@@ -129,8 +129,8 @@ test "TextError::is_retryable for sync errors" {
 
 ///|
 test "SyncSession::export_all and apply" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
+  let doc1 = TextState::new("alice")
+  let doc2 = TextState::new("bob")
   let _ = doc1.insert(Pos::at(0), "H")
   let _ = doc1.insert(Pos::at(1), "i")
   let msg = doc1.sync().export_all()
@@ -142,8 +142,8 @@ test "SyncSession::export_all and apply" {
 
 ///|
 test "SyncSession::export_since sends delta" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
+  let doc1 = TextState::new("alice")
+  let doc2 = TextState::new("bob")
   let _ = doc1.insert(Pos::at(0), "H")
   let _ = doc1.insert(Pos::at(1), "i")
   let msg1 = doc1.sync().export_all()
@@ -157,8 +157,8 @@ test "SyncSession::export_since sends delta" {
 }
 
 ///|
-test "TextDoc::checkout creates historical view" {
-  let doc = TextDoc::new("alice")
+test "TextState::checkout creates historical view" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let v1 = doc.version()
   let _ = doc.insert(Pos::at(5), " World")
@@ -192,13 +192,13 @@ test "SyncFailure::Cancelled is not retryable" {
 test "Version::empty creates empty version" {
   let v = Version::empty()
   // An empty version equals the initial state of a new document
-  let doc = TextDoc::new("test")
+  let doc = TextState::new("test")
   inspect(doc.version() == v, content="true")
 }
 
 ///|
-test "TextDoc insert at invalid position raises error" {
-  let doc = TextDoc::new("alice")
+test "TextState insert at invalid position raises error" {
+  let doc = TextState::new("alice")
   let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
     e => Err(e)
   }
@@ -212,8 +212,8 @@ test "TextDoc insert at invalid position raises error" {
 }
 
 ///|
-test "TextDoc delete at invalid position raises error" {
-  let doc = TextDoc::new("alice")
+test "TextState delete at invalid position raises error" {
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hi")
   let result : Result[Unit, TextError] = Ok(doc.delete(Pos::at(5))) catch {
     e => Err(e)
@@ -228,8 +228,8 @@ test "TextDoc delete at invalid position raises error" {
 }
 
 ///|
-test "TextDoc::replace_range_and_record undo and redo restore range edit" {
-  let doc = TextDoc::new("alice")
+test "TextState::replace_range_and_record undo and redo restore range edit" {
+  let doc = TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
   let _ = doc.replace_range_and_record(
@@ -247,7 +247,7 @@ test "TextDoc::replace_range_and_record undo and redo restore range edit" {
 
 ///|
 test "TextView::runs iterates over runs" {
-  let doc = TextDoc::new("alice")
+  let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let view = doc.checkout(doc.version())
   let runs = view.runs().collect()
@@ -262,8 +262,8 @@ test "TextView::runs iterates over runs" {
 ///|
 /// Test: Peer reconnects after divergence - both edited while disconnected
 test "sync recovery - peer reconnects after divergence" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
+  let doc1 = TextState::new("alice")
+  let doc2 = TextState::new("bob")
 
   // Initial sync - both start with "Hello"
   let _ = doc1.insert(Pos::at(0), "Hello")
@@ -307,8 +307,8 @@ test "sync recovery - peer reconnects after divergence" {
 ///|
 /// Test: Peer only received partial sync, reconnects with stale version
 test "sync recovery - partial operation log" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
+  let doc1 = TextState::new("alice")
+  let doc2 = TextState::new("bob")
 
   // Alice inserts "A" alone so Bob can sync to that specific version
   let _ = doc1.insert(Pos::at(0), "A")
@@ -334,8 +334,8 @@ test "sync recovery - partial operation log" {
 ///|
 /// Test: Use saved old version for export_since, verify correct delta
 test "sync recovery - stale version vector" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
+  let doc1 = TextState::new("alice")
+  let doc2 = TextState::new("bob")
 
   // Build up some history
   let _ = doc1.insert(Pos::at(0), "Hello")
@@ -361,9 +361,9 @@ test "sync recovery - stale version vector" {
 ///|
 /// Test: Two partitions evolve separately, reunify, all three converge
 test "sync recovery - network partition reunion (3 peers)" {
-  let doc_a = TextDoc::new("alice")
-  let doc_b = TextDoc::new("bob")
-  let doc_c = TextDoc::new("carol")
+  let doc_a = TextState::new("alice")
+  let doc_b = TextState::new("bob")
+  let doc_c = TextState::new("carol")
 
   // Initial state: all three have "X"
   let _ = doc_a.insert(Pos::at(0), "X")
@@ -417,8 +417,8 @@ test "sync recovery - network partition reunion (3 peers)" {
 ///|
 /// Test: Both peers have local-only ops, sync both directions simultaneously
 test "sync recovery - bidirectional delta after disconnect" {
-  let doc1 = TextDoc::new("alice")
-  let doc2 = TextDoc::new("bob")
+  let doc1 = TextState::new("alice")
+  let doc2 = TextState::new("bob")
 
   // Shared initial state
   let _ = doc1.insert(Pos::at(0), "START")

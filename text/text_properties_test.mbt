@@ -1,6 +1,6 @@
 // Property-based tests for Text API using QuickCheck
 //
-// These tests verify fundamental properties of the TextDoc CRDT
+// These tests verify fundamental properties of the TextState CRDT
 // using Arbitrary and Shrink traits for automatic test generation and minimization.
 
 ///|
@@ -11,7 +11,7 @@ enum TextEdit {
 } derive(Show)
 
 ///|
-/// Generated operations for property testing (real TextDoc edits).
+/// Generated operations for property testing (real TextState edits).
 struct RealOps {
   edits : Array[TextEdit]
 } derive(Show)
@@ -24,7 +24,7 @@ impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
     'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
   ]
   // Use a scratch doc to track position validity during generation
-  let scratch = @text.TextDoc::new("scratch")
+  let scratch = @text.TextState::new("scratch")
   let edits : Array[TextEdit] = []
   for i = 0; i < size; i = i + 1 {
     let len = scratch.len()
@@ -72,7 +72,7 @@ impl @qc.Shrink for RealOps with shrink(self) {
 
 ///|
 /// Apply a single TextEdit to a document, returning success.
-fn apply_edit(doc : @text.TextDoc, edit : TextEdit) -> Bool {
+fn apply_edit(doc : @text.TextState, edit : TextEdit) -> Bool {
   try {
     match edit {
       Insert(pos, ch) => doc.insert(@text.Pos::at(pos), ch)
@@ -86,7 +86,7 @@ fn apply_edit(doc : @text.TextDoc, edit : TextEdit) -> Bool {
 
 ///|
 /// Apply a sequence of edits to a document; returns false if any edit fails.
-fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Bool {
+fn apply_edits(doc : @text.TextState, edits : Array[TextEdit]) -> Bool {
   for edit in edits {
     if not(apply_edit(doc, edit)) {
       return false
@@ -98,8 +98,8 @@ fn apply_edits(doc : @text.TextDoc, edits : Array[TextEdit]) -> Bool {
 ///|
 /// Property: Sync convergence - two documents with same edits converge
 fn prop_sync_convergence(ops : RealOps) -> Bool {
-  let doc1 = @text.TextDoc::new("alice")
-  let doc2 = @text.TextDoc::new("bob")
+  let doc1 = @text.TextState::new("alice")
+  let doc2 = @text.TextState::new("bob")
 
   // Apply edits to doc1
   if not(apply_edits(doc1, ops.edits)) {
@@ -126,8 +126,8 @@ test "property: sync convergence" {
 ///|
 /// Property: Sync is idempotent - applying same message twice has no effect
 fn prop_sync_idempotent(ops : RealOps) -> Bool {
-  let doc1 = @text.TextDoc::new("alice")
-  let doc2 = @text.TextDoc::new("bob")
+  let doc1 = @text.TextState::new("alice")
+  let doc2 = @text.TextState::new("bob")
   if not(apply_edits(doc1, ops.edits)) {
     return true
   }
@@ -156,7 +156,7 @@ test "property: sync is idempotent" {
 ///|
 /// Property: Version changes after edit
 fn prop_version_changes_after_edit(char : Char) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   let v1 = doc.version()
   try {
     let _ = doc.insert(@text.Pos::at(0), char.to_string())
@@ -175,7 +175,7 @@ test "property: version changes after edit" {
 ///|
 /// Property: Insert increases length by 1
 fn prop_insert_increases_length(pos : Int) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   // Pre-populate with some content
   try {
     let _ = doc.insert(@text.Pos::at(0), "hello")
@@ -206,7 +206,7 @@ test "property: insert increases length" {
 ///|
 /// Property: Delete decreases length by 1 (when doc not empty)
 fn prop_delete_decreases_length(pos : Int) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   // Pre-populate
   try {
     let _ = doc.insert(@text.Pos::at(0), "hello")
@@ -240,7 +240,7 @@ test "property: delete decreases length" {
 ///|
 /// Property: Checkout preserves text at that version
 fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
 
   // Apply first half of edits
   let mid = ops.edits.length() / 2
@@ -273,7 +273,7 @@ test "property: checkout preserves text" {
 /// Property: Empty document has length 0
 fn prop_empty_doc_length_zero(agent : String) -> Bool {
   let agent_name = if agent.length() == 0 { "default" } else { agent }
-  let doc = @text.TextDoc::new(agent_name)
+  let doc = @text.TextState::new(agent_name)
   doc.len() == 0 && doc.is_empty()
 }
 
@@ -297,7 +297,7 @@ test "property: Pos clamps negative values" {
 ///|
 /// Property: Version equality is reflexive
 fn prop_version_reflexive(ops : RealOps) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   if not(apply_edits(doc, ops.edits)) {
     return true
   }
@@ -313,7 +313,7 @@ test "property: version equality is reflexive" {
 ///|
 /// Property: SyncMessage::is_empty consistent with op_count
 fn prop_sync_message_empty_consistent(ops : RealOps) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   if not(apply_edits(doc, ops.edits)) {
     return true
   }
@@ -331,8 +331,8 @@ test "property: SyncMessage is_empty consistent with op_count" {
 /// Property: Bidirectional sync results in convergence
 fn prop_bidirectional_sync_converges(pair : (RealOps, RealOps)) -> Bool {
   let (ops1, ops2) = pair
-  let doc1 = @text.TextDoc::new("alice")
-  let doc2 = @text.TextDoc::new("bob")
+  let doc1 = @text.TextState::new("alice")
+  let doc2 = @text.TextState::new("bob")
 
   // Apply different edits to each doc
   if not(apply_edits(doc1, ops1.edits)) {
@@ -364,7 +364,7 @@ test "property: bidirectional sync converges" {
 ///|
 /// Property: export_since with current version exports empty
 fn prop_export_since_current_is_empty(ops : RealOps) -> Bool {
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   if not(apply_edits(doc, ops.edits)) {
     return true
   }
@@ -383,7 +383,7 @@ test "property: export_since current version is empty" {
 /// For any sequence of inserts, undo then redo should restore the original text.
 fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   let clamped = if size < 0 { 0 } else if size > 20 { 20 } else { size }
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   // Insert characters one by one
   for i = 0; i < clamped; i = i + 1 {
@@ -431,7 +431,7 @@ test "property: undo-redo roundtrip preserves text (insert)" {
 /// After undo followed by redo, the document state should be restored.
 fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
-  let doc = @text.TextDoc::new("alice")
+  let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   // Insert some text first
   doc.insert_and_record(@text.Pos::at(0), "hello", mgr, timestamp_ms=0) catch {
@@ -479,8 +479,8 @@ test "property: undo-redo roundtrip preserves text (mixed)" {
 /// This verifies that undo-generated ops (Delete/Undelete) are valid sync ops.
 fn prop_undo_ops_sync_to_peer(size : Int) -> Bool {
   let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
-  let doc_a = @text.TextDoc::new("alice")
-  let doc_b = @text.TextDoc::new("bob")
+  let doc_a = @text.TextState::new("alice")
+  let doc_b = @text.TextState::new("bob")
   let mgr = @undo.UndoManager::new("alice")
   // Alice inserts text with recording
   for i = 0; i < clamped; i = i + 1 {

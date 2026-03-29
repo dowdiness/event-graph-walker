@@ -29,9 +29,9 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with arbitrary(size, rs) {
   let chars : Array[String] = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
   let num_agents = 2 + rs.split().next_uint64().to_int().abs() % 4 // 2-5 agents
   // Use scratch docs to track valid positions during generation
-  let scratches : Array[@text.TextDoc] = []
+  let scratches : Array[@text.TextState] = []
   for i = 0; i < num_agents; i = i + 1 {
-    scratches.push(@text.TextDoc::new("agent_" + i.to_string()))
+    scratches.push(@text.TextState::new("agent_" + i.to_string()))
   }
   let actions : Array[AgentAction] = []
   let action_count = if size < 5 { 5 } else { size }
@@ -107,11 +107,11 @@ impl @qc.Shrink for MultiAgentTrace with shrink(self) {
 ///|
 /// Execute a multi-agent trace and verify convergence after full sync.
 fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
-  let docs : Array[@text.TextDoc] = []
+  let docs : Array[@text.TextState] = []
   let mgrs : Array[@undo.UndoManager] = []
   for i = 0; i < trace.num_agents; i = i + 1 {
     let id = "agent_" + i.to_string()
-    docs.push(@text.TextDoc::new(id))
+    docs.push(@text.TextState::new(id))
     mgrs.push(@undo.UndoManager::new(id))
   }
 
@@ -264,8 +264,8 @@ test "property: multi-agent convergence with undo/redo" {
 fn prop_sync_order_independence(pair : (RealOps, RealOps)) -> Bool {
   let (ops1, ops2) = pair
   // Path 1: A->B then B->A
-  let a1 = @text.TextDoc::new("alice")
-  let b1 = @text.TextDoc::new("bob")
+  let a1 = @text.TextState::new("alice")
+  let b1 = @text.TextState::new("bob")
   if not(apply_edits(a1, ops1.edits)) {
     return true
   }
@@ -282,8 +282,8 @@ fn prop_sync_order_independence(pair : (RealOps, RealOps)) -> Bool {
   }
 
   // Path 2: B->A then A->B (fresh docs)
-  let a2 = @text.TextDoc::new("alice")
-  let b2 = @text.TextDoc::new("bob")
+  let a2 = @text.TextState::new("alice")
+  let b2 = @text.TextState::new("bob")
   if not(apply_edits(a2, ops1.edits)) {
     return true
   }
@@ -313,8 +313,8 @@ test "property: sync order independence" {
 /// Agent A types, agent B types concurrently, A undoes, then full sync.
 fn prop_undo_concurrent_convergence(pair : (RealOps, RealOps)) -> Bool {
   let (ops1, ops2) = pair
-  let doc_a = @text.TextDoc::new("alice")
-  let doc_b = @text.TextDoc::new("bob")
+  let doc_a = @text.TextState::new("alice")
+  let doc_b = @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // A types with undo recording
