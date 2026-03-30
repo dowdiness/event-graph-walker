@@ -226,7 +226,7 @@ pub fn Document::insert(
     last_op = Some(op)
     current_pos = current_pos + 1
   }
-  if not(cache_valid) {
+  if !cache_valid {
     self.invalidate_cache()
   }
 

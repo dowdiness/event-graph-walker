@@ -47,7 +47,7 @@ fn collect_reachable_versions(
   }
 
   // BFS to collect all reachable versions
-  while not(queue.is_empty()) {
+  while !queue.is_empty() {
     match queue.pop() {
       Some(current) => {
         // Skip if already visited
@@ -61,7 +61,7 @@ fn collect_reachable_versions(
         // Add parents to queue
         if graph[current] is Some(entry) {
           for parent in entry.parents {
-            if not(visited.contains(parent)) {
+            if !visited.contains(parent) {
               queue.push(parent)
             }
           }
@@ -146,7 +146,7 @@ fn topological_sort(
   let result : Array[Int] = []
 
   // Process versions in topological order
-  while not(queue.is_empty()) {
+  while !queue.is_empty() {
     match queue.pop() {
       Some(current) => {
         // Add to result

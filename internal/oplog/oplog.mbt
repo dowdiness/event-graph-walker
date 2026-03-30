@@ -266,13 +266,13 @@ pub fn OpLog::validate_remote_batch(
   }
   for op in remote_ops {
     for parent in op.parents() {
-      if self.graph.raw_to_lv(parent) is None && not(batch.contains(parent)) {
+      if self.graph.raw_to_lv(parent) is None && !batch.contains(parent) {
         raise OpLogError::MissingRemoteParent(raw=parent)
       }
     }
   }
   for raw in remote_frontier {
-    if self.graph.raw_to_lv(raw) is None && not(batch.contains(raw)) {
+    if self.graph.raw_to_lv(raw) is None && !batch.contains(raw) {
       raise OpLogError::MissingRemoteFrontier(raw~)
     }
   }

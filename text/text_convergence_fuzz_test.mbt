@@ -266,10 +266,10 @@ fn prop_sync_order_independence(pair : (RealOps, RealOps)) -> Bool {
   // Path 1: A->B then B->A
   let a1 = @text.TextState::new("alice")
   let b1 = @text.TextState::new("bob")
-  if not(apply_edits(a1, ops1.edits)) {
+  if !apply_edits(a1, ops1.edits) {
     return true
   }
-  if not(apply_edits(b1, ops2.edits)) {
+  if !apply_edits(b1, ops2.edits) {
     return true
   }
   let msg_a1 = a1.sync().export_all() catch { _ => return true }
@@ -284,10 +284,10 @@ fn prop_sync_order_independence(pair : (RealOps, RealOps)) -> Bool {
   // Path 2: B->A then A->B (fresh docs)
   let a2 = @text.TextState::new("alice")
   let b2 = @text.TextState::new("bob")
-  if not(apply_edits(a2, ops1.edits)) {
+  if !apply_edits(a2, ops1.edits) {
     return true
   }
-  if not(apply_edits(b2, ops2.edits)) {
+  if !apply_edits(b2, ops2.edits) {
     return true
   }
   let msg_a2 = a2.sync().export_all() catch { _ => return true }
@@ -332,7 +332,7 @@ fn prop_undo_concurrent_convergence(pair : (RealOps, RealOps)) -> Bool {
   }
 
   // B types concurrently (no undo tracking needed)
-  if not(apply_edits(doc_b, ops2.edits)) {
+  if !apply_edits(doc_b, ops2.edits) {
     return true
   }
 

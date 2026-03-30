@@ -183,7 +183,7 @@ fn between_impl(
     let lo = left.get_or_zero(i)
     let hi = if right_is_open { max_value } else { right.get_or_zero(i) }
     // When right is not open and we're past right's length, hi defaults to max_value
-    let hi = if not(right_is_open) && i >= right.elements.length() {
+    let hi = if !right_is_open && i >= right.elements.length() {
       max_value
     } else {
       hi

@@ -379,7 +379,7 @@ pub fn TreeState::create_node(
   self : TreeState,
   parent~ : @mt.TreeNodeId,
 ) -> @mt.TreeNodeId raise TreeError {
-  if not(self.is_local_parent_valid(parent)) {
+  if !self.is_local_parent_valid(parent) {
     raise ParentNotFound
   }
   let id = self.alloc_id()
@@ -407,7 +407,7 @@ pub fn TreeState::create_node_after(
   parent~ : @mt.TreeNodeId,
   after~ : @mt.TreeNodeId,
 ) -> @mt.TreeNodeId raise TreeError {
-  if not(self.is_local_parent_valid(parent)) {
+  if !self.is_local_parent_valid(parent) {
     raise ParentNotFound
   }
   let id = self.alloc_id()
@@ -432,10 +432,10 @@ pub fn TreeState::move_node(
   target~ : @mt.TreeNodeId,
   new_parent~ : @mt.TreeNodeId,
 ) -> Unit raise TreeError {
-  if not(self.tree.contains(target)) {
+  if !self.tree.contains(target) {
     raise TargetNotFound
   }
-  if not(self.is_local_parent_valid(new_parent)) {
+  if !self.is_local_parent_valid(new_parent) {
     raise ParentNotFound
   }
   if self.tree.would_create_cycle(target, new_parent) {
@@ -460,7 +460,7 @@ pub fn TreeState::delete_node(
   self : TreeState,
   target : @mt.TreeNodeId,
 ) -> Unit raise TreeError {
-  if not(self.tree.contains(target)) {
+  if !self.tree.contains(target) {
     raise TargetNotFound
   }
   let timestamp = self.next_timestamp()
@@ -499,7 +499,7 @@ pub fn TreeState::set_property(
   key : String,
   value : String,
 ) -> Unit {
-  if not(self.tree.contains(id)) {
+  if !self.tree.contains(id) {
     return
   }
   let timestamp = self.next_timestamp()
@@ -536,7 +536,7 @@ pub fn TreeState::export_ops(self : TreeState) -> Array[@mt.TreeOp] {
 /// The operation is recorded in the causal graph for local version tracking,
 /// then dispatched to the structural move log or the property replication layer.
 pub fn TreeState::apply_remote_op(self : TreeState, op : @mt.TreeOp) -> Unit {
-  if not(self.record_op(op)) {
+  if !self.record_op(op) {
     return
   }
   self.observe_remote_op(op)

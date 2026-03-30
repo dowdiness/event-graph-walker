@@ -66,7 +66,7 @@ fn UndoManager::record_item(
   timestamp_ms : Int,
   content : String?,
 ) -> Unit {
-  if not(self.tracking_enabled) {
+  if !self.tracking_enabled {
     return
   }
   if agent != self.agent_id {

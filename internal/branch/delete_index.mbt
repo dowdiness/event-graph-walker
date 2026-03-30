@@ -96,7 +96,7 @@ pub fn DeleteIndex::recompute_winner(
           best_ts = ts
           best_agent = agent
           best_is_undelete = is_undelete
-          best_deleted = not(is_undelete)
+          best_deleted = !is_undelete
         }
       }
       None => continue

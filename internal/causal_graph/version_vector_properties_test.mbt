@@ -123,7 +123,7 @@ fn prop_total_order_or_concurrent(
   pair : (VersionVector, VersionVector),
 ) -> Bool {
   let (vv_a, vv_b) = pair
-  if not(vv_a.concurrent(vv_b)) {
+  if !vv_a.concurrent(vv_b) {
     // One must be <= the other
     vv_a <= vv_b || vv_b <= vv_a
   } else {
@@ -179,7 +179,7 @@ fn prop_includes_consistent(pair : (VersionVector, VersionVector)) -> Bool {
     .agents()
     .each(fn(agent) {
       match vv_a.0.get(agent) {
-        Some(seq) => if not(vv_b.includes(agent, seq)) { all_included = false }
+        Some(seq) => if !vv_b.includes(agent, seq) { all_included = false }
         None => ()
       }
     })
@@ -330,7 +330,7 @@ test "property: merge is monotone in its arguments" {
 /// A version vector is never concurrent with itself.
 /// (By definition: concurrent(a, a) would require !(a <= a), but a <= a always holds.)
 fn prop_concurrent_irreflexive(vv : VersionVector) -> Bool {
-  not(vv.concurrent(vv))
+  !vv.concurrent(vv)
 }
 
 ///|
@@ -354,7 +354,7 @@ fn prop_includes_downward_closed(vv : VersionVector) -> Bool {
       // includes(max_seq) is true; includes(0..max_seq) must all be true
       let mut ok = true
       for s = 0; s <= max_seq && ok; s = s + 1 {
-        if not(vv.includes(agent, s)) {
+        if !vv.includes(agent, s) {
           ok = false
         }
       }

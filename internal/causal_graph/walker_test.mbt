@@ -69,10 +69,10 @@ test "walk diamond pattern (concurrent operations)" {
   // but both must come after lv0 and before lv3
   let has_lv1 = expanded.contains(1)
   let has_lv2 = expanded.contains(2)
-  if not(has_lv1) {
+  if !has_lv1 {
     abort("Result should contain lv1")
   }
-  if not(has_lv2) {
+  if !has_lv2 {
     abort("Result should contain lv2")
   }
 
@@ -112,19 +112,19 @@ test "walk complex branching" {
   inspect(expanded[5], content="6")
 
   // Verify all expected versions are present
-  if not(expanded.contains(0)) {
+  if !expanded.contains(0) {
     abort("Should contain lv0")
   }
-  if not(expanded.contains(1)) {
+  if !expanded.contains(1) {
     abort("Should contain lv1")
   }
-  if not(expanded.contains(2)) {
+  if !expanded.contains(2) {
     abort("Should contain lv2")
   }
-  if not(expanded.contains(3)) {
+  if !expanded.contains(3) {
     abort("Should contain lv3")
   }
-  if not(expanded.contains(4)) {
+  if !expanded.contains(4) {
     abort("Should contain lv4")
   }
 
@@ -162,7 +162,7 @@ test "walk with multiple frontier versions" {
 
   // All versions should be present
   for i = 0; i < 5; i = i + 1 {
-    if not(expanded.contains(i)) {
+    if !expanded.contains(i) {
       abort("Should contain lv\{i}")
     }
   }

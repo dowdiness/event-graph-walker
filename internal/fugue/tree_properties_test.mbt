@@ -305,7 +305,7 @@ fn prop_fugue_ancestor_reflexive(chain : ChainLen) -> Bool {
     })
   }
   for i = 0; i < chain.len; i = i + 1 {
-    if not(tree.is_ancestor(@fugue.Lv(i), @fugue.Lv(i))) {
+    if !tree.is_ancestor(@fugue.Lv(i), @fugue.Lv(i)) {
       return false
     }
   }
@@ -911,7 +911,7 @@ fn prop_jump_depth_consistency(bt : BranchingTree) -> Bool {
     match item {
       Some(it) =>
         match it.parent {
-          Some(p) => if not(tree.is_ancestor(p, @fugue.Lv(i))) { return false }
+          Some(p) => if !tree.is_ancestor(p, @fugue.Lv(i)) { return false }
           None => ()
         }
       None => ()

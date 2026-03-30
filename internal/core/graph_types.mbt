@@ -23,7 +23,7 @@ pub fn Frontier::from_array_dedup(values : Array[Int]) -> Frontier {
   let seen : @hashset.HashSet[Int] = @hashset.new()
   let deduped : Array[Int] = []
   for v in values {
-    if not(seen.contains(v)) {
+    if !seen.contains(v) {
       seen.add(v)
       deduped.push(v)
     }

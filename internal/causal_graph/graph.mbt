@@ -147,7 +147,7 @@ fn CausalGraph::update_frontier(
 ) -> Unit {
   // Remove all parents from frontier (they now have a successor)
   let mut frontier = self.frontier.0.copy()
-  frontier = frontier.filter(v => not(parents.contains(v)))
+  frontier = frontier.filter(v => !parents.contains(v))
 
   // Add new version
   frontier.push(new_lv)
@@ -181,7 +181,7 @@ pub fn CausalGraph::is_ancestor(
       }
     None => return false
   }
-  while not(queue.is_empty()) {
+  while !queue.is_empty() {
     match queue.pop() {
       Some(current) => {
         if current == lv1 {
@@ -213,7 +213,7 @@ fn CausalGraph::transitive_closure(
 ) -> @immut/hashset.HashSet[Int] {
   let mut result : @immut/hashset.HashSet[Int] = @immut/hashset.new()
   let queue = @queue.from_array(frontiers.0)
-  while not(queue.is_empty()) {
+  while !queue.is_empty() {
     match queue.pop() {
       Some(current) => {
         if result.contains(current) {

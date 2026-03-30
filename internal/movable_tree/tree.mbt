@@ -57,7 +57,7 @@ pub fn MovableTree::apply_create(
   parent : TreeNodeId,
   position : @fi.FractionalIndex,
 ) -> Unit {
-  if not(self.nodes.get(id) is None) {
+  if !(self.nodes.get(id) is None) {
     return
   }
   let node : TreeNode = { id, parent, position, properties: Map::new() }
@@ -220,7 +220,7 @@ pub fn MovableTree::is_alive(self : MovableTree, id : TreeNodeId) -> Bool {
 ///|
 /// Check if the tree contains a node with the given id.
 pub fn MovableTree::contains(self : MovableTree, id : TreeNodeId) -> Bool {
-  not(self.nodes.get(id) is None)
+  !(self.nodes.get(id) is None)
 }
 
 ///|

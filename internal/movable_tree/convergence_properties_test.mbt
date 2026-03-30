@@ -213,7 +213,7 @@ test "property: all orderings converge and produce acyclic trees" {
             }
           }
         }
-        if not(reached_sentinel) {
+        if !reached_sentinel {
           return false
         }
       }

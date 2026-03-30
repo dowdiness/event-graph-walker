@@ -104,7 +104,7 @@ test "sequential insertions: 20 items stay ordered" {
   // Verify all keys are strictly ordered
   let mut all_ordered = true
   for i = 1; i < keys.length(); i = i + 1 {
-    if not(keys[i - 1] < keys[i]) {
+    if !(keys[i - 1] < keys[i]) {
       all_ordered = false
     }
   }
@@ -139,7 +139,7 @@ test "interleaving: insert between existing keys" {
   keys.sort_by(fn(a, b) { a.compare(b) })
   let mut all_ordered = true
   for i = 1; i < keys.length(); i = i + 1 {
-    if not(keys[i - 1] < keys[i]) {
+    if !(keys[i - 1] < keys[i]) {
       all_ordered = false
     }
   }

@@ -195,7 +195,7 @@ pub fn[T] FugueTree::delete_with_ts(
           item.deleted_agent,
           item.deleted_is_undelete,
         ) {
-        if not(item.deleted) {
+        if !item.deleted {
           self.visible = self.visible - 1
         }
         item.deleted = true
@@ -258,9 +258,9 @@ pub fn[T] FugueTree::set_delete_winner(
   }
   match self[id] {
     Some(item) => {
-      if item.deleted && not(deleted) {
+      if item.deleted && !deleted {
         self.visible = self.visible + 1
-      } else if not(item.deleted) && deleted {
+      } else if !item.deleted && deleted {
         self.visible = self.visible - 1
       }
       item.deleted = deleted
@@ -292,7 +292,7 @@ pub fn[T] FugueTree::delete(
   }
   match self[id] {
     Some(item) => {
-      if not(item.deleted) {
+      if !item.deleted {
         self.visible = self.visible - 1
       }
       item.deleted = true
@@ -596,7 +596,7 @@ fn[T : Eq] FugueTree::traverse_tree(
       if node_id != root_lv {
         match self[node_id] {
           Some(item) =>
-            if not(visible_only) || item.is_visible() {
+            if !visible_only || item.is_visible() {
               result.push((node_id, item))
             }
           None => ()

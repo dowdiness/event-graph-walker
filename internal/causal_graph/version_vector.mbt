@@ -357,7 +357,7 @@ pub fn VersionVector::concurrent(
   self : VersionVector,
   other : VersionVector,
 ) -> Bool {
-  not(self <= other) && not(other <= self)
+  !(self <= other) && !(other <= self)
 }
 
 ///|

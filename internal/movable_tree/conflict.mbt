@@ -160,7 +160,7 @@ fn dedup_key(op : TreeMoveOp) -> String {
 ///   Record the node's current (parent, position) as undo information, then
 ///   move it to (new_parent, position).
 fn do_op(tree : MovableTree, op : TreeMoveOp) -> UndoInfo {
-  if not(tree.contains(op.target)) {
+  if !tree.contains(op.target) {
     // Never forward-create a node directly into trash.  A delete op (new_parent
     // == trash_id) that arrives before the corresponding create should be
     // recorded as Skipped so the redo phase can apply it later, after the
