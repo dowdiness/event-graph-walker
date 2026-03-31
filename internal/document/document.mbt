@@ -158,9 +158,11 @@ pub fn Document::insert(
         let or = if c.at_end {
           -1 // origin_right = None (end of document)
         } else {
-          // Partial hit: invalidate stale cache before reading
-          self.invalidate_cache()
-          cache_valid = false
+          // Partial hit: use existing cache for origin_right lookup.
+          // Cache is valid — no mutation since last update.
+          if !cache_valid {
+            cache_valid = true
+          }
           match self.lv_at_position(current_pos) {
             Some(lv) => lv
             None => -1
@@ -169,9 +171,14 @@ pub fn Document::insert(
         (ol, or)
       }
       _ => {
-        // Cursor miss: invalidate stale cache before reading, then do full lookup
-        self.invalidate_cache()
-        cache_valid = false
+        // Cursor miss: use existing cache (or lazy-build) for lookups.
+        // The cache is always valid at the start of insert() — every mutation
+        // either maintains it incrementally or sets it to None.
+        // After lookups, keep cache_valid true so the incremental insert_at
+        // maintains it, avoiding O(n) rebuild.
+        if !cache_valid {
+          cache_valid = true
+        }
         let ol = self.position_to_lv(current_pos)
         let or = match self.lv_at_position(current_pos) {
           Some(lv) => lv
