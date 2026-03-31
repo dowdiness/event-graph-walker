@@ -12,15 +12,13 @@ pub fn UndoError::is_retryable(Self) -> Bool
 pub fn UndoError::message(Self) -> String
 
 // Types and methods
-type UndoGroup
-pub impl Show for UndoGroup
+type UndoGroup derive(Show)
 
-type UndoItem
-pub impl Show for UndoItem
+type UndoItem derive(Show)
 
 pub struct UndoManager {
   // private fields
-}
+} derive(Show)
 pub fn UndoManager::can_redo(Self) -> Bool
 pub fn UndoManager::can_undo(Self) -> Bool
 pub fn UndoManager::clear(Self) -> Unit
@@ -31,14 +29,11 @@ pub fn UndoManager::record_insert(Self, Int, String, Int, content? : String?) ->
 pub fn[D : Undoable] UndoManager::redo(Self, D) -> Unit raise UndoError
 pub fn UndoManager::set_tracking(Self, Bool) -> Unit
 pub fn[D : Undoable] UndoManager::undo(Self, D) -> Unit raise UndoError
-pub impl Show for UndoManager
 
 pub enum UndoOpType {
   Insert
   Delete
-}
-pub impl Eq for UndoOpType
-pub impl Show for UndoOpType
+} derive(Eq, Show)
 
 // Type aliases
 

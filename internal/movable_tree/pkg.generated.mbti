@@ -37,9 +37,7 @@ pub(all) struct TreeMoveOp {
   new_parent : TreeNodeId
   position : @fractional_index.FractionalIndex
   agent : String
-}
-pub impl Show for TreeMoveOp
-pub impl @debug.Debug for TreeMoveOp
+} derive(Show, @debug.Debug)
 
 pub(all) struct TreeNode {
   id : TreeNodeId
@@ -51,19 +49,12 @@ pub(all) struct TreeNode {
 pub(all) struct TreeNodeId {
   agent : String
   counter : Int
-}
-pub impl Compare for TreeNodeId
-pub impl Eq for TreeNodeId
-pub impl Hash for TreeNodeId
-pub impl Show for TreeNodeId
-pub impl @debug.Debug for TreeNodeId
+} derive(Compare, Eq, Hash, Show, @debug.Debug)
 
 pub(all) enum TreeOp {
   Move(TreeMoveOp)
   SetProperty(TreePropertyOp)
-}
-pub impl Show for TreeOp
-pub impl @debug.Debug for TreeOp
+} derive(Show, @debug.Debug)
 
 pub struct TreeOpLog {
   // private fields
@@ -78,9 +69,7 @@ pub(all) struct TreePropertyOp {
   key : String
   value : String
   agent : String
-}
-pub impl Show for TreePropertyOp
-pub impl @debug.Debug for TreePropertyOp
+} derive(Show, @debug.Debug)
 
 // Type aliases
 

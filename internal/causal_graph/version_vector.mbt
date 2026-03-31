@@ -397,17 +397,17 @@ pub fn VersionVector::from_frontier(
   let agent_max_seq = {}
 
   // Get transitive closure of frontier to include all reachable versions
-  let reachable = graph.transitive_closure(frontier)
+  let (_, reachable_lvs) = graph.transitive_closure_gen(frontier)
 
   // Find max seq for each agent in reachable versions
-  reachable.each(lv => {
+  for lv in reachable_lvs {
     if graph[lv] is Some(entry) {
       let current_max = agent_max_seq.get(entry.agent).unwrap_or(-1)
       if entry.seq > current_max {
         agent_max_seq[entry.agent] = entry.seq
       }
     }
-  })
+  }
   VersionVector(agent_max_seq)
 }
 

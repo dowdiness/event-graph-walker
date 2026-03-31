@@ -25,7 +25,7 @@ pub(all) suberror DocumentError {
 pub struct Document {
   agent_id : String
   // private fields
-}
+} derive(Show)
 pub fn Document::agent_id(Self) -> String
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
@@ -48,10 +48,8 @@ pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::visible_count(Self) -> Int
 pub impl @core.RawToLv for Document
-pub impl Show for Document
 
-type InsertCursor
-pub impl Show for InsertCursor
+type InsertCursor derive(Show)
 
 pub struct MergeCache {
   cache : @order-tree.OrderTree[VisibleRun]?
@@ -62,13 +60,11 @@ pub fn MergeCache::new(@order-tree.OrderTree[VisibleRun]?, Int, Int) -> Self
 pub fn MergeCache::remove_at(Self, Int) -> Unit
 pub fn MergeCache::take(Self) -> @order-tree.OrderTree[VisibleRun]?
 
-type VisibleRun
+type VisibleRun derive(Eq, Show)
 pub impl @rle.HasLength for VisibleRun
 pub impl @rle.Mergeable for VisibleRun
 pub impl @rle.Sliceable for VisibleRun
 pub impl @rle.Spanning for VisibleRun
-pub impl Eq for VisibleRun
-pub impl Show for VisibleRun
 
 // Type aliases
 
