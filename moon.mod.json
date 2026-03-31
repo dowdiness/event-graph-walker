@@ -5,6 +5,7 @@
     "moonbitlang/quickcheck": "0.11.2",
     "dowdiness/rle": { "path": "../rle" },
     "dowdiness/order-tree": { "path": "../order-tree" },
+    "dowdiness/alga": { "path": "../alga" }
   },
   "readme": "README.md",
   "repository": "https://github.com/dowdiness/event-graph-walker",
