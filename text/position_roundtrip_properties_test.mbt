@@ -67,7 +67,7 @@ test "position roundtrip: insert at 0 on non-empty doc" {
   do_insert(doc, 0, "X")
   let text = doc.text()
   // X must be at position 0, not at the end
-  inspect(text.substring(start=0, end=1), content="X")
+  inspect(text[0:1].to_string(), content="X")
   inspect(text, content="Xabc")
 }
 
