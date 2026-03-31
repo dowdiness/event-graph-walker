@@ -203,21 +203,102 @@ test "incremental insert: sequential append preserves cache" {
 }
 
 ///|
-test "incremental insert: non-sequential invalidates cache" {
+test "incremental insert: non-sequential preserves cache" {
   let doc = Document::new("test")
   let _ = try! doc.insert(0, "abc")
   // Build cache by reading
   inspect(doc.lv_at_position(0), content="Some(0)")
   assert_true(doc.position_cache is Some(_))
-  // Insert at middle (not sequential append) — cache should be invalidated
+  // Insert at middle (not sequential append) — cache maintained incrementally
+  // This is a cursor-miss: cursor was at position 2 (end), now inserting at 1
   let _ = try! doc.insert(1, "x")
-  // Verify cache was invalidated immediately after non-sequential insert
-  assert_true(doc.position_cache is None)
-  // Verify positions are correct after lazy rebuild
+  // Verify cache is preserved (incremental OrderTree.insert_at, not full rebuild)
+  assert_true(doc.position_cache is Some(_))
+  // Verify positions are correct after incremental update
   inspect(doc.lv_at_position(0), content="Some(0)")
   inspect(doc.lv_at_position(1), content="Some(3)") // 'x' has LV 3
   inspect(doc.lv_at_position(2), content="Some(1)")
   inspect(doc.lv_at_position(3), content="Some(2)")
+  // Sequential insert after middle insertion — exercises the partial-hit branch:
+  // cursor is at position 1 with at_end=false, so current_pos (2) == c.position + 1
+  // but c.at_end is false → partial hit → looks up origin_right from cache
+  let _ = try! doc.insert(2, "y")
+  assert_true(doc.position_cache is Some(_))
+  // doc is now "a x y b c" → positions: a(0) x(3) y(4) b(1) c(2)
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  inspect(doc.lv_at_position(1), content="Some(3)") // x
+  inspect(doc.lv_at_position(2), content="Some(4)") // y
+  inspect(doc.lv_at_position(3), content="Some(1)") // b
+  inspect(doc.lv_at_position(4), content="Some(2)") // c
+}
+
+///|
+test "incremental insert: multi-char non-sequential paste preserves cache" {
+  let doc = Document::new("test")
+  let _ = try! doc.insert(0, "hello")
+  // Prime cache
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  assert_true(doc.position_cache is Some(_))
+  // Paste "abc" at position 2 (non-sequential: cursor was at 4)
+  let _ = try! doc.insert(2, "abc")
+  // Cache should be preserved through all 3 chars of the paste
+  assert_true(doc.position_cache is Some(_))
+  // Verify text: "he" + "abc" + "llo" = "heabcllo"
+  inspect(doc.to_text(), content="heabcllo")
+  // Verify position→LV mapping:
+  // pos 0→LV 0 (h), pos 1→LV 1 (e), pos 2→LV 5 (a), pos 3→LV 6 (b),
+  // pos 4→LV 7 (c), pos 5→LV 2 (l), pos 6→LV 3 (l), pos 7→LV 4 (o)
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  inspect(doc.lv_at_position(1), content="Some(1)")
+  inspect(doc.lv_at_position(2), content="Some(5)")
+  inspect(doc.lv_at_position(3), content="Some(6)")
+  inspect(doc.lv_at_position(4), content="Some(7)")
+  inspect(doc.lv_at_position(5), content="Some(2)")
+  inspect(doc.lv_at_position(6), content="Some(3)")
+  inspect(doc.lv_at_position(7), content="Some(4)")
+}
+
+///|
+test "incremental insert: delete_range then non-sequential insert" {
+  let doc = Document::new("test")
+  let _ = try! doc.insert(0, "abcde")
+  // Prime cache
+  inspect(doc.lv_at_position(0), content="Some(0)")
+  assert_true(doc.position_cache is Some(_))
+  // delete_range invalidates cache
+  try! doc.delete_range(1, 3) // delete "bc"
+  assert_true(doc.position_cache is None)
+  // Non-sequential insert after delete — should lazy-build and maintain cache
+  let _ = try! doc.insert(1, "xy")
+  // Cache should be valid after the insert
+  assert_true(doc.position_cache is Some(_))
+  // Verify text: "a" + "xy" + "de" = "axyde"
+  inspect(doc.to_text(), content="axyde")
+}
+
+///|
+test "incremental insert: remote op between local inserts resets cache" {
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  // Alice types "abc"
+  let _ = try! doc_a.insert(0, "abc")
+  // Prime Alice's cache
+  inspect(doc_a.lv_at_position(0), content="Some(0)")
+  assert_true(doc_a.position_cache is Some(_))
+  // Bob inserts "x" at position 0
+  let _ = try! doc_b.insert(0, "x")
+  // Export Bob's op and apply to Alice
+  let bob_op = doc_b.oplog.get_all_ops()[0]
+  try! doc_a.apply_remote(bob_op)
+  // Remote op should have invalidated cache and cleared cursor
+  assert_true(doc_a.position_cache is None)
+  assert_true(doc_a.cursor is None)
+  // Alice does another non-sequential insert — should lazy-build cache
+  let _ = try! doc_a.insert(1, "y")
+  // Cache should be valid
+  assert_true(doc_a.position_cache is Some(_))
+  // Verify total text length is correct (abc + x + y = 5 chars)
+  inspect(doc_a.to_text().length(), content="5")
 }
 
 ///|
