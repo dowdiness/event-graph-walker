@@ -182,14 +182,6 @@ pub fn Document::insert(
           Some(lv) => lv
           None => -1
         }
-        // When origin_left is root (position 0 in non-empty doc), FugueMax's
-        // find_parent_and_side(None, _) always places the item as a right child
-        // of root — at the END, not at position 0. The incremental
-        // insert_at(0, ...) would put it at the wrong cache position.
-        // Fall back to invalidation for this case only.
-        if ol == -1 && or != -1 {
-          cache_valid = false
-        }
         (ol, or)
       }
     }

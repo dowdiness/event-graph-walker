@@ -470,18 +470,32 @@ fn[T] FugueTree::find_parent_and_side(
   origin_left : Lv?,
   origin_right : Lv?,
 ) -> (Lv?, Side) {
-  match (origin_left, origin_right) {
-    // If inserting at start, parent is root, side is Right
-    (None, _) => (Some(root_lv), Right)
-    // If no right constraint, parent is origin_left, side is Right
-    (Some(left), None) => (Some(left), Right)
-    // FugueMax algorithm:
-    // If origin_left IS an ancestor of origin_right → Left child of origin_right
-    // If origin_left is NOT an ancestor of origin_right → Right child of origin_left
-    (Some(left), Some(right)) =>
+  // Fugue paper Algorithm 1, lines 25-28 (Weidner & Kleppmann, 2023):
+  //
+  // leftOrigin = origin_left (or root if None)
+  // rightOrigin = origin_right (or end if None)
+  //
+  // If leftOrigin has NO right children → right child of leftOrigin
+  // Else → left child of rightOrigin
+  //
+  // Equivalently via ancestor check: if leftOrigin IS an ancestor of
+  // rightOrigin in the tree, leftOrigin has right children (the path
+  // to rightOrigin goes through them), so → left child of rightOrigin.
+  // Otherwise → right child of leftOrigin.
+  let left = match origin_left {
+    Some(l) => l
+    None => root_lv
+  }
+  match origin_right {
+    None =>
+      // No right constraint: right child of leftOrigin (line 26)
+      (Some(left), Right)
+    Some(right) =>
       if self.is_ancestor(left, right) {
+        // leftOrigin is ancestor of rightOrigin: left child of rightOrigin (line 28)
         (Some(right), Left)
       } else {
+        // Not ancestor: right child of leftOrigin (line 26)
         (Some(left), Right)
       }
   }

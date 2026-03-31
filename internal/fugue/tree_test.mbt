@@ -197,8 +197,9 @@ test "interleaved operations" {
   // Concurrent insert in middle
   tree.insert(ins(6, "-", 2, 3, 6, "agent2"))
   let text = tree.to_text()
-  // Current behavior based on tree structure
-  inspect(text, content="Hel-lo>")
+  // Fugue Algorithm 1: insert at pos 0 (origin_left=root, origin_right=H)
+  // → root is ancestor of H → left child of H → ">" before "Hello"
+  inspect(text, content=">Hel-lo")
 }
 
 ///|
