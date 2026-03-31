@@ -20,7 +20,7 @@ pub(all) suberror CausalGraphError {
 // Types and methods
 pub struct CausalGraph {
   // private fields
-} derive(Show)
+}
 pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
 pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
 pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange])
@@ -34,6 +34,7 @@ pub fn CausalGraph::new() -> Self
 pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
 pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
 pub impl @alga.DirectedGraph for CausalGraph
+pub impl Show for CausalGraph
 
 pub struct VersionVector(Map[String, Int]) derive(Default, Eq, Show, ToJson, @json.FromJson)
 pub fn VersionVector::agents(Self) -> Array[String]

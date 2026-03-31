@@ -129,10 +129,7 @@ fn CausalGraph::add_version_inner(
   for p in parents {
     self.children[p].push(lv)
   }
-  self.version_map = self.version_map.add(
-    @core.RawVersion::new(agent, seq),
-    lv,
-  )
+  self.version_map = self.version_map.add(@core.RawVersion::new(agent, seq), lv)
   self.next_lv = lv + 1
   self.update_frontier(lv, parents)
   lv
@@ -148,7 +145,7 @@ pub fn CausalGraph::add_version(
     Some(s) => s + 1
     None => 0
   }
-  let lv = self.add_version_inner!(parents, agent, seq)
+  let lv = self.add_version_inner(parents, agent, seq)
   self.agent_seqs = self.agent_seqs.add(agent, seq)
   lv
 }
@@ -160,7 +157,7 @@ pub fn CausalGraph::add_version_with_seq(
   agent : String,
   seq : Int,
 ) -> Int raise CausalGraphError {
-  let lv = self.add_version_inner!(parents, agent, seq)
+  let lv = self.add_version_inner(parents, agent, seq)
   let current_seq = self.agent_seqs.get(agent).unwrap_or(-1)
   let next_seq = if seq > current_seq { seq } else { current_seq }
   self.agent_seqs = self.agent_seqs.add(agent, next_seq)
@@ -307,4 +304,11 @@ pub fn CausalGraph::graph_diff(
     }
   }
   (retreat, advance)
+}
+
+///|
+pub impl Show for CausalGraph with output(self, logger) {
+  logger.write_string("CausalGraph(")
+  logger.write_string(self.next_lv.to_string())
+  logger.write_string(" versions)")
 }
