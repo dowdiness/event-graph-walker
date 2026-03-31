@@ -611,17 +611,23 @@ compare(a, b) =
   3. If equal, compare by id (ascending)
 ```
 
-The **find_parent_and_side** algorithm (`event-graph-walker/fugue/tree.mbt:183-206`) determines
-tree placement:
+The **find_parent_and_side** algorithm (`event-graph-walker/fugue/tree.mbt`) determines
+tree placement following Fugue paper Algorithm 1, lines 25-28
+(Weidner & Kleppmann 2023, arXiv:2305.00583):
 
 ```
 find_parent_and_side(origin_left, origin_right) =
-  if origin_left == -1:          -> (root, Right)
-  if origin_right == -1:         -> (origin_left, Right)
-  if is_ancestor(origin_left, origin_right):
+  let left = origin_left ?? root
+  if origin_right == None:       -> (left, Right)
+  if is_ancestor(left, origin_right):
                                   -> (origin_right, Left)
-  else:                           -> (origin_left, Right)
+  else:                           -> (left, Right)
 ```
+
+Note: `origin_left = None` is treated as `left = root`. Since root is an
+ancestor of every node, `is_ancestor(root, origin_right)` is always true
+when `origin_right` exists, so the insert becomes a left child of
+`origin_right` — placing it at the document start.
 
 The document sequence is produced by **in-order traversal**:
 left children (sorted) -> node -> right children (sorted).
@@ -710,6 +716,22 @@ ordering is determined by lexicographic agent comparison.
 - **Test (property):** `"property: fugue tie-breaking (agent then id)"` in
   `event-graph-walker/fugue/tree_properties_test.mbt:532`
   (random agents/ids with equal timestamps).
+
+**L5.8 Position Round-Trip.**
+
+```
+For all positions p in [0, len(doc)], characters c:
+  After insert(p, c): text()[p] == c
+```
+
+This law connects the position-based API contract to the FugueMax tree
+placement algorithm. It ensures that `find_parent_and_side` places the
+new character at the position the caller requested, not elsewhere. This
+property is necessary for correctness of higher-layer optimizations
+(e.g., position cache) that assume characters land where requested.
+
+- **Test (property):** `"prop_insert_position_roundtrip"` in
+  `event-graph-walker/text/position_roundtrip_properties_test.mbt`
 
 ---
 
@@ -1194,6 +1216,7 @@ L5.4/L5.5 (strong list spec).
 | L5.5 | Strong list spec (delete) | `event-graph-walker/fugue/tree_properties_test.mbt` | 317 | Tested |
 | L5.6 | Non-interleaving | `event-graph-walker/fugue/tree_properties_test.mbt` | 472 | Tested |
 | L5.7 | Deterministic tie-breaking | `event-graph-walker/fugue/tree_properties_test.mbt` | 532 | Tested |
+| L5.8 | Position round-trip | `event-graph-walker/text/position_roundtrip_properties_test.mbt` | — | Tested |
 | L6.1 | Retreat/advance partition | `event-graph-walker/causal_graph/graph_test.mbt` | 70 | Indirect |
 | L6.2 | Coverage | — | — | Untested |
 | L6.3 | Topological apply order | `event-graph-walker/branch/branch_merge_test.mbt` | 21, 84, 146 | Indirect |
@@ -1230,7 +1253,7 @@ L5.4/L5.5 (strong list spec).
 | Normalized sequence | `Runs[T]` | I3.1, I3.2, L3.1-L3.8 | 3 |
 | Partial order | `VersionVector` (<=) | L4.1-L4.3 | 4 |
 | Join semilattice | `VersionVector` (merge) | L4.4-L4.7 | 4 |
-| Ordered tree | `FugueTree` | L5.1-L5.7 | 5 |
+| Ordered tree | `FugueTree` | L5.1-L5.8 | 5 |
 | State-based CRDT | `TextDoc` | L7.1-L7.12 | 7 |
 
 ### 10.3 Untested Laws

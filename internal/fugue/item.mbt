@@ -1,4 +1,32 @@
 ///| Item structure for FugueMax tree
+///
+/// ## Fugue Tree Model
+///
+/// The FugueMax tree (Weidner & Kleppmann 2023, "The Art of the Fugue",
+/// arXiv:2305.00583, Section 4) is a rooted ordered tree that represents a
+/// collaborative text sequence. Key properties:
+///
+/// - **Virtual root**: The tree has a sentinel root node (LV = -1) that is
+///   never part of the visible document. All content nodes descend from it.
+///
+/// - **Parent and side**: Each non-root node has a parent and a side (Left
+///   or Right). The side determines the node's position relative to its
+///   parent in document order.
+///
+/// - **Document order**: The visible text is produced by in-order traversal
+///   of the tree: left children (sorted), then the node itself, then right
+///   children (sorted). Left children appear *before* the parent in the
+///   document; right children appear *after*.
+///
+/// - **Sibling ordering**: Children on the same side of the same parent are
+///   sorted by Lamport timestamp (ascending), with agent ID as a
+///   deterministic tiebreaker (lexicographic). This ensures all replicas
+///   converge to identical ordering regardless of operation arrival order.
+///
+/// - **Tombstones**: Deleted nodes are never removed from the tree. They
+///   become tombstones (`deleted = true`) so that concurrent operations
+///   referencing them can still resolve correctly. Tombstones are skipped
+///   during visible-text traversal but participate in tree structure.
 
 ///|
 /// Logical Version (local sequence number)

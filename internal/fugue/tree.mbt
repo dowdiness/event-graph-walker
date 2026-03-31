@@ -451,18 +451,65 @@ test "ancestor check correctness" {
 }
 
 ///|
-/// Find the correct parent and side for a new item using FugueMax algorithm.
+/// Determine the parent and side for a new node in the FugueMax tree.
 ///
-/// Given the left and right origin constraints from an insert operation,
-/// determines where in the tree the new item should be placed. This implements
-/// the core conflict resolution logic that ensures convergence.
+/// Implements Algorithm 1, lines 25-28 of the Fugue paper:
+///   Weidner & Kleppmann, "The Art of the Fugue: Minimizing Interleaving
+///   in Collaborative Text Editing", 2023. arXiv:2305.00583.
 ///
-/// **Algorithm**:
-/// - If `origin_left == None`: Insert at document start (parent = root, side = Right)
-/// - If `origin_right == None`: Insert after origin_left (parent = origin_left, side = Right)
-/// - Otherwise: Navigate the tree to find the correct position between origins
+/// ## Algorithm (paper lines 25-28)
 ///
-/// **Complexity**: O(d) where d = tree depth (typically O(log n) for balanced trees).
+/// Given `origin_left` (the item immediately to the left of the insertion
+/// position) and `origin_right` (the item immediately to the right):
+///
+///   let left = origin_left ?? root
+///   if origin_right is None:
+///     → right child of left                          (line 26)
+///   else if left is an ancestor of origin_right:
+///     → left child of origin_right                   (line 28)
+///   else:
+///     → right child of left                          (line 26)
+///
+/// ## Why `is_ancestor` is the correct check
+///
+/// The paper distinguishes two cases based on whether `leftOrigin` has
+/// right children in the Fugue tree:
+///
+/// - **No right children** (line 26): The new node becomes leftOrigin's
+///   right child, placing it immediately after leftOrigin in document order.
+///
+/// - **Has right children** (line 28): The new node becomes a left child
+///   of rightOrigin, placing it immediately before rightOrigin in document
+///   order. This avoids interleaving with the existing right subtree.
+///
+/// The condition "leftOrigin has right children that lead to rightOrigin"
+/// is equivalent to `is_ancestor(leftOrigin, rightOrigin)` in the tree,
+/// because the in-order traversal path from leftOrigin to rightOrigin
+/// must pass through leftOrigin's right subtree.
+///
+/// ## Why the old `(None, _) → (root, Right)` was wrong
+///
+/// The previous implementation had a special case:
+///
+///   match (origin_left, origin_right) {
+///     (None, _) => (root, Right)     // WRONG: ignores origin_right
+///     ...
+///   }
+///
+/// When `origin_left = None`, the effective left origin is root. Root is
+/// an ancestor of every node, so `is_ancestor(root, origin_right)` is
+/// always true. The correct result is `(origin_right, Left)`, placing
+/// the new node at the document start. The old code placed it as a right
+/// child of root, which puts it at the document END.
+///
+/// ## Position round-trip property (Law L5.8)
+///
+/// This function is guarded by the property test `prop_insert_position_roundtrip`:
+///   For all positions p in [0, len(doc)], after insert(p, c): text()[p] == c
+/// See `text/position_roundtrip_properties_test.mbt`.
+///
+/// **Complexity**: O(log d) where d = tree depth (dominated by `is_ancestor`
+/// which uses binary lifting jump pointers).
 ///
 /// Returns `(parent_id, side)` where side indicates Left or Right child placement.
 fn[T] FugueTree::find_parent_and_side(
