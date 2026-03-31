@@ -19,7 +19,7 @@ pub struct FugueTree[T] {
   root_children : Array[Lv]
   children : Array[Array[Lv]]
   jump_ancestors : JumpAncestors
-}
+} derive(Show)
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
 pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
 pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
@@ -39,7 +39,6 @@ pub fn FugueTree::to_text(Self[String]) -> String
 pub fn[T] FugueTree::undelete(Self[T], Lv) -> Unit raise FugueError
 pub fn[T] FugueTree::undelete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
 pub fn[T] FugueTree::visible_count(Self[T]) -> Int
-pub impl[T : Show] Show for FugueTree[T]
 
 pub(all) struct InsertOp[T] {
   id : Lv
@@ -48,8 +47,7 @@ pub(all) struct InsertOp[T] {
   origin_right : Lv?
   timestamp : Timestamp
   agent : ReplicaId
-}
-pub impl[T : Show] Show for InsertOp[T]
+} derive(Show)
 
 pub(all) struct Item[T] {
   id : Lv
@@ -64,57 +62,38 @@ pub(all) struct Item[T] {
   mut delete_count : Int
   timestamp : Timestamp
   agent : ReplicaId
-}
-pub impl[T : Eq] Eq for Item[T]
-pub impl[T : Show] Show for Item[T]
+} derive(Eq, Show)
 
 pub enum ItemState {
   NotInserted
   Inserted
   Deleted
   Retreated
-}
+} derive(Eq, Show)
 pub fn ItemState::advance_insert(Self) -> Self
 pub fn ItemState::is_visible(Self, delete_count~ : Int) -> Bool
 pub fn ItemState::retreat_insert(Self) -> Self
 pub fn ItemState::update_from_delete_count(Self, Int) -> Self
 pub impl Default for ItemState
-pub impl Eq for ItemState
-pub impl Show for ItemState
 
-type JumpAncestors
-pub impl Show for JumpAncestors
+type JumpAncestors derive(Show)
 
-pub(all) struct Lv(Int)
+pub(all) struct Lv(Int) derive(Compare, Default, Eq, Hash, Show)
 #deprecated
 pub fn Lv::inner(Self) -> Int
-pub impl Compare for Lv
-pub impl Default for Lv
-pub impl Eq for Lv
-pub impl Hash for Lv
-pub impl Show for Lv
 
-pub(all) struct ReplicaId(String)
+pub(all) struct ReplicaId(String) derive(Compare, Eq, Show)
 #deprecated
 pub fn ReplicaId::inner(Self) -> String
-pub impl Compare for ReplicaId
-pub impl Eq for ReplicaId
-pub impl Show for ReplicaId
 
 pub enum Side {
   Left
   Right
-}
-pub impl Eq for Side
-pub impl Show for Side
+} derive(Eq, Show)
 
-pub(all) struct Timestamp(Int)
+pub(all) struct Timestamp(Int) derive(Compare, Default, Eq, Show)
 #deprecated
 pub fn Timestamp::inner(Self) -> Int
-pub impl Compare for Timestamp
-pub impl Default for Timestamp
-pub impl Eq for Timestamp
-pub impl Show for Timestamp
 
 // Type aliases
 

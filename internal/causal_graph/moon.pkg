@@ -1,6 +1,7 @@
 import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/rle",
+  "dowdiness/alga" @alga,
   "moonbitlang/core/bench",
   "moonbitlang/core/queue",
   "moonbitlang/core/json",

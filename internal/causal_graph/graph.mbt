@@ -1,23 +1,62 @@
 ///|
 /// CausalGraph - tracks operation dependencies and causal ordering
+///
+/// Stores both parent and children edges for bidirectional traversal:
+/// - parents: backward traversal (is_ancestor, transitive_closure)
+/// - children: forward traversal (topological_sort, walk_from_frontier)
+///
+/// Uses flat arrays indexed by LV (0..n-1) for O(1) lookup.
 pub struct CausalGraph {
-  priv mut entries : @immut/hashmap.HashMap[Int, @core.GraphEntry]
+  priv entries : Array[@core.GraphEntry?]
+  priv children : Array[Array[Int]]
   priv mut version_map : @immut/hashmap.HashMap[@core.RawVersion, Int]
   priv mut next_lv : Int
   priv mut frontier : @core.Frontier
   priv mut agent_seqs : @immut/hashmap.HashMap[String, Int]
+  // Reusable query buffers — amortize allocation across repeated calls.
+  // query_visited: generation-counter visited set (query_visited[lv] == gen → visited)
+  // query_int_buf: reusable int buffer for in-degrees etc.
+  priv query_visited : Array[Int]
+  priv mut query_gen : Int
+  priv query_int_buf : Array[Int]
 } derive(Show)
 
 ///|
 /// Create a new empty CausalGraph
 pub fn CausalGraph::new() -> CausalGraph {
   {
-    entries: @immut/hashmap.new(),
+    entries: [],
+    children: [],
     version_map: @immut/hashmap.new(),
     next_lv: 0,
     frontier: @core.Frontier::from_array([]),
     agent_seqs: @immut/hashmap.new(),
+    query_visited: [],
+    query_gen: 0,
+    query_int_buf: [],
   }
+}
+
+///|
+/// Ensure query buffers are large enough for the current graph size.
+/// Doubles capacity to amortize reallocation.
+fn CausalGraph::ensure_query_buffers(self : CausalGraph) -> Unit {
+  let n = self.next_lv
+  if self.query_visited.length() < n {
+    let cap = if n < 16 { 16 } else { n * 2 }
+    // Reallocate — old gen values become invalid, reset gen
+    self.query_visited.resize(cap, 0)
+    self.query_int_buf.resize(cap, 0)
+    self.query_gen = 0
+  }
+}
+
+///|
+/// Get a fresh generation number for the query visited buffer.
+fn CausalGraph::fresh_gen(self : CausalGraph) -> Int {
+  self.ensure_query_buffers()
+  self.query_gen = self.query_gen + 1
+  self.query_gen
 }
 
 ///|
@@ -26,7 +65,10 @@ pub fn CausalGraph::lv_to_raw(
   self : CausalGraph,
   lv : Int,
 ) -> @core.RawVersion? {
-  match self.entries.get(lv) {
+  if lv < 0 || lv >= self.next_lv {
+    return None
+  }
+  match self.entries[lv] {
     Some(entry) => Some(@core.RawVersion::new(entry.agent, entry.seq))
     None => None
   }
@@ -50,7 +92,10 @@ pub fn CausalGraph::get_entry(
   self : CausalGraph,
   lv : Int,
 ) -> @core.GraphEntry? {
-  self.entries.get(lv)
+  if lv < 0 || lv >= self.next_lv {
+    return None
+  }
+  self.entries[lv]
 }
 
 ///|
@@ -61,7 +106,7 @@ pub fn CausalGraph::add_version(
   agent : String,
 ) -> Int raise CausalGraphError {
   for parent in parents {
-    if self.entries.get(parent) is None {
+    if parent < 0 || parent >= self.next_lv || self.entries[parent] is None {
       raise CausalGraphError::MissingParent(lv=parent)
     }
   }
@@ -69,11 +114,14 @@ pub fn CausalGraph::add_version(
   let timestamp = if parents.is_empty() {
     0
   } else {
-    let max_parent_timestamp = parents
-      .iter()
-      .filter_map(lv => self.entries.get(lv))
-      .fold((prev_max, curr) => curr.timestamp.max(prev_max), init=0)
-    max_parent_timestamp + 1
+    let mut max_ts = 0
+    for p in parents {
+      match self.entries[p] {
+        Some(entry) => if entry.timestamp > max_ts { max_ts = entry.timestamp }
+        None => ()
+      }
+    }
+    max_ts + 1
   }
 
   // Get next sequence for this agent
@@ -86,8 +134,15 @@ pub fn CausalGraph::add_version(
   let lv = self.next_lv
   let entry = @core.GraphEntry::{ parents, agent, seq, timestamp }
 
-  // Update graph
-  self.entries = self.entries.add(lv, entry)
+  // Append to flat arrays
+  self.entries.push(Some(entry))
+  self.children.push([])
+
+  // Maintain children index: for each parent, record this LV as a child
+  for p in parents {
+    self.children[p].push(lv)
+  }
+
   self.version_map = self.version_map.add(@core.RawVersion::new(agent, seq), lv)
   self.next_lv = lv + 1
   self.agent_seqs = self.agent_seqs.add(agent, seq)
@@ -106,7 +161,7 @@ pub fn CausalGraph::add_version_with_seq(
   seq : Int,
 ) -> Int raise CausalGraphError {
   for parent in parents {
-    if self.entries.get(parent) is None {
+    if parent < 0 || parent >= self.next_lv || self.entries[parent] is None {
       raise CausalGraphError::MissingParent(lv=parent)
     }
   }
@@ -114,19 +169,29 @@ pub fn CausalGraph::add_version_with_seq(
   let timestamp = if parents.is_empty() {
     0
   } else {
-    let max_parent_timestamp = parents
-      .iter()
-      .filter_map(lv => self.entries.get(lv))
-      .fold((prev_max, curr) => curr.timestamp.max(prev_max), init=0)
-    max_parent_timestamp + 1
+    let mut max_ts = 0
+    for p in parents {
+      match self.entries[p] {
+        Some(entry) => if entry.timestamp > max_ts { max_ts = entry.timestamp }
+        None => ()
+      }
+    }
+    max_ts + 1
   }
 
   // Create entry
   let lv = self.next_lv
   let entry = @core.GraphEntry::{ parents, agent, seq, timestamp }
 
-  // Update graph
-  self.entries = self.entries.add(lv, entry)
+  // Append to flat arrays
+  self.entries.push(Some(entry))
+  self.children.push([])
+
+  // Maintain children index
+  for p in parents {
+    self.children[p].push(lv)
+  }
+
   self.version_map = self.version_map.add(@core.RawVersion::new(agent, seq), lv)
   self.next_lv = lv + 1
   let current_seq = self.agent_seqs.get(agent).unwrap_or(-1)
@@ -170,68 +235,99 @@ pub fn CausalGraph::is_ancestor(
   if lv1 == lv2 {
     return true
   }
-
-  // BFS to find if lv1 is reachable from lv2's parents
-  let mut visited : @immut/hashset.HashSet[Int] = @immut/hashset.new()
-  let queue = @queue.Queue::new()
-  match self.entries.get(lv2) {
+  let n = self.next_lv
+  if lv1 < 0 || lv1 >= n || lv2 < 0 || lv2 >= n {
+    return false
+  }
+  // BFS backward through parents. Uses gen-counter visited set (O(1) reset).
+  let gen = self.fresh_gen()
+  let visited = self.query_visited
+  let queue : Array[Int] = []
+  match self.entries[lv2] {
     Some(entry) =>
       for parent in entry.parents {
         queue.push(parent)
       }
     None => return false
   }
-  while !queue.is_empty() {
-    match queue.pop() {
-      Some(current) => {
-        if current == lv1 {
-          return true
+  let mut head = 0
+  while head < queue.length() {
+    let current = queue[head]
+    head = head + 1
+    if current == lv1 {
+      return true
+    }
+    if visited[current] == gen {
+      continue
+    }
+    visited[current] = gen
+    match self.entries[current] {
+      Some(entry) =>
+        for parent in entry.parents {
+          if visited[parent] != gen {
+            queue.push(parent)
+          }
         }
-        if visited.contains(current) {
-          continue
-        }
-        visited = visited.add(current)
-        match self.entries.get(current) {
-          Some(entry) =>
-            for parent in entry.parents {
-              queue.push(parent)
-            }
-          None => ()
-        }
-      }
-      None => break
+      None => ()
     }
   }
   false
 }
 
 ///|
-/// Get all versions reachable from given frontiers (transitive closure)
-fn CausalGraph::transitive_closure(
+/// Collect all LVs reachable from frontier via backward BFS through parents.
+/// Uses gen-counter visited set (O(1) reset). Returns (gen, reachable_lvs)
+/// where gen marks which entries in query_visited are in this set.
+
+///|
+/// BFS backward through parents using a given visited buffer + generation.
+/// Returns the list of reachable LVs. Marks visited[lv] = gen for each.
+fn CausalGraph::bfs_backward(
   self : CausalGraph,
   frontiers : @core.Frontier,
-) -> @immut/hashset.HashSet[Int] {
-  let mut result : @immut/hashset.HashSet[Int] = @immut/hashset.new()
-  let queue = @queue.from_array(frontiers.0)
-  while !queue.is_empty() {
-    match queue.pop() {
-      Some(current) => {
-        if result.contains(current) {
-          continue
-        }
-        result = result.add(current)
-        match self.entries.get(current) {
-          Some(entry) =>
-            for parent in entry.parents {
-              queue.push(parent)
-            }
-          None => ()
-        }
-      }
-      None => break
+  visited : Array[Int],
+  gen : Int,
+) -> Array[Int] {
+  let n = self.next_lv
+  let reachable : Array[Int] = []
+  let queue : Array[Int] = []
+  for lv in frontiers.0 {
+    if lv >= 0 && lv < n {
+      queue.push(lv)
     }
   }
-  result
+  let mut head = 0
+  while head < queue.length() {
+    let current = queue[head]
+    head = head + 1
+    if visited[current] == gen {
+      continue
+    }
+    visited[current] = gen
+    reachable.push(current)
+    match self.entries[current] {
+      Some(entry) =>
+        for parent in entry.parents {
+          if visited[parent] != gen {
+            queue.push(parent)
+          }
+        }
+      None => ()
+    }
+  }
+  reachable
+}
+
+///|
+/// Transitive closure using the shared query_visited buffer.
+/// Returns (gen, reachable_lvs).
+fn CausalGraph::transitive_closure_gen(
+  self : CausalGraph,
+  frontiers : @core.Frontier,
+) -> (Int, Array[Int]) {
+  let gen = self.fresh_gen()
+  let reachable = self.bfs_backward(frontiers, self.query_visited, gen)
+  (gen, reachable)
 }
 
 ///|
@@ -250,14 +346,28 @@ pub fn CausalGraph::graph_diff(
   from : @core.Frontier,
   to : @core.Frontier,
 ) -> (Array[Int], Array[Int]) {
-  let from_set = self.transitive_closure(from)
-  let to_set = self.transitive_closure(to)
-
-  // from_set.difference(to_set)
-  // retreat = versions in 'from' but not in 'to'
-  let retreat = from_set.difference(to_set).iter().to_array()
-
-  // advance = versions in 'to' but not in 'from'
-  let advance = to_set.difference(from_set).iter().to_array()
+  self.ensure_query_buffers()
+  // Use two separate buffers to avoid interference.
+  // "from" set marked in query_visited, "to" set marked in query_int_buf.
+  let from_gen = self.fresh_gen()
+  let from_lvs = self.bfs_backward(from, self.query_visited, from_gen)
+  let to_gen = self.fresh_gen()
+  let to_lvs = self.bfs_backward(to, self.query_int_buf, to_gen)
+  // retreat = in from but not in to
+  let retreat : Array[Int] = []
+  let to_buf = self.query_int_buf
+  for lv in from_lvs {
+    if to_buf[lv] != to_gen {
+      retreat.push(lv)
+    }
+  }
+  // advance = in to but not in from
+  let advance : Array[Int] = []
+  let from_buf = self.query_visited
+  for lv in to_lvs {
+    if from_buf[lv] != from_gen {
+      advance.push(lv)
+    }
+  }
   (retreat, advance)
 }

@@ -2,6 +2,7 @@
 package "dowdiness/event-graph-walker/internal/causal_graph"
 
 import {
+  "dowdiness/alga",
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/rle",
   "moonbitlang/core/json",
@@ -14,13 +15,12 @@ import {
 pub(all) suberror CausalGraphError {
   MissingParent(lv~ : Int)
   MissingEntry(lv~ : Int)
-}
-pub impl Show for CausalGraphError
+} derive(Show)
 
 // Types and methods
 pub struct CausalGraph {
   // private fields
-}
+} derive(Show)
 pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
 pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
 pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange])
@@ -33,9 +33,9 @@ pub fn CausalGraph::lv_to_raw(Self, Int) -> @core.RawVersion?
 pub fn CausalGraph::new() -> Self
 pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
 pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
-pub impl Show for CausalGraph
+pub impl @alga.DirectedGraph for CausalGraph
 
-pub struct VersionVector(Map[String, Int])
+pub struct VersionVector(Map[String, Int]) derive(Default, Eq, Show, ToJson, @json.FromJson)
 pub fn VersionVector::agents(Self) -> Array[String]
 pub fn VersionVector::concurrent(Self, Self) -> Bool
 pub fn VersionVector::from_frontier(CausalGraph, @core.Frontier) -> Self
@@ -48,11 +48,6 @@ pub fn VersionVector::new() -> Self
 pub fn VersionVector::set(Self, String, Int) -> Self
 pub fn VersionVector::to_frontier(Self, CausalGraph) -> @core.Frontier
 pub impl Compare for VersionVector
-pub impl Default for VersionVector
-pub impl Eq for VersionVector
-pub impl Show for VersionVector
-pub impl ToJson for VersionVector
-pub impl @json.FromJson for VersionVector
 pub impl @moonbitlang/core/quickcheck.Arbitrary for VersionVector
 pub impl @moonbitlang/quickcheck.Shrink for VersionVector
 

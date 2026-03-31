@@ -25,7 +25,7 @@ pub(all) suberror BranchError {
 // Types and methods
 pub struct Branch {
   // private fields
-}
+} derive(Show)
 pub fn Branch::advance(Self, @core.Frontier) -> Self raise BranchError
 pub fn Branch::advance_to_version_vector(Self, @causal_graph.VersionVector) -> Self raise BranchError
 pub fn Branch::at_frontier(Self, @core.Frontier) -> Bool
@@ -40,7 +40,6 @@ pub fn Branch::merge_remote_ops(Self, Array[@core.Op]) -> Self raise BranchError
 pub fn Branch::new(@oplog.OpLog) -> Self
 pub fn Branch::to_text(Self) -> String
 pub fn Branch::visible_count(Self) -> Int
-pub impl Show for Branch
 
 pub struct DeleteIndex {
   index : Map[Int, Array[Int]]

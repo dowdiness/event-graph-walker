@@ -22,37 +22,31 @@ pub fn TextError::message(Self) -> String
 // Types and methods
 pub(all) struct Pos {
   // private fields
-}
+} derive(Eq, Show)
 pub fn Pos::at(Int) -> Self
 pub fn Pos::value(Self) -> Int
-pub impl Eq for Pos
-pub impl Show for Pos
 
 pub(all) struct Range {
   start : Pos
   end : Pos
-}
+} derive(Eq, Show)
 pub fn Range::from_ints(Int, Int) -> Self
 pub fn Range::new(Pos, Pos) -> Self
-pub impl Eq for Range
-pub impl Show for Range
 
 pub(all) enum SyncFailure {
   MissingDependency(hint~ : String)
   MalformedMessage(detail~ : String)
   Timeout(detail~ : String)
   Cancelled(detail~ : String)
-}
-pub impl Show for SyncFailure
+} derive(Show)
 
 pub(all) struct SyncMessage {
   // private fields
-}
+} derive(Show)
 pub fn SyncMessage::from_json_string(String) -> Self raise TextError
 pub fn SyncMessage::is_empty(Self) -> Bool
 pub fn SyncMessage::op_count(Self) -> Int
 pub fn SyncMessage::to_json_string(Self) -> String
-pub impl Show for SyncMessage
 
 pub(all) struct SyncSession {
   // private fields
@@ -94,12 +88,10 @@ pub impl Show for TextView
 
 pub(all) struct Version {
   // private fields
-}
+} derive(Eq, Show)
 pub fn Version::empty() -> Self
 pub fn Version::from_json_string(String) -> Self raise TextError
 pub fn Version::to_json_string(Self) -> String
-pub impl Eq for Version
-pub impl Show for Version
 
 // Type aliases
 

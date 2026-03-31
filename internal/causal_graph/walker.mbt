@@ -7,172 +7,84 @@
 ///
 /// This is the core eg-walker algorithm that ensures operations are
 /// replayed in an order that respects their causal dependencies.
-///
-/// # Arguments
-/// * `frontier` - Starting frontier (versions to walk from)
-///
-/// # Returns
-/// RLE-compressed LVs in topological order, from oldest to newest
 pub fn CausalGraph::walk_from_frontier(
   self : CausalGraph,
   frontier : @core.Frontier,
 ) -> @rle.Rle[@core.LvRange] {
-  // Get all versions reachable from frontier
-  let reachable = collect_reachable_versions(self, frontier.0)
-
-  // Sort them in topological order (respecting causal dependencies)
-  topological_sort(self, reachable)
+  let (gen, reachable_lvs) = self.transitive_closure_gen(frontier)
+  topological_sort_subset(self, reachable_lvs, self.query_visited, gen)
 }
 
 ///|
-/// Collect all versions reachable from the given frontier.
+/// Topological sort of a subset of versions using Kahn's algorithm.
+/// Uses the pre-built children index. Only iterates over reachable LVs
+/// (not the full 0..n range).
 ///
-/// Uses BFS traversal to find all ancestor versions. This includes the frontier
-/// versions themselves and all their transitive parents in the causal graph.
-///
-/// **Complexity**: O(V + E) where V = number of versions, E = number of parent edges.
-///
-/// **Invariant**: The returned set forms a downward-closed subset of the DAG -
-/// if a version is included, all its ancestors are also included.
-fn collect_reachable_versions(
+/// `reachable_lvs` is the list of LVs in the subset.
+/// `membership_buf[lv] == membership_gen` checks subset membership.
+fn topological_sort_subset(
   graph : CausalGraph,
-  frontier : Array[Int],
-) -> @immut/hashset.HashSet[Int] {
-  let mut visited : @immut/hashset.HashSet[Int] = @immut/hashset.new()
-  let queue = @queue.Queue::new()
-
-  // Start from frontier
-  for lv in frontier {
-    queue.push(lv)
-  }
-
-  // BFS to collect all reachable versions
-  while !queue.is_empty() {
-    match queue.pop() {
-      Some(current) => {
-        // Skip if already visited
-        if visited.contains(current) {
-          continue
-        }
-
-        // Mark as visited
-        visited = visited.add(current)
-
-        // Add parents to queue
-        if graph[current] is Some(entry) {
-          for parent in entry.parents {
-            if !visited.contains(parent) {
-              queue.push(parent)
-            }
-          }
-        }
-      }
-      None => break
-    }
-  }
-  visited
-}
-
-///|
-/// Topological sort of versions using Kahn's algorithm
-/// Returns versions ordered from oldest to newest (respecting causality)
-///
-/// https://en.wikipedia.org/wiki/Topological_sorting
-///
-/// # Algorithm
-/// 1. Build children map for O(1) lookups (avoids O(n²) scanning)
-/// 2. Calculate in-degree for each version (number of unprocessed dependencies)
-/// 3. Start with versions that have in-degree 0
-/// 4. Process versions, decrementing in-degrees of their children
-/// 5. Add newly-zero-in-degree versions to queue
-fn topological_sort(
-  graph : CausalGraph,
-  versions : @immut/hashset.HashSet[Int],
+  reachable_lvs : Array[Int],
+  membership_buf : Array[Int],
+  membership_gen : Int,
 ) -> @rle.Rle[@core.LvRange] {
-  // Build children map: parent -> [children]
-  // This is O(n + edges) instead of O(n²) for repeated scanning
-  let mut children : @immut/hashmap.HashMap[Int, Array[Int]] = @immut/hashmap.new()
-  for lv in versions.iter() {
-    if graph[lv] is Some(entry) {
-      // For each parent, record this version as a child
-      for parent in entry.parents {
-        if versions.contains(parent) {
-          let current_children = children.get(parent).unwrap_or([])
-          current_children.push(lv)
-          children = children.add(parent, current_children)
-        }
-      }
-    }
+  let int_buf = graph.query_int_buf
+
+  // Compute in-degrees — only for reachable vertices.
+  // int_buf is reused; we zero entries before and clean up after.
+  for lv in reachable_lvs {
+    int_buf[lv] = 0
   }
-
-  // Calculate in-degrees (number of parents in the reachable set)
-  let mut in_degree : @immut/hashmap.HashMap[Int, Int] = @immut/hashmap.new()
-
-  // Initialize in-degrees to 0
-  for lv in versions.iter() {
-    in_degree = in_degree.add(lv, 0)
-  }
-
-  // Count in-degrees
-  for lv in versions.iter() {
-    if graph[lv] is Some(entry) {
-      // For each parent in the reachable set, increment this version's in-degree
-      for parent in entry.parents {
-        if versions.contains(parent) {
-          let current_degree = in_degree.get(lv).unwrap_or(0)
-          in_degree = in_degree.add(lv, current_degree + 1)
-        }
-      }
-    }
-  }
-
-  // Queue for versions with in-degree 0 (no dependencies)
-  let queue = @queue.Queue::new()
-
-  // Find initial versions with in-degree 0, enqueue in deterministic order
-  let ready : Array[Int] = []
-  for lv in versions.iter() {
-    match in_degree.get(lv) {
-      Some(0) | None => ready.push(lv)
-      _ => ()
-    }
-  }
-  ready.sort()
-  for lv in ready {
-    queue.push(lv)
-  }
-
-  // Result array
-  let result : Array[Int] = []
-
-  // Process versions in topological order
-  while !queue.is_empty() {
-    match queue.pop() {
-      Some(current) => {
-        // Add to result
-        result.push(current)
-
-        // Look up children directly from map (O(1) instead of O(n))
-        if children.get(current) is Some(child_list) {
-          let sorted_children = child_list.copy()
-          sorted_children.sort()
-          for child in sorted_children {
-            // Decrement in-degree
-            if in_degree.get(child) is Some(degree) {
-              let new_degree = degree - 1
-              in_degree = in_degree.add(child, new_degree)
-
-              // If in-degree reaches 0, add to queue
-              if new_degree == 0 {
-                queue.push(child)
-              }
-            }
+  for lv in reachable_lvs {
+    match graph.entries[lv] {
+      Some(entry) =>
+        for parent in entry.parents {
+          if membership_buf[parent] == membership_gen {
+            int_buf[lv] = int_buf[lv] + 1
           }
         }
-      }
-      None => break
+      None => ()
     }
   }
+
+  // Seed queue with zero-in-degree vertices in sorted order
+  let queue : Array[Int] = []
+  for lv in reachable_lvs {
+    if int_buf[lv] == 0 {
+      queue.push(lv)
+    }
+  }
+  queue.sort()
+
+  // Kahn's algorithm using pre-built children index
+  let result : Array[Int] = []
+  let mut head = 0
+  while head < queue.length() {
+    let current = queue[head]
+    head = head + 1
+    result.push(current)
+    // Collect newly-ready children in sorted order for determinism
+    let ready : Array[Int] = []
+    for child in graph.children[current] {
+      if membership_buf[child] != membership_gen {
+        continue
+      }
+      int_buf[child] = int_buf[child] - 1
+      if int_buf[child] == 0 {
+        ready.push(child)
+      }
+    }
+    ready.sort()
+    for child in ready {
+      queue.push(child)
+    }
+  }
+
+  // Clean up int_buf for reuse
+  for lv in reachable_lvs {
+    int_buf[lv] = 0
+  }
+
   @rle.Rle::from_sorted_ints(result)
 }
 
@@ -190,22 +102,23 @@ pub fn CausalGraph::diff_frontiers_lvs(
   from_frontier : @core.Frontier,
   to_frontier : @core.Frontier,
 ) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange]) {
-  // Use existing graph_diff to get the unsorted sets
   let (retreat_set, advance_set) = self.graph_diff(from_frontier, to_frontier)
 
-  // Walk (topological sort) the retreat set, then reverse for undo order
+  // Topological sort the retreat set, then reverse for undo order
   let retreat_rle = if retreat_set.length() > 0 {
-    let reachable = @immut/hashset.from_array(retreat_set)
-    let sorted = topological_sort(self, reachable)
-    // Reverse the retreat LVs for undo order:
-    // expand, reverse, re-compress as singleton ranges
+    // Mark retreat set in query_visited for membership checks
+    let gen = self.fresh_gen()
+    let visited = self.query_visited
+    for lv in retreat_set {
+      visited[lv] = gen
+    }
+    let sorted = topological_sort_subset(self, retreat_set, visited, gen)
+    // Reverse for undo order
     let expanded = sorted.iter_units().collect()
     let reversed : Array[Int] = []
     for i = expanded.length() - 1; i >= 0; i = i - 1 {
       reversed.push(expanded[i])
     }
-    // Reversed LVs are descending so they won't merge (each is a singleton).
-    // This is acceptable: retreat sets are typically small.
     @rle.Rle::from_array(
       reversed.map(fn(lv) { @core.LvRange::{ start: lv, count: 1 } }),
     )
@@ -213,10 +126,14 @@ pub fn CausalGraph::diff_frontiers_lvs(
     @rle.Rle::new()
   }
 
-  // Walk (topological sort) the advance set
+  // Topological sort the advance set
   let advance_rle = if advance_set.length() > 0 {
-    let reachable = @immut/hashset.from_array(advance_set)
-    topological_sort(self, reachable)
+    let gen = self.fresh_gen()
+    let visited = self.query_visited
+    for lv in advance_set {
+      visited[lv] = gen
+    }
+    topological_sort_subset(self, advance_set, visited, gen)
   } else {
     @rle.Rle::new()
   }
