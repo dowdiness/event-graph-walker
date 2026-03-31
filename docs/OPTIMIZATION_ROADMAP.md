@@ -38,11 +38,20 @@ The critical O(n²) bottleneck in topological sort has been eliminated by buildi
 ### ✅ Completed (2026-02-04)
 
 **Document Position Cache** (`document/document.mbt`)
-- Added lazy `position_cache: Array[(Int, @fugue.Item)]?` for visible items
-- First access: O(n) tree traversal, subsequent lookups: O(1)
+- Added lazy `position_cache: OrderTree[VisibleRun]?` for visible items
+- O(log n) position→LV lookup via `OrderTree::find`
 - Automatically invalidated on any mutation (insert, delete, sync apply)
 - Cache invalidation happens *before* tree mutations for exception safety
-- Files: `document/document.mbt`, `document/document_test.mbt`
+- Files: `document/document.mbt`, `document/document_wbtest.mbt`
+
+### ✅ Completed (2026-03-31)
+
+**Incremental Position Cache for Non-Sequential Inserts** ([PR #16](https://github.com/dowdiness/event-graph-walker/pull/16))
+- Non-sequential inserts (click to new position, then type) previously invalidated cache → O(n) rebuild
+- Root cause: defensive `invalidate_cache()` before lookups was unnecessary — cache is always valid at `insert()` entry
+- Fix: remove invalidation, use existing cache for lookups, maintain via `OrderTree.insert_at`
+- Result: O(n) → O(log n). Single non-seq insert: 1.47ms → 4.79µs (306x) at 1000 chars
+- See `docs/benchmarks/2026-03-31-incremental-position-cache.md`
 
 **Zero-Copy Reference Methods** (`branch/branch.mbt`, `oplog/oplog.mbt`)
 - Added `Branch::frontier_ref()` - returns frontier without copying
