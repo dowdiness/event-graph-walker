@@ -47,9 +47,9 @@ test "cache - alternating pos (1000 chars)" (b : @bench.T) {
 // =============================================================================
 
 ///|
-/// Simulates editing at 1000 chars: type 10 chars sequentially, jump to a
-/// random position (non-sequential), repeat. ~100 cache rebuilds.
-test "cache - jump every 10 chars (1000 chars)" (b : @bench.T) {
+/// Type 10 chars, jump to pos 0 (FugueMax edge case: falls back to
+/// invalidation since origin_left=root on non-empty doc). ~100 rebuilds.
+test "cache - jump to pos 0 every 10 chars (1000 chars)" (b : @bench.T) {
   b.bench(fn() {
     let doc = TextState::new("alice")
     let mut pos = 0
@@ -57,6 +57,25 @@ test "cache - jump every 10 chars (1000 chars)" (b : @bench.T) {
       bench_insert(doc, pos, "x")
       if (i + 1) % 10 == 0 {
         pos = 0
+      } else {
+        pos = pos + 1
+      }
+    }
+    b.keep(doc)
+  })
+}
+
+///|
+/// Type 10 chars, jump to middle (realistic click-then-type pattern,
+/// no FugueMax edge case). Incremental cache maintained. ~100 jumps.
+test "cache - jump to middle every 10 chars (1000 chars)" (b : @bench.T) {
+  b.bench(fn() {
+    let doc = TextState::new("alice")
+    let mut pos = 0
+    for i = 0; i < 1000; i = i + 1 {
+      bench_insert(doc, pos, "x")
+      if (i + 1) % 10 == 0 {
+        pos = (i + 1) / 2
       } else {
         pos = pos + 1
       }

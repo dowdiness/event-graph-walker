@@ -174,8 +174,6 @@ pub fn Document::insert(
         // Cursor miss: use existing cache (or lazy-build) for lookups.
         // The cache is always valid at the start of insert() — every mutation
         // either maintains it incrementally or sets it to None.
-        // After lookups, keep cache_valid true so the incremental insert_at
-        // maintains it, avoiding O(n) rebuild.
         if !cache_valid {
           cache_valid = true
         }
@@ -183,6 +181,14 @@ pub fn Document::insert(
         let or = match self.lv_at_position(current_pos) {
           Some(lv) => lv
           None => -1
+        }
+        // When origin_left is root (position 0 in non-empty doc), FugueMax's
+        // find_parent_and_side(None, _) always places the item as a right child
+        // of root — at the END, not at position 0. The incremental
+        // insert_at(0, ...) would put it at the wrong cache position.
+        // Fall back to invalidation for this case only.
+        if ol == -1 && or != -1 {
+          cache_valid = false
         }
         (ol, or)
       }
