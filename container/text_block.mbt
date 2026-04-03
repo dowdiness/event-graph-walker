@@ -1,0 +1,111 @@
+///| Per-block text state machine.
+///
+/// Each tree node that has text content gets a TextBlock. The FugueTree
+/// uses global LVs from the shared CausalGraph (Path A). Per-block arrays
+/// are sparse — a block with LVs [100, 105, 200] allocates a 201-slot
+/// items array. This is the accepted tradeoff for Path A simplicity.
+/// Internal dense-ItemId refactoring is a future optimization.
+
+///|
+pub struct TextBlock {
+  priv tree : @fugue.FugueTree[String]
+  priv mut text_cache : String?
+}
+
+///|
+pub fn TextBlock::new() -> TextBlock {
+  { tree: @fugue.FugueTree::new(), text_cache: None }
+}
+
+///|
+/// Insert a character at a visible position in this block's text.
+///
+/// Resolves Fugue origins (origin_left, origin_right) internally from
+/// the visible items at `pos`. The caller provides only the position,
+/// a global LV, and causal metadata.
+pub fn TextBlock::insert_at(
+  self : TextBlock,
+  pos : Int,
+  lv : Int,
+  content : String,
+  timestamp : Int,
+  agent : String,
+) -> Unit raise DocumentError {
+  let len = self.tree.visible_count()
+  if pos < 0 || pos > len {
+    raise DocumentError::Internal(
+      detail="TextBlock insert_at: position " +
+        pos.to_string() +
+        " out of bounds (len=" +
+        len.to_string() +
+        ")",
+    )
+  }
+  let items = self.tree.get_visible_items()
+  let origin_left : @fugue.Lv? = if pos == 0 {
+    None
+  } else {
+    Some(items[pos - 1].0)
+  }
+  let origin_right : @fugue.Lv? = if pos >= items.length() {
+    None
+  } else {
+    Some(items[pos].0)
+  }
+  self.tree.insert({
+    id: @fugue.Lv(lv),
+    content,
+    origin_left,
+    origin_right,
+    timestamp: @fugue.Timestamp(timestamp),
+    agent: @fugue.ReplicaId(agent),
+  })
+  self.text_cache = None
+}
+
+///|
+/// Delete the character at a visible position in this block's text.
+pub fn TextBlock::delete_at(
+  self : TextBlock,
+  pos : Int,
+  del_timestamp : Int,
+  del_agent : String,
+) -> Unit raise DocumentError {
+  let items = self.tree.get_visible_items()
+  if pos < 0 || pos >= items.length() {
+    raise DocumentError::Internal(
+      detail="TextBlock delete_at: position " +
+        pos.to_string() +
+        " out of bounds (len=" +
+        items.length().to_string() +
+        ")",
+    )
+  }
+  let (item_lv, _) = items[pos]
+  self.tree.delete_with_ts(item_lv, del_timestamp, del_agent) catch {
+    _ =>
+      raise DocumentError::Internal(
+        detail="TextBlock delete: missing item at lv=" + item_lv.0.to_string(),
+      )
+  }
+  self.text_cache = None
+}
+
+///|
+/// Get the current visible text of this block.
+pub fn TextBlock::text(self : TextBlock) -> String {
+  match self.text_cache {
+    Some(cached) => cached
+    None => {
+      let text = self.tree.to_text()
+      self.text_cache = Some(text)
+      text
+    }
+  }
+}
+
+///|
+/// Get the visible character count.
+pub fn TextBlock::len(self : TextBlock) -> Int {
+  self.tree.visible_count()
+}

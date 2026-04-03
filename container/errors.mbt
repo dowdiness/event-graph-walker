@@ -10,6 +10,8 @@ pub(all) suberror DocumentError {
   ParentNotFound
   /// Move would create a cycle in the tree
   CycleDetected
+  /// Text block does not exist for the given tree node
+  TextBlockNotFound(id~ : @mt.TreeNodeId)
   /// Internal invariant violation
   Internal(detail~ : String)
 }
