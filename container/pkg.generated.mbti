@@ -26,7 +26,6 @@ pub(all) suberror DocumentError {
   TargetNotFound
   ParentNotFound
   CycleDetected
-  TextBlockNotFound(id~ : @movable_tree.TreeNodeId)
   Internal(detail~ : String)
 }
 
@@ -50,15 +49,6 @@ pub fn Document::new(String) -> Self raise DocumentError
 pub fn Document::replace_text(Self, @movable_tree.TreeNodeId, String) -> Unit raise DocumentError
 pub fn Document::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
 pub fn Document::text_len(Self, @movable_tree.TreeNodeId) -> Int
-
-pub struct TextBlock {
-  // private fields
-}
-pub fn TextBlock::delete_at(Self, Int, Int, String) -> Unit raise DocumentError
-pub fn TextBlock::insert_at(Self, Int, Int, String, Int, String) -> Unit raise DocumentError
-pub fn TextBlock::len(Self) -> Int
-pub fn TextBlock::new() -> Self
-pub fn TextBlock::text(Self) -> String
 
 // Type aliases
 pub using @movable_tree {type TreeNodeId}

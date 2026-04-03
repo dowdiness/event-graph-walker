@@ -109,3 +109,25 @@ fn TextBlock::text(self : TextBlock) -> String {
 fn TextBlock::len(self : TextBlock) -> Int {
   self.tree.visible_count()
 }
+
+///|
+/// Delete all visible items by their LVs.
+/// Snapshots the visible set first, then deletes each by identity.
+fn TextBlock::delete_all(
+  self : TextBlock,
+  agent_id : String,
+  alloc_timestamp : () -> Int raise DocumentError,
+) -> Unit raise DocumentError {
+  let visible = self.tree.get_visible_items()
+  for i in 0..<visible.length() {
+    let (item_lv, _) = visible[i]
+    let timestamp = alloc_timestamp()
+    self.tree.delete_with_ts(item_lv, timestamp, agent_id) catch {
+      _ =>
+        raise DocumentError::Internal(
+          detail="delete_all: missing item at lv=" + item_lv.0.to_string(),
+        )
+    }
+  }
+  self.text_cache = None
+}

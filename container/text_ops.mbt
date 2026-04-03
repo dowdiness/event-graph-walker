@@ -61,21 +61,11 @@ pub fn Document::replace_text(
     raise DocumentError::TargetNotFound
   }
   match self.blocks.get(id) {
-    Some(block) => {
-      let visible = block.tree.get_visible_items()
-      for i = 0; i < visible.length(); i = i + 1 {
-        let (item_lv, _) = visible[i]
+    Some(block) =>
+      block.delete_all(self.agent_id, fn() raise DocumentError {
         let (_, timestamp) = self.next_version()
-        block.tree.delete_with_ts(item_lv, timestamp, self.agent_id) catch {
-          _ =>
-            raise DocumentError::Internal(
-              detail="replace_text: missing item at lv=" +
-                item_lv.0.to_string(),
-            )
-        }
-      }
-      block.text_cache = None
-    }
+        timestamp
+      })
     None => ()
   }
   if text != "" {
