@@ -44,10 +44,7 @@ pub fn Document::delete_text(
   if !self.is_alive(id) {
     raise DocumentError::TargetNotFound
   }
-  let block = match self.blocks.get(id) {
-    Some(b) => b
-    None => raise DocumentError::TextBlockNotFound(id~)
-  }
+  let block = self.get_or_create_text(id)
   let (_, timestamp) = self.next_version()
   block.delete_at(pos, timestamp, self.agent_id)
 }
@@ -70,7 +67,11 @@ pub fn Document::replace_text(
         let (item_lv, _) = visible[i]
         let (_, timestamp) = self.next_version()
         block.tree.delete_with_ts(item_lv, timestamp, self.agent_id) catch {
-          _ => ()
+          _ =>
+            raise DocumentError::Internal(
+              detail="replace_text: missing item at lv=" +
+                item_lv.0.to_string(),
+            )
         }
       }
       block.text_cache = None

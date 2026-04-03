@@ -7,13 +7,13 @@
 /// Internal dense-ItemId refactoring is a future optimization.
 
 ///|
-pub struct TextBlock {
-  priv tree : @fugue.FugueTree[String]
-  priv mut text_cache : String?
+priv struct TextBlock {
+  tree : @fugue.FugueTree[String]
+  mut text_cache : String?
 }
 
 ///|
-pub fn TextBlock::new() -> TextBlock {
+fn TextBlock::new() -> TextBlock {
   { tree: @fugue.FugueTree::new(), text_cache: None }
 }
 
@@ -23,7 +23,7 @@ pub fn TextBlock::new() -> TextBlock {
 /// Resolves Fugue origins (origin_left, origin_right) internally from
 /// the visible items at `pos`. The caller provides only the position,
 /// a global LV, and causal metadata.
-pub fn TextBlock::insert_at(
+fn TextBlock::insert_at(
   self : TextBlock,
   pos : Int,
   lv : Int,
@@ -65,7 +65,7 @@ pub fn TextBlock::insert_at(
 
 ///|
 /// Delete the character at a visible position in this block's text.
-pub fn TextBlock::delete_at(
+fn TextBlock::delete_at(
   self : TextBlock,
   pos : Int,
   del_timestamp : Int,
@@ -93,7 +93,7 @@ pub fn TextBlock::delete_at(
 
 ///|
 /// Get the current visible text of this block.
-pub fn TextBlock::text(self : TextBlock) -> String {
+fn TextBlock::text(self : TextBlock) -> String {
   match self.text_cache {
     Some(cached) => cached
     None => {
@@ -106,6 +106,6 @@ pub fn TextBlock::text(self : TextBlock) -> String {
 
 ///|
 /// Get the visible character count.
-pub fn TextBlock::len(self : TextBlock) -> Int {
+fn TextBlock::len(self : TextBlock) -> Int {
   self.tree.visible_count()
 }

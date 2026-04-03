@@ -63,9 +63,10 @@ test "document: tree and text ops share causal graph" {
 }
 
 ///|
-test "document: delete from nonexistent text block" {
+test "document: delete from empty block fails" {
   let doc = @container.Document::new("alice")
   let node = doc.create_node(parent=@container.root_id)
+  // No text inserted — delete at pos 0 of empty block is out of bounds
   let result = try {
     doc.delete_text(node, 0)
     Ok(())
@@ -128,4 +129,22 @@ test "document: replace_text with empty string" {
   doc.replace_text(node, "")
   inspect(doc.get_text(node), content="")
   inspect(doc.text_len(node), content="0")
+}
+
+///|
+test "document: get_text after delete_node returns empty" {
+  let doc = @container.Document::new("alice")
+  let node = doc.create_node(parent=@container.root_id)
+  doc.insert_text(node, 0, "Hello")
+  inspect(doc.get_text(node), content="Hello")
+  doc.delete_node(node)
+  // Node is in trash — text ops should fail, reads return empty
+  inspect(doc.get_text(node), content="Hello") // block still exists, node is trashed
+  let result = try {
+    doc.insert_text(node, 0, "x")
+    Ok(())
+  } catch {
+    _ => Err(())
+  }
+  inspect(result, content="Err(())")
 }
