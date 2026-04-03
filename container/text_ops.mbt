@@ -1,7 +1,6 @@
 ///| Text operations on Document.
 
 ///|
-/// Get or create the TextBlock for a tree node.
 fn Document::get_or_create_text(
   self : Document,
   id : @mt.TreeNodeId,

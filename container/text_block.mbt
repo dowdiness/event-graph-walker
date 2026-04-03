@@ -18,11 +18,8 @@ fn TextBlock::new() -> TextBlock {
 }
 
 ///|
-/// Insert a character at a visible position in this block's text.
-///
-/// Resolves Fugue origins (origin_left, origin_right) internally from
-/// the visible items at `pos`. The caller provides only the position,
-/// a global LV, and causal metadata.
+/// Resolves Fugue origins from the visible items at `pos` —
+/// callers never touch origin_left/origin_right.
 fn TextBlock::insert_at(
   self : TextBlock,
   pos : Int,
@@ -64,7 +61,6 @@ fn TextBlock::insert_at(
 }
 
 ///|
-/// Delete the character at a visible position in this block's text.
 fn TextBlock::delete_at(
   self : TextBlock,
   pos : Int,
@@ -92,7 +88,6 @@ fn TextBlock::delete_at(
 }
 
 ///|
-/// Get the current visible text of this block.
 fn TextBlock::text(self : TextBlock) -> String {
   match self.text_cache {
     Some(cached) => cached
@@ -105,14 +100,12 @@ fn TextBlock::text(self : TextBlock) -> String {
 }
 
 ///|
-/// Get the visible character count.
 fn TextBlock::len(self : TextBlock) -> Int {
   self.tree.visible_count()
 }
 
 ///|
-/// Delete all visible items by their LVs.
-/// Snapshots the visible set first, then deletes each by identity.
+/// Snapshots visible LVs first, then deletes each by identity.
 fn TextBlock::delete_all(
   self : TextBlock,
   agent_id : String,
