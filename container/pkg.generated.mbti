@@ -39,12 +39,17 @@ pub fn Document::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree
 pub fn Document::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::delete_node(Self, @movable_tree.TreeNodeId) -> Unit raise DocumentError
+pub fn Document::delete_text(Self, @movable_tree.TreeNodeId, Int) -> Unit raise DocumentError
 pub fn Document::export_ops(Self) -> Array[@movable_tree.TreeOp]
 pub fn Document::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
+pub fn Document::get_text(Self, @movable_tree.TreeNodeId) -> String
+pub fn Document::insert_text(Self, @movable_tree.TreeNodeId, Int, String) -> Unit raise DocumentError
 pub fn Document::is_alive(Self, @movable_tree.TreeNodeId) -> Bool
 pub fn Document::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self raise DocumentError
+pub fn Document::replace_text(Self, @movable_tree.TreeNodeId, String) -> Unit raise DocumentError
 pub fn Document::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
+pub fn Document::text_len(Self, @movable_tree.TreeNodeId) -> Int
 
 pub struct TextBlock {
   // private fields
