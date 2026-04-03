@@ -28,8 +28,7 @@ pub fn Document::insert_text(
     raise DocumentError::TargetNotFound
   }
   let block = self.get_or_create_text(id)
-  for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i]
+  for i, ch in text {
     let (lv, timestamp) = self.next_version()
     block.insert_at(pos + i, lv, ch.to_string(), timestamp, self.agent_id)
   }
