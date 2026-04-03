@@ -167,6 +167,7 @@ pub struct Document {
   priv ops : Array[@mt.TreeOp]
   priv seen_ops : Map[String, Bool]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
+  priv blocks : Map[@mt.TreeNodeId, TextBlock]
 }
 
 ///|
@@ -191,6 +192,7 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     ops: [],
     seen_ops: Map::new(),
     property_state: Map::new(),
+    blocks: Map::new(),
   }
 }
 
@@ -203,21 +205,29 @@ fn Document::alloc_id(self : Document) -> @mt.TreeNodeId {
 }
 
 ///|
-/// Derive a Lamport timestamp by adding a version to the causal graph.
-/// Returns the timestamp from the newly created graph entry.
-fn Document::next_timestamp(self : Document) -> Int {
+/// Allocate a new causal version. Returns (lv, timestamp).
+fn Document::next_version(self : Document) -> (Int, Int) raise DocumentError {
   let frontier = self.graph.get_frontier()
   let parents = frontier.0
-  let mut graph_timestamp = self.lamport_clock + 1
-  let lv = self.graph.add_version(parents, self.agent_id) catch { _ => -1 }
-  if lv >= 0 {
-    match self.graph.get_entry(lv) {
-      Some(entry) => graph_timestamp = entry.timestamp
-      None => ()
-    }
+  let lv = self.graph.add_version(parents, self.agent_id) catch {
+    _ => raise DocumentError::Internal(detail="failed to allocate LV")
+  }
+  let graph_timestamp = match self.graph.get_entry(lv) {
+    Some(entry) => entry.timestamp
+    None => self.lamport_clock + 1
   }
   let timestamp = graph_timestamp.max(self.lamport_clock + 1)
   self.lamport_clock = timestamp
+  (lv, timestamp)
+}
+
+///|
+/// Derive a Lamport timestamp by adding a version to the causal graph.
+/// Returns the timestamp from the newly created graph entry.
+fn Document::next_timestamp(self : Document) -> Int {
+  let (_, timestamp) = self.next_version() catch {
+    _ => (-1, self.lamport_clock + 1)
+  }
   timestamp
 }
 
