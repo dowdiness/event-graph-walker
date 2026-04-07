@@ -78,13 +78,33 @@ test "VisibleRun: Rle find locates correct position" {
   let _ = rle.append({ start_lv: 0, text: "abc", count: 3 })
   let _ = rle.append({ start_lv: 10, text: "de", count: 2 })
   // Position 0 → run 0, offset 0
-  inspect(rle.find(0), content="Some({run: 0, offset: 0})")
+  inspect(
+    rle.find(0),
+    content=(
+      #|Some({ run: 0, offset: 0 })
+    ),
+  )
   // Position 2 → run 0, offset 2
-  inspect(rle.find(2), content="Some({run: 0, offset: 2})")
+  inspect(
+    rle.find(2),
+    content=(
+      #|Some({ run: 0, offset: 2 })
+    ),
+  )
   // Position 3 → run 1, offset 0
-  inspect(rle.find(3), content="Some({run: 1, offset: 0})")
+  inspect(
+    rle.find(3),
+    content=(
+      #|Some({ run: 1, offset: 0 })
+    ),
+  )
   // Position 4 → run 1, offset 1
-  inspect(rle.find(4), content="Some({run: 1, offset: 1})")
+  inspect(
+    rle.find(4),
+    content=(
+      #|Some({ run: 1, offset: 1 })
+    ),
+  )
 }
 
 ///|

@@ -22,9 +22,24 @@ test "roundtrip: insert op -> OpRun -> Op" {
   inspect(d.agent(), content="alice")
   inspect(d.seq(), content="4")
   inspect(d.content(), content="Insert(\"x\")")
-  inspect(d.origin_left(), content="Some({agent: \"alice\", seq: 3})")
-  inspect(d.origin_right(), content="Some({agent: \"bob\", seq: 0})")
-  inspect(d.parents(), content="[{agent: \"alice\", seq: 3}]")
+  inspect(
+    d.origin_left(),
+    content=(
+      #|Some({ agent: "alice", seq: 3 })
+    ),
+  )
+  inspect(
+    d.origin_right(),
+    content=(
+      #|Some({ agent: "bob", seq: 0 })
+    ),
+  )
+  inspect(
+    d.parents(),
+    content=(
+      #|[{ agent: "alice", seq: 3 }]
+    ),
+  )
 }
 
 ///|
@@ -43,7 +58,12 @@ test "roundtrip: delete op -> OpRun -> Op" {
   inspect(d.agent(), content="bob")
   inspect(d.seq(), content="6")
   inspect(d.content(), content="Delete")
-  inspect(d.origin_left(), content="Some({agent: \"alice\", seq: 2})")
+  inspect(
+    d.origin_left(),
+    content=(
+      #|Some({ agent: "alice", seq: 2 })
+    ),
+  )
   inspect(d.origin_right(), content="None")
 }
 
@@ -61,7 +81,12 @@ test "roundtrip: undelete op -> OpRun -> Op" {
   guard decompressed is Some(d) else { fail("expected Some") }
   inspect(d.lv(), content="20")
   inspect(d.content(), content="Undelete")
-  inspect(d.origin_left(), content="Some({agent: \"alice\", seq: 5})")
+  inspect(
+    d.origin_left(),
+    content=(
+      #|Some({ agent: "alice", seq: 5 })
+    ),
+  )
 }
 
 ///|
@@ -255,25 +280,70 @@ test "decompress: multi-op insert run at various offsets" {
   guard d0 is Some(op0) else { fail("expected Some") }
   inspect(op0.lv(), content="10")
   inspect(op0.seq(), content="5")
-  inspect(op0.parents(), content="[{agent: \"bob\", seq: 3}]")
-  inspect(op0.origin_left(), content="Some({agent: \"bob\", seq: 3})")
-  inspect(op0.origin_right(), content="Some({agent: \"carol\", seq: 0})")
+  inspect(
+    op0.parents(),
+    content=(
+      #|[{ agent: "bob", seq: 3 }]
+    ),
+  )
+  inspect(
+    op0.origin_left(),
+    content=(
+      #|Some({ agent: "bob", seq: 3 })
+    ),
+  )
+  inspect(
+    op0.origin_right(),
+    content=(
+      #|Some({ agent: "carol", seq: 0 })
+    ),
+  )
   inspect(op0.content(), content="Insert(\"a\")")
   let d1 = run.decompress(1)
   guard d1 is Some(op1) else { fail("expected Some") }
   inspect(op1.lv(), content="11")
   inspect(op1.seq(), content="6")
-  inspect(op1.parents(), content="[{agent: \"alice\", seq: 5}]")
-  inspect(op1.origin_left(), content="Some({agent: \"alice\", seq: 5})")
-  inspect(op1.origin_right(), content="Some({agent: \"carol\", seq: 0})")
+  inspect(
+    op1.parents(),
+    content=(
+      #|[{ agent: "alice", seq: 5 }]
+    ),
+  )
+  inspect(
+    op1.origin_left(),
+    content=(
+      #|Some({ agent: "alice", seq: 5 })
+    ),
+  )
+  inspect(
+    op1.origin_right(),
+    content=(
+      #|Some({ agent: "carol", seq: 0 })
+    ),
+  )
   inspect(op1.content(), content="Insert(\"b\")")
   let d2 = run.decompress(2)
   guard d2 is Some(op2) else { fail("expected Some") }
   inspect(op2.lv(), content="12")
   inspect(op2.seq(), content="7")
-  inspect(op2.parents(), content="[{agent: \"alice\", seq: 6}]")
-  inspect(op2.origin_left(), content="Some({agent: \"alice\", seq: 6})")
-  inspect(op2.origin_right(), content="Some({agent: \"carol\", seq: 0})")
+  inspect(
+    op2.parents(),
+    content=(
+      #|[{ agent: "alice", seq: 6 }]
+    ),
+  )
+  inspect(
+    op2.origin_left(),
+    content=(
+      #|Some({ agent: "alice", seq: 6 })
+    ),
+  )
+  inspect(
+    op2.origin_right(),
+    content=(
+      #|Some({ agent: "carol", seq: 0 })
+    ),
+  )
   inspect(op2.content(), content="Insert(\"c\")")
 }
 

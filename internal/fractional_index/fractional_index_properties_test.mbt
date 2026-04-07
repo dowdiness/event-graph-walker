@@ -5,7 +5,12 @@
 pub(all) struct OrderedPair {
   left : @fractional_index.FractionalIndex
   right : @fractional_index.FractionalIndex
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for OrderedPair with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for OrderedPair with arbitrary(size, rs) {
@@ -68,7 +73,12 @@ pub impl @qc.Shrink for OrderedPair with shrink(self) {
 /// Wrapper for generating a single valid FractionalIndex.
 pub(all) struct SingleKey {
   key : @fractional_index.FractionalIndex
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for SingleKey with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Shrink instance for SingleKey — try shorter element lists.

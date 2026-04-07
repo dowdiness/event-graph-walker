@@ -5,7 +5,7 @@
 struct JumpAncestors {
   depth : Array[Int] // depth[lv.0], -1 = gap (non-tree LV)
   jump : Array[Array[Lv]] // jump[lv.0][k] = 2^k-th ancestor, [] = gap
-} derive(Show)
+} derive(Debug)
 
 ///|
 fn JumpAncestors::new() -> JumpAncestors {

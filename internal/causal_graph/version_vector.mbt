@@ -13,12 +13,17 @@
 ///
 /// This provides O(1) comparison for common operations and reduces memory usage.
 pub struct VersionVector(Map[String, Int]) derive (
-  Show,
+  Debug,
   Eq,
   Default,
   ToJson,
   FromJson,
 )
+
+///|
+pub impl Show for VersionVector with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///| Trait implementations
 

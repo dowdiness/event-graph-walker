@@ -5,6 +5,7 @@ import {
   "dowdiness/alga",
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/rle",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/quickcheck/splitmix",
 }
@@ -15,7 +16,7 @@ import {
 pub(all) suberror CausalGraphError {
   MissingParent(lv~ : Int)
   MissingEntry(lv~ : Int)
-} derive(Show)
+} derive(@debug.Debug)
 
 // Types and methods
 pub struct CausalGraph {
@@ -35,8 +36,9 @@ pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
 pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
 pub impl @alga.DirectedGraph for CausalGraph
 pub impl Show for CausalGraph
+pub impl @debug.Debug for CausalGraph
 
-pub struct VersionVector(Map[String, Int]) derive(Default, Eq, Show, ToJson, @json.FromJson)
+pub struct VersionVector(Map[String, Int]) derive(Default, Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn VersionVector::agents(Self) -> Array[String]
 pub fn VersionVector::concurrent(Self, Self) -> Bool
 pub fn VersionVector::from_frontier(CausalGraph, @core.Frontier) -> Self
@@ -49,6 +51,7 @@ pub fn VersionVector::new() -> Self
 pub fn VersionVector::set(Self, String, Int) -> Self
 pub fn VersionVector::to_frontier(Self, CausalGraph) -> @core.Frontier
 pub impl Compare for VersionVector
+pub impl Show for VersionVector
 pub impl @moonbitlang/core/quickcheck.Arbitrary for VersionVector
 pub impl @moonbitlang/quickcheck.Shrink for VersionVector
 

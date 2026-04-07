@@ -6,7 +6,12 @@ pub enum OpContent {
   Insert(String) // Insert text
   Delete // Delete character
   Undelete // Undelete (revive) a previously deleted character
-} derive(Eq, Show, FromJson, ToJson)
+} derive(Eq, Debug, FromJson, ToJson)
+
+///|
+pub impl Show for OpContent with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Operation structure with causal and FugueMax metadata
@@ -18,7 +23,12 @@ pub struct Op {
   priv content : OpContent // Operation content
   priv origin_left : RawVersion? // FugueMax: item to the left
   priv origin_right : RawVersion? // FugueMax: item to the right
-} derive(Show, FromJson, ToJson)
+} derive(Debug, FromJson, ToJson)
+
+///|
+pub impl Show for Op with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub fn Op::lv(self : Op) -> Int {

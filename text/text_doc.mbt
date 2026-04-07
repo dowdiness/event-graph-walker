@@ -7,6 +7,11 @@ pub(all) struct TextState {
 }
 
 ///|
+pub impl @debug.Debug for TextState with to_repr(self) {
+  @debug.Repr::literal("TextState(len=" + self.len().to_string() + ")")
+}
+
+///|
 /// Create a new empty document with the given agent ID
 pub fn TextState::new(agent_id : String) -> TextState {
   TextState::{ inner: @document.Document::new(agent_id) }

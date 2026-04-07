@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "dowdiness/event-graph-walker/internal/fugue"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub let root_lv : Lv
 
@@ -19,7 +23,7 @@ pub struct FugueTree[T] {
   root_children : Array[Lv]
   children : Array[Array[Lv]]
   jump_ancestors : JumpAncestors
-} derive(Show)
+} derive(@debug.Debug)
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
 pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
 pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
@@ -47,7 +51,7 @@ pub(all) struct InsertOp[T] {
   origin_right : Lv?
   timestamp : Timestamp
   agent : ReplicaId
-} derive(Show)
+} derive(@debug.Debug)
 
 pub(all) struct Item[T] {
   id : Lv
@@ -62,36 +66,40 @@ pub(all) struct Item[T] {
   mut delete_count : Int
   timestamp : Timestamp
   agent : ReplicaId
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl[T : @debug.Debug] Show for Item[T]
 
 pub enum ItemState {
   NotInserted
   Inserted
   Deleted
   Retreated
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn ItemState::advance_insert(Self) -> Self
 pub fn ItemState::is_visible(Self, delete_count~ : Int) -> Bool
 pub fn ItemState::retreat_insert(Self) -> Self
 pub fn ItemState::update_from_delete_count(Self, Int) -> Self
 pub impl Default for ItemState
+pub impl Show for ItemState
 
-type JumpAncestors derive(Show)
+type JumpAncestors derive(@debug.Debug)
 
-pub(all) struct Lv(Int) derive(Compare, Default, Eq, Hash, Show)
+pub(all) struct Lv(Int) derive(Compare, Default, Eq, Hash, @debug.Debug)
 #deprecated
 pub fn Lv::inner(Self) -> Int
+pub impl Show for Lv
 
-pub(all) struct ReplicaId(String) derive(Compare, Eq, Show)
+pub(all) struct ReplicaId(String) derive(Compare, Eq, @debug.Debug)
 #deprecated
 pub fn ReplicaId::inner(Self) -> String
 
 pub enum Side {
   Left
   Right
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
+pub impl Show for Side
 
-pub(all) struct Timestamp(Int) derive(Compare, Default, Eq, Show)
+pub(all) struct Timestamp(Int) derive(Compare, Default, Eq, @debug.Debug)
 #deprecated
 pub fn Timestamp::inner(Self) -> Int
 

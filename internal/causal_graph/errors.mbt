@@ -8,4 +8,4 @@ pub(all) suberror CausalGraphError {
   /// A graph entry was not found for the given LV.
   /// Indicates a consistency bug — LV was referenced but never registered.
   MissingEntry(lv~ : Int)
-} derive(Show)
+} derive(Debug)

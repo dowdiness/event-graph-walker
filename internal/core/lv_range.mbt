@@ -7,7 +7,7 @@
 pub(all) struct LvRange {
   start : Int
   count : Int
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub impl @rle.HasLength for LvRange with length(self) {

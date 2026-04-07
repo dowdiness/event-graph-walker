@@ -43,7 +43,7 @@
 pub(all) struct SyncMessage {
   priv runs : Array[@core.OpRun]
   priv heads : Array[@core.RawVersion]
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Check if this message contains no operations.

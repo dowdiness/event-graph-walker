@@ -10,13 +10,18 @@ enum TreeAction {
   Create(Int)
   Move(Int, Int)
   Delete(Int)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// A scenario consisting of a sequence of tree actions for property testing.
 struct TreeScenario {
   actions : Array[TreeAction]
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for TreeScenario with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Arbitrary instance for TreeScenario.

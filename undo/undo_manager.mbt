@@ -8,7 +8,7 @@ pub struct UndoManager {
   priv capture_timeout_ms : Int
   priv mut last_change_ms : Int
   priv mut tracking_enabled : Bool
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new UndoManager for the given agent.

@@ -3,6 +3,7 @@ import {
   "dowdiness/rle",
   "dowdiness/alga" @alga,
   "moonbitlang/core/bench",
+  "moonbitlang/core/debug",
   "moonbitlang/core/queue",
   "moonbitlang/core/json",
   "moonbitlang/core/immut/hashmap" @immut/hashmap,

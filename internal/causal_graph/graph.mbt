@@ -24,6 +24,13 @@ pub struct CausalGraph {
 }
 
 ///|
+pub impl @debug.Debug for CausalGraph with to_repr(self) {
+  @debug.Repr::literal(
+    "CausalGraph(entries=" + self.entries.length().to_string() + ")",
+  )
+}
+
+///|
 pub fn CausalGraph::new() -> CausalGraph {
   {
     entries: [],

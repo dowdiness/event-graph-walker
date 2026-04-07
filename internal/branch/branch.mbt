@@ -17,7 +17,7 @@ pub struct Branch {
   priv frontier : @core.Frontier // Version frontier this branch represents
   priv tree : @fugue.FugueTree[String] // CRDT tree state at this frontier
   priv oplog : @oplog.OpLog // Reference to the operation log
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new empty branch

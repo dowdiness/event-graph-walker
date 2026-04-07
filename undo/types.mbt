@@ -4,7 +4,7 @@
 pub enum UndoOpType {
   Insert
   Delete
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A single tracked operation.
@@ -15,14 +15,14 @@ struct UndoItem {
   target_lv : Int
   op_type : UndoOpType
   content : String?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// A group of operations undone/redone together
 struct UndoGroup {
   items : Array[UndoItem]
   timestamp : Int
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Errors that can occur during undo/redo operations

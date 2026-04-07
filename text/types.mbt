@@ -6,7 +6,7 @@
 /// Negative values are clamped to 0 during construction.
 pub(all) struct Pos {
   priv value : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///| Create a position at the given index.
 
@@ -31,7 +31,7 @@ pub(all) struct Range {
   start : Pos
   /// Ending position (exclusive)
   end : Pos
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a range from two positions.
@@ -51,7 +51,12 @@ pub fn Range::from_ints(start : Int, end : Int) -> Range {
 /// Used for sync operations and historical checkouts.
 pub(all) struct Version {
   priv frontier : @core.Frontier
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for Version with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 fn Version::from_frontier(frontier : @core.Frontier) -> Version {

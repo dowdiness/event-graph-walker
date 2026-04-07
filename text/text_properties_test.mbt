@@ -8,13 +8,18 @@
 enum TextEdit {
   Insert(Int, String)
   Delete(Int)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Generated operations for property testing (real TextState edits).
 struct RealOps {
   edits : Array[TextEdit]
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for RealOps with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Arbitrary instance for RealOps

@@ -6,7 +6,7 @@ pub enum OpRunContent {
   Inserts(Array[Char]) // One char per op, O(1) index access, O(1) amortized append
   Deletes
   Undeletes
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// A compressed run of consecutive operations from the same agent.
@@ -26,7 +26,7 @@ pub struct OpRun {
   origin_left : RawVersion?
   origin_right : RawVersion?
   count : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 /// Create a single-element OpRun from an Op.

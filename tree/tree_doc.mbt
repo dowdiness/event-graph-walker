@@ -131,9 +131,9 @@ fn op_key(op : @mt.TreeOp) -> String {
       "|" +
       move_op.timestamp.to_string() +
       "|" +
-      encode_field(move_op.target.to_string()) +
+      encode_field(@debug.to_string(move_op.target)) +
       "|" +
-      encode_field(move_op.new_parent.to_string()) +
+      encode_field(@debug.to_string(move_op.new_parent)) +
       "|" +
       encode_field(move_op.position.to_string())
     @mt.SetProperty(prop_op) =>
@@ -142,7 +142,7 @@ fn op_key(op : @mt.TreeOp) -> String {
       "|" +
       prop_op.timestamp.to_string() +
       "|" +
-      encode_field(prop_op.target.to_string()) +
+      encode_field(@debug.to_string(prop_op.target)) +
       "|" +
       encode_field(prop_op.key) +
       "|" +
