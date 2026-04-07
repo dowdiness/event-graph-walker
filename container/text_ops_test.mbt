@@ -273,3 +273,58 @@ test "document: export_sync_message_since sends only missing mixed history" {
   inspect(doc_a.is_alive(right), content="false")
   inspect(doc_b.is_alive(right), content="false")
 }
+
+///|
+test "document: remote tree ops buffer until causal parents arrive" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+  doc_a.delete_node(node)
+
+  let message = doc_a.export_sync_message()
+  inspect(message.tree_ops.length(), content="2")
+  inspect(message.tree_ops[0].parents.length(), content="0")
+  inspect(message.tree_ops[1].parents.length(), content="1")
+
+  doc_b.apply_remote_sync_message({
+    tree_ops: [message.tree_ops[1]],
+    text_ops: [],
+  })
+  inspect(doc_b.is_alive(node), content="false")
+
+  doc_b.apply_remote_sync_message({
+    tree_ops: [message.tree_ops[0]],
+    text_ops: [],
+  })
+  inspect(doc_b.is_alive(node), content="false")
+}
+
+///|
+test "document: remote text ops buffer until causal parents arrive" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+
+  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  let vv = doc_b.get_version_vector()
+
+  doc_a.insert_text(node, 0, "AB")
+
+  let message = doc_a.export_sync_message_since(vv)
+  inspect(message.tree_ops.length(), content="0")
+  inspect(message.text_ops.length(), content="2")
+  inspect(message.text_ops[0].parents.length(), content="1")
+  inspect(message.text_ops[1].parents.length(), content="1")
+
+  doc_b.apply_remote_sync_message({
+    tree_ops: [],
+    text_ops: [message.text_ops[1]],
+  })
+  inspect(doc_b.get_text(node), content="")
+
+  doc_b.apply_remote_sync_message({
+    tree_ops: [],
+    text_ops: [message.text_ops[0]],
+  })
+  inspect(doc_b.get_text(node), content="AB")
+}

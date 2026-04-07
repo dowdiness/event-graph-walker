@@ -42,13 +42,14 @@ pub fn Document::insert_text(
   let block = self.get_or_create_text(id)
   for i, ch in text {
     let (lv, timestamp, version) = self.next_version_with_raw()
+    let parents = self.raw_parents_for_lv(lv)
     let op : BlockTextOp = {
       block: id,
       op: block.make_insert_op_at(pos + i, lv, ch.to_string(), timestamp, self.agent_id),
     }
     self.apply_block_text_op(id, op)
     let _ = self.record_text_op(op)
-    let _ = self.record_sync_text_op({ version, block: id, op: op.op })
+    let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
   }
 }
 
@@ -63,14 +64,15 @@ pub fn Document::delete_text(
     raise DocumentError::TargetNotFound
   }
   let block = self.get_or_create_text(id)
-  let (_, timestamp, version) = self.next_version_with_raw()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let op : BlockTextOp = {
     block: id,
     op: block.make_delete_op_at(pos, timestamp, self.agent_id),
   }
   self.apply_block_text_op(id, op)
   let _ = self.record_text_op(op)
-  let _ = self.record_sync_text_op({ version, block: id, op: op.op })
+  let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
 }
 
 ///|

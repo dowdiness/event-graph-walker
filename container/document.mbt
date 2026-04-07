@@ -71,12 +71,14 @@ pub(all) struct BlockTextOp {
 ///|
 pub(all) struct VersionedTreeOp {
   version : @core.RawVersion
+  parents : Array[@core.RawVersion]
   op : @mt.TreeOp
 }
 
 ///|
 pub(all) struct VersionedBlockTextOp {
   version : @core.RawVersion
+  parents : Array[@core.RawVersion]
   block : @mt.TreeNodeId
   op : TextOp
 }
@@ -291,6 +293,8 @@ pub struct Document {
   priv sync_text_ops : Array[VersionedBlockTextOp]
   priv seen_sync_tree_versions : Map[String, Bool]
   priv seen_sync_text_versions : Map[String, Bool]
+  priv mut pending_sync_tree_ops : Array[VersionedTreeOp]
+  priv mut pending_sync_text_ops : Array[VersionedBlockTextOp]
   priv pending_text_ops : Map[String, Array[BlockTextOp]]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
@@ -323,6 +327,8 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     sync_text_ops: [],
     seen_sync_tree_versions: Map::new(),
     seen_sync_text_versions: Map::new(),
+    pending_sync_tree_ops: [],
+    pending_sync_text_ops: [],
     pending_text_ops: Map::new(),
     property_state: Map::new(),
     blocks: Map::new(),
@@ -372,6 +378,22 @@ fn Document::next_version_with_raw(
   let (lv, timestamp) = self.next_version()
   let version = self.raw_version_for_lv(lv)
   (lv, timestamp, version)
+}
+
+///|
+fn Document::raw_parents_for_lv(
+  self : Document,
+  lv : Int,
+) -> Array[@core.RawVersion] raise DocumentError {
+  let entry = match self.graph.get_entry(lv) {
+    Some(entry) => entry
+    None => raise DocumentError::Internal(detail="missing graph entry for lv")
+  }
+  let parents : Array[@core.RawVersion] = []
+  for parent_lv in entry.parents {
+    parents.push(self.raw_version_for_lv(parent_lv))
+  }
+  parents
 }
 
 /// Insert a replicated op into the export history if it has not been seen yet.
@@ -450,6 +472,148 @@ fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> 
       }
       self.sync_text_ops.insert(insert_idx, op)
       true
+    }
+  }
+}
+
+///|
+fn Document::defer_sync_tree_op(self : Document, op : VersionedTreeOp) -> Unit {
+  let pending = self.pending_sync_tree_ops
+  let mut insert_idx = pending.length()
+  for i = 0; i < pending.length(); i = i + 1 {
+    if compare_versioned_tree_ops(op, pending[i]) < 0 {
+      insert_idx = i
+      break
+    }
+  }
+  pending.insert(insert_idx, op)
+}
+
+///|
+fn Document::defer_sync_text_op(self : Document, op : VersionedBlockTextOp) -> Unit {
+  let pending = self.pending_sync_text_ops
+  let mut insert_idx = pending.length()
+  for i = 0; i < pending.length(); i = i + 1 {
+    if compare_versioned_text_ops(op, pending[i]) < 0 {
+      insert_idx = i
+      break
+    }
+  }
+  pending.insert(insert_idx, op)
+}
+
+///|
+fn Document::resolve_parent_lvs(
+  self : Document,
+  parents : Array[@core.RawVersion],
+) -> Array[Int]? {
+  let resolved : Array[Int] = []
+  for parent in parents {
+    match self.graph.raw_to_lv(parent) {
+      Some(lv) => resolved.push(lv)
+      None => return None
+    }
+  }
+  Some(resolved)
+}
+
+///|
+fn Document::observe_remote_timestamp(self : Document, timestamp : Int) -> Unit {
+  if timestamp > self.lamport_clock {
+    self.lamport_clock = timestamp
+  }
+}
+
+///|
+fn Document::try_apply_versioned_tree_op(
+  self : Document,
+  op : VersionedTreeOp,
+) -> Bool {
+  let parent_lvs = match self.resolve_parent_lvs(op.parents) {
+    Some(parent_lvs) => parent_lvs
+    None => return false
+  }
+  let added = self.graph.add_version_with_seq(
+    parent_lvs,
+    op.version.agent,
+    op.version.seq,
+  ) catch { _ => -1 }
+  if added < 0 {
+    return false
+  }
+  if !self.record_op(op.op) {
+    return true
+  }
+  let timestamp = match op.op {
+    @mt.Move(move_op) => move_op.timestamp
+    @mt.SetProperty(prop_op) => prop_op.timestamp
+  }
+  self.observe_remote_timestamp(timestamp)
+  match op.op {
+    @mt.Move(move_op) => {
+      self.apply_move_op(move_op)
+      self.flush_pending_text_ops(move_op.target)
+      if move_op.target.agent == self.agent_id &&
+        move_op.target.counter >= self.next_counter {
+        self.next_counter = move_op.target.counter + 1
+      }
+    }
+    @mt.SetProperty(prop_op) => {
+      self.apply_property_op(prop_op)
+      if prop_op.target.agent == self.agent_id &&
+        prop_op.target.counter >= self.next_counter {
+        self.next_counter = prop_op.target.counter + 1
+      }
+    }
+  }
+  true
+}
+
+///|
+fn Document::try_apply_versioned_text_op(
+  self : Document,
+  op : VersionedBlockTextOp,
+) -> Bool {
+  let parent_lvs = match self.resolve_parent_lvs(op.parents) {
+    Some(parent_lvs) => parent_lvs
+    None => return false
+  }
+  let added = self.graph.add_version_with_seq(
+    parent_lvs,
+    op.version.agent,
+    op.version.seq,
+  ) catch { _ => -1 }
+  if added < 0 {
+    return false
+  }
+  self.apply_remote_text_op({ block: op.block, op: op.op })
+  true
+}
+
+///|
+fn Document::flush_pending_sync_ops(self : Document) -> Unit {
+  let mut progressed = true
+  while progressed {
+    progressed = false
+
+    let pending_tree = self.pending_sync_tree_ops.copy()
+    self.pending_sync_tree_ops = []
+    for op in pending_tree {
+      if self.try_apply_versioned_tree_op(op) {
+        progressed = true
+      } else {
+        self.defer_sync_tree_op(op)
+      }
+    }
+
+    let pending_text = self.pending_sync_text_ops.copy()
+    self.pending_sync_text_ops = []
+    for op in pending_text {
+      if self.try_apply_versioned_text_op(op) {
+        progressed = true
+      } else {
+        self.defer_sync_text_op(op)
+      }
     }
   }
 }
@@ -644,7 +808,8 @@ pub fn Document::create_node(
     raise ParentNotFound
   }
   let id = self.alloc_id()
-  let (_, timestamp, version) = self.next_version_with_raw()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_last_child(parent)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -655,7 +820,7 @@ pub fn Document::create_node(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, op: @mt.Move(move_op) })
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
   id
 }
 
@@ -673,7 +838,8 @@ pub fn Document::create_node_after(
     raise ParentNotFound
   }
   let id = self.alloc_id()
-  let (_, timestamp, version) = self.next_version_with_raw()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_sibling(parent, after)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -684,7 +850,7 @@ pub fn Document::create_node_after(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, op: @mt.Move(move_op) })
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
   id
 }
 
@@ -704,7 +870,8 @@ pub fn Document::move_node(
   if self.tree.would_create_cycle(target, new_parent) {
     raise CycleDetected
   }
-  let (_, timestamp, version) = self.next_version_with_raw()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_last_child(new_parent)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -715,7 +882,7 @@ pub fn Document::move_node(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, op: @mt.Move(move_op) })
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
 }
 
 ///|
@@ -727,7 +894,8 @@ pub fn Document::delete_node(
   if !self.tree.contains(target) {
     raise TargetNotFound
   }
-  let (_, timestamp, version) = self.next_version_with_raw()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_last_child(@mt.trash_id)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -738,7 +906,7 @@ pub fn Document::delete_node(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, op: @mt.Move(move_op) })
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
 }
 
 ///|
@@ -767,9 +935,10 @@ pub fn Document::set_property(
   if !self.tree.contains(id) {
     return
   }
-  let (_, timestamp, version) = self.next_version_with_raw() catch { _ =>
+  let (lv, timestamp, version) = self.next_version_with_raw() catch { _ =>
     return
   }
+  let parents = self.raw_parents_for_lv(lv) catch { _ => return }
   let op : @mt.TreePropertyOp = {
     timestamp,
     target: id,
@@ -779,7 +948,11 @@ pub fn Document::set_property(
   }
   self.apply_property_op(op)
   let _ = self.record_op(@mt.SetProperty(op))
-  let _ = self.record_sync_tree_op({ version, op: @mt.SetProperty(op) })
+  let _ = self.record_sync_tree_op({
+    version,
+    parents,
+    op: @mt.SetProperty(op),
+  })
 }
 
 ///|
@@ -865,32 +1038,17 @@ pub fn Document::apply_remote_sync_message(
     if !self.record_sync_tree_op(op) {
       continue
     }
-    if !self.record_op(op.op) {
-      continue
-    }
-    let _ = self.graph.add_version_with_seq(
-      self.graph.get_frontier().0,
-      op.version.agent,
-      op.version.seq,
-    ) catch { _ => 0 }
-    self.observe_remote_op(op.op)
-    match op.op {
-      @mt.Move(move_op) => {
-        self.apply_move_op(move_op)
-        self.flush_pending_text_ops(move_op.target)
-      }
-      @mt.SetProperty(prop_op) => self.apply_property_op(prop_op)
+    if !self.try_apply_versioned_tree_op(op) {
+      self.defer_sync_tree_op(op)
     }
   }
   for op in message.text_ops {
     if !self.record_sync_text_op(op) {
       continue
     }
-    let _ = self.graph.add_version_with_seq(
-      self.graph.get_frontier().0,
-      op.version.agent,
-      op.version.seq,
-    ) catch { _ => 0 }
-    self.apply_remote_text_op({ block: op.block, op: op.op })
+    if !self.try_apply_versioned_text_op(op) {
+      self.defer_sync_text_op(op)
+    }
   }
+  self.flush_pending_sync_ops()
 }

@@ -90,12 +90,14 @@ pub(all) enum TextOp {
 
 pub(all) struct VersionedBlockTextOp {
   version : @core.RawVersion
+  parents : Array[@core.RawVersion]
   block : @movable_tree.TreeNodeId
   op : TextOp
 }
 
 pub(all) struct VersionedTreeOp {
   version : @core.RawVersion
+  parents : Array[@core.RawVersion]
   op : @movable_tree.TreeOp
 }
 
