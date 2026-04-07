@@ -96,6 +96,12 @@ priv enum SyncOpRecord {
 }
 
 ///|
+priv enum PendingSyncOp {
+  Tree(VersionedTreeOp)
+  Text(VersionedBlockTextOp)
+}
+
+///|
 fn text_op_timestamp(op : TextOp) -> Int {
   match op {
     Insert(insert_op) => insert_op.timestamp
@@ -253,31 +259,6 @@ fn raw_version_key(version : @core.RawVersion) -> String {
   version.to_string()
 }
 
-///|
-fn compare_versioned_tree_ops(a : VersionedTreeOp, b : VersionedTreeOp) -> Int {
-  let op_cmp = compare_ops(a.op, b.op)
-  if op_cmp != 0 {
-    return op_cmp
-  }
-  a.version.compare(b.version)
-}
-
-///|
-fn compare_versioned_text_ops(
-  a : VersionedBlockTextOp,
-  b : VersionedBlockTextOp,
-) -> Int {
-  let op_cmp = compare_text_ops({ block: a.block, op: a.op }, {
-    block: b.block,
-    op: b.op,
-  })
-  if op_cmp != 0 {
-    return op_cmp
-  }
-  a.version.compare(b.version)
-}
-
-///|
 /// Compare two property ops using the document's total op ordering.
 fn compare_property_ops(a : @mt.TreePropertyOp, b : @mt.TreePropertyOp) -> Int {
   compare_ops(@mt.SetProperty(a), @mt.SetProperty(b))
@@ -297,8 +278,7 @@ pub struct Document {
   priv seen_text_ops : Map[String, Bool]
   priv sync_ops_by_version : Map[String, SyncOpRecord]
   priv seen_sync_versions : Map[String, Bool]
-  priv mut pending_sync_tree_ops : Array[VersionedTreeOp]
-  priv mut pending_sync_text_ops : Array[VersionedBlockTextOp]
+  priv mut pending_sync_ops : Array[PendingSyncOp]
   priv pending_text_ops : Map[String, Array[BlockTextOp]]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
@@ -329,8 +309,7 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     seen_text_ops: Map::new(),
     sync_ops_by_version: Map::new(),
     seen_sync_versions: Map::new(),
-    pending_sync_tree_ops: [],
-    pending_sync_text_ops: [],
+    pending_sync_ops: [],
     pending_text_ops: Map::new(),
     property_state: Map::new(),
     blocks: Map::new(),
@@ -465,29 +444,11 @@ fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> 
 }
 
 ///|
-fn Document::defer_sync_tree_op(self : Document, op : VersionedTreeOp) -> Unit {
-  let pending = self.pending_sync_tree_ops
-  let mut insert_idx = pending.length()
-  for i = 0; i < pending.length(); i = i + 1 {
-    if compare_versioned_tree_ops(op, pending[i]) < 0 {
-      insert_idx = i
-      break
-    }
-  }
-  pending.insert(insert_idx, op)
-}
-
-///|
-fn Document::defer_sync_text_op(self : Document, op : VersionedBlockTextOp) -> Unit {
-  let pending = self.pending_sync_text_ops
-  let mut insert_idx = pending.length()
-  for i = 0; i < pending.length(); i = i + 1 {
-    if compare_versioned_text_ops(op, pending[i]) < 0 {
-      insert_idx = i
-      break
-    }
-  }
-  pending.insert(insert_idx, op)
+fn Document::defer_pending_sync_op(
+  self : Document,
+  op : PendingSyncOp,
+) -> Unit {
+  self.pending_sync_ops.push(op)
 }
 
 ///|
@@ -579,28 +540,28 @@ fn Document::try_apply_versioned_text_op(
 }
 
 ///|
+fn Document::try_apply_pending_sync_op(
+  self : Document,
+  op : PendingSyncOp,
+) -> Bool {
+  match op {
+    Tree(tree_op) => self.try_apply_versioned_tree_op(tree_op)
+    Text(text_op) => self.try_apply_versioned_text_op(text_op)
+  }
+}
+
+///|
 fn Document::flush_pending_sync_ops(self : Document) -> Unit {
   let mut progressed = true
   while progressed {
     progressed = false
-
-    let pending_tree = self.pending_sync_tree_ops.copy()
-    self.pending_sync_tree_ops = []
-    for op in pending_tree {
-      if self.try_apply_versioned_tree_op(op) {
+    let pending = self.pending_sync_ops.copy()
+    self.pending_sync_ops = []
+    for op in pending {
+      if self.try_apply_pending_sync_op(op) {
         progressed = true
       } else {
-        self.defer_sync_tree_op(op)
-      }
-    }
-
-    let pending_text = self.pending_sync_text_ops.copy()
-    self.pending_sync_text_ops = []
-    for op in pending_text {
-      if self.try_apply_versioned_text_op(op) {
-        progressed = true
-      } else {
-        self.defer_sync_text_op(op)
+        self.defer_pending_sync_op(op)
       }
     }
   }
@@ -1054,7 +1015,7 @@ pub fn Document::apply_remote_sync_message(
       continue
     }
     if !self.try_apply_versioned_tree_op(op) {
-      self.defer_sync_tree_op(op)
+      self.defer_pending_sync_op(Tree(op))
     }
   }
   for op in message.text_ops {
@@ -1062,7 +1023,7 @@ pub fn Document::apply_remote_sync_message(
       continue
     }
     if !self.try_apply_versioned_text_op(op) {
-      self.defer_sync_text_op(op)
+      self.defer_pending_sync_op(Text(op))
     }
   }
   self.flush_pending_sync_ops()
