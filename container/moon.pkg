@@ -4,6 +4,7 @@ import {
   "dowdiness/event-graph-walker/internal/causal_graph" @cg,
   "dowdiness/event-graph-walker/internal/core" @core,
   "dowdiness/event-graph-walker/internal/fugue" @fugue,
+  "dowdiness/rle",
 }
 
 import {

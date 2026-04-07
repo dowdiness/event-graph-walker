@@ -291,6 +291,8 @@ pub struct Document {
   priv seen_text_ops : Map[String, Bool]
   priv sync_tree_ops : Array[VersionedTreeOp]
   priv sync_text_ops : Array[VersionedBlockTextOp]
+  priv sync_tree_by_version : Map[String, VersionedTreeOp]
+  priv sync_text_by_version : Map[String, VersionedBlockTextOp]
   priv seen_sync_tree_versions : Map[String, Bool]
   priv seen_sync_text_versions : Map[String, Bool]
   priv mut pending_sync_tree_ops : Array[VersionedTreeOp]
@@ -325,6 +327,8 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     seen_text_ops: Map::new(),
     sync_tree_ops: [],
     sync_text_ops: [],
+    sync_tree_by_version: Map::new(),
+    sync_text_by_version: Map::new(),
     seen_sync_tree_versions: Map::new(),
     seen_sync_text_versions: Map::new(),
     pending_sync_tree_ops: [],
@@ -443,6 +447,7 @@ fn Document::record_sync_tree_op(self : Document, op : VersionedTreeOp) -> Bool 
     Some(true) => false
     _ => {
       self.seen_sync_tree_versions.set(key, true)
+      self.sync_tree_by_version[key] = op
       let mut insert_idx = self.sync_tree_ops.length()
       for i = 0; i < self.sync_tree_ops.length(); i = i + 1 {
         if compare_versioned_tree_ops(op, self.sync_tree_ops[i]) < 0 {
@@ -463,6 +468,7 @@ fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> 
     Some(true) => false
     _ => {
       self.seen_sync_text_versions.set(key, true)
+      self.sync_text_by_version[key] = op
       let mut insert_idx = self.sync_text_ops.length()
       for i = 0; i < self.sync_text_ops.length(); i = i + 1 {
         if compare_versioned_text_ops(op, self.sync_text_ops[i]) < 0 {
@@ -616,6 +622,34 @@ fn Document::flush_pending_sync_ops(self : Document) -> Unit {
       }
     }
   }
+}
+
+///|
+fn Document::versioned_sync_ops_between(
+  self : Document,
+  from : @core.Frontier,
+  to : @core.Frontier,
+) -> SyncMessage raise DocumentError {
+  let (_, advance_rle) = self.graph.diff_frontiers_lvs(from, to)
+  let advance_lvs = advance_rle.iter_units().collect()
+  let tree_ops : Array[VersionedTreeOp] = []
+  let text_ops : Array[VersionedBlockTextOp] = []
+  for lv in advance_lvs {
+    let version = self.raw_version_for_lv(lv)
+    let key = raw_version_key(version)
+    match self.sync_tree_by_version.get(key) {
+      Some(op) => tree_ops.push(op)
+      None =>
+        match self.sync_text_by_version.get(key) {
+          Some(op) => text_ops.push(op)
+          None =>
+            raise DocumentError::Internal(
+              detail="missing sync payload for graph version",
+            )
+        }
+    }
+  }
+  { tree_ops, text_ops }
 }
 
 ///|
@@ -977,7 +1011,12 @@ pub fn Document::export_ops(self : Document) -> Array[@mt.TreeOp] {
 /// Tree ops are replayed before text ops on receipt so newly-created blocks
 /// exist before their text history is applied.
 pub fn Document::export_sync_message(self : Document) -> SyncMessage {
-  { tree_ops: self.sync_tree_ops.copy(), text_ops: self.sync_text_ops.copy() }
+  self.versioned_sync_ops_between(
+    @core.Frontier::from_array([]),
+    self.graph.get_frontier(),
+  ) catch {
+    _ => { tree_ops: self.sync_tree_ops.copy(), text_ops: self.sync_text_ops.copy() }
+  }
 }
 
 ///|
@@ -990,13 +1029,18 @@ pub fn Document::export_sync_message_since(
   self : Document,
   vv : @cg.VersionVector,
 ) -> SyncMessage {
-  let tree_ops = self.sync_tree_ops.filter(fn(op) {
-    !vv.includes(op.version.agent, op.version.seq)
-  })
-  let text_ops = self.sync_text_ops.filter(fn(op) {
-    !vv.includes(op.version.agent, op.version.seq)
-  })
-  { tree_ops, text_ops }
+  let from = vv.to_frontier(self.graph)
+  self.versioned_sync_ops_between(from, self.graph.get_frontier()) catch {
+    _ => {
+      let tree_ops = self.sync_tree_ops.filter(fn(op) {
+        !vv.includes(op.version.agent, op.version.seq)
+      })
+      let text_ops = self.sync_text_ops.filter(fn(op) {
+        !vv.includes(op.version.agent, op.version.seq)
+      })
+      { tree_ops, text_ops }
+    }
+  }
 }
 
 ///|
