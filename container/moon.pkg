@@ -4,3 +4,8 @@ import {
   "dowdiness/event-graph-walker/internal/causal_graph" @cg,
   "dowdiness/event-graph-walker/internal/fugue" @fugue,
 }
+
+import {
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+} for "test"

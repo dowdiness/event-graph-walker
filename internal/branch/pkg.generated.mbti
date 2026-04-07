@@ -43,11 +43,11 @@ pub fn Branch::to_text(Self) -> String
 pub fn Branch::visible_count(Self) -> Int
 
 pub struct DeleteIndex {
-  index : Map[Int, Array[Int]]
+  index : Map[@core.RawVersion, Array[Int]]
 }
 pub fn DeleteIndex::build(@oplog.OpLog) -> Self
-pub fn DeleteIndex::get_delete_ops(Self, Int) -> Array[Int]
-pub fn DeleteIndex::recompute_winner(Self, Int, @oplog.OpLog, @rle.Rle[@core.LvRange]) -> DeleteWinner
+pub fn DeleteIndex::get_delete_ops(Self, @core.RawVersion) -> Array[Int]
+pub fn DeleteIndex::recompute_winner(Self, @core.RawVersion, @oplog.OpLog, @rle.Rle[@core.LvRange]) -> DeleteWinner
 
 pub(all) struct DeleteWinner {
   deleted : Bool

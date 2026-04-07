@@ -18,10 +18,11 @@ pub(all) suberror FugueError {
 // Types and methods
 pub struct FugueTree[T] {
   items : Array[Item[T]?]
+  lv_index : Array[ItemId?]
   mut length : Int
   mut visible : Int
-  root_children : Array[Lv]
-  children : Array[Array[Lv]]
+  root_children : Array[ItemId]
+  children : Array[Array[ItemId]]
   jump_ancestors : JumpAncestors
 } derive(@debug.Debug)
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
@@ -68,6 +69,10 @@ pub(all) struct Item[T] {
   agent : ReplicaId
 } derive(Eq, @debug.Debug)
 pub impl[T : @debug.Debug] Show for Item[T]
+
+pub(all) struct ItemId(Int) derive(Compare, Default, Eq, Hash, Show)
+#deprecated
+pub fn ItemId::inner(Self) -> Int
 
 pub enum ItemState {
   NotInserted

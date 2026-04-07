@@ -148,3 +148,17 @@ test "document: text after delete_node" {
   }
   inspect(result, content="Err(())")
 }
+
+///|
+test "document: mixed two-block edits preserve sibling isolation" {
+  let doc = @container.Document::new("alice")
+  let left = doc.create_node(parent=@container.root_id)
+  let right = doc.create_node(parent=@container.root_id)
+  doc.insert_text(left, 0, "abc")
+  doc.insert_text(right, 0, "XYZ")
+  doc.delete_text(left, 1)
+  doc.replace_text(right, "Q")
+  doc.insert_text(left, 2, "d")
+  inspect(doc.get_text(left), content="acd")
+  inspect(doc.get_text(right), content="Q")
+}
