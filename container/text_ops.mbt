@@ -76,8 +76,11 @@ pub fn Document::delete_text(
 }
 
 ///|
-/// Replace all text in a block atomically.
-/// Replays a deterministic delete-then-insert sequence so export history stays complete.
+/// Replace all text in a block using a deterministic delete-then-insert sequence.
+///
+/// This is a convenience helper, not a transaction boundary: peers syncing
+/// mid-sequence may observe intermediate partial states until all generated ops
+/// have arrived and been applied.
 pub fn Document::replace_text(
   self : Document,
   id : @mt.TreeNodeId,

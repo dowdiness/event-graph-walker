@@ -201,6 +201,33 @@ test "document: sync message carries replace_text history" {
 }
 
 ///|
+test "document: replace_text sync can expose intermediate states" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+
+  doc_a.insert_text(node, 0, "Hello")
+  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  let vv = doc_b.get_version_vector()
+
+  doc_a.replace_text(node, "World")
+  let delta = doc_a.export_sync_message_since(vv)
+
+  inspect(delta.text_ops.length() > 1, content="true")
+  doc_b.apply_remote_sync_message({
+    tree_ops: [],
+    text_ops: [delta.text_ops[0]],
+  })
+  inspect(doc_b.get_text(node) != "World", content="true")
+
+  doc_b.apply_remote_sync_message({
+    tree_ops: [],
+    text_ops: delta.text_ops[1:].iter().collect(),
+  })
+  inspect(doc_b.get_text(node), content="World")
+}
+
+///|
 test "document: remote text ops buffer until tree target exists" {
   let doc_a = @container.Document::new("alice")
   let doc_b = @container.Document::new("bob")
