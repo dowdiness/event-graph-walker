@@ -243,3 +243,40 @@ fn prop_delete_node_preserves_text_and_rejects_writes(
 test "property: delete_node preserves existing text and rejects later writes" {
   @qc.quick_check_fn(prop_delete_node_preserves_text_and_rejects_writes)
 }
+
+///|
+fn prop_sync_message_replays_mixed_tree_and_text(
+  scenario : BlockScenario,
+) -> Bool {
+  let doc_a = @container.Document::new("alice") catch { _ => return false }
+  let doc_b = @container.Document::new("bob") catch { _ => return false }
+  let n0 = doc_a.create_node(parent=@container.root_id) catch { _ => return false }
+  let n1 = doc_a.create_node(parent=@container.root_id) catch { _ => return false }
+  let nodes = [n0, n1]
+
+  for edit in scenario.edits {
+    if !doc_apply(doc_a, nodes, edit) {
+      return false
+    }
+  }
+
+  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+
+  for block = 0; block < 2; block = block + 1 {
+    if doc_b.get_text(nodes[block]) != doc_a.get_text(nodes[block]) {
+      return false
+    }
+    if doc_b.text_len(nodes[block]) != doc_a.text_len(nodes[block]) {
+      return false
+    }
+    if doc_b.is_alive(nodes[block]) != doc_a.is_alive(nodes[block]) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+test "property: sync message converges mixed tree and text edits" {
+  @qc.quick_check_fn(prop_sync_message_replays_mixed_tree_and_text)
+}

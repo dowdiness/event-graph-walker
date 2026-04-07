@@ -245,6 +245,7 @@ pub struct Document {
   priv seen_ops : Map[String, Bool]
   priv text_ops : Array[BlockTextOp]
   priv seen_text_ops : Map[String, Bool]
+  priv pending_text_ops : Map[String, Array[BlockTextOp]]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
 }
@@ -272,6 +273,7 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     seen_ops: Map::new(),
     text_ops: [],
     seen_text_ops: Map::new(),
+    pending_text_ops: Map::new(),
     property_state: Map::new(),
     blocks: Map::new(),
   }
@@ -350,6 +352,55 @@ fn Document::record_text_op(self : Document, op : BlockTextOp) -> Bool {
       self.text_ops.insert(insert_idx, op)
       true
     }
+  }
+}
+
+///|
+fn Document::pending_text_key(_self : Document, id : @mt.TreeNodeId) -> String {
+  tree_node_id_key(id)
+}
+
+///|
+fn Document::defer_text_op(self : Document, op : BlockTextOp) -> Unit {
+  let key = self.pending_text_key(op.block)
+  let pending = match self.pending_text_ops.get(key) {
+    Some(existing) => existing.copy()
+    None => []
+  }
+  let mut insert_idx = pending.length()
+  for i = 0; i < pending.length(); i = i + 1 {
+    if compare_text_ops(op, pending[i]) < 0 {
+      insert_idx = i
+      break
+    }
+  }
+  pending.insert(insert_idx, op)
+  self.pending_text_ops[key] = pending
+}
+
+///|
+fn Document::flush_pending_text_ops(self : Document, id : @mt.TreeNodeId) -> Unit {
+  let key = self.pending_text_key(id)
+  let pending = match self.pending_text_ops.get(key) {
+    Some(existing) => existing.copy()
+    None => return
+  }
+  let still_pending : Array[BlockTextOp] = []
+  for op in pending {
+    let applied = try {
+      self.apply_block_text_op(id, op)
+      true
+    } catch {
+      _ => false
+    }
+    if !applied {
+      still_pending.push(op)
+    }
+  }
+  if still_pending.is_empty() {
+    self.pending_text_ops.remove(key)
+  } else {
+    self.pending_text_ops[key] = still_pending
   }
 }
 
@@ -663,6 +714,7 @@ pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
   match op {
     @mt.Move(move_op) => {
       self.apply_move_op(move_op)
+      self.flush_pending_text_ops(move_op.target)
       if move_op.target.agent == self.agent_id &&
         move_op.target.counter >= self.next_counter {
         self.next_counter = move_op.target.counter + 1
@@ -683,7 +735,7 @@ pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
 pub fn Document::apply_remote_sync_message(
   self : Document,
   message : SyncMessage,
-) -> Unit raise DocumentError {
+) -> Unit {
   for op in message.tree_ops {
     self.apply_remote_op(op)
   }

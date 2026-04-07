@@ -119,7 +119,7 @@ pub fn Document::export_text_ops(self : Document) -> Array[BlockTextOp] {
 pub fn Document::apply_remote_text_op(
   self : Document,
   op : BlockTextOp,
-) -> Unit raise DocumentError {
+) -> Unit {
   if !self.record_text_op(op) {
     return
   }
@@ -127,5 +127,15 @@ pub fn Document::apply_remote_text_op(
   if timestamp > self.lamport_clock {
     self.lamport_clock = timestamp
   }
-  self.apply_block_text_op(op.block, op)
+  let applied = try {
+    self.apply_block_text_op(op.block, op)
+    true
+  } catch {
+    _ => false
+  }
+  if !applied {
+    self.defer_text_op(op)
+    return
+  }
+  self.flush_pending_text_ops(op.block)
 }

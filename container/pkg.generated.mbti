@@ -39,8 +39,8 @@ pub struct Document {
   // private fields
 }
 pub fn Document::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
-pub fn Document::apply_remote_sync_message(Self, SyncMessage) -> Unit raise DocumentError
-pub fn Document::apply_remote_text_op(Self, BlockTextOp) -> Unit raise DocumentError
+pub fn Document::apply_remote_sync_message(Self, SyncMessage) -> Unit
+pub fn Document::apply_remote_text_op(Self, BlockTextOp) -> Unit
 pub fn Document::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
 pub fn Document::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError

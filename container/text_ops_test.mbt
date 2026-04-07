@@ -177,7 +177,7 @@ test "document: sync message replays tree and text together" {
   let message = doc_a.export_sync_message()
   inspect(message.tree_ops.length(), content="2")
   inspect(message.text_ops.length(), content="5")
-  try! doc_b.apply_remote_sync_message(message)
+  doc_b.apply_remote_sync_message(message)
 
   inspect(doc_a.get_text(node), content="AC")
   inspect(doc_b.get_text(node), content="AC")
@@ -194,8 +194,54 @@ test "document: sync message carries replace_text history" {
   doc_a.replace_text(node, "World")
 
   let message = doc_a.export_sync_message()
-  try! doc_b.apply_remote_sync_message(message)
+  doc_b.apply_remote_sync_message(message)
 
   inspect(doc_a.get_text(node), content="World")
   inspect(doc_b.get_text(node), content="World")
+}
+
+///|
+test "document: remote text ops buffer until tree target exists" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+
+  doc_a.insert_text(node, 0, "AB")
+
+  let text_ops = doc_a.export_text_ops()
+  inspect(text_ops.length(), content="2")
+  doc_b.apply_remote_text_op(text_ops[0])
+  doc_b.apply_remote_text_op(text_ops[1])
+  inspect(doc_b.get_text(node), content="")
+
+  for op in doc_a.export_ops() {
+    doc_b.apply_remote_op(op)
+  }
+
+  inspect(doc_b.get_text(node), content="AB")
+}
+
+///|
+test "document: remote delete buffers until target insert arrives" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+
+  for op in doc_a.export_ops() {
+    doc_b.apply_remote_op(op)
+  }
+
+  doc_a.insert_text(node, 0, "AB")
+  doc_a.delete_text(node, 1)
+
+  let text_ops = doc_a.export_text_ops()
+  inspect(text_ops.length(), content="3")
+  doc_b.apply_remote_text_op(text_ops[2])
+  inspect(doc_b.get_text(node), content="")
+  doc_b.apply_remote_text_op(text_ops[0])
+  inspect(doc_b.get_text(node), content="A")
+  doc_b.apply_remote_text_op(text_ops[1])
+
+  inspect(doc_a.get_text(node), content="A")
+  inspect(doc_b.get_text(node), content="A")
 }
