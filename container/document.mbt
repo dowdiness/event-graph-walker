@@ -90,6 +90,12 @@ pub(all) struct SyncMessage {
 }
 
 ///|
+priv enum SyncOpRecord {
+  Tree(VersionedTreeOp)
+  Text(VersionedBlockTextOp)
+}
+
+///|
 fn text_op_timestamp(op : TextOp) -> Int {
   match op {
     Insert(insert_op) => insert_op.timestamp
@@ -289,12 +295,8 @@ pub struct Document {
   priv seen_ops : Map[String, Bool]
   priv text_ops : Array[BlockTextOp]
   priv seen_text_ops : Map[String, Bool]
-  priv sync_tree_ops : Array[VersionedTreeOp]
-  priv sync_text_ops : Array[VersionedBlockTextOp]
-  priv sync_tree_by_version : Map[String, VersionedTreeOp]
-  priv sync_text_by_version : Map[String, VersionedBlockTextOp]
-  priv seen_sync_tree_versions : Map[String, Bool]
-  priv seen_sync_text_versions : Map[String, Bool]
+  priv sync_ops_by_version : Map[String, SyncOpRecord]
+  priv seen_sync_versions : Map[String, Bool]
   priv mut pending_sync_tree_ops : Array[VersionedTreeOp]
   priv mut pending_sync_text_ops : Array[VersionedBlockTextOp]
   priv pending_text_ops : Map[String, Array[BlockTextOp]]
@@ -325,12 +327,8 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     seen_ops: Map::new(),
     text_ops: [],
     seen_text_ops: Map::new(),
-    sync_tree_ops: [],
-    sync_text_ops: [],
-    sync_tree_by_version: Map::new(),
-    sync_text_by_version: Map::new(),
-    seen_sync_tree_versions: Map::new(),
-    seen_sync_text_versions: Map::new(),
+    sync_ops_by_version: Map::new(),
+    seen_sync_versions: Map::new(),
     pending_sync_tree_ops: [],
     pending_sync_text_ops: [],
     pending_text_ops: Map::new(),
@@ -443,19 +441,11 @@ fn Document::record_text_op(self : Document, op : BlockTextOp) -> Bool {
 ///|
 fn Document::record_sync_tree_op(self : Document, op : VersionedTreeOp) -> Bool {
   let key = raw_version_key(op.version)
-  match self.seen_sync_tree_versions.get(key) {
+  match self.seen_sync_versions.get(key) {
     Some(true) => false
     _ => {
-      self.seen_sync_tree_versions.set(key, true)
-      self.sync_tree_by_version[key] = op
-      let mut insert_idx = self.sync_tree_ops.length()
-      for i = 0; i < self.sync_tree_ops.length(); i = i + 1 {
-        if compare_versioned_tree_ops(op, self.sync_tree_ops[i]) < 0 {
-          insert_idx = i
-          break
-        }
-      }
-      self.sync_tree_ops.insert(insert_idx, op)
+      self.seen_sync_versions.set(key, true)
+      self.sync_ops_by_version[key] = Tree(op)
       true
     }
   }
@@ -464,19 +454,11 @@ fn Document::record_sync_tree_op(self : Document, op : VersionedTreeOp) -> Bool 
 ///|
 fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> Bool {
   let key = raw_version_key(op.version)
-  match self.seen_sync_text_versions.get(key) {
+  match self.seen_sync_versions.get(key) {
     Some(true) => false
     _ => {
-      self.seen_sync_text_versions.set(key, true)
-      self.sync_text_by_version[key] = op
-      let mut insert_idx = self.sync_text_ops.length()
-      for i = 0; i < self.sync_text_ops.length(); i = i + 1 {
-        if compare_versioned_text_ops(op, self.sync_text_ops[i]) < 0 {
-          insert_idx = i
-          break
-        }
-      }
-      self.sync_text_ops.insert(insert_idx, op)
+      self.seen_sync_versions.set(key, true)
+      self.sync_ops_by_version[key] = Text(op)
       true
     }
   }
@@ -637,16 +619,13 @@ fn Document::versioned_sync_ops_between(
   for lv in advance_lvs {
     let version = self.raw_version_for_lv(lv)
     let key = raw_version_key(version)
-    match self.sync_tree_by_version.get(key) {
-      Some(op) => tree_ops.push(op)
+    match self.sync_ops_by_version.get(key) {
+      Some(Tree(op)) => tree_ops.push(op)
+      Some(Text(op)) => text_ops.push(op)
       None =>
-        match self.sync_text_by_version.get(key) {
-          Some(op) => text_ops.push(op)
-          None =>
-            raise DocumentError::Internal(
-              detail="missing sync payload for graph version",
-            )
-        }
+        raise DocumentError::Internal(
+          detail="missing sync payload for graph version",
+        )
     }
   }
   { tree_ops, text_ops }
@@ -1015,7 +994,7 @@ pub fn Document::export_sync_message(self : Document) -> SyncMessage {
     @core.Frontier::from_array([]),
     self.graph.get_frontier(),
   ) catch {
-    _ => { tree_ops: self.sync_tree_ops.copy(), text_ops: self.sync_text_ops.copy() }
+    _ => abort("Document::export_sync_message: missing sync payload")
   }
 }
 
@@ -1031,15 +1010,7 @@ pub fn Document::export_sync_message_since(
 ) -> SyncMessage {
   let from = vv.to_frontier(self.graph)
   self.versioned_sync_ops_between(from, self.graph.get_frontier()) catch {
-    _ => {
-      let tree_ops = self.sync_tree_ops.filter(fn(op) {
-        !vv.includes(op.version.agent, op.version.seq)
-      })
-      let text_ops = self.sync_text_ops.filter(fn(op) {
-        !vv.includes(op.version.agent, op.version.seq)
-      })
-      { tree_ops, text_ops }
-    }
+    _ => abort("Document::export_sync_message_since: missing sync payload")
   }
 }
 
