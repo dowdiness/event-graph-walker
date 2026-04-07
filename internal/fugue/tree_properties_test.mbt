@@ -237,18 +237,20 @@ fn is_ancestor_naive(
   if ancestor_id == @fugue.root_lv {
     return true
   }
-  loop tree[descendant_id] {
-    Some(item) =>
-      match item.parent {
-        Some(parent_lv) => {
-          if parent_lv == ancestor_id {
-            return true
+  for node = tree[descendant_id] {
+    match node {
+      Some(item) =>
+        match item.parent {
+          Some(parent_lv) => {
+            if parent_lv == ancestor_id {
+              return true
+            }
+            continue tree[parent_lv]
           }
-          continue tree[parent_lv]
+          None => break false
         }
-        None => break false
-      }
-    None => break false
+      None => break false
+    }
   }
 }
 
