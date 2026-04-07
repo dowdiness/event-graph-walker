@@ -50,15 +50,6 @@ fn JumpAncestors::add_item_id(
 }
 
 ///|
-/// Compatibility wrapper for the legacy LV-indexed tests.
-fn JumpAncestors::add(self : JumpAncestors, lv : Lv, parent : Lv) -> Unit {
-  self.add_item_id(
-    ItemId(lv.0),
-    if parent == root_lv { None } else { Some(ItemId(parent.0)) },
-  )
-}
-
-///|
 /// Check if `ancestor` is an ancestor of `descendant`. O(log depth).
 /// Both must be non-root tree nodes. Caller handles root and equality.
 /// Returns false for absent or gap item slots.
@@ -91,10 +82,4 @@ fn JumpAncestors::is_ancestor_item_id(
     k = k - 1
   }
   current == ancestor
-}
-
-///|
-/// Compatibility wrapper for the legacy LV-indexed tests.
-fn JumpAncestors::is_ancestor(self : JumpAncestors, ancestor : Lv, descendant : Lv) -> Bool {
-  self.is_ancestor_item_id(ItemId(ancestor.0), ItemId(descendant.0))
 }
