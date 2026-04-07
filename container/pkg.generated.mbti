@@ -2,6 +2,8 @@
 package "dowdiness/event-graph-walker/container"
 
 import {
+  "dowdiness/event-graph-walker/internal/causal_graph",
+  "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/movable_tree",
 }
 
@@ -48,9 +50,11 @@ pub fn Document::delete_node(Self, @movable_tree.TreeNodeId) -> Unit raise Docum
 pub fn Document::delete_text(Self, @movable_tree.TreeNodeId, Int) -> Unit raise DocumentError
 pub fn Document::export_ops(Self) -> Array[@movable_tree.TreeOp]
 pub fn Document::export_sync_message(Self) -> SyncMessage
+pub fn Document::export_sync_message_since(Self, @causal_graph.VersionVector) -> SyncMessage
 pub fn Document::export_text_ops(Self) -> Array[BlockTextOp]
 pub fn Document::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
 pub fn Document::get_text(Self, @movable_tree.TreeNodeId) -> String
+pub fn Document::get_version_vector(Self) -> @causal_graph.VersionVector
 pub fn Document::insert_text(Self, @movable_tree.TreeNodeId, Int, String) -> Unit raise DocumentError
 pub fn Document::is_alive(Self, @movable_tree.TreeNodeId) -> Bool
 pub fn Document::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
@@ -60,8 +64,8 @@ pub fn Document::set_property(Self, @movable_tree.TreeNodeId, String, String) ->
 pub fn Document::text_len(Self, @movable_tree.TreeNodeId) -> Int
 
 pub(all) struct SyncMessage {
-  tree_ops : Array[@movable_tree.TreeOp]
-  text_ops : Array[BlockTextOp]
+  tree_ops : Array[VersionedTreeOp]
+  text_ops : Array[VersionedBlockTextOp]
 }
 
 pub(all) struct TextDeleteOp {
@@ -82,6 +86,17 @@ pub(all) struct TextInsertOp {
 pub(all) enum TextOp {
   Insert(TextInsertOp)
   Delete(TextDeleteOp)
+}
+
+pub(all) struct VersionedBlockTextOp {
+  version : @core.RawVersion
+  block : @movable_tree.TreeNodeId
+  op : TextOp
+}
+
+pub(all) struct VersionedTreeOp {
+  version : @core.RawVersion
+  op : @movable_tree.TreeOp
 }
 
 // Type aliases

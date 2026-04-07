@@ -245,3 +245,31 @@ test "document: remote delete buffers until target insert arrives" {
   inspect(doc_a.get_text(node), content="A")
   inspect(doc_b.get_text(node), content="A")
 }
+
+///|
+test "document: export_sync_message_since sends only missing mixed history" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let left = doc_a.create_node(parent=@container.root_id)
+  let right = doc_a.create_node(parent=@container.root_id)
+
+  doc_a.insert_text(left, 0, "AB")
+  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  let vv = doc_b.get_version_vector()
+
+  doc_a.delete_text(left, 1)
+  doc_a.insert_text(right, 0, "Z")
+  doc_a.delete_node(right)
+
+  let delta = doc_a.export_sync_message_since(vv)
+  inspect(delta.tree_ops.length(), content="1")
+  inspect(delta.text_ops.length(), content="2")
+  doc_b.apply_remote_sync_message(delta)
+
+  inspect(doc_a.get_text(left), content="A")
+  inspect(doc_b.get_text(left), content="A")
+  inspect(doc_a.get_text(right), content="Z")
+  inspect(doc_b.get_text(right), content="Z")
+  inspect(doc_a.is_alive(right), content="false")
+  inspect(doc_b.is_alive(right), content="false")
+}
