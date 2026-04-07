@@ -15,14 +15,19 @@ enum AgentAction {
   FuzzUndo(Int) // (agent_idx)
   FuzzRedo(Int) // (agent_idx)
   FuzzSync(Int, Int) // (from_idx, to_idx)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// A generated trace of multi-agent actions.
 struct MultiAgentTrace {
   num_agents : Int
   actions : Array[AgentAction]
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for MultiAgentTrace with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 impl @quickcheck.Arbitrary for MultiAgentTrace with arbitrary(size, rs) {

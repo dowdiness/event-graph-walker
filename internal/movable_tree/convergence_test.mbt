@@ -96,8 +96,18 @@ test "convergence: two peers same ops different order" {
   let snap2 = tree_snapshot(tree2, ids)
   inspect(snap1, content=snap2.to_string())
   // Verify the actual structure: A under root, B under A
-  inspect(tree1.parent(a), content="Some({agent: \"__ROOT__\", counter: -1})")
-  inspect(tree1.parent(b), content="Some({agent: \"alice\", counter: 0})")
+  inspect(
+    tree1.parent(a),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
+  inspect(
+    tree1.parent(b),
+    content=(
+      #|Some({ agent: "alice", counter: 0 })
+    ),
+  )
 }
 
 ///|
@@ -149,8 +159,18 @@ test "convergence: concurrent cycle — later move skipped" {
   log1.apply(tree1, move_a_under_b)
   log1.apply(tree1, move_b_under_a)
   // Expected: A under B, B under root (move_b_under_a was skipped)
-  inspect(tree1.parent(a), content="Some({agent: \"bob\", counter: 0})")
-  inspect(tree1.parent(b), content="Some({agent: \"__ROOT__\", counter: -1})")
+  inspect(
+    tree1.parent(a),
+    content=(
+      #|Some({ agent: "bob", counter: 0 })
+    ),
+  )
+  inspect(
+    tree1.parent(b),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
   // Also verify with reversed arrival order
   let tree2 = @movable_tree.MovableTree::new()
   let log2 = @movable_tree.TreeOpLog::new()
@@ -159,8 +179,18 @@ test "convergence: concurrent cycle — later move skipped" {
   log2.apply(tree2, create_b)
   log2.apply(tree2, create_a)
   // Should converge to same result
-  inspect(tree2.parent(a), content="Some({agent: \"bob\", counter: 0})")
-  inspect(tree2.parent(b), content="Some({agent: \"__ROOT__\", counter: -1})")
+  inspect(
+    tree2.parent(a),
+    content=(
+      #|Some({ agent: "bob", counter: 0 })
+    ),
+  )
+  inspect(
+    tree2.parent(b),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
 }
 
 ///|
@@ -179,11 +209,21 @@ test "convergence: duplicate ops idempotent" {
   let log = @movable_tree.TreeOpLog::new()
   log.apply(tree, op)
   inspect(tree.contains(a), content="true")
-  inspect(tree.parent(a), content="Some({agent: \"__ROOT__\", counter: -1})")
+  inspect(
+    tree.parent(a),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
   // Apply the same op again — should be a no-op
   log.apply(tree, op)
   inspect(tree.contains(a), content="true")
-  inspect(tree.parent(a), content="Some({agent: \"__ROOT__\", counter: -1})")
+  inspect(
+    tree.parent(a),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
   // Only one entry in the log
   inspect(log.all_ops().length(), content="1")
 }
@@ -227,8 +267,18 @@ test "convergence: move before create" {
   log.apply(tree, create_a)
   log.apply(tree, create_b)
   // After undo-do-redo, should be: A under root, B under A
-  inspect(tree.parent(a), content="Some({agent: \"__ROOT__\", counter: -1})")
-  inspect(tree.parent(b), content="Some({agent: \"alice\", counter: 0})")
+  inspect(
+    tree.parent(a),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
+  inspect(
+    tree.parent(b),
+    content=(
+      #|Some({ agent: "alice", counter: 0 })
+    ),
+  )
 }
 
 ///|
@@ -274,7 +324,12 @@ test "convergence: missing-target replay still checks cycles" {
   log.apply(tree, create_a_under_b)
   // This used to hang because the prior two ops could leave A <-> B.
   log.apply(tree, move_c_under_a)
-  inspect(tree.parent(c), content="Some({agent: \"alice\", counter: 0})")
+  inspect(
+    tree.parent(c),
+    content=(
+      #|Some({ agent: "alice", counter: 0 })
+    ),
+  )
   inspect(tree.would_create_cycle(b, a), content="true")
 }
 
@@ -347,10 +402,22 @@ test "convergence: six orderings all converge" {
   // Verify the actual structure: A under root, B under A, C under B
   inspect(
     ref_tree.parent(a),
-    content="Some({agent: \"__ROOT__\", counter: -1})",
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
   )
-  inspect(ref_tree.parent(b), content="Some({agent: \"alice\", counter: 0})")
-  inspect(ref_tree.parent(c), content="Some({agent: \"bob\", counter: 0})")
+  inspect(
+    ref_tree.parent(b),
+    content=(
+      #|Some({ agent: "alice", counter: 0 })
+    ),
+  )
+  inspect(
+    ref_tree.parent(c),
+    content=(
+      #|Some({ agent: "bob", counter: 0 })
+    ),
+  )
 }
 
 ///|

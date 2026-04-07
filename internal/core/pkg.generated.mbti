@@ -3,6 +3,7 @@ package "dowdiness/event-graph-walker/internal/core"
 
 import {
   "dowdiness/rle",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
@@ -11,24 +12,25 @@ import {
 // Errors
 
 // Types and methods
-pub(all) struct Frontier(Array[Int]) derive(Eq, Show, ToJson, @json.FromJson)
+pub(all) struct Frontier(Array[Int]) derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn Frontier::from_array(Array[Int]) -> Self
 pub fn Frontier::from_array_dedup(Array[Int]) -> Self
 pub fn Frontier::has_duplicates(Self) -> Bool
 #deprecated
 pub fn Frontier::inner(Self) -> Array[Int]
+pub impl Show for Frontier
 
 pub(all) struct GraphEntry {
   parents : Array[Int]
   agent : String
   seq : Int
   timestamp : Int
-} derive(Show)
+} derive(@debug.Debug)
 
 pub(all) struct LvRange {
   start : Int
   count : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn LvRange::contains(Self, Int) -> Bool
 pub fn LvRange::end(Self) -> Int
 pub impl @rle.Addressable for LvRange
@@ -39,7 +41,7 @@ pub impl @rle.Spanning for LvRange
 
 pub struct Op {
   // private fields
-} derive(Show, ToJson, @json.FromJson)
+} derive(ToJson, @debug.Debug, @json.FromJson)
 pub fn Op::agent(Self) -> String
 pub fn Op::content(Self) -> OpContent
 pub fn Op::get_delete_target(Self) -> RawVersion?
@@ -57,12 +59,14 @@ pub fn Op::origin_right(Self) -> RawVersion?
 pub fn Op::parents(Self) -> Array[RawVersion]
 pub fn Op::parents_iter(Self) -> Iter[RawVersion]
 pub fn Op::seq(Self) -> Int
+pub impl Show for Op
 
 pub enum OpContent {
   Insert(String)
   Delete
   Undelete
-} derive(Eq, Show, ToJson, @json.FromJson)
+} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub impl Show for OpContent
 
 pub struct OpRun {
   start_lv : Int
@@ -73,7 +77,7 @@ pub struct OpRun {
   origin_left : RawVersion?
   origin_right : RawVersion?
   count : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn OpRun::decompress(Self, Int) -> Op?
 pub fn OpRun::decompress_into(Self, Array[Op]) -> Unit
 pub fn OpRun::from_op(Op) -> Self
@@ -87,17 +91,18 @@ pub enum OpRunContent {
   Inserts(Array[Char])
   Deletes
   Undeletes
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub impl ToJson for OpRunContent
 pub impl @json.FromJson for OpRunContent
 
 pub struct RawVersion {
   agent : String
   seq : Int
-} derive(Compare, Eq, Show, ToJson, @json.FromJson)
+} derive(Compare, Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn RawVersion::new(String, Int) -> Self
 pub fn RawVersion::to_string(Self) -> String
 pub impl Hash for RawVersion
+pub impl Show for RawVersion
 
 // Type aliases
 pub type AgentId = String

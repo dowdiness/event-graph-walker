@@ -5,6 +5,7 @@ import {
   "dowdiness/event-graph-walker/internal/causal_graph",
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/rle",
+  "moonbitlang/core/debug",
 }
 
 // Values
@@ -22,7 +23,7 @@ pub(all) suberror OpLogError {
 // Types and methods
 pub struct OpLog {
   // private fields
-} derive(Show)
+} derive(@debug.Debug)
 pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
 pub fn OpLog::delete(Self, Int) -> @core.Op raise OpLogError

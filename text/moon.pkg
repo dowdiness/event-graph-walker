@@ -8,6 +8,7 @@ import {
   "dowdiness/event-graph-walker/undo",
   "dowdiness/rle",
   "moonbitlang/core/bench",
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 

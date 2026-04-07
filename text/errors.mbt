@@ -7,7 +7,12 @@ pub(all) enum SyncFailure {
   MalformedMessage(detail~ : String)
   Timeout(detail~ : String)
   Cancelled(detail~ : String)
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for SyncFailure with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// User-facing error type for the text facade

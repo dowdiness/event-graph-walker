@@ -14,7 +14,7 @@ struct VisibleRun {
   start_lv : Int // First LV in this visible run
   text : String // Concatenated visible text
   count : Int // Number of items in run
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 ///|
 pub impl @rle.HasLength for VisibleRun with length(self) -> Int {

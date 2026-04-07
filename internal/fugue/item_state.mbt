@@ -11,7 +11,12 @@ pub enum ItemState {
   Inserted
   Deleted
   Retreated
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for ItemState with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub impl Default for ItemState with default() -> ItemState {

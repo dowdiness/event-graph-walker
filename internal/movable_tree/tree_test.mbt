@@ -9,7 +9,12 @@ test "create: single node under root" {
   tree.apply_create(id, @movable_tree.root_id, pos)
   inspect(tree.contains(id), content="true")
   inspect(tree.is_alive(id), content="true")
-  inspect(tree.parent(id), content="Some({agent: \"__ROOT__\", counter: -1})")
+  inspect(
+    tree.parent(id),
+    content=(
+      #|Some({ agent: "__ROOT__", counter: -1 })
+    ),
+  )
   let children = tree.children(@movable_tree.root_id)
   inspect(children.length(), content="1")
   inspect(children[0] == id, content="true")
@@ -30,7 +35,12 @@ test "move: reparent a node" {
   // Move child under parent
   let new_pos = @fi.FractionalIndex::between(left=None, right=None)
   tree.apply_move(child_id, parent_id, new_pos)
-  inspect(tree.parent(child_id), content="Some({agent: \"alice\", counter: 0})")
+  inspect(
+    tree.parent(child_id),
+    content=(
+      #|Some({ agent: "alice", counter: 0 })
+    ),
+  )
   inspect(tree.children(@movable_tree.root_id).length(), content="1")
   inspect(tree.children(parent_id).length(), content="1")
 }
@@ -48,7 +58,12 @@ test "delete: move to trash" {
   tree.apply_move(id, @movable_tree.trash_id, trash_pos)
   inspect(tree.is_alive(id), content="false")
   inspect(tree.contains(id), content="true")
-  inspect(tree.parent(id), content="Some({agent: \"__TRASH__\", counter: -2})")
+  inspect(
+    tree.parent(id),
+    content=(
+      #|Some({ agent: "__TRASH__", counter: -2 })
+    ),
+  )
 }
 
 ///|

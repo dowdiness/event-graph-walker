@@ -7,7 +7,12 @@
 pub(all) struct TreeNodeId {
   agent : String
   counter : Int
-} derive(Eq, Hash, Show, Debug, Compare)
+} derive(Eq, Hash, Debug, Compare)
+
+///|
+pub impl Show for TreeNodeId with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Sentinel identifier for the virtual root of the tree.
@@ -29,7 +34,7 @@ pub(all) struct TreeMoveOp {
   new_parent : TreeNodeId
   position : @fi.FractionalIndex
   agent : String
-} derive(Show, Debug)
+} derive(Debug)
 
 ///|
 /// A timestamped property mutation on a tree node.
@@ -39,11 +44,11 @@ pub(all) struct TreePropertyOp {
   key : String
   value : String
   agent : String
-} derive(Show, Debug)
+} derive(Debug)
 
 ///|
 /// A replicated tree operation.
 pub(all) enum TreeOp {
   Move(TreeMoveOp)
   SetProperty(TreePropertyOp)
-} derive(Show, Debug)
+} derive(Debug)

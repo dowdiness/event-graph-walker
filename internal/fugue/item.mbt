@@ -30,15 +30,20 @@
 
 ///|
 /// Logical Version (local sequence number)
-pub(all) struct Lv(Int) derive(Show, Eq, Compare, Default, Hash)
+pub(all) struct Lv(Int) derive(Debug, Eq, Compare, Default, Hash)
+
+///|
+pub impl Show for Lv with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Lamport Timestamp for causal ordering
-pub(all) struct Timestamp(Int) derive(Show, Eq, Compare, Default)
+pub(all) struct Timestamp(Int) derive(Debug, Eq, Compare, Default)
 
 ///|
 /// Replica identifier
-pub(all) struct ReplicaId(String) derive(Show, Eq, Compare)
+pub(all) struct ReplicaId(String) derive(Debug, Eq, Compare)
 
 ///|
 /// The root node's logical version sentinel
@@ -49,7 +54,12 @@ pub let root_lv : Lv = Lv(-1)
 pub enum Side {
   Left
   Right
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for Side with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// A node in the FugueMax tree, representing one unit of content (e.g. a character).
@@ -88,7 +98,12 @@ pub(all) struct Item[T] {
   /// Replica that created this item. Used as a deterministic tiebreaker when
   /// two siblings have equal Lamport timestamps.
   agent : ReplicaId
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl[T : Debug] Show for Item[T] with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Compares two items to establish their order in the FugueMax sequence.
@@ -127,7 +142,7 @@ pub(all) struct InsertOp[T] {
   origin_right : Lv? // None = no right constraint
   timestamp : Timestamp
   agent : ReplicaId
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new item

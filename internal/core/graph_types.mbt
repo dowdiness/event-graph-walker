@@ -3,7 +3,12 @@
 ///
 /// **Invariant**: Elements must be unique. Duplicate LVs violate the frontier semantics
 /// (a version cannot be a tip twice) and may cause incorrect diff calculations.
-pub(all) struct Frontier(Array[Int]) derive(Eq, Show, ToJson, FromJson)
+pub(all) struct Frontier(Array[Int]) derive(Eq, Debug, ToJson, FromJson)
+
+///|
+pub impl Show for Frontier with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Create a frontier from an array of LVs.
@@ -68,4 +73,4 @@ pub(all) struct GraphEntry {
   /// Lamport timestamp: always `max(parents' timestamps) + 1`, or 0 for roots.
   /// Used for deterministic total ordering when causal order alone is ambiguous.
   timestamp : Int
-} derive(Show)
+} derive(Debug)

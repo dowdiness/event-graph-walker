@@ -11,7 +11,7 @@ struct InsertCursor {
   position : Int // last insert position (0-based)
   lv : Int // LV of last inserted item
   at_end : Bool // whether origin_right was None (end of document)
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Provides position-based operations (insert/delete at cursor position)
@@ -24,7 +24,7 @@ pub struct Document {
   priv mut position_cache : @order_tree.OrderTree[VisibleRun]?
   // Insert cursor: caches last insert position/LV for sequential append fast-path.
   priv mut cursor : InsertCursor?
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Create a new document for an agent

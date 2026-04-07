@@ -11,7 +11,7 @@ pub struct FugueTree[T] {
   root_children : Array[Lv] // Root's children (root not in items array)
   children : Array[Array[Lv]] // Children index, sparse array indexed by LV
   jump_ancestors : JumpAncestors // Binary lifting for O(log n) ancestor queries
-} derive(Show)
+} derive(Debug)
 
 ///|
 /// Creates a default empty FugueTree with a virtual root node.

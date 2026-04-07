@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "dowdiness/event-graph-walker/undo"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 
 // Errors
@@ -12,13 +16,13 @@ pub fn UndoError::is_retryable(Self) -> Bool
 pub fn UndoError::message(Self) -> String
 
 // Types and methods
-type UndoGroup derive(Show)
+type UndoGroup derive(@debug.Debug)
 
-type UndoItem derive(Show)
+type UndoItem derive(@debug.Debug)
 
 pub struct UndoManager {
   // private fields
-} derive(Show)
+} derive(@debug.Debug)
 pub fn UndoManager::can_redo(Self) -> Bool
 pub fn UndoManager::can_undo(Self) -> Bool
 pub fn UndoManager::clear(Self) -> Unit
@@ -33,7 +37,7 @@ pub fn[D : Undoable] UndoManager::undo(Self, D) -> Unit raise UndoError
 pub enum UndoOpType {
   Insert
   Delete
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

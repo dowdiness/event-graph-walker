@@ -1,5 +1,6 @@
 import {
   "dowdiness/event-graph-walker/internal/fractional_index" @fi,
+  "moonbitlang/core/debug",
 }
 
 import {

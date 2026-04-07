@@ -19,7 +19,12 @@ pub type AgentId = String
 pub struct RawVersion {
   agent : String
   seq : Int
-} derive(Eq, Compare, Show, ToJson, FromJson)
+} derive(Eq, Compare, Debug, ToJson, FromJson)
+
+///|
+pub impl Show for RawVersion with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Create a new RawVersion

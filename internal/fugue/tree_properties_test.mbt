@@ -8,13 +8,18 @@ pub(all) struct QcInsertOp {
   content : String
   ts : Int
   agent : String
-} derive(Show)
+} derive(Debug)
 
 ///|
 pub(all) struct QcInsertOpSet {
   ops : Array[QcInsertOp]
   shuffle_seed : UInt64
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for QcInsertOpSet with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Arbitrary instance for QcInsertOpSet
@@ -194,7 +199,12 @@ test "property: fugue insertion determinism (order independence)" {
 /// Generated chain length for ancestor properties
 pub(all) struct ChainLen {
   len : Int
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for ChainLen with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for ChainLen with arbitrary(size, _random_state) {
@@ -356,7 +366,12 @@ test "property: fugue ancestor transitivity (chain)" {
 pub(all) struct InsertSetWithDeletes {
   inserts : Array[QcInsertOp]
   delete_count : Int
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for InsertSetWithDeletes with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with arbitrary(
@@ -513,7 +528,12 @@ pub(all) struct ConcurrentInsertSeq {
   len_b : Int
   ts_a : Int
   ts_b : Int
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for ConcurrentInsertSeq with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Arbitrary instance for ConcurrentInsertSeq
@@ -717,7 +737,12 @@ pub(all) struct TieBreakCase {
   agent_b : String
   id_a : Int
   id_b : Int
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for TieBreakCase with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for TieBreakCase with arbitrary(
@@ -808,7 +833,12 @@ test "property: fugue tie-breaking (agent then id)" {
 /// Generated branching tree size for binary lifting property tests
 pub(all) struct BranchingTree {
   len : Int
-} derive(Show)
+} derive(Debug)
+
+///|
+impl Show for BranchingTree with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for BranchingTree with arbitrary(size, rs) {
