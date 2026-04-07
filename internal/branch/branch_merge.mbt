@@ -143,7 +143,7 @@ pub fn MergeContext::retreat_operations(
   operations : @rle.Rle[@core.LvRange],
 ) -> Unit raise BranchError {
   let cg = self.oplog.causal_graph()
-  let dirty_items : Array[Int] = []
+  let dirty_items : Array[@core.RawVersion] = []
 
   for range in operations.iter() {
     for lv = range.start; lv < range.end(); lv = lv + 1 {
@@ -157,45 +157,33 @@ pub fn MergeContext::retreat_operations(
               }
             @core.Delete => {
               // Retreat Delete: track as dirty for post-retreat LWW sweep
-              let target_lv = match op.origin_left() {
+              let target_raw = match op.origin_left() {
                 None => continue
-                Some(raw) =>
-                  match cg.raw_to_lv(raw) {
-                    Some(mapped) => mapped
-                    None => raise BranchError::MissingOrigin(raw~)
-                  }
+                Some(raw) => raw
               }
-              match self.tree[@fugue.Lv(target_lv)] {
-                Some(item) => {
-                  item.delete_count = item.delete_count - 1
-                  dirty_items.push(target_lv)
-                }
-                None =>
-                  raise BranchError::Fugue(
-                    @fugue.FugueError::MissingItem(id=@fugue.Lv(target_lv)),
-                  )
+              let target_lv = match cg.raw_to_lv(target_raw) {
+                Some(mapped) => mapped
+                None => raise BranchError::MissingOrigin(raw=target_raw)
               }
+              self.tree.adjust_delete_count(@fugue.Lv(target_lv), -1) catch {
+                e => raise BranchError::Fugue(e)
+              }
+              dirty_items.push(target_raw)
             }
             @core.Undelete => {
               // Retreat Undelete: re-apply the delete it cancelled
-              let target_lv = match op.origin_left() {
+              let target_raw = match op.origin_left() {
                 None => continue
-                Some(raw) =>
-                  match cg.raw_to_lv(raw) {
-                    Some(mapped) => mapped
-                    None => raise BranchError::MissingOrigin(raw~)
-                  }
+                Some(raw) => raw
               }
-              match self.tree[@fugue.Lv(target_lv)] {
-                Some(item) => {
-                  item.delete_count = item.delete_count + 1
-                  dirty_items.push(target_lv)
-                }
-                None =>
-                  raise BranchError::Fugue(
-                    @fugue.FugueError::MissingItem(id=@fugue.Lv(target_lv)),
-                  )
+              let target_lv = match cg.raw_to_lv(target_raw) {
+                Some(mapped) => mapped
+                None => raise BranchError::MissingOrigin(raw=target_raw)
               }
+              self.tree.adjust_delete_count(@fugue.Lv(target_lv), 1) catch {
+                e => raise BranchError::Fugue(e)
+              }
+              dirty_items.push(target_raw)
             }
           }
         None => raise BranchError::MissingOp(lv~)
@@ -206,12 +194,16 @@ pub fn MergeContext::retreat_operations(
   // Post-retreat: recompute LWW winners for dirty items
   if dirty_items.length() > 0 {
     let delete_index = DeleteIndex::build(self.oplog)
-    for target_lv in dirty_items {
+    for target_raw in dirty_items {
       let winner = delete_index.recompute_winner(
-        target_lv,
+        target_raw,
         self.oplog,
         operations,
       )
+      let target_lv = match cg.raw_to_lv(target_raw) {
+        Some(mapped) => mapped
+        None => raise BranchError::MissingOrigin(raw=target_raw)
+      }
       self.tree.set_delete_winner(
         @fugue.Lv(target_lv),
         winner.deleted,

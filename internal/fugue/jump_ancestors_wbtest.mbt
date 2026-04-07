@@ -3,8 +3,7 @@ test "jump: root children have depth 1" {
   let ja = JumpAncestors::new()
   ja.add(Lv(0), root_lv)
   inspect(ja.depth[0], content="1")
-  inspect(ja.jump[0].length(), content="1")
-  inspect(ja.jump[0][0], content="Lv(-1)")
+  inspect(ja.jump[0].length(), content="0")
 }
 
 ///|

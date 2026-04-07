@@ -16,6 +16,19 @@ fn Document::get_or_create_text(
 }
 
 ///|
+fn Document::apply_block_text_op(
+  self : Document,
+  id : @mt.TreeNodeId,
+  op : BlockTextOp,
+) -> Unit raise DocumentError {
+  if !self.tree.contains(id) {
+    raise DocumentError::TargetNotFound
+  }
+  let block = self.get_or_create_text(id)
+  block.apply_op(op.op)
+}
+
+///|
 /// Insert text at the given character position in a block's text content.
 pub fn Document::insert_text(
   self : Document,
@@ -28,8 +41,15 @@ pub fn Document::insert_text(
   }
   let block = self.get_or_create_text(id)
   for i, ch in text {
-    let (lv, timestamp) = self.next_version()
-    block.insert_at(pos + i, lv, ch.to_string(), timestamp, self.agent_id)
+    let (lv, timestamp, version) = self.next_version_with_raw()
+    let parents = self.raw_parents_for_lv(lv)
+    let op : BlockTextOp = {
+      block: id,
+      op: block.make_insert_op_at(pos + i, lv, ch.to_string(), timestamp, self.agent_id),
+    }
+    self.apply_block_text_op(id, op)
+    let _ = self.record_text_op(op)
+    let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
   }
 }
 
@@ -44,13 +64,23 @@ pub fn Document::delete_text(
     raise DocumentError::TargetNotFound
   }
   let block = self.get_or_create_text(id)
-  let (_, timestamp) = self.next_version()
-  block.delete_at(pos, timestamp, self.agent_id)
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
+  let op : BlockTextOp = {
+    block: id,
+    op: block.make_delete_op_at(pos, timestamp, self.agent_id),
+  }
+  self.apply_block_text_op(id, op)
+  let _ = self.record_text_op(op)
+  let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
 }
 
 ///|
-/// Replace all text in a block atomically.
-/// Snapshots visible LVs before deleting to avoid CRDT target drift.
+/// Replace all text in a block using a deterministic delete-then-insert sequence.
+///
+/// This is a convenience helper, not a transaction boundary: peers syncing
+/// mid-sequence may observe intermediate partial states until all generated ops
+/// have arrived and been applied.
 pub fn Document::replace_text(
   self : Document,
   id : @mt.TreeNodeId,
@@ -59,13 +89,10 @@ pub fn Document::replace_text(
   if !self.is_alive(id) {
     raise DocumentError::TargetNotFound
   }
-  match self.blocks.get(id) {
-    Some(block) =>
-      block.delete_all(self.agent_id, fn() raise DocumentError {
-        let (_, timestamp) = self.next_version()
-        timestamp
-      })
-    None => ()
+  let mut remaining = self.text_len(id)
+  while remaining > 0 {
+    self.delete_text(id, remaining - 1)
+    remaining = remaining - 1
   }
   if text != "" {
     self.insert_text(id, 0, text)
@@ -88,4 +115,34 @@ pub fn Document::text_len(self : Document, id : @mt.TreeNodeId) -> Int {
     Some(block) => block.len()
     None => 0
   }
+}
+
+///|
+pub fn Document::export_text_ops(self : Document) -> Array[BlockTextOp] {
+  self.text_ops.copy()
+}
+
+///|
+pub fn Document::apply_remote_text_op(
+  self : Document,
+  op : BlockTextOp,
+) -> Unit {
+  if !self.record_text_op(op) {
+    return
+  }
+  let timestamp = text_op_timestamp(op.op)
+  if timestamp > self.lamport_clock {
+    self.lamport_clock = timestamp
+  }
+  let applied = try {
+    self.apply_block_text_op(op.block, op)
+    true
+  } catch {
+    _ => false
+  }
+  if !applied {
+    self.defer_text_op(op)
+    return
+  }
+  self.flush_pending_text_ops(op.block)
 }

@@ -5,11 +5,12 @@
 ///|
 /// FugueTree - maintains ordered sequence with CRDT properties
 pub struct FugueTree[T] {
-  items : Array[Item[T]?] // Sparse array indexed by LV (item LV = index)
+  items : Array[Item[T]?] // Dense array indexed by ItemId
+  lv_index : Array[ItemId?] // Sparse LV -> ItemId lookup bridge
   mut length : Int // Total items (including deleted)
   mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
-  root_children : Array[Lv] // Root's children (root not in items array)
-  children : Array[Array[Lv]] // Children index, sparse array indexed by LV
+  root_children : Array[ItemId] // Root's children (root not in items array)
+  children : Array[Array[ItemId]] // Children index, dense by ItemId
   jump_ancestors : JumpAncestors // Binary lifting for O(log n) ancestor queries
 } derive(Debug)
 
@@ -36,6 +37,7 @@ pub fn[T : Default] FugueTree::new() -> FugueTree[T] {
 pub fn[T] FugueTree::make(_root_content : T) -> FugueTree[T] {
   {
     items: Array::new(capacity=1024),
+    lv_index: Array::new(capacity=1024),
     length: 0,
     visible: 0,
     root_children: [],
@@ -45,15 +47,42 @@ pub fn[T] FugueTree::make(_root_content : T) -> FugueTree[T] {
 }
 
 ///|
+/// Map an external LV to the current dense ItemId slot, if present.
+fn[T] FugueTree::lookup_item_id(self : FugueTree[T], lv : Lv) -> ItemId? {
+  let idx = lv.0
+  if idx >= 0 && idx < self.lv_index.length() {
+    self.lv_index[idx]
+  } else {
+    None
+  }
+}
+
+///|
+/// Resolve a dense ItemId slot back to the item's external LV.
+fn[T] FugueTree::lookup_lv(self : FugueTree[T], item_id : ItemId) -> Lv? {
+  let idx = item_id.0
+  if idx >= 0 && idx < self.items.length() {
+    match self.items[idx] {
+      Some(item) => Some(item.id)
+      None => None
+    }
+  } else {
+    None
+  }
+}
+
+///|
 /// Get children for a node. Handles root (LV=-1) separately.
 fn[T] FugueTree::get_children(self : FugueTree[T], id : Lv) -> Array[Lv] {
-  if id == root_lv {
-    self.root_children
-  } else if id.0 >= 0 && id.0 < self.children.length() {
-    self.children[id.0]
-  } else {
-    []
+  let result : Array[Lv] = []
+  let child_ids = self.get_children_raw(id)
+  for child_id in child_ids {
+    match self.lookup_lv(child_id) {
+      Some(lv) => result.push(lv)
+      None => ()
+    }
   }
+  result
 }
 
 ///|
@@ -63,11 +92,14 @@ fn[T] FugueTree::get_children(self : FugueTree[T], id : Lv) -> Array[Lv] {
 ///
 #alias("_[_]")
 pub fn[T] FugueTree::get(self : FugueTree[T], id : Lv) -> Item[T]? {
-  let lv = id.0
-  if lv >= 0 && lv < self.items.length() {
-    self.items[lv]
-  } else {
-    None
+  match self.lookup_item_id(id) {
+    Some(item_id) =>
+      if item_id.0 >= 0 && item_id.0 < self.items.length() {
+        self.items[item_id.0]
+      } else {
+        None
+      }
+    None => None
   }
 }
 
@@ -277,6 +309,25 @@ pub fn[T] FugueTree::set_delete_winner(
 }
 
 ///|
+/// Adjust the merge-time delete-count tracker for an item.
+///
+/// This is used by branch retreat logic to account for removed Delete/Undelete
+/// operations without reaching into Fugue item internals directly.
+pub fn[T] FugueTree::adjust_delete_count(
+  self : FugueTree[T],
+  id : Lv,
+  delta : Int,
+) -> Unit raise FugueError {
+  if id == root_lv {
+    return
+  }
+  match self[id] {
+    Some(item) => item.delete_count = item.delete_count + delta
+    None => raise FugueError::MissingItem(id~)
+  }
+}
+
+///|
 /// Delete an item (mark as deleted).
 /// Force-delete: always applies. Updates winner record to zero state.
 /// Used for retreat of Insert ops and local edits.
@@ -353,25 +404,40 @@ pub fn[T : Eq] FugueTree::lv_to_position(self : FugueTree[T], id : Lv) -> Int? {
 /// **Complexity**: O(log depth) — dominated by jump pointer computation.
 fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
   let lv = item.id.0
-  // Grow items array and store item at its LV index
-  while self.items.length() <= lv {
-    self.items.push(None)
+  let item_id = ItemId(self.items.length())
+  self.items.push(Some(item))
+  while self.lv_index.length() <= lv {
+    self.lv_index.push(None)
   }
-  self.items[lv] = Some(item)
+  self.lv_index[lv] = Some(item_id)
   self.length = self.length + 1
   self.visible = self.visible + 1
   // Register as child of parent
   match item.parent {
-    Some(parent_lv) => self.get_children(parent_lv).push(item.id)
+    Some(parent_lv) =>
+      if parent_lv == root_lv {
+        self.root_children.push(item_id)
+      } else {
+        match self.lookup_item_id(parent_lv) {
+          Some(parent_id) => self.children[parent_id.0].push(item_id)
+          None => ()
+        }
+      }
     None => ()
   }
   // Grow children array and initialize empty entry for the new item
-  while self.children.length() <= lv {
-    self.children.push([])
-  }
+  self.children.push([])
   // Register jump pointers for the new item (O(log depth), permanent)
   match item.parent {
-    Some(p) => self.jump_ancestors.add(item.id, p)
+    Some(p) =>
+      if p == root_lv {
+        self.jump_ancestors.add_item_id(item_id, None)
+      } else {
+        match self.lookup_item_id(p) {
+          Some(parent_id) => self.jump_ancestors.add_item_id(item_id, Some(parent_id))
+          None => ()
+        }
+      }
     None => () // No parent — skip jump pointer setup
   }
 }
@@ -385,7 +451,7 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
 ///
 /// **Complexity**: O(1) for numeric comparison, O(k) for string tiebreaker
 /// where k = agent ID length.
-fn[T : Eq] compare_children(a : (Lv, Item[T]), b : (Lv, Item[T])) -> Int {
+fn[T : Eq] compare_children(a : (ItemId, Item[T]), b : (ItemId, Item[T])) -> Int {
   let (_, item_a) = a
   let (_, item_b) = b
   item_a.compare(item_b)
@@ -408,7 +474,11 @@ pub fn[T] FugueTree::is_ancestor(
   if descendant_id == root_lv {
     return false
   }
-  self.jump_ancestors.is_ancestor(ancestor_id, descendant_id)
+  match (self.lookup_item_id(ancestor_id), self.lookup_item_id(descendant_id)) {
+    (Some(ancestor_item_id), Some(descendant_item_id)) =>
+      self.jump_ancestors.is_ancestor_item_id(ancestor_item_id, descendant_item_id)
+    _ => false
+  }
 }
 
 ///|
@@ -587,15 +657,27 @@ pub fn[T] FugueTree::get_children_index(
 fn[T] FugueTree::get_children_raw(
   self : FugueTree[T],
   parent_id : Lv,
-) -> Array[Lv] {
-  self.get_children(parent_id)
+) -> Array[ItemId] {
+  if parent_id == root_lv {
+    self.root_children
+  } else {
+    match self.lookup_item_id(parent_id) {
+      Some(item_id) =>
+        if item_id.0 >= 0 && item_id.0 < self.children.length() {
+          self.children[item_id.0]
+        } else {
+          []
+        }
+      None => []
+    }
+  }
 }
 
 ///|
 /// Partition children into left and right sides
 fn[T] partition_children(
-  children : Array[(Lv, Item[T])],
-) -> (Array[(Lv, Item[T])], Array[(Lv, Item[T])]) {
+  children : Array[(ItemId, Item[T])],
+) -> (Array[(ItemId, Item[T])], Array[(ItemId, Item[T])]) {
   let left = []
   let right = []
   for child in children {
@@ -625,7 +707,7 @@ fn[T : Eq] FugueTree::traverse_tree(
 ) -> Unit {
   // Stack entries: (node_id, phase, sorted_left, sorted_right)
   // We store the sorted children arrays to avoid recomputing them between phases.
-  let stack : Array[(Lv, Int, Array[(Lv, Item[T])], Array[(Lv, Item[T])])] = []
+  let stack : Array[(Lv, Int, Array[(ItemId, Item[T])], Array[(ItemId, Item[T])])] = []
   stack.push((start_id, 0, [], []))
   while stack.length() > 0 {
     let top = stack.length() - 1
@@ -633,11 +715,15 @@ fn[T : Eq] FugueTree::traverse_tree(
     if phase == 0 {
       // Phase 0: first visit — compute children and push left subtrees
       let child_lvs = self.get_children_raw(node_id)
-      let children_with_items : Array[(Lv, Item[T])] = []
-      for lv in child_lvs {
-        match self[lv] {
-          Some(item) => children_with_items.push((lv, item))
-          None => ()
+      let children_with_items : Array[(ItemId, Item[T])] = []
+      for child_id in child_lvs {
+        if child_id.0 < self.items.length() {
+          match self.items[child_id.0] {
+            Some(item) => children_with_items.push((child_id, item))
+            None => ()
+          }
+        } else {
+          ()
         }
       }
       let (left, right) = partition_children(children_with_items)
@@ -647,9 +733,10 @@ fn[T : Eq] FugueTree::traverse_tree(
       stack[top] = (node_id, 1, left, right)
       // Push left children in reverse order so first child is processed first
       for i = left.length() - 1; i >= 0; i = i - 1 {
-        let (child_id, _) = left[i]
-        if child_id != node_id {
-          stack.push((child_id, 0, [], []))
+        let (child_item_id, _) = left[i]
+        match self.lookup_lv(child_item_id) {
+          Some(child_lv) if child_lv != node_id => stack.push((child_lv, 0, [], []))
+          _ => ()
         }
       }
     } else if phase == 1 {
@@ -667,9 +754,10 @@ fn[T : Eq] FugueTree::traverse_tree(
       stack[top] = (node_id, 2, sorted_left, sorted_right)
       // Push right children in reverse order
       for i = sorted_right.length() - 1; i >= 0; i = i - 1 {
-        let (child_id, _) = sorted_right[i]
-        if child_id != node_id {
-          stack.push((child_id, 0, [], []))
+        let (child_item_id, _) = sorted_right[i]
+        match self.lookup_lv(child_item_id) {
+          Some(child_lv) if child_lv != node_id => stack.push((child_lv, 0, [], []))
+          _ => ()
         }
       }
     } else {

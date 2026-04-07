@@ -7,7 +7,7 @@ pub struct OpLog {
   priv mut pending : Array[@core.Op] // Remote ops waiting for missing parents
   priv graph : @causal_graph.CausalGraph // The causal graph
   priv agent_id : String // This agent's ID
-} derive(Debug)
+}
 
 ///|
 /// Create a new OpLog

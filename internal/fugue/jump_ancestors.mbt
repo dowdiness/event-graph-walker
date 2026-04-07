@@ -3,8 +3,8 @@
 
 ///|
 struct JumpAncestors {
-  depth : Array[Int] // depth[lv.0], -1 = gap (non-tree LV)
-  jump : Array[Array[Lv]] // jump[lv.0][k] = 2^k-th ancestor, [] = gap
+  depth : Array[Int] // depth[item_id.0], -1 = gap (non-tree slot)
+  jump : Array[Array[ItemId]] // jump[item_id.0][k] = 2^k-th ancestor, [] = gap
 } derive(Debug)
 
 ///|
@@ -14,40 +14,58 @@ fn JumpAncestors::new() -> JumpAncestors {
 
 ///|
 /// Register a new tree node with its parent. O(log depth).
-/// Precondition: parent was already added (or is root_lv).
-fn JumpAncestors::add(self : JumpAncestors, lv : Lv, parent : Lv) -> Unit {
-  let idx = lv.0
+/// Precondition: parent was already added, if present.
+fn JumpAncestors::add_item_id(
+  self : JumpAncestors,
+  item_id : ItemId,
+  parent : ItemId?,
+) -> Unit {
+  let idx = item_id.0
   while self.depth.length() <= idx {
     self.depth.push(-1)
   }
   while self.jump.length() <= idx {
     self.jump.push([])
   }
-  guard parent == root_lv || self.depth[parent.0] != -1
-  self.depth[idx] = if parent == root_lv { 1 } else { self.depth[parent.0] + 1 }
-  let jumps : Array[Lv] = [parent]
-  while true {
-    let k = jumps.length()
-    let prev = jumps[k - 1]
-    if prev == root_lv {
-      break
+  match parent {
+    None => {
+      self.depth[idx] = 1
+      self.jump[idx] = []
     }
-    if k - 1 >= self.jump[prev.0].length() {
-      break
+    Some(parent_id) => {
+      guard self.depth[parent_id.0] != -1
+      self.depth[idx] = self.depth[parent_id.0] + 1
+      let jumps : Array[ItemId] = [parent_id]
+      while true {
+        let k = jumps.length()
+        let prev = jumps[k - 1]
+        if k - 1 >= self.jump[prev.0].length() {
+          break
+        }
+        jumps.push(self.jump[prev.0][k - 1])
+      }
+      self.jump[idx] = jumps
     }
-    jumps.push(self.jump[prev.0][k - 1])
   }
-  self.jump[idx] = jumps
+}
+
+///|
+/// Compatibility wrapper for the legacy LV-indexed tests.
+fn JumpAncestors::add(self : JumpAncestors, lv : Lv, parent : Lv) -> Unit {
+  self.add_item_id(
+    ItemId(lv.0),
+    if parent == root_lv { None } else { Some(ItemId(parent.0)) },
+  )
 }
 
 ///|
 /// Check if `ancestor` is an ancestor of `descendant`. O(log depth).
-/// Both must be non-root tree nodes. Caller handles root_lv and equality.
-/// Returns false for absent or gap LVs.
-fn JumpAncestors::is_ancestor(
+/// Both must be non-root tree nodes. Caller handles root and equality.
+/// Returns false for absent or gap item slots.
+fn JumpAncestors::is_ancestor_item_id(
   self : JumpAncestors,
-  ancestor : Lv,
-  descendant : Lv,
+  ancestor : ItemId,
+  descendant : ItemId,
 ) -> Bool {
   let a = ancestor.0
   let b = descendant.0
@@ -73,4 +91,10 @@ fn JumpAncestors::is_ancestor(
     k = k - 1
   }
   current == ancestor
+}
+
+///|
+/// Compatibility wrapper for the legacy LV-indexed tests.
+fn JumpAncestors::is_ancestor(self : JumpAncestors, ancestor : Lv, descendant : Lv) -> Bool {
+  self.is_ancestor_item_id(ItemId(ancestor.0), ItemId(descendant.0))
 }

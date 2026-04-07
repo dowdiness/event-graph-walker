@@ -2,5 +2,12 @@ import {
   "dowdiness/event-graph-walker/internal/movable_tree" @mt,
   "dowdiness/event-graph-walker/internal/fractional_index" @fi,
   "dowdiness/event-graph-walker/internal/causal_graph" @cg,
+  "dowdiness/event-graph-walker/internal/core" @core,
   "dowdiness/event-graph-walker/internal/fugue" @fugue,
+  "dowdiness/rle",
 }
+
+import {
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+} for "test"

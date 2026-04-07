@@ -36,6 +36,24 @@ pub(all) struct Lv(Int) derive(Debug, Eq, Compare, Default, Hash)
 pub impl Show for Lv with output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
+/// Replica-local causal-graph handle for an operation.
+///
+/// Historically Fugue used this same integer as both the causal version handle
+/// and the tree item identity. The container text-sync refactor splits those
+/// concepts, but `Lv` remains the causal-graph-side handle.
+
+///|
+/// Per-tree item identity used by Fugue storage.
+///
+/// Existing code still uses `Lv` at most call sites. Later refactor slices will
+/// migrate storage and merge logic to use `ItemId` where block-local sequence
+/// identity is the real concern.
+pub(all) struct ItemId(Int) derive(Debug, Eq, Compare, Default, Hash)
+
+///|
+pub impl Show for ItemId with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// Lamport Timestamp for causal ordering
@@ -67,7 +85,11 @@ pub impl Show for Side with output(self, logger) {
 /// Items are never removed — deleted content becomes a **tombstone** (`deleted = true`)
 /// so that concurrent operations that reference it can still resolve correctly.
 pub(all) struct Item[T] {
-  /// Local version of this item. Unique within the tree.
+  /// Current item identity.
+  ///
+  /// Today this is still an `Lv`, but the identity-splitting refactor is
+  /// moving toward a separate `ItemId` so per-block storage no longer depends
+  /// on global causal version numbering.
   id : Lv
   /// The content value (e.g. a `String` character).
   content : T

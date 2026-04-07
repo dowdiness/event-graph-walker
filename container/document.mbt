@@ -63,6 +63,83 @@ priv struct PropertyKey {
 } derive(Eq, Hash)
 
 ///|
+pub(all) struct BlockTextOp {
+  block : @mt.TreeNodeId
+  op : TextOp
+}
+
+///|
+pub(all) struct VersionedTreeOp {
+  version : @core.RawVersion
+  parents : Array[@core.RawVersion]
+  op : @mt.TreeOp
+}
+
+///|
+pub(all) struct VersionedBlockTextOp {
+  version : @core.RawVersion
+  parents : Array[@core.RawVersion]
+  block : @mt.TreeNodeId
+  op : TextOp
+}
+
+///|
+pub(all) struct SyncMessage {
+  tree_ops : Array[VersionedTreeOp]
+  text_ops : Array[VersionedBlockTextOp]
+}
+
+///|
+priv enum SyncOpRecord {
+  Tree(VersionedTreeOp)
+  Text(VersionedBlockTextOp)
+}
+
+///|
+priv enum PendingSyncOp {
+  Tree(VersionedTreeOp)
+  Text(VersionedBlockTextOp)
+}
+
+///|
+fn text_op_timestamp(op : TextOp) -> Int {
+  match op {
+    Insert(insert_op) => insert_op.timestamp
+    Delete(delete_op) => delete_op.timestamp
+  }
+}
+
+///|
+fn text_op_agent(op : TextOp) -> String {
+  match op {
+    Insert(insert_op) => insert_op.agent
+    Delete(delete_op) => delete_op.agent
+  }
+}
+
+///|
+fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
+  let ts_cmp = text_op_timestamp(a.op).compare(text_op_timestamp(b.op))
+  if ts_cmp != 0 {
+    return ts_cmp
+  }
+  let agent_cmp = text_op_agent(a.op).compare(text_op_agent(b.op))
+  if agent_cmp != 0 {
+    return agent_cmp
+  }
+  let block_cmp = a.block.compare(b.block)
+  if block_cmp != 0 {
+    return block_cmp
+  }
+  match (a.op, b.op) {
+    (Insert(insert_a), Insert(insert_b)) => insert_a.id.compare(insert_b.id)
+    (Insert(_), Delete(_)) => -1
+    (Delete(_), Insert(_)) => 1
+    (Delete(delete_a), Delete(delete_b)) => delete_a.target.compare(delete_b.target)
+  }
+}
+
+///|
 /// Compare two replicated tree ops by Lamport timestamp, agent, and payload.
 fn compare_ops(a : @mt.TreeOp, b : @mt.TreeOp) -> Int {
   let (a_timestamp, a_agent) = match a {
@@ -151,6 +228,37 @@ fn op_key(op : @mt.TreeOp) -> String {
 }
 
 ///|
+fn text_op_key(op : BlockTextOp) -> String {
+  let block = encode_field(tree_node_id_key(op.block))
+  match op.op {
+    Insert(insert_op) =>
+      "text-insert|" +
+      block +
+      "|" +
+      encode_field(insert_op.agent) +
+      "|" +
+      insert_op.timestamp.to_string() +
+      "|" +
+      insert_op.id.to_string() +
+      "|" +
+      encode_field(insert_op.content)
+    Delete(delete_op) =>
+      "text-delete|" +
+      block +
+      "|" +
+      encode_field(delete_op.agent) +
+      "|" +
+      delete_op.timestamp.to_string() +
+      "|" +
+      delete_op.target.to_string()
+  }
+}
+
+///|
+fn raw_version_key(version : @core.RawVersion) -> String {
+  version.to_string()
+}
+
 /// Compare two property ops using the document's total op ordering.
 fn compare_property_ops(a : @mt.TreePropertyOp, b : @mt.TreePropertyOp) -> Int {
   compare_ops(@mt.SetProperty(a), @mt.SetProperty(b))
@@ -166,6 +274,12 @@ pub struct Document {
   priv mut lamport_clock : Int
   priv ops : Array[@mt.TreeOp]
   priv seen_ops : Map[String, Bool]
+  priv text_ops : Array[BlockTextOp]
+  priv seen_text_ops : Map[String, Bool]
+  priv sync_ops_by_version : Map[String, SyncOpRecord]
+  priv seen_sync_versions : Map[String, Bool]
+  priv mut pending_sync_ops : Array[PendingSyncOp]
+  priv pending_text_ops : Map[String, Array[BlockTextOp]]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
 }
@@ -191,6 +305,12 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     lamport_clock: -1,
     ops: [],
     seen_ops: Map::new(),
+    text_ops: [],
+    seen_text_ops: Map::new(),
+    sync_ops_by_version: Map::new(),
+    seen_sync_versions: Map::new(),
+    pending_sync_ops: [],
+    pending_text_ops: Map::new(),
     property_state: Map::new(),
     blocks: Map::new(),
   }
@@ -222,16 +342,41 @@ fn Document::next_version(self : Document) -> (Int, Int) raise DocumentError {
 }
 
 ///|
-/// Derive a Lamport timestamp by adding a version to the causal graph.
-/// Returns the timestamp from the newly created graph entry.
-fn Document::next_timestamp(self : Document) -> Int {
-  let (_, timestamp) = self.next_version() catch {
-    _ => (-1, self.lamport_clock + 1)
+fn Document::raw_version_for_lv(
+  self : Document,
+  lv : Int,
+) -> @core.RawVersion raise DocumentError {
+  match self.graph.lv_to_raw(lv) {
+    Some(version) => version
+    None => raise DocumentError::Internal(detail="missing raw version for lv")
   }
-  timestamp
 }
 
 ///|
+fn Document::next_version_with_raw(
+  self : Document,
+) -> (Int, Int, @core.RawVersion) raise DocumentError {
+  let (lv, timestamp) = self.next_version()
+  let version = self.raw_version_for_lv(lv)
+  (lv, timestamp, version)
+}
+
+///|
+fn Document::raw_parents_for_lv(
+  self : Document,
+  lv : Int,
+) -> Array[@core.RawVersion] raise DocumentError {
+  let entry = match self.graph.get_entry(lv) {
+    Some(entry) => entry
+    None => raise DocumentError::Internal(detail="missing graph entry for lv")
+  }
+  let parents : Array[@core.RawVersion] = []
+  for parent_lv in entry.parents {
+    parents.push(self.raw_version_for_lv(parent_lv))
+  }
+  parents
+}
+
 /// Insert a replicated op into the export history if it has not been seen yet.
 fn Document::record_op(self : Document, op : @mt.TreeOp) -> Bool {
   let key = op_key(op)
@@ -249,6 +394,250 @@ fn Document::record_op(self : Document, op : @mt.TreeOp) -> Bool {
       self.ops.insert(insert_idx, op)
       true
     }
+  }
+}
+
+///|
+fn Document::record_text_op(self : Document, op : BlockTextOp) -> Bool {
+  let key = text_op_key(op)
+  match self.seen_text_ops.get(key) {
+    Some(true) => false
+    _ => {
+      self.seen_text_ops.set(key, true)
+      let mut insert_idx = self.text_ops.length()
+      for i = 0; i < self.text_ops.length(); i = i + 1 {
+        if compare_text_ops(op, self.text_ops[i]) < 0 {
+          insert_idx = i
+          break
+        }
+      }
+      self.text_ops.insert(insert_idx, op)
+      true
+    }
+  }
+}
+
+///|
+fn Document::record_sync_tree_op(self : Document, op : VersionedTreeOp) -> Bool {
+  let key = raw_version_key(op.version)
+  match self.seen_sync_versions.get(key) {
+    Some(true) => false
+    _ => {
+      self.seen_sync_versions.set(key, true)
+      self.sync_ops_by_version[key] = Tree(op)
+      true
+    }
+  }
+}
+
+///|
+fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> Bool {
+  let key = raw_version_key(op.version)
+  match self.seen_sync_versions.get(key) {
+    Some(true) => false
+    _ => {
+      self.seen_sync_versions.set(key, true)
+      self.sync_ops_by_version[key] = Text(op)
+      true
+    }
+  }
+}
+
+///|
+fn Document::defer_pending_sync_op(
+  self : Document,
+  op : PendingSyncOp,
+) -> Unit {
+  self.pending_sync_ops.push(op)
+}
+
+///|
+fn Document::resolve_parent_lvs(
+  self : Document,
+  parents : Array[@core.RawVersion],
+) -> Array[Int]? {
+  let resolved : Array[Int] = []
+  for parent in parents {
+    match self.graph.raw_to_lv(parent) {
+      Some(lv) => resolved.push(lv)
+      None => return None
+    }
+  }
+  Some(resolved)
+}
+
+///|
+fn Document::observe_remote_timestamp(self : Document, timestamp : Int) -> Unit {
+  if timestamp > self.lamport_clock {
+    self.lamport_clock = timestamp
+  }
+}
+
+///|
+fn Document::try_apply_versioned_tree_op(
+  self : Document,
+  op : VersionedTreeOp,
+) -> Bool {
+  let parent_lvs = match self.resolve_parent_lvs(op.parents) {
+    Some(parent_lvs) => parent_lvs
+    None => return false
+  }
+  let added = self.graph.add_version_with_seq(
+    parent_lvs,
+    op.version.agent,
+    op.version.seq,
+  ) catch { _ => -1 }
+  if added < 0 {
+    return false
+  }
+  if !self.record_op(op.op) {
+    return true
+  }
+  let timestamp = match op.op {
+    @mt.Move(move_op) => move_op.timestamp
+    @mt.SetProperty(prop_op) => prop_op.timestamp
+  }
+  self.observe_remote_timestamp(timestamp)
+  match op.op {
+    @mt.Move(move_op) => {
+      self.apply_move_op(move_op)
+      self.flush_pending_text_ops(move_op.target)
+      if move_op.target.agent == self.agent_id &&
+        move_op.target.counter >= self.next_counter {
+        self.next_counter = move_op.target.counter + 1
+      }
+    }
+    @mt.SetProperty(prop_op) => {
+      self.apply_property_op(prop_op)
+      if prop_op.target.agent == self.agent_id &&
+        prop_op.target.counter >= self.next_counter {
+        self.next_counter = prop_op.target.counter + 1
+      }
+    }
+  }
+  true
+}
+
+///|
+fn Document::try_apply_versioned_text_op(
+  self : Document,
+  op : VersionedBlockTextOp,
+) -> Bool {
+  let parent_lvs = match self.resolve_parent_lvs(op.parents) {
+    Some(parent_lvs) => parent_lvs
+    None => return false
+  }
+  let added = self.graph.add_version_with_seq(
+    parent_lvs,
+    op.version.agent,
+    op.version.seq,
+  ) catch { _ => -1 }
+  if added < 0 {
+    return false
+  }
+  self.apply_remote_text_op({ block: op.block, op: op.op })
+  true
+}
+
+///|
+fn Document::try_apply_pending_sync_op(
+  self : Document,
+  op : PendingSyncOp,
+) -> Bool {
+  match op {
+    Tree(tree_op) => self.try_apply_versioned_tree_op(tree_op)
+    Text(text_op) => self.try_apply_versioned_text_op(text_op)
+  }
+}
+
+///|
+fn Document::flush_pending_sync_ops(self : Document) -> Unit {
+  let mut progressed = true
+  while progressed {
+    progressed = false
+    let pending = self.pending_sync_ops.copy()
+    self.pending_sync_ops = []
+    for op in pending {
+      if self.try_apply_pending_sync_op(op) {
+        progressed = true
+      } else {
+        self.defer_pending_sync_op(op)
+      }
+    }
+  }
+}
+
+///|
+fn Document::versioned_sync_ops_between(
+  self : Document,
+  from : @core.Frontier,
+  to : @core.Frontier,
+) -> SyncMessage raise DocumentError {
+  let (_, advance_rle) = self.graph.diff_frontiers_lvs(from, to)
+  let advance_lvs = advance_rle.iter_units().collect()
+  let tree_ops : Array[VersionedTreeOp] = []
+  let text_ops : Array[VersionedBlockTextOp] = []
+  for lv in advance_lvs {
+    let version = self.raw_version_for_lv(lv)
+    let key = raw_version_key(version)
+    match self.sync_ops_by_version.get(key) {
+      Some(Tree(op)) => tree_ops.push(op)
+      Some(Text(op)) => text_ops.push(op)
+      None =>
+        raise DocumentError::Internal(
+          detail="missing sync payload for graph version",
+        )
+    }
+  }
+  { tree_ops, text_ops }
+}
+
+///|
+fn Document::pending_text_key(_self : Document, id : @mt.TreeNodeId) -> String {
+  tree_node_id_key(id)
+}
+
+///|
+fn Document::defer_text_op(self : Document, op : BlockTextOp) -> Unit {
+  let key = self.pending_text_key(op.block)
+  let pending = match self.pending_text_ops.get(key) {
+    Some(existing) => existing.copy()
+    None => []
+  }
+  let mut insert_idx = pending.length()
+  for i = 0; i < pending.length(); i = i + 1 {
+    if compare_text_ops(op, pending[i]) < 0 {
+      insert_idx = i
+      break
+    }
+  }
+  pending.insert(insert_idx, op)
+  self.pending_text_ops[key] = pending
+}
+
+///|
+fn Document::flush_pending_text_ops(self : Document, id : @mt.TreeNodeId) -> Unit {
+  let key = self.pending_text_key(id)
+  let pending = match self.pending_text_ops.get(key) {
+    Some(existing) => existing.copy()
+    None => return
+  }
+  let still_pending : Array[BlockTextOp] = []
+  for op in pending {
+    let applied = try {
+      self.apply_block_text_op(id, op)
+      true
+    } catch {
+      _ => false
+    }
+    if !applied {
+      still_pending.push(op)
+    }
+  }
+  if still_pending.is_empty() {
+    self.pending_text_ops.remove(key)
+  } else {
+    self.pending_text_ops[key] = still_pending
   }
 }
 
@@ -393,7 +782,8 @@ pub fn Document::create_node(
     raise ParentNotFound
   }
   let id = self.alloc_id()
-  let timestamp = self.next_timestamp()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_last_child(parent)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -404,6 +794,7 @@ pub fn Document::create_node(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
   id
 }
 
@@ -421,7 +812,8 @@ pub fn Document::create_node_after(
     raise ParentNotFound
   }
   let id = self.alloc_id()
-  let timestamp = self.next_timestamp()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_sibling(parent, after)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -432,6 +824,7 @@ pub fn Document::create_node_after(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
   id
 }
 
@@ -451,7 +844,8 @@ pub fn Document::move_node(
   if self.tree.would_create_cycle(target, new_parent) {
     raise CycleDetected
   }
-  let timestamp = self.next_timestamp()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_last_child(new_parent)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -462,6 +856,7 @@ pub fn Document::move_node(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
 }
 
 ///|
@@ -473,7 +868,8 @@ pub fn Document::delete_node(
   if !self.tree.contains(target) {
     raise TargetNotFound
   }
-  let timestamp = self.next_timestamp()
+  let (lv, timestamp, version) = self.next_version_with_raw()
+  let parents = self.raw_parents_for_lv(lv)
   let position = self.position_after_last_child(@mt.trash_id)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
@@ -484,6 +880,7 @@ pub fn Document::delete_node(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
 }
 
 ///|
@@ -512,7 +909,10 @@ pub fn Document::set_property(
   if !self.tree.contains(id) {
     return
   }
-  let timestamp = self.next_timestamp()
+  let (lv, timestamp, version) = self.next_version_with_raw() catch { _ =>
+    return
+  }
+  let parents = self.raw_parents_for_lv(lv) catch { _ => return }
   let op : @mt.TreePropertyOp = {
     timestamp,
     target: id,
@@ -522,6 +922,11 @@ pub fn Document::set_property(
   }
   self.apply_property_op(op)
   let _ = self.record_op(@mt.SetProperty(op))
+  let _ = self.record_sync_tree_op({
+    version,
+    parents,
+    op: @mt.SetProperty(op),
+  })
 }
 
 ///|
@@ -541,6 +946,36 @@ pub fn Document::export_ops(self : Document) -> Array[@mt.TreeOp] {
 }
 
 ///|
+/// Export the full document sync payload.
+///
+/// Tree ops are replayed before text ops on receipt so newly-created blocks
+/// exist before their text history is applied.
+pub fn Document::export_sync_message(self : Document) -> SyncMessage {
+  self.versioned_sync_ops_between(
+    @core.Frontier::from_array([]),
+    self.graph.get_frontier(),
+  ) catch {
+    _ => abort("Document::export_sync_message: missing sync payload")
+  }
+}
+
+///|
+pub fn Document::get_version_vector(self : Document) -> @cg.VersionVector {
+  @cg.VersionVector::from_frontier(self.graph, self.graph.get_frontier())
+}
+
+///|
+pub fn Document::export_sync_message_since(
+  self : Document,
+  vv : @cg.VersionVector,
+) -> SyncMessage {
+  let from = vv.to_frontier(self.graph)
+  self.versioned_sync_ops_between(from, self.graph.get_frontier()) catch {
+    _ => abort("Document::export_sync_message_since: missing sync payload")
+  }
+}
+
+///|
 /// Apply an operation received from a remote peer.
 ///
 /// The operation is recorded in the causal graph for local version tracking,
@@ -553,6 +988,7 @@ pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
   match op {
     @mt.Move(move_op) => {
       self.apply_move_op(move_op)
+      self.flush_pending_text_ops(move_op.target)
       if move_op.target.agent == self.agent_id &&
         move_op.target.counter >= self.next_counter {
         self.next_counter = move_op.target.counter + 1
@@ -566,4 +1002,29 @@ pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
       }
     }
   }
+}
+
+///|
+/// Apply a remote sync payload in replay-safe order.
+pub fn Document::apply_remote_sync_message(
+  self : Document,
+  message : SyncMessage,
+) -> Unit {
+  for op in message.tree_ops {
+    if !self.record_sync_tree_op(op) {
+      continue
+    }
+    if !self.try_apply_versioned_tree_op(op) {
+      self.defer_pending_sync_op(Tree(op))
+    }
+  }
+  for op in message.text_ops {
+    if !self.record_sync_text_op(op) {
+      continue
+    }
+    if !self.try_apply_versioned_text_op(op) {
+      self.defer_pending_sync_op(Text(op))
+    }
+  }
+  self.flush_pending_sync_ops()
 }
