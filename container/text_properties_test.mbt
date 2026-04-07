@@ -9,12 +9,22 @@ enum BlockEdit {
   Delete(Int, Int)
   Replace(Int, String)
   DeleteNode(Int)
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for BlockEdit with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 struct BlockScenario {
   edits : Array[BlockEdit]
-} derive(Show)
+} derive(Debug)
+
+///|
+pub impl Show for BlockScenario with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 fn insert_string(text : String, pos : Int, chunk : String) -> String {
