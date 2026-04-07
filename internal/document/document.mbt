@@ -24,7 +24,7 @@ pub struct Document {
   priv mut position_cache : @order_tree.OrderTree[VisibleRun]?
   // Insert cursor: caches last insert position/LV for sequential append fast-path.
   priv mut cursor : InsertCursor?
-} derive(Debug)
+}
 
 ///|
 /// Create a new document for an agent
