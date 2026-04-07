@@ -165,16 +165,10 @@ pub fn MergeContext::retreat_operations(
                 Some(mapped) => mapped
                 None => raise BranchError::MissingOrigin(raw=target_raw)
               }
-              match self.tree[@fugue.Lv(target_lv)] {
-                Some(item) => {
-                  item.delete_count = item.delete_count - 1
-                  dirty_items.push(target_raw)
-                }
-                None =>
-                  raise BranchError::Fugue(
-                    @fugue.FugueError::MissingItem(id=@fugue.Lv(target_lv)),
-                  )
+              self.tree.adjust_delete_count(@fugue.Lv(target_lv), -1) catch {
+                e => raise BranchError::Fugue(e)
               }
+              dirty_items.push(target_raw)
             }
             @core.Undelete => {
               // Retreat Undelete: re-apply the delete it cancelled
@@ -186,16 +180,10 @@ pub fn MergeContext::retreat_operations(
                 Some(mapped) => mapped
                 None => raise BranchError::MissingOrigin(raw=target_raw)
               }
-              match self.tree[@fugue.Lv(target_lv)] {
-                Some(item) => {
-                  item.delete_count = item.delete_count + 1
-                  dirty_items.push(target_raw)
-                }
-                None =>
-                  raise BranchError::Fugue(
-                    @fugue.FugueError::MissingItem(id=@fugue.Lv(target_lv)),
-                  )
+              self.tree.adjust_delete_count(@fugue.Lv(target_lv), 1) catch {
+                e => raise BranchError::Fugue(e)
               }
+              dirty_items.push(target_raw)
             }
           }
         None => raise BranchError::MissingOp(lv~)

@@ -309,6 +309,25 @@ pub fn[T] FugueTree::set_delete_winner(
 }
 
 ///|
+/// Adjust the merge-time delete-count tracker for an item.
+///
+/// This is used by branch retreat logic to account for removed Delete/Undelete
+/// operations without reaching into Fugue item internals directly.
+pub fn[T] FugueTree::adjust_delete_count(
+  self : FugueTree[T],
+  id : Lv,
+  delta : Int,
+) -> Unit raise FugueError {
+  if id == root_lv {
+    return
+  }
+  match self[id] {
+    Some(item) => item.delete_count = item.delete_count + delta
+    None => raise FugueError::MissingItem(id~)
+  }
+}
+
+///|
 /// Delete an item (mark as deleted).
 /// Force-delete: always applies. Updates winner record to zero state.
 /// Used for retreat of Insert ops and local edits.

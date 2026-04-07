@@ -485,6 +485,38 @@ test "set_delete_winner: restores winner state" {
 }
 
 ///|
+test "adjust_delete_count: updates merge-time tracker without changing visibility" {
+  let tree = @fugue.FugueTree::new()
+  let lv = @fugue.Lv(0)
+  tree.insert({
+    id: lv,
+    content: "x",
+    origin_left: None,
+    origin_right: None,
+    timestamp: @fugue.Timestamp(1),
+    agent: @fugue.ReplicaId("alice"),
+  })
+  try! tree.adjust_delete_count(lv, 1)
+  inspect(tree.visible_count(), content="1")
+  inspect(
+    match tree[lv] {
+      Some(item) => item.delete_count
+      None => -999
+    },
+    content="1",
+  )
+  try! tree.adjust_delete_count(lv, -2)
+  inspect(
+    match tree[lv] {
+      Some(item) => item.delete_count
+      None => -999
+    },
+    content="-1",
+  )
+  inspect(tree.visible_count(), content="1")
+}
+
+///|
 test "LCA: missing node returns false" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
