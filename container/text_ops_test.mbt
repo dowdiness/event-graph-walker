@@ -162,3 +162,40 @@ test "document: mixed two-block edits preserve sibling isolation" {
   inspect(doc.get_text(left), content="acd")
   inspect(doc.get_text(right), content="Q")
 }
+
+///|
+test "document: sync message replays tree and text together" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+  let sibling = doc_a.create_node_after(parent=@container.root_id, after=node)
+
+  doc_a.insert_text(node, 0, "ABC")
+  doc_a.insert_text(sibling, 0, "Z")
+  doc_a.delete_text(node, 1)
+
+  let message = doc_a.export_sync_message()
+  inspect(message.tree_ops.length(), content="2")
+  inspect(message.text_ops.length(), content="5")
+  try! doc_b.apply_remote_sync_message(message)
+
+  inspect(doc_a.get_text(node), content="AC")
+  inspect(doc_b.get_text(node), content="AC")
+  inspect(doc_b.get_text(sibling), content="Z")
+}
+
+///|
+test "document: sync message carries replace_text history" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+
+  doc_a.insert_text(node, 0, "Hello")
+  doc_a.replace_text(node, "World")
+
+  let message = doc_a.export_sync_message()
+  try! doc_b.apply_remote_sync_message(message)
+
+  inspect(doc_a.get_text(node), content="World")
+  inspect(doc_b.get_text(node), content="World")
+}

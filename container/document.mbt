@@ -63,6 +63,56 @@ priv struct PropertyKey {
 } derive(Eq, Hash)
 
 ///|
+pub(all) struct BlockTextOp {
+  block : @mt.TreeNodeId
+  op : TextOp
+}
+
+///|
+pub(all) struct SyncMessage {
+  tree_ops : Array[@mt.TreeOp]
+  text_ops : Array[BlockTextOp]
+}
+
+///|
+fn text_op_timestamp(op : TextOp) -> Int {
+  match op {
+    Insert(insert_op) => insert_op.timestamp
+    Delete(delete_op) => delete_op.timestamp
+  }
+}
+
+///|
+fn text_op_agent(op : TextOp) -> String {
+  match op {
+    Insert(insert_op) => insert_op.agent
+    Delete(delete_op) => delete_op.agent
+  }
+}
+
+///|
+fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
+  let ts_cmp = text_op_timestamp(a.op).compare(text_op_timestamp(b.op))
+  if ts_cmp != 0 {
+    return ts_cmp
+  }
+  let agent_cmp = text_op_agent(a.op).compare(text_op_agent(b.op))
+  if agent_cmp != 0 {
+    return agent_cmp
+  }
+  let block_cmp = a.block.compare(b.block)
+  if block_cmp != 0 {
+    return block_cmp
+  }
+  match (a.op, b.op) {
+    (Insert(insert_a), Insert(insert_b)) => insert_a.id.compare(insert_b.id)
+    (Insert(_), Delete(_)) => -1
+    (Delete(_), Insert(_)) => 1
+    (Delete(delete_a), Delete(delete_b)) => delete_a.target.compare(delete_b.target)
+  }
+}
+
+///|
 /// Compare two replicated tree ops by Lamport timestamp, agent, and payload.
 fn compare_ops(a : @mt.TreeOp, b : @mt.TreeOp) -> Int {
   let (a_timestamp, a_agent) = match a {
@@ -151,6 +201,33 @@ fn op_key(op : @mt.TreeOp) -> String {
 }
 
 ///|
+fn text_op_key(op : BlockTextOp) -> String {
+  let block = encode_field(tree_node_id_key(op.block))
+  match op.op {
+    Insert(insert_op) =>
+      "text-insert|" +
+      block +
+      "|" +
+      encode_field(insert_op.agent) +
+      "|" +
+      insert_op.timestamp.to_string() +
+      "|" +
+      insert_op.id.to_string() +
+      "|" +
+      encode_field(insert_op.content)
+    Delete(delete_op) =>
+      "text-delete|" +
+      block +
+      "|" +
+      encode_field(delete_op.agent) +
+      "|" +
+      delete_op.timestamp.to_string() +
+      "|" +
+      delete_op.target.to_string()
+  }
+}
+
+///|
 /// Compare two property ops using the document's total op ordering.
 fn compare_property_ops(a : @mt.TreePropertyOp, b : @mt.TreePropertyOp) -> Int {
   compare_ops(@mt.SetProperty(a), @mt.SetProperty(b))
@@ -166,6 +243,8 @@ pub struct Document {
   priv mut lamport_clock : Int
   priv ops : Array[@mt.TreeOp]
   priv seen_ops : Map[String, Bool]
+  priv text_ops : Array[BlockTextOp]
+  priv seen_text_ops : Map[String, Bool]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
 }
@@ -191,6 +270,8 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     lamport_clock: -1,
     ops: [],
     seen_ops: Map::new(),
+    text_ops: [],
+    seen_text_ops: Map::new(),
     property_state: Map::new(),
     blocks: Map::new(),
   }
@@ -247,6 +328,26 @@ fn Document::record_op(self : Document, op : @mt.TreeOp) -> Bool {
         }
       }
       self.ops.insert(insert_idx, op)
+      true
+    }
+  }
+}
+
+///|
+fn Document::record_text_op(self : Document, op : BlockTextOp) -> Bool {
+  let key = text_op_key(op)
+  match self.seen_text_ops.get(key) {
+    Some(true) => false
+    _ => {
+      self.seen_text_ops.set(key, true)
+      let mut insert_idx = self.text_ops.length()
+      for i = 0; i < self.text_ops.length(); i = i + 1 {
+        if compare_text_ops(op, self.text_ops[i]) < 0 {
+          insert_idx = i
+          break
+        }
+      }
+      self.text_ops.insert(insert_idx, op)
       true
     }
   }
@@ -541,6 +642,15 @@ pub fn Document::export_ops(self : Document) -> Array[@mt.TreeOp] {
 }
 
 ///|
+/// Export the full document sync payload.
+///
+/// Tree ops are replayed before text ops on receipt so newly-created blocks
+/// exist before their text history is applied.
+pub fn Document::export_sync_message(self : Document) -> SyncMessage {
+  { tree_ops: self.export_ops(), text_ops: self.text_ops.copy() }
+}
+
+///|
 /// Apply an operation received from a remote peer.
 ///
 /// The operation is recorded in the causal graph for local version tracking,
@@ -565,5 +675,19 @@ pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
         self.next_counter = prop_op.target.counter + 1
       }
     }
+  }
+}
+
+///|
+/// Apply a remote sync payload in replay-safe order.
+pub fn Document::apply_remote_sync_message(
+  self : Document,
+  message : SyncMessage,
+) -> Unit raise DocumentError {
+  for op in message.tree_ops {
+    self.apply_remote_op(op)
+  }
+  for op in message.text_ops {
+    self.apply_remote_text_op(op)
   }
 }

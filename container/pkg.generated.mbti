@@ -30,16 +30,25 @@ pub(all) suberror DocumentError {
 }
 
 // Types and methods
+pub(all) struct BlockTextOp {
+  block : @movable_tree.TreeNodeId
+  op : TextOp
+}
+
 pub struct Document {
   // private fields
 }
 pub fn Document::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
+pub fn Document::apply_remote_sync_message(Self, SyncMessage) -> Unit raise DocumentError
+pub fn Document::apply_remote_text_op(Self, BlockTextOp) -> Unit raise DocumentError
 pub fn Document::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
 pub fn Document::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::delete_node(Self, @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::delete_text(Self, @movable_tree.TreeNodeId, Int) -> Unit raise DocumentError
 pub fn Document::export_ops(Self) -> Array[@movable_tree.TreeOp]
+pub fn Document::export_sync_message(Self) -> SyncMessage
+pub fn Document::export_text_ops(Self) -> Array[BlockTextOp]
 pub fn Document::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
 pub fn Document::get_text(Self, @movable_tree.TreeNodeId) -> String
 pub fn Document::insert_text(Self, @movable_tree.TreeNodeId, Int, String) -> Unit raise DocumentError
@@ -49,6 +58,31 @@ pub fn Document::new(String) -> Self raise DocumentError
 pub fn Document::replace_text(Self, @movable_tree.TreeNodeId, String) -> Unit raise DocumentError
 pub fn Document::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
 pub fn Document::text_len(Self, @movable_tree.TreeNodeId) -> Int
+
+pub(all) struct SyncMessage {
+  tree_ops : Array[@movable_tree.TreeOp]
+  text_ops : Array[BlockTextOp]
+}
+
+pub(all) struct TextDeleteOp {
+  target : Int
+  timestamp : Int
+  agent : String
+}
+
+pub(all) struct TextInsertOp {
+  id : Int
+  content : String
+  origin_left : Int?
+  origin_right : Int?
+  timestamp : Int
+  agent : String
+}
+
+pub(all) enum TextOp {
+  Insert(TextInsertOp)
+  Delete(TextDeleteOp)
+}
 
 // Type aliases
 pub using @movable_tree {type TreeNodeId}
