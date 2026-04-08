@@ -5,6 +5,7 @@ import {
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/branch",
   "dowdiness/rle",
+  "dowdiness/btree" @btree,
   "dowdiness/order-tree" @order_tree,
 }
 
