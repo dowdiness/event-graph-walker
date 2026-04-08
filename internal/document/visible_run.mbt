@@ -77,6 +77,9 @@ pub impl @rle.Sliceable for VisibleRun with slice(
 }
 
 ///|
+impl @btree.BTreeElem for VisibleRun
+
+///|
 /// Convert an item offset (0-based character index) to a UTF-16 code unit offset.
 ///
 /// Each CRDT item is one character. Characters may be 1 or 2 UTF-16 code units.

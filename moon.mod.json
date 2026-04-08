@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "deps": {
     "moonbitlang/quickcheck": "0.11.2",
+    "dowdiness/btree": { "path": "../lib/btree" },
     "dowdiness/rle": { "path": "../rle" },
     "dowdiness/order-tree": { "path": "../order-tree" },
     "dowdiness/alga": { "path": "../alga" }
