@@ -72,7 +72,7 @@ test "bench: 10 remote inserts + queries (1000-char doc)" (b : @bench.T) {
     // Bob receives them one at a time, querying position after each
     for i in 1000..<ops.length() {
       bob.apply_remote(ops[i]) catch {
-        _ => ()
+        _ => abort("remote apply failed in benchmark")
       }
       ignore(bob.lv_at_position(500))
     }
@@ -97,7 +97,7 @@ test "bench: 10 remote inserts + queries (5000-char doc)" (b : @bench.T) {
     let ops = alice.get_all_ops()
     for i in 5000..<ops.length() {
       bob.apply_remote(ops[i]) catch {
-        _ => ()
+        _ => abort("remote apply failed in benchmark")
       }
       ignore(bob.lv_at_position(2500))
     }
