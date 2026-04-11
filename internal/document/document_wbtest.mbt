@@ -290,14 +290,23 @@ test "incremental insert: remote op between local inserts resets cache" {
   // Export Bob's op and apply to Alice
   let bob_op = doc_b.oplog.get_all_ops()[0]
   try! doc_a.apply_remote(bob_op)
-  // Remote op should have invalidated cache and cleared cursor
-  assert_true(doc_a.position_cache is None)
-  assert_true(doc_a.cursor is None)
-  // Alice does another non-sequential insert — should lazy-build cache
-  let _ = try! doc_a.insert(1, "y")
-  // Cache should be valid
+  // Small remote batch with warm cache: cache updated incrementally (not invalidated)
   assert_true(doc_a.position_cache is Some(_))
-  // Verify total text length is correct (abc + x + y = 5 chars)
+  assert_true(doc_a.cursor is None)
+  // Verify cache content is correct: position queries return right LVs
+  // Bob's "x" goes to the front (FugueMax ordering), so doc is "xabc"
+  let text = doc_a.to_text()
+  inspect(text.length(), content="4")
+  // Position 0 should resolve to a valid LV (Bob's insert)
+  assert_true(doc_a.lv_at_position(0) is Some(_))
+  // Position 3 should resolve to a valid LV (Alice's 'c')
+  assert_true(doc_a.lv_at_position(3) is Some(_))
+  // Position 4 should be out of bounds
+  assert_true(doc_a.lv_at_position(4) is None)
+  // Alice does another non-sequential insert
+  let _ = try! doc_a.insert(1, "y")
+  assert_true(doc_a.position_cache is Some(_))
+  // Verify total text length is correct (xabc + y = 5 chars)
   inspect(doc_a.to_text().length(), content="5")
 }
 
