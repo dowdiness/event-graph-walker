@@ -49,8 +49,8 @@ pub fn Document::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, aft
 pub fn Document::delete_node(Self, @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::delete_text(Self, @movable_tree.TreeNodeId, Int) -> Unit raise DocumentError
 pub fn Document::export_ops(Self) -> Array[@movable_tree.TreeOp]
-pub fn Document::export_sync_message(Self) -> SyncMessage
-pub fn Document::export_sync_message_since(Self, @causal_graph.VersionVector) -> SyncMessage
+pub fn Document::export_sync_message(Self) -> SyncMessage raise DocumentError
+pub fn Document::export_sync_message_since(Self, @causal_graph.VersionVector) -> SyncMessage raise DocumentError
 pub fn Document::export_text_ops(Self) -> Array[BlockTextOp]
 pub fn Document::get_property(Self, @movable_tree.TreeNodeId, String) -> String?
 pub fn Document::get_text(Self, @movable_tree.TreeNodeId) -> String
