@@ -26,7 +26,7 @@ pub(all) suberror DocumentError {
 pub struct Document {
   agent_id : String
   // private fields
-} derive(@debug.Debug)
+}
 pub fn Document::agent_id(Self) -> String
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError

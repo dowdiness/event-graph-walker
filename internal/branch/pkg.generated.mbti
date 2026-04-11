@@ -7,7 +7,6 @@ import {
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/oplog",
   "dowdiness/rle",
-  "moonbitlang/core/debug",
 }
 
 // Values
@@ -26,7 +25,7 @@ pub(all) suberror BranchError {
 // Types and methods
 pub struct Branch {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn Branch::advance(Self, @core.Frontier) -> Self raise BranchError
 pub fn Branch::advance_to_version_vector(Self, @causal_graph.VersionVector) -> Self raise BranchError
 pub fn Branch::at_frontier(Self, @core.Frontier) -> Bool

@@ -434,7 +434,8 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
         self.jump_ancestors.add_item_id(item_id, None)
       } else {
         match self.lookup_item_id(p) {
-          Some(parent_id) => self.jump_ancestors.add_item_id(item_id, Some(parent_id))
+          Some(parent_id) =>
+            self.jump_ancestors.add_item_id(item_id, Some(parent_id))
           None => ()
         }
       }
@@ -451,7 +452,10 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
 ///
 /// **Complexity**: O(1) for numeric comparison, O(k) for string tiebreaker
 /// where k = agent ID length.
-fn[T : Eq] compare_children(a : (ItemId, Item[T]), b : (ItemId, Item[T])) -> Int {
+fn[T : Eq] compare_children(
+  a : (ItemId, Item[T]),
+  b : (ItemId, Item[T]),
+) -> Int {
   let (_, item_a) = a
   let (_, item_b) = b
   item_a.compare(item_b)
@@ -476,7 +480,9 @@ pub fn[T] FugueTree::is_ancestor(
   }
   match (self.lookup_item_id(ancestor_id), self.lookup_item_id(descendant_id)) {
     (Some(ancestor_item_id), Some(descendant_item_id)) =>
-      self.jump_ancestors.is_ancestor_item_id(ancestor_item_id, descendant_item_id)
+      self.jump_ancestors.is_ancestor_item_id(
+        ancestor_item_id, descendant_item_id,
+      )
     _ => false
   }
 }
@@ -707,7 +713,9 @@ fn[T : Eq] FugueTree::traverse_tree(
 ) -> Unit {
   // Stack entries: (node_id, phase, sorted_left, sorted_right)
   // We store the sorted children arrays to avoid recomputing them between phases.
-  let stack : Array[(Lv, Int, Array[(ItemId, Item[T])], Array[(ItemId, Item[T])])] = []
+  let stack : Array[
+    (Lv, Int, Array[(ItemId, Item[T])], Array[(ItemId, Item[T])]),
+  ] = []
   stack.push((start_id, 0, [], []))
   while stack.length() > 0 {
     let top = stack.length() - 1
@@ -735,7 +743,8 @@ fn[T : Eq] FugueTree::traverse_tree(
       for i = left.length() - 1; i >= 0; i = i - 1 {
         let (child_item_id, _) = left[i]
         match self.lookup_lv(child_item_id) {
-          Some(child_lv) if child_lv != node_id => stack.push((child_lv, 0, [], []))
+          Some(child_lv) if child_lv != node_id =>
+            stack.push((child_lv, 0, [], []))
           _ => ()
         }
       }
@@ -756,7 +765,8 @@ fn[T : Eq] FugueTree::traverse_tree(
       for i = sorted_right.length() - 1; i >= 0; i = i - 1 {
         let (child_item_id, _) = sorted_right[i]
         match self.lookup_lv(child_item_id) {
-          Some(child_lv) if child_lv != node_id => stack.push((child_lv, 0, [], []))
+          Some(child_lv) if child_lv != node_id =>
+            stack.push((child_lv, 0, [], []))
           _ => ()
         }
       }

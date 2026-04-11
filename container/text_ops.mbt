@@ -45,7 +45,13 @@ pub fn Document::insert_text(
     let parents = self.raw_parents_for_lv(lv)
     let op : BlockTextOp = {
       block: id,
-      op: block.make_insert_op_at(pos + i, lv, ch.to_string(), timestamp, self.agent_id),
+      op: block.make_insert_op_at(
+        pos + i,
+        lv,
+        ch.to_string(),
+        timestamp,
+        self.agent_id,
+      ),
     }
     self.apply_block_text_op(id, op)
     let _ = self.record_text_op(op)
