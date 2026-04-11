@@ -7,6 +7,7 @@ import {
   "dowdiness/rle",
   "dowdiness/btree" @btree,
   "dowdiness/order-tree" @order_tree,
+  "moonbitlang/core/bench" @bench,
 }
 
 options(

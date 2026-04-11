@@ -421,17 +421,19 @@ pub fn Document::apply_remote(
   op : @core.Op,
 ) -> Unit raise DocumentError {
   self.cursor = None
-  // Add to oplog (buffering if parents are missing)
   let applied_ops = self.oplog.apply_remote(op) catch {
     e => raise DocumentError::OpLog(e)
   }
-
-  // Invalidate before any tree mutation so exception paths can't leave stale cache.
-  if applied_ops.length() > 0 {
+  if applied_ops.length() == 0 {
+    return
+  }
+  // For small batches with a warm cache, update incrementally to avoid
+  // the O(n) full rebuild. For large batches, invalidate and rebuild lazily.
+  let mut incremental = applied_ops.length() <= 3 &&
+    self.position_cache is Some(_)
+  if !incremental {
     self.invalidate_cache()
   }
-
-  // Apply any newly-resolved operations to the tree
   let cg = self.oplog.causal_graph()
   for applied in applied_ops {
     let origin_left : @fugue.Lv? = match applied.origin_left() {
@@ -452,7 +454,6 @@ pub fn Document::apply_remote(
     }
     match applied.content() {
       @core.Insert(text) => {
-        // Get Lamport timestamp and agent from causal graph for proper ordering
         let (timestamp, agent) = match cg[applied.lv()] {
           Some(entry) => (entry.timestamp, entry.agent)
           None =>
@@ -468,10 +469,36 @@ pub fn Document::apply_remote(
           timestamp: @fugue.Timestamp(timestamp),
           agent: @fugue.ReplicaId(agent),
         })
+        // Incremental cache update: find position of newly visible item
+        if incremental {
+          match self.tree.lv_to_position(@fugue.Lv(applied.lv())) {
+            Some(pos) =>
+              match self.position_cache {
+                Some(cache) =>
+                  cache.insert_at(pos, {
+                    start_lv: applied.lv(),
+                    text,
+                    count: 1,
+                  })
+                None => incremental = false
+              }
+            None => {
+              self.invalidate_cache()
+              incremental = false
+            }
+          }
+        }
       }
       @core.Delete =>
         match origin_left {
           Some(lv) => {
+            // For incremental: find position BEFORE deleting from tree
+            let pos_before = if incremental {
+              self.lv_to_position(lv.0)
+            } else {
+              None
+            }
+            let visible_before = self.tree.visible_count()
             let (del_ts, del_agent) = match cg[applied.lv()] {
               Some(entry) => (entry.timestamp, entry.agent)
               None =>
@@ -482,12 +509,30 @@ pub fn Document::apply_remote(
             self.tree.delete_with_ts(lv, del_ts, del_agent) catch {
               e => raise DocumentError::Fugue(e)
             }
+            // Only update cache if item actually became invisible
+            if incremental && self.tree.visible_count() < visible_before {
+              match (pos_before, self.position_cache) {
+                (Some(pos), Some(cache)) =>
+                  match cache.delete_at(pos) {
+                    Some(_) => ()
+                    None => {
+                      self.invalidate_cache()
+                      incremental = false
+                    }
+                  }
+                _ => {
+                  self.invalidate_cache()
+                  incremental = false
+                }
+              }
+            }
           }
           None => ()
         }
       @core.Undelete =>
         match origin_left {
           Some(lv) => {
+            let visible_before = self.tree.visible_count()
             let (undel_ts, undel_agent) = match cg[applied.lv()] {
               Some(entry) => (entry.timestamp, entry.agent)
               None =>
@@ -497,6 +542,28 @@ pub fn Document::apply_remote(
             }
             self.tree.undelete_with_ts(lv, undel_ts, undel_agent) catch {
               e => raise DocumentError::Fugue(e)
+            }
+            // If item became visible, insert into cache
+            if incremental && self.tree.visible_count() > visible_before {
+              match self.tree.lv_to_position(lv) {
+                Some(pos) =>
+                  match (self.tree[lv], self.position_cache) {
+                    (Some(item), Some(cache)) =>
+                      cache.insert_at(pos, {
+                        start_lv: lv.0,
+                        text: item.content,
+                        count: 1,
+                      })
+                    _ => {
+                      self.invalidate_cache()
+                      incremental = false
+                    }
+                  }
+                None => {
+                  self.invalidate_cache()
+                  incremental = false
+                }
+              }
             }
           }
           None => ()
