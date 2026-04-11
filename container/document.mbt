@@ -135,7 +135,8 @@ fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
     (Insert(insert_a), Insert(insert_b)) => insert_a.id.compare(insert_b.id)
     (Insert(_), Delete(_)) => -1
     (Delete(_), Insert(_)) => 1
-    (Delete(delete_a), Delete(delete_b)) => delete_a.target.compare(delete_b.target)
+    (Delete(delete_a), Delete(delete_b)) =>
+      delete_a.target.compare(delete_b.target)
   }
 }
 
@@ -259,6 +260,7 @@ fn raw_version_key(version : @core.RawVersion) -> String {
   version.to_string()
 }
 
+///|
 /// Compare two property ops using the document's total op ordering.
 fn compare_property_ops(a : @mt.TreePropertyOp, b : @mt.TreePropertyOp) -> Int {
   compare_ops(@mt.SetProperty(a), @mt.SetProperty(b))
@@ -377,6 +379,7 @@ fn Document::raw_parents_for_lv(
   parents
 }
 
+///|
 /// Insert a replicated op into the export history if it has not been seen yet.
 fn Document::record_op(self : Document, op : @mt.TreeOp) -> Bool {
   let key = op_key(op)
@@ -431,7 +434,10 @@ fn Document::record_sync_tree_op(self : Document, op : VersionedTreeOp) -> Bool 
 }
 
 ///|
-fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> Bool {
+fn Document::record_sync_text_op(
+  self : Document,
+  op : VersionedBlockTextOp,
+) -> Bool {
   let key = raw_version_key(op.version)
   match self.seen_sync_versions.get(key) {
     Some(true) => false
@@ -444,10 +450,7 @@ fn Document::record_sync_text_op(self : Document, op : VersionedBlockTextOp) -> 
 }
 
 ///|
-fn Document::defer_pending_sync_op(
-  self : Document,
-  op : PendingSyncOp,
-) -> Unit {
+fn Document::defer_pending_sync_op(self : Document, op : PendingSyncOp) -> Unit {
   self.pending_sync_ops.push(op)
 }
 
@@ -486,7 +489,9 @@ fn Document::try_apply_versioned_tree_op(
     parent_lvs,
     op.version.agent,
     op.version.seq,
-  ) catch { _ => -1 }
+  ) catch {
+    _ => -1
+  }
   if added < 0 {
     return false
   }
@@ -531,7 +536,9 @@ fn Document::try_apply_versioned_text_op(
     parent_lvs,
     op.version.agent,
     op.version.seq,
-  ) catch { _ => -1 }
+  ) catch {
+    _ => -1
+  }
   if added < 0 {
     return false
   }
@@ -616,7 +623,10 @@ fn Document::defer_text_op(self : Document, op : BlockTextOp) -> Unit {
 }
 
 ///|
-fn Document::flush_pending_text_ops(self : Document, id : @mt.TreeNodeId) -> Unit {
+fn Document::flush_pending_text_ops(
+  self : Document,
+  id : @mt.TreeNodeId,
+) -> Unit {
   let key = self.pending_text_key(id)
   let pending = match self.pending_text_ops.get(key) {
     Some(existing) => existing.copy()
@@ -909,8 +919,8 @@ pub fn Document::set_property(
   if !self.tree.contains(id) {
     return
   }
-  let (lv, timestamp, version) = self.next_version_with_raw() catch { _ =>
-    return
+  let (lv, timestamp, version) = self.next_version_with_raw() catch {
+    _ => return
   }
   let parents = self.raw_parents_for_lv(lv) catch { _ => return }
   let op : @mt.TreePropertyOp = {
@@ -922,11 +932,7 @@ pub fn Document::set_property(
   }
   self.apply_property_op(op)
   let _ = self.record_op(@mt.SetProperty(op))
-  let _ = self.record_sync_tree_op({
-    version,
-    parents,
-    op: @mt.SetProperty(op),
-  })
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.SetProperty(op) })
 }
 
 ///|
@@ -950,13 +956,13 @@ pub fn Document::export_ops(self : Document) -> Array[@mt.TreeOp] {
 ///
 /// Tree ops are replayed before text ops on receipt so newly-created blocks
 /// exist before their text history is applied.
-pub fn Document::export_sync_message(self : Document) -> SyncMessage {
+pub fn Document::export_sync_message(
+  self : Document,
+) -> SyncMessage raise DocumentError {
   self.versioned_sync_ops_between(
     @core.Frontier::from_array([]),
     self.graph.get_frontier(),
-  ) catch {
-    _ => abort("Document::export_sync_message: missing sync payload")
-  }
+  )
 }
 
 ///|
@@ -968,11 +974,9 @@ pub fn Document::get_version_vector(self : Document) -> @cg.VersionVector {
 pub fn Document::export_sync_message_since(
   self : Document,
   vv : @cg.VersionVector,
-) -> SyncMessage {
+) -> SyncMessage raise DocumentError {
   let from = vv.to_frontier(self.graph)
-  self.versioned_sync_ops_between(from, self.graph.get_frontier()) catch {
-    _ => abort("Document::export_sync_message_since: missing sync payload")
-  }
+  self.versioned_sync_ops_between(from, self.graph.get_frontier())
 }
 
 ///|

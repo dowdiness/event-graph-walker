@@ -65,12 +65,12 @@ fn TextBlock::make_insert_op_at(
   let origin_left : Int? = if pos == 0 {
     None
   } else {
-    Some(items[pos - 1].0 .0)
+    Some(items[pos - 1].0.0)
   }
   let origin_right : Int? = if pos >= items.length() {
     None
   } else {
-    Some(items[pos].0 .0)
+    Some(items[pos].0.0)
   }
   Insert({ id: lv, content, origin_left, origin_right, timestamp, agent })
 }
@@ -98,7 +98,10 @@ fn TextBlock::make_delete_op_at(
 }
 
 ///|
-fn TextBlock::apply_op(self : TextBlock, op : TextOp) -> Unit raise DocumentError {
+fn TextBlock::apply_op(
+  self : TextBlock,
+  op : TextOp,
+) -> Unit raise DocumentError {
   match op {
     Insert(insert_op) =>
       self.tree.insert({

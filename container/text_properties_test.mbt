@@ -115,7 +115,11 @@ impl @qc.Shrink for BlockScenario with shrink(self) {
 }
 
 ///|
-fn model_apply(texts : Array[String], alive : Array[Bool], edit : BlockEdit) -> Unit {
+fn model_apply(
+  texts : Array[String],
+  alive : Array[Bool],
+  edit : BlockEdit,
+) -> Unit {
   match edit {
     Insert(block, pos, chunk) =>
       if alive[block] {
@@ -155,8 +159,12 @@ fn doc_apply(
 ///|
 fn prop_container_text_matches_model(scenario : BlockScenario) -> Bool {
   let doc = @container.Document::new("alice") catch { _ => return false }
-  let n0 = doc.create_node(parent=@container.root_id) catch { _ => return false }
-  let n1 = doc.create_node(parent=@container.root_id) catch { _ => return false }
+  let n0 = doc.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
+  let n1 = doc.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
   let nodes = [n0, n1]
   let texts = ["", ""]
   let alive = [true, true]
@@ -185,8 +193,12 @@ test "property: container text matches simple two-block model" {
 ///|
 fn prop_block_independence(scenario : BlockScenario) -> Bool {
   let doc = @container.Document::new("alice") catch { _ => return false }
-  let n0 = doc.create_node(parent=@container.root_id) catch { _ => return false }
-  let n1 = doc.create_node(parent=@container.root_id) catch { _ => return false }
+  let n0 = doc.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
+  let n1 = doc.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
   let nodes = [n0, n1]
   for edit in scenario.edits {
     let other = match edit {
@@ -216,8 +228,12 @@ fn prop_delete_node_preserves_text_and_rejects_writes(
   scenario : BlockScenario,
 ) -> Bool {
   let doc = @container.Document::new("alice") catch { _ => return false }
-  let n0 = doc.create_node(parent=@container.root_id) catch { _ => return false }
-  let n1 = doc.create_node(parent=@container.root_id) catch { _ => return false }
+  let n0 = doc.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
+  let n1 = doc.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
   let nodes = [n0, n1]
 
   for edit in scenario.edits {
@@ -240,10 +256,7 @@ fn prop_delete_node_preserves_text_and_rejects_writes(
           return false
         }
       }
-      _ =>
-        if !doc_apply(doc, nodes, edit) {
-          return false
-        }
+      _ => if !doc_apply(doc, nodes, edit) { return false }
     }
   }
   true
@@ -260,8 +273,12 @@ fn prop_sync_message_replays_mixed_tree_and_text(
 ) -> Bool {
   let doc_a = @container.Document::new("alice") catch { _ => return false }
   let doc_b = @container.Document::new("bob") catch { _ => return false }
-  let n0 = doc_a.create_node(parent=@container.root_id) catch { _ => return false }
-  let n1 = doc_a.create_node(parent=@container.root_id) catch { _ => return false }
+  let n0 = doc_a.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
+  let n1 = doc_a.create_node(parent=@container.root_id) catch {
+    _ => return false
+  }
   let nodes = [n0, n1]
 
   for edit in scenario.edits {
@@ -270,7 +287,11 @@ fn prop_sync_message_replays_mixed_tree_and_text(
     }
   }
 
-  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  doc_b.apply_remote_sync_message(
+    doc_a.export_sync_message() catch {
+      _ => return false
+    },
+  )
 
   for block = 0; block < 2; block = block + 1 {
     if doc_b.get_text(nodes[block]) != doc_a.get_text(nodes[block]) {
