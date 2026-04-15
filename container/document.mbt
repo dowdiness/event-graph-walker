@@ -754,7 +754,13 @@ fn Document::position_after_sibling(
   }
   if after_idx < 0 {
     // `after` not found among children — fall back to appending at end
-    return self.position_after_last_child(parent)
+    // Inline rather than delegating to position_after_last_child to avoid
+    // a redundant children() call (which allocates and sorts).
+    if children.is_empty() {
+      return @fi.FractionalIndex::between(left=None, right=None)
+    }
+    let last_pos = self.tree.get_position(children[children.length() - 1])
+    return @fi.FractionalIndex::between(left=last_pos, right=None)
   }
   let after_pos = self.tree.get_position(after)
   if after_idx == children.length() - 1 {
@@ -775,6 +781,53 @@ fn Document::position_after_sibling(
       _ =>
         raise Internal(
           detail="position_after_sibling: children must have positions",
+        )
+    }
+  }
+}
+
+///|
+/// Compute a fractional index that sorts immediately before a given sibling.
+///
+/// Falls back to inserting before the first child when `before` is not found
+/// among `parent`'s children (e.g. deleted or moved to another parent).
+fn Document::position_before_sibling(
+  self : Document,
+  parent : @mt.TreeNodeId,
+  before : @mt.TreeNodeId,
+) -> @fi.FractionalIndex raise DocumentError {
+  let children = self.tree.children(parent)
+  let mut before_idx = -1
+  for i = 0; i < children.length(); i = i + 1 {
+    if children[i] == before {
+      before_idx = i
+      break
+    }
+  }
+  if before_idx < 0 {
+    // `before` not found among children — fall back to inserting at start
+    if children.is_empty() {
+      return @fi.FractionalIndex::between(left=None, right=None)
+    }
+    let first_pos = self.tree.get_position(children[0])
+    return @fi.FractionalIndex::between(left=None, right=first_pos)
+  }
+  let before_pos = self.tree.get_position(children[before_idx])
+  if before_idx == 0 {
+    // `before` is the first child — insert before it
+    @fi.FractionalIndex::between(left=None, right=before_pos)
+  } else {
+    let prev_pos = self.tree.get_position(children[before_idx - 1])
+    match (prev_pos, before_pos) {
+      (Some(pp), Some(bp)) =>
+        if pp.compare(bp) >= 0 {
+          @fi.FractionalIndex::between(left=None, right=Some(bp))
+        } else {
+          @fi.FractionalIndex::between(left=Some(pp), right=Some(bp))
+        }
+      _ =>
+        raise Internal(
+          detail="position_before_sibling: children must have positions",
         )
     }
   }
@@ -839,11 +892,11 @@ pub fn Document::create_node_after(
 }
 
 ///|
-/// Move a node to be the last child of a new parent.
-pub fn Document::move_node(
+/// Validate that a move operation is legal (target exists, parent valid, no cycle).
+fn Document::validate_move(
   self : Document,
-  target~ : @mt.TreeNodeId,
-  new_parent~ : @mt.TreeNodeId,
+  target : @mt.TreeNodeId,
+  new_parent : @mt.TreeNodeId,
 ) -> Unit raise DocumentError {
   if !self.tree.contains(target) {
     raise TargetNotFound
@@ -854,9 +907,18 @@ pub fn Document::move_node(
   if self.tree.would_create_cycle(target, new_parent) {
     raise CycleDetected
   }
+}
+
+///|
+/// Stamp, apply, and record a move operation.
+fn Document::emit_move_op(
+  self : Document,
+  target : @mt.TreeNodeId,
+  new_parent : @mt.TreeNodeId,
+  position : @fi.FractionalIndex,
+) -> Unit raise DocumentError {
   let (lv, timestamp, version) = self.next_version_with_raw()
   let parents = self.raw_parents_for_lv(lv)
-  let position = self.position_after_last_child(new_parent)
   let move_op : @mt.TreeMoveOp = {
     timestamp,
     target,
@@ -867,6 +929,44 @@ pub fn Document::move_node(
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
   let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+}
+
+///|
+/// Move a node to be the last child of a new parent.
+pub fn Document::move_node(
+  self : Document,
+  target~ : @mt.TreeNodeId,
+  new_parent~ : @mt.TreeNodeId,
+) -> Unit raise DocumentError {
+  self.validate_move(target, new_parent)
+  let position = self.position_after_last_child(new_parent)
+  self.emit_move_op(target, new_parent, position)
+}
+
+///|
+/// Move a node to be immediately after a given sibling under the specified parent.
+pub fn Document::move_node_after(
+  self : Document,
+  target~ : @mt.TreeNodeId,
+  parent~ : @mt.TreeNodeId,
+  after~ : @mt.TreeNodeId,
+) -> Unit raise DocumentError {
+  self.validate_move(target, parent)
+  let position = self.position_after_sibling(parent, after)
+  self.emit_move_op(target, parent, position)
+}
+
+///|
+/// Move a node to be immediately before a given sibling under the specified parent.
+pub fn Document::move_node_before(
+  self : Document,
+  target~ : @mt.TreeNodeId,
+  parent~ : @mt.TreeNodeId,
+  before~ : @mt.TreeNodeId,
+) -> Unit raise DocumentError {
+  self.validate_move(target, parent)
+  let position = self.position_before_sibling(parent, before)
+  self.emit_move_op(target, parent, position)
 }
 
 ///|
