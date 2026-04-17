@@ -334,6 +334,14 @@ pub struct Document {
   priv pending_text_ops : Map[String, Array[BlockTextOp]]
   priv property_state : Map[PropertyKey, @mt.TreePropertyOp]
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
+  priv undo_stack : Array[UndoGroup]
+  priv redo_stack : Array[UndoGroup]
+  priv mut txn_depth : Int
+  priv txn_buffer : Array[UndoItem]
+  // Phase 2 initializes these to true/false; Phase 3 adds the setter and the
+  // undo-execution code path that mutate them.
+  priv tracking_enabled : Bool
+  priv undo_execution_mode : Bool
 }
 
 ///|
@@ -365,6 +373,12 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     pending_text_ops: Map::new(),
     property_state: Map::new(),
     blocks: Map::new(),
+    undo_stack: [],
+    redo_stack: [],
+    txn_depth: 0,
+    txn_buffer: [],
+    tracking_enabled: true,
+    undo_execution_mode: false,
   }
 }
 
