@@ -24,8 +24,6 @@ pub(all) struct TextDeleteOp {
 }
 
 ///|
-/// Revive a previously-deleted fugue item. Uses `undelete_with_ts` for LWW-correct
-/// revival: higher timestamp wins, on ties Undelete beats Delete (add-wins).
 pub(all) struct TextUndeleteOp {
   target : Int
   timestamp : Int

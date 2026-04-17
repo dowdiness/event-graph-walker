@@ -151,9 +151,8 @@ fn text_op_agent(op : TextOp) -> String {
 }
 
 ///|
-// Deterministic total order across text ops: timestamp → agent → block → kind → payload.
-// Kind priority Insert < Delete < Undelete keeps a stream of conflict ops stably sorted
-// when timestamps and agents coincide.
+// Kind priority Insert < Delete < Undelete: forces stable ordering when
+// timestamp, agent, and block tie across different kinds.
 fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
   let ts_cmp = text_op_timestamp(a.op).compare(text_op_timestamp(b.op))
   if ts_cmp != 0 {
