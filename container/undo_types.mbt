@@ -6,8 +6,8 @@
 
 ///|
 priv enum UndoItem {
-  TextInsert(block~ : @mt.TreeNodeId, lv~ : Int, content~ : String)
-  TextDelete(block~ : @mt.TreeNodeId, lv~ : Int, content~ : String)
+  TextInsert(block~ : @mt.TreeNodeId, lv~ : Int)
+  TextDelete(block~ : @mt.TreeNodeId, lv~ : Int)
   TreeMove(
     target~ : @mt.TreeNodeId,
     old_parent~ : @mt.TreeNodeId,
@@ -31,9 +31,9 @@ priv enum UndoItem {
     old_value~ : String?,
     new_value~ : String
   )
-} derive(Debug)
+}
 
 ///|
 priv struct UndoGroup {
   items : Array[UndoItem]
-} derive(Debug)
+}

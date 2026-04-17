@@ -48,9 +48,7 @@ pub fn Document::insert_text(
         inserted_lv = lv
         block.make_insert_op_at(pos + i, lv, ch_content, ts, self.agent_id)
       })
-      self.record_undo_item(
-        TextInsert(block=id, lv=inserted_lv, content=ch_content),
-      )
+      self.record_undo_item(TextInsert(block=id, lv=inserted_lv))
     }
   })
 }
@@ -67,22 +65,19 @@ pub fn Document::delete_text(
       raise DocumentError::TargetNotFound
     }
     let block = self.get_or_create_text(id)
-    // Capture the target LV + content BEFORE the op lands so the undo
-    // snapshot has what it needs to synthesize an Undelete later.
+    // Capture the target LV BEFORE the op lands so the undo snapshot has
+    // the stable identity it needs to synthesize an Undelete later.
     let items = block.tree.get_visible_items()
     if pos < 0 || pos >= items.length() {
       raise DocumentError::Internal(
         detail="delete_text: position out of bounds",
       )
     }
-    let (target_lv, target_item) = items[pos]
-    let target_content = target_item.content
+    let (target_lv, _) = items[pos]
     self.emit_text_op(id, (_, ts) => {
       block.make_delete_op_at(pos, ts, self.agent_id)
     })
-    self.record_undo_item(
-      TextDelete(block=id, lv=target_lv.0, content=target_content),
-    )
+    self.record_undo_item(TextDelete(block=id, lv=target_lv.0))
   })
 }
 

@@ -150,12 +150,12 @@ fn Document::apply_undo(
   item : UndoItem,
 ) -> Unit raise DocumentError {
   match item {
-    TextInsert(block~, lv~, content=_) =>
+    TextInsert(block~, lv~) =>
       // Undo an insert: tombstone the LV we created.
       self.emit_text_op(block, (_, ts) => {
         Delete({ target: lv, timestamp: ts, agent: self.agent_id })
       })
-    TextDelete(block~, lv~, content=_) =>
+    TextDelete(block~, lv~) =>
       // Undo a delete: revive the tombstone.
       self.emit_text_op(block, (_, ts) => {
         Undelete({ target: lv, timestamp: ts, agent: self.agent_id })
@@ -183,13 +183,13 @@ fn Document::apply_redo(
   item : UndoItem,
 ) -> Unit raise DocumentError {
   match item {
-    TextInsert(block~, lv~, content=_) =>
+    TextInsert(block~, lv~) =>
       // Redo of insert: revive tombstoned LV via Undelete. LWW-wins because
       // we allocate a higher timestamp.
       self.emit_text_op(block, (_, ts) => {
         Undelete({ target: lv, timestamp: ts, agent: self.agent_id })
       })
-    TextDelete(block~, lv~, content=_) =>
+    TextDelete(block~, lv~) =>
       // Redo of delete: re-tombstone at a fresh higher timestamp.
       self.emit_text_op(block, (_, ts) => {
         Delete({ target: lv, timestamp: ts, agent: self.agent_id })

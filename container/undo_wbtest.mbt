@@ -5,11 +5,11 @@
 /// lands, most behaviors will also be testable through public entry points.
 
 ///|
-/// Synthesize a cheap TextInsert undo item for tests that don't care about
-/// content — only the presence of a record in the buffer / stack.
+/// Synthesize a cheap TextInsert undo item for tests that only care about
+/// the presence of a record in the buffer / stack.
 fn dummy_undo_item() -> UndoItem {
   let id : @mt.TreeNodeId = { agent: "test", counter: 0 }
-  TextInsert(block=id, lv=42, content="x")
+  TextInsert(block=id, lv=42)
 }
 
 ///|
