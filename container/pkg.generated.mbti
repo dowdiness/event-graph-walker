@@ -41,7 +41,7 @@ pub struct Document {
   // private fields
 }
 pub fn Document::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
-pub fn Document::apply_remote_sync_message(Self, SyncMessage) -> Unit
+pub fn Document::apply_remote_sync_message(Self, SyncMessage) -> SyncReport
 pub fn Document::apply_remote_text_op(Self, BlockTextOp) -> Unit
 pub fn Document::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
 pub fn Document::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
@@ -61,13 +61,26 @@ pub fn Document::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~
 pub fn Document::move_node_after(Self, target~ : @movable_tree.TreeNodeId, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::move_node_before(Self, target~ : @movable_tree.TreeNodeId, parent~ : @movable_tree.TreeNodeId, before~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self raise DocumentError
+pub fn Document::pending_sync_ops(Self) -> Array[PendingSyncOp]
 pub fn Document::replace_text(Self, @movable_tree.TreeNodeId, String) -> Unit raise DocumentError
 pub fn Document::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
 pub fn Document::text_len(Self, @movable_tree.TreeNodeId) -> Int
 
+pub(all) enum PendingSyncOp {
+  Tree(VersionedTreeOp)
+  Text(VersionedBlockTextOp)
+}
+
 pub(all) struct SyncMessage {
   tree_ops : Array[VersionedTreeOp]
   text_ops : Array[VersionedBlockTextOp]
+}
+
+pub(all) struct SyncReport {
+  applied_tree_ops : Int
+  applied_text_ops : Int
+  duplicate_ops : Int
+  pending_ops : Int
 }
 
 pub(all) struct TextDeleteOp {
