@@ -96,9 +96,40 @@ priv enum SyncOpRecord {
 }
 
 ///|
-priv enum PendingSyncOp {
+pub(all) enum PendingSyncOp {
   Tree(VersionedTreeOp)
   Text(VersionedBlockTextOp)
+}
+
+///|
+/// Summary of an `apply_remote_sync_message` call.
+///
+/// - `applied_tree_ops` / `applied_text_ops` count ops that landed in the
+///   document state, whether on the initial pass or a later `flush_pending_sync_ops`
+///   iteration.
+/// - `duplicate_ops` counts ops whose version was already recorded (silent
+///   idempotent skip — the frontier did not advance for them).
+/// - `pending_ops` is the number of ops that remain in the sync pending queue
+///   after the flush, waiting for ancestors that have not yet arrived. Inspect
+///   via `Document::pending_sync_ops` when `pending_ops > 0`.
+///
+/// Text ops that land in the causal graph but whose target block is not yet
+/// in the tree are routed to a separate per-block queue (`pending_text_ops`)
+/// and are still counted as `applied_text_ops` here — that queue is an
+/// internal handler-routing detail, not a sync-protocol pending state.
+///
+/// `applied_*_ops` reflects sync-layer version dedup, not payload-layer
+/// state change. If the same op was previously ingested via the direct
+/// `apply_remote_op` / `apply_remote_text_op` APIs and then arrives via a
+/// sync message under a fresh version record, it will be counted as applied
+/// even though the payload-level dedup makes the actual mutation a no-op.
+/// Mixing direct and sync ingestion of the same op stream is therefore not
+/// recommended if these counters need to mirror real state changes.
+pub(all) struct SyncReport {
+  applied_tree_ops : Int
+  applied_text_ops : Int
+  duplicate_ops : Int
+  pending_ops : Int
 }
 
 ///|
@@ -542,6 +573,12 @@ fn Document::try_apply_versioned_text_op(
   if added < 0 {
     return false
   }
+  // The version is now in the causal graph. apply_remote_text_op may
+  // internally route the op to pending_text_ops if its target block is
+  // not yet present in the tree (an unusual but possible state — e.g.
+  // when the op stream bypasses normal causal ordering). That is a
+  // handler-internal queue, not a sync-protocol pending state, so we
+  // report success once the version has been recorded.
   self.apply_remote_text_op({ block: op.block, op: op.op })
   true
 }
@@ -558,7 +595,11 @@ fn Document::try_apply_pending_sync_op(
 }
 
 ///|
-fn Document::flush_pending_sync_ops(self : Document) -> Unit {
+/// Drain pending sync ops that have become applicable and report how many
+/// tree/text ops were applied during the drain.
+fn Document::flush_pending_sync_ops(self : Document) -> (Int, Int) {
+  let mut applied_tree = 0
+  let mut applied_text = 0
   let mut progressed = true
   while progressed {
     progressed = false
@@ -567,11 +608,16 @@ fn Document::flush_pending_sync_ops(self : Document) -> Unit {
     for op in pending {
       if self.try_apply_pending_sync_op(op) {
         progressed = true
+        match op {
+          Tree(_) => applied_tree = applied_tree + 1
+          Text(_) => applied_text = applied_text + 1
+        }
       } else {
         self.defer_pending_sync_op(op)
       }
     }
   }
+  (applied_tree, applied_text)
 }
 
 ///|
@@ -1110,25 +1156,51 @@ pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
 
 ///|
 /// Apply a remote sync payload in replay-safe order.
+///
+/// Returns a `SyncReport` summarising how many ops were applied, were
+/// duplicate no-ops, or remain pending because their ancestors have not yet
+/// arrived. Pending ops can be inspected via `Document::pending_sync_ops`.
 pub fn Document::apply_remote_sync_message(
   self : Document,
   message : SyncMessage,
-) -> Unit {
+) -> SyncReport {
+  let mut applied_tree = 0
+  let mut applied_text = 0
+  let mut duplicates = 0
   for op in message.tree_ops {
     if !self.record_sync_tree_op(op) {
+      duplicates = duplicates + 1
       continue
     }
-    if !self.try_apply_versioned_tree_op(op) {
+    if self.try_apply_versioned_tree_op(op) {
+      applied_tree = applied_tree + 1
+    } else {
       self.defer_pending_sync_op(Tree(op))
     }
   }
   for op in message.text_ops {
     if !self.record_sync_text_op(op) {
+      duplicates = duplicates + 1
       continue
     }
-    if !self.try_apply_versioned_text_op(op) {
+    if self.try_apply_versioned_text_op(op) {
+      applied_text = applied_text + 1
+    } else {
       self.defer_pending_sync_op(Text(op))
     }
   }
-  self.flush_pending_sync_ops()
+  let (flushed_tree, flushed_text) = self.flush_pending_sync_ops()
+  {
+    applied_tree_ops: applied_tree + flushed_tree,
+    applied_text_ops: applied_text + flushed_text,
+    duplicate_ops: duplicates,
+    pending_ops: self.pending_sync_ops.length(),
+  }
+}
+
+///|
+/// Snapshot of sync ops still waiting for unresolved ancestors. The returned
+/// array is a copy — mutating it does not affect the document.
+pub fn Document::pending_sync_ops(self : Document) -> Array[PendingSyncOp] {
+  self.pending_sync_ops.copy()
 }

@@ -177,7 +177,7 @@ test "document: sync message replays tree and text together" {
   let message = doc_a.export_sync_message()
   inspect(message.tree_ops.length(), content="2")
   inspect(message.text_ops.length(), content="5")
-  doc_b.apply_remote_sync_message(message)
+  ignore(doc_b.apply_remote_sync_message(message))
 
   inspect(doc_a.get_text(node), content="AC")
   inspect(doc_b.get_text(node), content="AC")
@@ -194,7 +194,7 @@ test "document: sync message carries replace_text history" {
   doc_a.replace_text(node, "World")
 
   let message = doc_a.export_sync_message()
-  doc_b.apply_remote_sync_message(message)
+  ignore(doc_b.apply_remote_sync_message(message))
 
   inspect(doc_a.get_text(node), content="World")
   inspect(doc_b.get_text(node), content="World")
@@ -207,23 +207,26 @@ test "document: replace_text sync can expose intermediate states" {
   let node = doc_a.create_node(parent=@container.root_id)
 
   doc_a.insert_text(node, 0, "Hello")
-  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
   let vv = doc_b.get_version_vector()
 
   doc_a.replace_text(node, "World")
   let delta = doc_a.export_sync_message_since(vv)
 
   inspect(delta.text_ops.length() > 1, content="true")
-  doc_b.apply_remote_sync_message({
-    tree_ops: [],
-    text_ops: [delta.text_ops[0]],
-  })
+  ignore(
+    doc_b.apply_remote_sync_message({
+      tree_ops: [],
+      text_ops: [delta.text_ops[0]],
+    }),
+  )
   inspect(doc_b.get_text(node) != "World", content="true")
-
-  doc_b.apply_remote_sync_message({
-    tree_ops: [],
-    text_ops: delta.text_ops[1:].iter().collect(),
-  })
+  ignore(
+    doc_b.apply_remote_sync_message({
+      tree_ops: [],
+      text_ops: delta.text_ops[1:].iter().collect(),
+    }),
+  )
   inspect(doc_b.get_text(node), content="World")
 }
 
@@ -281,7 +284,7 @@ test "document: export_sync_message_since sends only missing mixed history" {
   let right = doc_a.create_node(parent=@container.root_id)
 
   doc_a.insert_text(left, 0, "AB")
-  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
   let vv = doc_b.get_version_vector()
 
   doc_a.delete_text(left, 1)
@@ -291,7 +294,7 @@ test "document: export_sync_message_since sends only missing mixed history" {
   let delta = doc_a.export_sync_message_since(vv)
   inspect(delta.tree_ops.length(), content="1")
   inspect(delta.text_ops.length(), content="2")
-  doc_b.apply_remote_sync_message(delta)
+  ignore(doc_b.apply_remote_sync_message(delta))
 
   inspect(doc_a.get_text(left), content="A")
   inspect(doc_b.get_text(left), content="A")
@@ -313,16 +316,19 @@ test "document: remote tree ops buffer until causal parents arrive" {
   inspect(message.tree_ops[0].parents.length(), content="0")
   inspect(message.tree_ops[1].parents.length(), content="1")
 
-  doc_b.apply_remote_sync_message({
-    tree_ops: [message.tree_ops[1]],
-    text_ops: [],
-  })
+  ignore(
+    doc_b.apply_remote_sync_message({
+      tree_ops: [message.tree_ops[1]],
+      text_ops: [],
+    }),
+  )
   inspect(doc_b.is_alive(node), content="false")
-
-  doc_b.apply_remote_sync_message({
-    tree_ops: [message.tree_ops[0]],
-    text_ops: [],
-  })
+  ignore(
+    doc_b.apply_remote_sync_message({
+      tree_ops: [message.tree_ops[0]],
+      text_ops: [],
+    }),
+  )
   inspect(doc_b.is_alive(node), content="false")
 }
 
@@ -332,7 +338,7 @@ test "document: remote text ops buffer until causal parents arrive" {
   let doc_b = @container.Document::new("bob")
   let node = doc_a.create_node(parent=@container.root_id)
 
-  doc_b.apply_remote_sync_message(doc_a.export_sync_message())
+  ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
   let vv = doc_b.get_version_vector()
 
   doc_a.insert_text(node, 0, "AB")
@@ -343,15 +349,52 @@ test "document: remote text ops buffer until causal parents arrive" {
   inspect(message.text_ops[0].parents.length(), content="1")
   inspect(message.text_ops[1].parents.length(), content="1")
 
-  doc_b.apply_remote_sync_message({
-    tree_ops: [],
-    text_ops: [message.text_ops[1]],
-  })
+  ignore(
+    doc_b.apply_remote_sync_message({
+      tree_ops: [],
+      text_ops: [message.text_ops[1]],
+    }),
+  )
   inspect(doc_b.get_text(node), content="")
+  ignore(
+    doc_b.apply_remote_sync_message({
+      tree_ops: [],
+      text_ops: [message.text_ops[0]],
+    }),
+  )
+  inspect(doc_b.get_text(node), content="AB")
+}
 
-  doc_b.apply_remote_sync_message({
+///|
+test "document: SyncReport counts applied, duplicate, and pending ops" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let node = doc_a.create_node(parent=@container.root_id)
+  doc_a.insert_text(node, 0, "AB")
+  let message = doc_a.export_sync_message()
+
+  // Applied on first delivery.
+  let report_first = doc_b.apply_remote_sync_message(message)
+  inspect(report_first.applied_tree_ops, content="1")
+  inspect(report_first.applied_text_ops, content="2")
+  inspect(report_first.duplicate_ops, content="0")
+  inspect(report_first.pending_ops, content="0")
+  inspect(doc_b.pending_sync_ops().length(), content="0")
+
+  // Re-delivering the same payload is a full no-op.
+  let report_dup = doc_b.apply_remote_sync_message(message)
+  inspect(report_dup.applied_tree_ops, content="0")
+  inspect(report_dup.applied_text_ops, content="0")
+  inspect(report_dup.duplicate_ops, content="3")
+  inspect(report_dup.pending_ops, content="0")
+
+  // Delivering a text op whose tree parent is missing defers it.
+  let doc_c = @container.Document::new("carol")
+  let report_pending = doc_c.apply_remote_sync_message({
     tree_ops: [],
     text_ops: [message.text_ops[0]],
   })
-  inspect(doc_b.get_text(node), content="AB")
+  inspect(report_pending.applied_text_ops, content="0")
+  inspect(report_pending.pending_ops, content="1")
+  inspect(doc_c.pending_sync_ops().length(), content="1")
 }

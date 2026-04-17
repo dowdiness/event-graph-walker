@@ -287,10 +287,12 @@ fn prop_sync_message_replays_mixed_tree_and_text(
     }
   }
 
-  doc_b.apply_remote_sync_message(
-    doc_a.export_sync_message() catch {
-      _ => return false
-    },
+  ignore(
+    doc_b.apply_remote_sync_message(
+      doc_a.export_sync_message() catch {
+        _ => return false
+      },
+    ),
   )
 
   for block = 0; block < 2; block = block + 1 {
