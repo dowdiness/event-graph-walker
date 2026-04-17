@@ -43,7 +43,10 @@ pub struct Document {
 pub fn Document::apply_remote_op(Self, @movable_tree.TreeOp) -> Unit
 pub fn Document::apply_remote_sync_message(Self, SyncMessage) -> SyncReport
 pub fn Document::apply_remote_text_op(Self, BlockTextOp) -> Unit
+pub fn Document::can_redo(Self) -> Bool
+pub fn Document::can_undo(Self) -> Bool
 pub fn Document::children(Self, @movable_tree.TreeNodeId) -> Array[@movable_tree.TreeNodeId]
+pub fn Document::clear_undo(Self) -> Unit
 pub fn Document::create_node(Self, parent~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::create_node_after(Self, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> @movable_tree.TreeNodeId raise DocumentError
 pub fn Document::delete_node(Self, @movable_tree.TreeNodeId) -> Unit raise DocumentError
@@ -57,14 +60,19 @@ pub fn Document::get_text(Self, @movable_tree.TreeNodeId) -> String
 pub fn Document::get_version_vector(Self) -> @causal_graph.VersionVector
 pub fn Document::insert_text(Self, @movable_tree.TreeNodeId, Int, String) -> Unit raise DocumentError
 pub fn Document::is_alive(Self, @movable_tree.TreeNodeId) -> Bool
+pub fn Document::is_tracking(Self) -> Bool
 pub fn Document::move_node(Self, target~ : @movable_tree.TreeNodeId, new_parent~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::move_node_after(Self, target~ : @movable_tree.TreeNodeId, parent~ : @movable_tree.TreeNodeId, after~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::move_node_before(Self, target~ : @movable_tree.TreeNodeId, parent~ : @movable_tree.TreeNodeId, before~ : @movable_tree.TreeNodeId) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self raise DocumentError
 pub fn Document::pending_sync_ops(Self) -> Array[PendingSyncOp]
+pub fn Document::redo(Self) -> Bool
 pub fn Document::replace_text(Self, @movable_tree.TreeNodeId, String) -> Unit raise DocumentError
 pub fn Document::set_property(Self, @movable_tree.TreeNodeId, String, String) -> Unit
+pub fn Document::set_tracking(Self, Bool) -> Unit
 pub fn Document::text_len(Self, @movable_tree.TreeNodeId) -> Int
+pub fn[T, E : Error] Document::transaction(Self, () -> T raise E) -> T raise E
+pub fn Document::undo(Self) -> Bool
 
 pub(all) enum PendingSyncOp {
   Tree(VersionedTreeOp)

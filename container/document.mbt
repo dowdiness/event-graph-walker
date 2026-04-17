@@ -338,10 +338,8 @@ pub struct Document {
   priv redo_stack : Array[UndoGroup]
   priv mut txn_depth : Int
   priv txn_buffer : Array[UndoItem]
-  // Phase 2 initializes these to true/false; Phase 3 adds the setter and the
-  // undo-execution code path that mutate them.
-  priv tracking_enabled : Bool
-  priv undo_execution_mode : Bool
+  priv mut tracking_enabled : Bool
+  priv mut undo_execution_mode : Bool
 }
 
 ///|
@@ -920,24 +918,27 @@ pub fn Document::create_node(
   self : Document,
   parent~ : @mt.TreeNodeId,
 ) -> @mt.TreeNodeId raise DocumentError {
-  if !self.is_local_parent_valid(parent) {
-    raise ParentNotFound
-  }
-  let id = self.alloc_id()
-  let (lv, timestamp, version) = self.next_version_with_raw()
-  let parents = self.raw_parents_for_lv(lv)
-  let position = self.position_after_last_child(parent)
-  let move_op : @mt.TreeMoveOp = {
-    timestamp,
-    target: id,
-    new_parent: parent,
-    position,
-    agent: self.agent_id,
-  }
-  self.apply_move_op(move_op)
-  let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
-  id
+  self.with_implicit_transaction(() => {
+    if !self.is_local_parent_valid(parent) {
+      raise ParentNotFound
+    }
+    let id = self.alloc_id()
+    let (lv, timestamp, version) = self.next_version_with_raw()
+    let parents = self.raw_parents_for_lv(lv)
+    let position = self.position_after_last_child(parent)
+    let move_op : @mt.TreeMoveOp = {
+      timestamp,
+      target: id,
+      new_parent: parent,
+      position,
+      agent: self.agent_id,
+    }
+    self.apply_move_op(move_op)
+    let _ = self.record_op(@mt.Move(move_op))
+    let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+    self.record_undo_item(TreeCreate(target=id, parent~, pos=position))
+    id
+  })
 }
 
 ///|
@@ -950,24 +951,27 @@ pub fn Document::create_node_after(
   parent~ : @mt.TreeNodeId,
   after~ : @mt.TreeNodeId,
 ) -> @mt.TreeNodeId raise DocumentError {
-  if !self.is_local_parent_valid(parent) {
-    raise ParentNotFound
-  }
-  let id = self.alloc_id()
-  let (lv, timestamp, version) = self.next_version_with_raw()
-  let parents = self.raw_parents_for_lv(lv)
-  let position = self.position_after_sibling(parent, after)
-  let move_op : @mt.TreeMoveOp = {
-    timestamp,
-    target: id,
-    new_parent: parent,
-    position,
-    agent: self.agent_id,
-  }
-  self.apply_move_op(move_op)
-  let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
-  id
+  self.with_implicit_transaction(() => {
+    if !self.is_local_parent_valid(parent) {
+      raise ParentNotFound
+    }
+    let id = self.alloc_id()
+    let (lv, timestamp, version) = self.next_version_with_raw()
+    let parents = self.raw_parents_for_lv(lv)
+    let position = self.position_after_sibling(parent, after)
+    let move_op : @mt.TreeMoveOp = {
+      timestamp,
+      target: id,
+      new_parent: parent,
+      position,
+      agent: self.agent_id,
+    }
+    self.apply_move_op(move_op)
+    let _ = self.record_op(@mt.Move(move_op))
+    let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+    self.record_undo_item(TreeCreate(target=id, parent~, pos=position))
+    id
+  })
 }
 
 ///|
@@ -1011,15 +1015,44 @@ fn Document::emit_move_op(
 }
 
 ///|
+/// Capture (parent, position) immediately before a forthcoming move so the
+/// resulting TreeMove undo record points at the right pre-state.
+fn Document::snapshot_move_state(
+  self : Document,
+  target : @mt.TreeNodeId,
+) -> (@mt.TreeNodeId, @fi.FractionalIndex)? {
+  match (self.tree.parent(target), self.tree.get_position(target)) {
+    (Some(p), Some(pos)) => Some((p, pos))
+    _ => None
+  }
+}
+
+///|
 /// Move a node to be the last child of a new parent.
 pub fn Document::move_node(
   self : Document,
   target~ : @mt.TreeNodeId,
   new_parent~ : @mt.TreeNodeId,
 ) -> Unit raise DocumentError {
-  self.validate_move(target, new_parent)
-  let position = self.position_after_last_child(new_parent)
-  self.emit_move_op(target, new_parent, position)
+  self.with_implicit_transaction(() => {
+    self.validate_move(target, new_parent)
+    let snapshot = self.snapshot_move_state(target)
+    let position = self.position_after_last_child(new_parent)
+    self.emit_move_op(target, new_parent, position)
+    match snapshot {
+      Some((old_parent, old_pos)) =>
+        self.record_undo_item(
+          TreeMove(
+            target~,
+            old_parent~,
+            old_pos~,
+            new_parent~,
+            new_pos=position,
+          ),
+        )
+      None => ()
+    }
+  })
 }
 
 ///|
@@ -1030,9 +1063,25 @@ pub fn Document::move_node_after(
   parent~ : @mt.TreeNodeId,
   after~ : @mt.TreeNodeId,
 ) -> Unit raise DocumentError {
-  self.validate_move(target, parent)
-  let position = self.position_after_sibling(parent, after)
-  self.emit_move_op(target, parent, position)
+  self.with_implicit_transaction(() => {
+    self.validate_move(target, parent)
+    let snapshot = self.snapshot_move_state(target)
+    let position = self.position_after_sibling(parent, after)
+    self.emit_move_op(target, parent, position)
+    match snapshot {
+      Some((old_parent, old_pos)) =>
+        self.record_undo_item(
+          TreeMove(
+            target~,
+            old_parent~,
+            old_pos~,
+            new_parent=parent,
+            new_pos=position,
+          ),
+        )
+      None => ()
+    }
+  })
 }
 
 ///|
@@ -1043,9 +1092,25 @@ pub fn Document::move_node_before(
   parent~ : @mt.TreeNodeId,
   before~ : @mt.TreeNodeId,
 ) -> Unit raise DocumentError {
-  self.validate_move(target, parent)
-  let position = self.position_before_sibling(parent, before)
-  self.emit_move_op(target, parent, position)
+  self.with_implicit_transaction(() => {
+    self.validate_move(target, parent)
+    let snapshot = self.snapshot_move_state(target)
+    let position = self.position_before_sibling(parent, before)
+    self.emit_move_op(target, parent, position)
+    match snapshot {
+      Some((old_parent, old_pos)) =>
+        self.record_undo_item(
+          TreeMove(
+            target~,
+            old_parent~,
+            old_pos~,
+            new_parent=parent,
+            new_pos=position,
+          ),
+        )
+      None => ()
+    }
+  })
 }
 
 ///|
@@ -1054,22 +1119,30 @@ pub fn Document::delete_node(
   self : Document,
   target : @mt.TreeNodeId,
 ) -> Unit raise DocumentError {
-  if !self.tree.contains(target) {
-    raise TargetNotFound
-  }
-  let (lv, timestamp, version) = self.next_version_with_raw()
-  let parents = self.raw_parents_for_lv(lv)
-  let position = self.position_after_last_child(@mt.trash_id)
-  let move_op : @mt.TreeMoveOp = {
-    timestamp,
-    target,
-    new_parent: @mt.trash_id,
-    position,
-    agent: self.agent_id,
-  }
-  self.apply_move_op(move_op)
-  let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+  self.with_implicit_transaction(() => {
+    if !self.tree.contains(target) {
+      raise TargetNotFound
+    }
+    let snapshot = self.snapshot_move_state(target)
+    let (lv, timestamp, version) = self.next_version_with_raw()
+    let parents = self.raw_parents_for_lv(lv)
+    let position = self.position_after_last_child(@mt.trash_id)
+    let move_op : @mt.TreeMoveOp = {
+      timestamp,
+      target,
+      new_parent: @mt.trash_id,
+      position,
+      agent: self.agent_id,
+    }
+    self.apply_move_op(move_op)
+    let _ = self.record_op(@mt.Move(move_op))
+    let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+    match snapshot {
+      Some((old_parent, old_pos)) =>
+        self.record_undo_item(TreeDelete(target~, old_parent~, old_pos~))
+      None => ()
+    }
+  })
 }
 
 ///|
@@ -1089,6 +1162,9 @@ pub fn Document::is_alive(self : Document, id : @mt.TreeNodeId) -> Bool {
 
 ///|
 /// Set a property on a node.
+///
+/// Silent early-return paths (missing node, LV alloc failure) skip recording
+/// an undo item so the stack reflects only mutations that actually landed.
 pub fn Document::set_property(
   self : Document,
   id : @mt.TreeNodeId,
@@ -1098,10 +1174,20 @@ pub fn Document::set_property(
   if !self.tree.contains(id) {
     return
   }
+  let old_value = self.get_property(id, key)
+  self.txn_open()
   let (lv, timestamp, version) = self.next_version_with_raw() catch {
-    _ => return
+    _ => {
+      self.txn_close()
+      return
+    }
   }
-  let parents = self.raw_parents_for_lv(lv) catch { _ => return }
+  let parents = self.raw_parents_for_lv(lv) catch {
+    _ => {
+      self.txn_close()
+      return
+    }
+  }
   let op : @mt.TreePropertyOp = {
     timestamp,
     target: id,
@@ -1112,6 +1198,10 @@ pub fn Document::set_property(
   self.apply_property_op(op)
   let _ = self.record_op(@mt.SetProperty(op))
   let _ = self.record_sync_tree_op({ version, parents, op: @mt.SetProperty(op) })
+  self.record_undo_item(
+    PropertySet(target=id, key~, old_value~, new_value=value),
+  )
+  self.txn_close()
 }
 
 ///|

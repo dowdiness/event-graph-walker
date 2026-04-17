@@ -36,27 +36,35 @@ pub fn Document::insert_text(
   pos : Int,
   text : String,
 ) -> Unit raise DocumentError {
-  if !self.is_alive(id) {
-    raise DocumentError::TargetNotFound
-  }
-  let block = self.get_or_create_text(id)
-  for i, ch in text {
-    let (lv, timestamp, version) = self.next_version_with_raw()
-    let parents = self.raw_parents_for_lv(lv)
-    let op : BlockTextOp = {
-      block: id,
-      op: block.make_insert_op_at(
-        pos + i,
-        lv,
-        ch.to_string(),
-        timestamp,
-        self.agent_id,
-      ),
+  self.with_implicit_transaction(() => {
+    if !self.is_alive(id) {
+      raise DocumentError::TargetNotFound
     }
-    self.apply_block_text_op(id, op)
-    let _ = self.record_text_op(op)
-    let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
-  }
+    let block = self.get_or_create_text(id)
+    for i, ch in text {
+      let (lv, timestamp, version) = self.next_version_with_raw()
+      let parents = self.raw_parents_for_lv(lv)
+      let op : BlockTextOp = {
+        block: id,
+        op: block.make_insert_op_at(
+          pos + i,
+          lv,
+          ch.to_string(),
+          timestamp,
+          self.agent_id,
+        ),
+      }
+      self.apply_block_text_op(id, op)
+      let _ = self.record_text_op(op)
+      let _ = self.record_sync_text_op({
+        version,
+        parents,
+        block: id,
+        op: op.op,
+      })
+      self.record_undo_item(TextInsert(block=id, lv~, content=ch.to_string()))
+    }
+  })
 }
 
 ///|
@@ -66,43 +74,64 @@ pub fn Document::delete_text(
   id : @mt.TreeNodeId,
   pos : Int,
 ) -> Unit raise DocumentError {
-  if !self.is_alive(id) {
-    raise DocumentError::TargetNotFound
-  }
-  let block = self.get_or_create_text(id)
-  let (lv, timestamp, version) = self.next_version_with_raw()
-  let parents = self.raw_parents_for_lv(lv)
-  let op : BlockTextOp = {
-    block: id,
-    op: block.make_delete_op_at(pos, timestamp, self.agent_id),
-  }
-  self.apply_block_text_op(id, op)
-  let _ = self.record_text_op(op)
-  let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
+  self.with_implicit_transaction(() => {
+    if !self.is_alive(id) {
+      raise DocumentError::TargetNotFound
+    }
+    let block = self.get_or_create_text(id)
+    // Capture the target LV + content BEFORE the op lands, so the undo
+    // snapshot has what it needs to synthesize an Undelete later.
+    let items = block.tree.get_visible_items()
+    if pos < 0 || pos >= items.length() {
+      raise DocumentError::Internal(
+        detail="delete_text: position out of bounds",
+      )
+    }
+    let (target_lv, target_item) = items[pos]
+    let target_content = target_item.content
+    let (lv, timestamp, version) = self.next_version_with_raw()
+    let parents = self.raw_parents_for_lv(lv)
+    let op : BlockTextOp = {
+      block: id,
+      op: block.make_delete_op_at(pos, timestamp, self.agent_id),
+    }
+    self.apply_block_text_op(id, op)
+    let _ = self.record_text_op(op)
+    let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
+    self.record_undo_item(
+      TextDelete(block=id, lv=target_lv.0, content=target_content),
+    )
+  })
 }
 
 ///|
 /// Replace all text in a block using a deterministic delete-then-insert sequence.
 ///
-/// This is a convenience helper, not a transaction boundary: peers syncing
-/// mid-sequence may observe intermediate partial states until all generated ops
-/// have arrived and been applied.
+/// Replaces flatten into a single undo group: the outer implicit transaction
+/// absorbs the per-call transactions opened by each inner delete_text and
+/// insert_text.
+///
+/// This is a convenience helper, not a transaction boundary for sync: peers
+/// syncing mid-sequence may observe intermediate partial states until all
+/// generated ops have arrived and been applied.
 pub fn Document::replace_text(
   self : Document,
   id : @mt.TreeNodeId,
   text : String,
 ) -> Unit raise DocumentError {
-  if !self.is_alive(id) {
-    raise DocumentError::TargetNotFound
-  }
-  let mut remaining = self.text_len(id)
-  while remaining > 0 {
-    self.delete_text(id, remaining - 1)
-    remaining = remaining - 1
-  }
-  if text != "" {
-    self.insert_text(id, 0, text)
-  }
+  self.with_implicit_transaction(() => {
+    if !self.is_alive(id) {
+      raise DocumentError::TargetNotFound
+    }
+    let mut remaining = self.text_len(id)
+    while remaining > 0 {
+      self.delete_text(id, remaining - 1)
+      remaining = remaining - 1
+    }
+    if text != "" {
+      self.insert_text(id, 0, text)
+    }
+  })
 }
 
 ///|
