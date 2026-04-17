@@ -83,38 +83,28 @@ fn[T, E : Error] Document::with_implicit_transaction(
 // ============================================================================
 
 ///|
-/// Emit a text op as part of an undo or redo replay.
+/// Stamp, apply, and record a text op built from a fresh LV+timestamp.
 ///
-/// Allocates a fresh LV+timestamp for the op itself (the target LV of the
-/// Delete/Undelete still refers to the original insert). Mirrors
-/// `Document::delete_text` minus the position → LV lookup.
-fn Document::emit_replay_text_op(
+/// The builder receives the allocated (lv, timestamp) and returns the TextOp
+/// payload. Mirrors `emit_move_op` for text — all three public text methods
+/// (insert_text, delete_text) and the undo replay path share this tail.
+fn Document::emit_text_op(
   self : Document,
   block : @mt.TreeNodeId,
-  kind : ReplayTextKind,
-  target : Int,
+  build : (Int, Int) -> TextOp raise DocumentError,
 ) -> Unit raise DocumentError {
   let (lv, timestamp, version) = self.next_version_with_raw()
   let parents = self.raw_parents_for_lv(lv)
-  let text_op : TextOp = match kind {
-    Kdelete => Delete({ target, timestamp, agent: self.agent_id })
-    Kundelete => Undelete({ target, timestamp, agent: self.agent_id })
-  }
-  let block_text_op : BlockTextOp = { block, op: text_op }
-  self.apply_block_text_op(block, block_text_op)
-  let _ = self.record_text_op(block_text_op)
+  let text_op = build(lv, timestamp)
+  let op : BlockTextOp = { block, op: text_op }
+  self.apply_block_text_op(block, op)
+  let _ = self.record_text_op(op)
   let _ = self.record_sync_text_op({ version, parents, block, op: text_op })
 }
 
 ///|
-priv enum ReplayTextKind {
-  Kdelete
-  Kundelete
-}
-
-///|
-/// Emit a property op as part of an undo or redo replay.
-fn Document::emit_replay_property(
+/// Stamp, apply, and record a SetProperty op with a fresh LV+timestamp.
+fn Document::emit_property_op(
   self : Document,
   target : @mt.TreeNodeId,
   key : String,
@@ -143,10 +133,14 @@ fn Document::apply_undo(
   match item {
     TextInsert(block~, lv~, content=_) =>
       // Undo an insert: tombstone the LV we created.
-      self.emit_replay_text_op(block, Kdelete, lv)
+      self.emit_text_op(block, (_, ts) => {
+        Delete({ target: lv, timestamp: ts, agent: self.agent_id })
+      })
     TextDelete(block~, lv~, content=_) =>
       // Undo a delete: revive the tombstone.
-      self.emit_replay_text_op(block, Kundelete, lv)
+      self.emit_text_op(block, (_, ts) => {
+        Undelete({ target: lv, timestamp: ts, agent: self.agent_id })
+      })
     TreeMove(target~, old_parent~, old_pos~, new_parent=_, new_pos=_) =>
       // Move back to the pre-move parent/position.
       self.emit_move_op(target, old_parent, old_pos)
@@ -159,7 +153,7 @@ fn Document::apply_undo(
       // Node is in trash; move it back to its original parent/position.
       self.emit_move_op(target, old_parent, old_pos)
     PropertySet(target~, key~, old_value~, new_value=_) =>
-      self.emit_replay_property(target, key, old_value.unwrap_or(""))
+      self.emit_property_op(target, key, old_value.unwrap_or(""))
   }
 }
 
@@ -173,10 +167,14 @@ fn Document::apply_redo(
     TextInsert(block~, lv~, content=_) =>
       // Redo of insert: revive tombstoned LV via Undelete. LWW-wins because
       // we allocate a higher timestamp.
-      self.emit_replay_text_op(block, Kundelete, lv)
+      self.emit_text_op(block, (_, ts) => {
+        Undelete({ target: lv, timestamp: ts, agent: self.agent_id })
+      })
     TextDelete(block~, lv~, content=_) =>
       // Redo of delete: re-tombstone at a fresh higher timestamp.
-      self.emit_replay_text_op(block, Kdelete, lv)
+      self.emit_text_op(block, (_, ts) => {
+        Delete({ target: lv, timestamp: ts, agent: self.agent_id })
+      })
     TreeMove(target~, old_parent=_, old_pos=_, new_parent~, new_pos~) =>
       self.emit_move_op(target, new_parent, new_pos)
     TreeCreate(target~, parent~, pos~) =>
@@ -188,7 +186,21 @@ fn Document::apply_redo(
       self.emit_move_op(target, @mt.trash_id, position)
     }
     PropertySet(target~, key~, old_value=_, new_value~) =>
-      self.emit_replay_property(target, key, new_value)
+      self.emit_property_op(target, key, new_value)
+  }
+}
+
+///|
+/// Return true iff `err` is a semantic failure we silently skip during undo
+/// or redo replay per §10.5 (target remotely trashed beyond recovery,
+/// concurrent move left no legal parent, cycle would result). Any other
+/// variant is a genuine invariant break and must propagate.
+fn is_recoverable_apply_error(err : DocumentError) -> Bool {
+  match err {
+    TargetNotFound => true
+    ParentNotFound => true
+    CycleDetected => true
+    _ => false
   }
 }
 
@@ -196,16 +208,20 @@ fn Document::apply_redo(
 /// Reverse the most-recent group of forward ops. Returns true if a group was
 /// popped, false if the undo stack was empty.
 ///
-/// Items that fail to invert (e.g. target remotely trashed beyond recovery)
-/// are silently skipped per §10.5 of the design. The undo/redo execution path
-/// bypasses `with_implicit_transaction` so the redo stack is not wiped
-/// mid-operation.
-pub fn Document::undo(self : Document) -> Bool {
+/// Items that fail to invert due to concurrent peer state changes are silently
+/// skipped per §10.5; invariant violations (`Internal`, `EmptyReplicaId`)
+/// propagate as `DocumentError` so bugs surface rather than corrupting the
+/// redo stack. The execution path bypasses `with_implicit_transaction` so the
+/// redo stack is not wiped mid-operation.
+pub fn Document::undo(self : Document) -> Bool raise DocumentError {
   let group = match self.undo_stack.pop() {
     None => return false
     Some(group) => group
   }
   self.undo_execution_mode = true
+  // `items` holds forward-time order; iterate reverse to emit inverses in
+  // backward-time order. `reversed_redo` collects items in reverse order and
+  // is flipped at the end so the redo group is also forward-time.
   let reversed_redo : Array[UndoItem] = []
   let items = group.items
   let mut i = items.length() - 1
@@ -215,7 +231,13 @@ pub fn Document::undo(self : Document) -> Bool {
       self.apply_undo(item)
       true
     } catch {
-      _ => false
+      e =>
+        if is_recoverable_apply_error(e) {
+          false
+        } else {
+          self.undo_execution_mode = false
+          raise e
+        }
     }
     if applied {
       reversed_redo.push(item)
@@ -231,20 +253,29 @@ pub fn Document::undo(self : Document) -> Bool {
 
 ///|
 /// Re-apply the most-recently undone group. Returns true if a group was
-/// popped, false if the redo stack was empty.
-pub fn Document::redo(self : Document) -> Bool {
+/// popped, false if the redo stack was empty. See `undo` for the recoverable-
+/// error contract.
+pub fn Document::redo(self : Document) -> Bool raise DocumentError {
   let group = match self.redo_stack.pop() {
     None => return false
     Some(group) => group
   }
   self.undo_execution_mode = true
+  // Forward iteration matches forward-time order; successful items form the
+  // next undo group in the same order with no flip needed.
   let next_undo : Array[UndoItem] = []
   for item in group.items {
     let applied = try {
       self.apply_redo(item)
       true
     } catch {
-      _ => false
+      e =>
+        if is_recoverable_apply_error(e) {
+          false
+        } else {
+          self.undo_execution_mode = false
+          raise e
+        }
     }
     if applied {
       next_undo.push(item)

@@ -42,27 +42,15 @@ pub fn Document::insert_text(
     }
     let block = self.get_or_create_text(id)
     for i, ch in text {
-      let (lv, timestamp, version) = self.next_version_with_raw()
-      let parents = self.raw_parents_for_lv(lv)
-      let op : BlockTextOp = {
-        block: id,
-        op: block.make_insert_op_at(
-          pos + i,
-          lv,
-          ch.to_string(),
-          timestamp,
-          self.agent_id,
-        ),
-      }
-      self.apply_block_text_op(id, op)
-      let _ = self.record_text_op(op)
-      let _ = self.record_sync_text_op({
-        version,
-        parents,
-        block: id,
-        op: op.op,
+      let ch_content = ch.to_string()
+      let mut inserted_lv = 0
+      self.emit_text_op(id, (lv, ts) => {
+        inserted_lv = lv
+        block.make_insert_op_at(pos + i, lv, ch_content, ts, self.agent_id)
       })
-      self.record_undo_item(TextInsert(block=id, lv~, content=ch.to_string()))
+      self.record_undo_item(
+        TextInsert(block=id, lv=inserted_lv, content=ch_content),
+      )
     }
   })
 }
@@ -79,7 +67,7 @@ pub fn Document::delete_text(
       raise DocumentError::TargetNotFound
     }
     let block = self.get_or_create_text(id)
-    // Capture the target LV + content BEFORE the op lands, so the undo
+    // Capture the target LV + content BEFORE the op lands so the undo
     // snapshot has what it needs to synthesize an Undelete later.
     let items = block.tree.get_visible_items()
     if pos < 0 || pos >= items.length() {
@@ -89,15 +77,9 @@ pub fn Document::delete_text(
     }
     let (target_lv, target_item) = items[pos]
     let target_content = target_item.content
-    let (lv, timestamp, version) = self.next_version_with_raw()
-    let parents = self.raw_parents_for_lv(lv)
-    let op : BlockTextOp = {
-      block: id,
-      op: block.make_delete_op_at(pos, timestamp, self.agent_id),
-    }
-    self.apply_block_text_op(id, op)
-    let _ = self.record_text_op(op)
-    let _ = self.record_sync_text_op({ version, parents, block: id, op: op.op })
+    self.emit_text_op(id, (_, ts) => {
+      block.make_delete_op_at(pos, ts, self.agent_id)
+    })
     self.record_undo_item(
       TextDelete(block=id, lv=target_lv.0, content=target_content),
     )

@@ -123,9 +123,6 @@ test "undo convergence: concurrent moves + undo converge on both peers" {
   // Sanity: x is placed somewhere in the tree on both.
   inspect(alice.is_alive(x), content="true")
   inspect(bob.is_alive(x), content="true")
-  // (Silence unused-binding warnings.)
-  let _ = p1
-  let _ = p2
 }
 
 // ---------------------------------------------------------------------------

@@ -1175,33 +1175,13 @@ pub fn Document::set_property(
     return
   }
   let old_value = self.get_property(id, key)
-  self.txn_open()
-  let (lv, timestamp, version) = self.next_version_with_raw() catch {
-    _ => {
-      self.txn_close()
-      return
-    }
-  }
-  let parents = self.raw_parents_for_lv(lv) catch {
-    _ => {
-      self.txn_close()
-      return
-    }
-  }
-  let op : @mt.TreePropertyOp = {
-    timestamp,
-    target: id,
-    key,
-    value,
-    agent: self.agent_id,
-  }
-  self.apply_property_op(op)
-  let _ = self.record_op(@mt.SetProperty(op))
-  let _ = self.record_sync_tree_op({ version, parents, op: @mt.SetProperty(op) })
-  self.record_undo_item(
-    PropertySet(target=id, key~, old_value~, new_value=value),
+  let _result : Result[Unit, DocumentError] = try? self.with_implicit_transaction(() => {
+      self.emit_property_op(id, key, value)
+      self.record_undo_item(
+        PropertySet(target=id, key~, old_value~, new_value=value),
+      )
+    },
   )
-  self.txn_close()
 }
 
 ///|
