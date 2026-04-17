@@ -412,3 +412,158 @@ test "Document: create_node_after with equal positions from concurrent inserts" 
   inspect(has_a1, content="true")
   inspect(has_b1, content="true")
 }
+
+///|
+/// Convergence test: concurrent positional moves of the same target on
+/// different peers settle to the same children order. Drag-and-drop in the
+/// block editor is built on `move_node_before`, so divergence here would
+/// surface as desynced block ordering after two users drop the same block
+/// at different positions.
+test "Document: concurrent positional moves converge" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  // Build a shared baseline of three siblings: x, y, z.
+  let x = doc_a.create_node(parent=@container.root_id)
+  let y = doc_a.create_node_after(parent=@container.root_id, after=x)
+  let z = doc_a.create_node_after(parent=@container.root_id, after=y)
+  ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
+  inspect(doc_a.children(@container.root_id).length(), content="3")
+  inspect(doc_b.children(@container.root_id).length(), content="3")
+
+  // Concurrent edits, both visibly relocating x:
+  //   alice: move_node_after(x, after=z)   →  [y, z, x]
+  //   bob:   move_node_before(x, before=z) →  [y, x, z]
+  // Both ops touch x's position, so the CRDT must arbitrate.
+  let vv_a = doc_a.get_version_vector()
+  let vv_b = doc_b.get_version_vector()
+  doc_a.move_node_after(target=x, parent=@container.root_id, after=z)
+  doc_b.move_node_before(target=x, parent=@container.root_id, before=z)
+
+  // Cross-deliver only the new ops since each peer's prior frontier.
+  let report_to_b = doc_b.apply_remote_sync_message(
+    doc_a.export_sync_message_since(vv_b),
+  )
+  let report_to_a = doc_a.apply_remote_sync_message(
+    doc_b.export_sync_message_since(vv_a),
+  )
+  inspect(report_to_b.applied_tree_ops, content="1")
+  inspect(report_to_b.pending_ops, content="0")
+  inspect(report_to_a.applied_tree_ops, content="1")
+  inspect(report_to_a.pending_ops, content="0")
+
+  // After cross-sync, both peers see identical sibling order...
+  let children_a = doc_a.children(@container.root_id)
+  let children_b = doc_b.children(@container.root_id)
+  inspect(children_a.length(), content="3")
+  inspect(children_b.length(), content="3")
+  inspect(children_a[0] == children_b[0], content="true")
+  inspect(children_a[1] == children_b[1], content="true")
+  inspect(children_a[2] == children_b[2], content="true")
+
+  // ...and every original sibling survives exactly once.
+  let mut seen_x = 0
+  let mut seen_y = 0
+  let mut seen_z = 0
+  for child in children_a {
+    if child == x {
+      seen_x = seen_x + 1
+    }
+    if child == y {
+      seen_y = seen_y + 1
+    }
+    if child == z {
+      seen_z = seen_z + 1
+    }
+  }
+  inspect(seen_x, content="1")
+  inspect(seen_y, content="1")
+  inspect(seen_z, content="1")
+  inspect(doc_a.is_alive(x), content="true")
+  inspect(doc_b.is_alive(x), content="true")
+}
+
+///|
+/// SyncReport coverage for tree-only deltas: applying a positional move sync
+/// message should report exactly one applied tree op, no duplicates, and no
+/// pending ops. Re-delivering the same payload is a full no-op.
+test "Document: SyncReport accounts for positional move ops" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let x = doc_a.create_node(parent=@container.root_id)
+  let y = doc_a.create_node_after(parent=@container.root_id, after=x)
+  ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
+  let vv_b = doc_b.get_version_vector()
+
+  // Alice swaps the two siblings; sync only the diff.
+  doc_a.move_node_after(target=x, parent=@container.root_id, after=y)
+  let delta = doc_a.export_sync_message_since(vv_b)
+  inspect(delta.tree_ops.length(), content="1")
+  inspect(delta.text_ops.length(), content="0")
+  let first = doc_b.apply_remote_sync_message(delta)
+  inspect(first.applied_tree_ops, content="1")
+  inspect(first.applied_text_ops, content="0")
+  inspect(first.duplicate_ops, content="0")
+  inspect(first.pending_ops, content="0")
+
+  // Replay the same message — every op is a version-level duplicate.
+  let replay = doc_b.apply_remote_sync_message(delta)
+  inspect(replay.applied_tree_ops, content="0")
+  inspect(replay.duplicate_ops, content="1")
+  inspect(replay.pending_ops, content="0")
+}
+
+///|
+/// SyncReport pending behaviour for moves: a move op delivered before its
+/// causal parent (e.g. an earlier rename or property op) is queued in
+/// pending_sync_ops, then drains to applied when the missing ancestor
+/// arrives via a follow-up sync.
+test "Document: SyncReport defers move op until ancestor arrives" {
+  let doc_a = @container.Document::new("alice")
+  let doc_b = @container.Document::new("bob")
+  let x = doc_a.create_node(parent=@container.root_id)
+  let y = doc_a.create_node_after(parent=@container.root_id, after=x)
+
+  // Issue the swap, then capture the message ordered as: [creates..., swap].
+  doc_a.move_node_after(target=x, parent=@container.root_id, after=y)
+  let full = doc_a.export_sync_message()
+  let swap = full.tree_ops[full.tree_ops.length() - 1]
+
+  // Deliver the swap first — its parents are not yet in the graph.
+  let early = doc_b.apply_remote_sync_message({ tree_ops: [swap], text_ops: [] })
+  inspect(early.applied_tree_ops, content="0")
+  inspect(early.pending_ops, content="1")
+  inspect(doc_b.pending_sync_ops().length(), content="1")
+
+  // Deliver the rest; the queued swap should drain via flush_pending_sync_ops.
+  let preceding : Array[@container.VersionedTreeOp] = []
+  for i = 0; i < full.tree_ops.length() - 1; i = i + 1 {
+    preceding.push(full.tree_ops[i])
+  }
+  let rest = doc_b.apply_remote_sync_message({
+    tree_ops: preceding,
+    text_ops: [],
+  })
+  inspect(rest.applied_tree_ops, content="3")
+  inspect(rest.pending_ops, content="0")
+  inspect(doc_b.pending_sync_ops().length(), content="0")
+
+  // Final state matches Alice and both siblings survive exactly once.
+  let children_a = doc_a.children(@container.root_id)
+  let children_b = doc_b.children(@container.root_id)
+  inspect(children_a.length(), content="2")
+  inspect(children_b.length(), content="2")
+  inspect(children_a[0] == children_b[0], content="true")
+  inspect(children_a[1] == children_b[1], content="true")
+  let mut seen_x = 0
+  let mut seen_y = 0
+  for child in children_b {
+    if child == x {
+      seen_x = seen_x + 1
+    }
+    if child == y {
+      seen_y = seen_y + 1
+    }
+  }
+  inspect(seen_x, content="1")
+  inspect(seen_y, content="1")
+}
