@@ -117,6 +117,14 @@ pub(all) enum PendingSyncOp {
 /// in the tree are routed to a separate per-block queue (`pending_text_ops`)
 /// and are still counted as `applied_text_ops` here — that queue is an
 /// internal handler-routing detail, not a sync-protocol pending state.
+///
+/// `applied_*_ops` reflects sync-layer version dedup, not payload-layer
+/// state change. If the same op was previously ingested via the direct
+/// `apply_remote_op` / `apply_remote_text_op` APIs and then arrives via a
+/// sync message under a fresh version record, it will be counted as applied
+/// even though the payload-level dedup makes the actual mutation a no-op.
+/// Mixing direct and sync ingestion of the same op stream is therefore not
+/// recommended if these counters need to mirror real state changes.
 pub(all) struct SyncReport {
   applied_tree_ops : Int
   applied_text_ops : Int
