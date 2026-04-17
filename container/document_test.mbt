@@ -430,11 +430,14 @@ test "Document: concurrent positional moves converge" {
   inspect(doc_a.children(@container.root_id).length(), content="3")
   inspect(doc_b.children(@container.root_id).length(), content="3")
 
-  // Concurrent edits: alice puts x AFTER z; bob puts x BEFORE y.
+  // Concurrent edits, both visibly relocating x:
+  //   alice: move_node_after(x, after=z)   →  [y, z, x]
+  //   bob:   move_node_before(x, before=z) →  [y, x, z]
+  // Both ops touch x's position, so the CRDT must arbitrate.
   let vv_a = doc_a.get_version_vector()
   let vv_b = doc_b.get_version_vector()
   doc_a.move_node_after(target=x, parent=@container.root_id, after=z)
-  doc_b.move_node_before(target=x, parent=@container.root_id, before=y)
+  doc_b.move_node_before(target=x, parent=@container.root_id, before=z)
 
   // Cross-deliver only the new ops since each peer's prior frontier.
   let report_to_b = doc_b.apply_remote_sync_message(
@@ -448,7 +451,7 @@ test "Document: concurrent positional moves converge" {
   inspect(report_to_a.applied_tree_ops, content="1")
   inspect(report_to_a.pending_ops, content="0")
 
-  // After cross-sync, both peers see identical sibling order.
+  // After cross-sync, both peers see identical sibling order...
   let children_a = doc_a.children(@container.root_id)
   let children_b = doc_b.children(@container.root_id)
   inspect(children_a.length(), content="3")
@@ -456,6 +459,25 @@ test "Document: concurrent positional moves converge" {
   inspect(children_a[0] == children_b[0], content="true")
   inspect(children_a[1] == children_b[1], content="true")
   inspect(children_a[2] == children_b[2], content="true")
+
+  // ...and every original sibling survives exactly once.
+  let mut seen_x = 0
+  let mut seen_y = 0
+  let mut seen_z = 0
+  for child in children_a {
+    if child == x {
+      seen_x = seen_x + 1
+    }
+    if child == y {
+      seen_y = seen_y + 1
+    }
+    if child == z {
+      seen_z = seen_z + 1
+    }
+  }
+  inspect(seen_x, content="1")
+  inspect(seen_y, content="1")
+  inspect(seen_z, content="1")
   inspect(doc_a.is_alive(x), content="true")
   inspect(doc_b.is_alive(x), content="true")
 }
@@ -525,9 +547,23 @@ test "Document: SyncReport defers move op until ancestor arrives" {
   inspect(rest.pending_ops, content="0")
   inspect(doc_b.pending_sync_ops().length(), content="0")
 
-  // Final state matches Alice.
+  // Final state matches Alice and both siblings survive exactly once.
   let children_a = doc_a.children(@container.root_id)
   let children_b = doc_b.children(@container.root_id)
+  inspect(children_a.length(), content="2")
+  inspect(children_b.length(), content="2")
   inspect(children_a[0] == children_b[0], content="true")
   inspect(children_a[1] == children_b[1], content="true")
+  let mut seen_x = 0
+  let mut seen_y = 0
+  for child in children_b {
+    if child == x {
+      seen_x = seen_x + 1
+    }
+    if child == y {
+      seen_y = seen_y + 1
+    }
+  }
+  inspect(seen_x, content="1")
+  inspect(seen_y, content="1")
 }
