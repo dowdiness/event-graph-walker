@@ -109,9 +109,14 @@ pub(all) enum PendingSyncOp {
 ///   iteration.
 /// - `duplicate_ops` counts ops whose version was already recorded (silent
 ///   idempotent skip — the frontier did not advance for them).
-/// - `pending_ops` is the number of ops that remain in the pending queue after
-///   the flush, waiting for ancestors that have not yet arrived. Inspect via
-///   `Document::pending_sync_ops` when `pending_ops > 0`.
+/// - `pending_ops` is the number of ops that remain in the sync pending queue
+///   after the flush, waiting for ancestors that have not yet arrived. Inspect
+///   via `Document::pending_sync_ops` when `pending_ops > 0`.
+///
+/// Text ops that land in the causal graph but whose target block is not yet
+/// in the tree are routed to a separate per-block queue (`pending_text_ops`)
+/// and are still counted as `applied_text_ops` here — that queue is an
+/// internal handler-routing detail, not a sync-protocol pending state.
 pub(all) struct SyncReport {
   applied_tree_ops : Int
   applied_text_ops : Int
@@ -560,6 +565,12 @@ fn Document::try_apply_versioned_text_op(
   if added < 0 {
     return false
   }
+  // The version is now in the causal graph. apply_remote_text_op may
+  // internally route the op to pending_text_ops if its target block is
+  // not yet present in the tree (an unusual but possible state — e.g.
+  // when the op stream bypasses normal causal ordering). That is a
+  // handler-internal queue, not a sync-protocol pending state, so we
+  // report success once the version has been recorded.
   self.apply_remote_text_op({ block: op.block, op: op.op })
   true
 }
