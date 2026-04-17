@@ -101,6 +101,13 @@ pub(all) struct TextInsertOp {
 pub(all) enum TextOp {
   Insert(TextInsertOp)
   Delete(TextDeleteOp)
+  Undelete(TextUndeleteOp)
+}
+
+pub(all) struct TextUndeleteOp {
+  target : Int
+  timestamp : Int
+  agent : String
 }
 
 pub(all) struct VersionedBlockTextOp {

@@ -24,9 +24,19 @@ pub(all) struct TextDeleteOp {
 }
 
 ///|
+/// Revive a previously-deleted fugue item. Uses `undelete_with_ts` for LWW-correct
+/// revival: higher timestamp wins, on ties Undelete beats Delete (add-wins).
+pub(all) struct TextUndeleteOp {
+  target : Int
+  timestamp : Int
+  agent : String
+}
+
+///|
 pub(all) enum TextOp {
   Insert(TextInsertOp)
   Delete(TextDeleteOp)
+  Undelete(TextUndeleteOp)
 }
 
 ///|
@@ -122,6 +132,18 @@ fn TextBlock::apply_op(
           raise DocumentError::Internal(
             detail="TextBlock delete: missing item at lv=" +
               delete_op.target.to_string(),
+          )
+      }
+    Undelete(undelete_op) =>
+      self.tree.undelete_with_ts(
+        @fugue.Lv(undelete_op.target),
+        undelete_op.timestamp,
+        undelete_op.agent,
+      ) catch {
+        _ =>
+          raise DocumentError::Internal(
+            detail="TextBlock undelete: missing item at lv=" +
+              undelete_op.target.to_string(),
           )
       }
   }

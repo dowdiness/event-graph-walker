@@ -137,6 +137,7 @@ fn text_op_timestamp(op : TextOp) -> Int {
   match op {
     Insert(insert_op) => insert_op.timestamp
     Delete(delete_op) => delete_op.timestamp
+    Undelete(undelete_op) => undelete_op.timestamp
   }
 }
 
@@ -145,10 +146,14 @@ fn text_op_agent(op : TextOp) -> String {
   match op {
     Insert(insert_op) => insert_op.agent
     Delete(delete_op) => delete_op.agent
+    Undelete(undelete_op) => undelete_op.agent
   }
 }
 
 ///|
+// Deterministic total order across text ops: timestamp → agent → block → kind → payload.
+// Kind priority Insert < Delete < Undelete keeps a stream of conflict ops stably sorted
+// when timestamps and agents coincide.
 fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
   let ts_cmp = text_op_timestamp(a.op).compare(text_op_timestamp(b.op))
   if ts_cmp != 0 {
@@ -165,9 +170,15 @@ fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
   match (a.op, b.op) {
     (Insert(insert_a), Insert(insert_b)) => insert_a.id.compare(insert_b.id)
     (Insert(_), Delete(_)) => -1
+    (Insert(_), Undelete(_)) => -1
     (Delete(_), Insert(_)) => 1
     (Delete(delete_a), Delete(delete_b)) =>
       delete_a.target.compare(delete_b.target)
+    (Delete(_), Undelete(_)) => -1
+    (Undelete(_), Insert(_)) => 1
+    (Undelete(_), Delete(_)) => 1
+    (Undelete(undelete_a), Undelete(undelete_b)) =>
+      undelete_a.target.compare(undelete_b.target)
   }
 }
 
@@ -283,6 +294,15 @@ fn text_op_key(op : BlockTextOp) -> String {
       delete_op.timestamp.to_string() +
       "|" +
       delete_op.target.to_string()
+    Undelete(undelete_op) =>
+      "text-undelete|" +
+      block +
+      "|" +
+      encode_field(undelete_op.agent) +
+      "|" +
+      undelete_op.timestamp.to_string() +
+      "|" +
+      undelete_op.target.to_string()
   }
 }
 
