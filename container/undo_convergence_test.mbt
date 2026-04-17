@@ -249,6 +249,33 @@ test "undo: set_property undo on absent key produces Some(\"\") (v1 limit)" {
 }
 
 // ---------------------------------------------------------------------------
+// Task 4.7b — redo converges after a concurrent remote edit
+// ---------------------------------------------------------------------------
+
+///|
+test "undo convergence: redo converges after concurrent remote edits" {
+  let alice = @container.Document::new("alice")
+  let block = alice.create_node(parent=@container.root_id)
+  alice.insert_text(block, 0, "hello")
+  let bob = @container.Document::new("bob")
+  let _ = bob.apply_remote_sync_message(alice.export_sync_message())
+  // Alice undoes — locally "", redo stack holds the insert inverse.
+  let _ = alice.undo()
+  inspect(alice.get_text(block), content="")
+  let _ = bob.apply_remote_sync_message(alice.export_sync_message())
+  inspect(bob.get_text(block), content="")
+  // Bob makes a concurrent edit against the post-undo state.
+  bob.insert_text(block, 0, "world")
+  // Alice redoes her original insert at a fresh higher timestamp. Because
+  // redo allocates new timestamps, LWW resolves naturally on both sides.
+  let _ = alice.redo()
+  let _ = alice.apply_remote_sync_message(bob.export_sync_message())
+  let _ = bob.apply_remote_sync_message(alice.export_sync_message())
+  // Both peers converge on the same content.
+  inspect(alice.get_text(block) == bob.get_text(block), content="true")
+}
+
+// ---------------------------------------------------------------------------
 // Task 4.8 — remote ops never recorded
 // ---------------------------------------------------------------------------
 

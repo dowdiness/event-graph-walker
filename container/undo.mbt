@@ -36,12 +36,14 @@ fn Document::txn_open(self : Document) -> Unit {
 }
 
 ///|
-/// Close the current transaction scope.
+/// Close the current transaction scope, committing on the outermost close.
 ///
-/// Nested closes just decrement. On the outermost close (1 → 0), commit: if
-/// the buffer holds any items, push a new UndoGroup onto the undo stack and
-/// clear the redo stack (any new commit invalidates redo history). Always
-/// clear the buffer afterward.
+/// Nested closes (depth > 1 → depth - 1) just decrement. On the outermost
+/// close (1 → 0): if the buffer holds any items, push a new UndoGroup onto
+/// the undo stack and clear the redo stack. Always clear the buffer.
+///
+/// Used on the success path and by per-method hooks that want "partial on
+/// raise" semantics — see `with_implicit_transaction`.
 fn Document::txn_close(self : Document) -> Unit {
   if self.txn_depth <= 0 {
     return
@@ -58,11 +60,28 @@ fn Document::txn_close(self : Document) -> Unit {
 }
 
 ///|
-/// Run `action` inside an implicit transaction, closing on success or raise.
-///
-/// On raise, we still close so the depth counter and buffer stay coherent;
-/// then re-raise. Used by every public mutation method to wrap per-call
-/// grouping and to flatten into an enclosing explicit transaction.
+/// Abort the current transaction scope: decrement depth and, on the outermost
+/// abort, discard the buffer without committing. Used by explicit
+/// `Document::transaction` so a raising closure is all-or-nothing from the
+/// undo-stack perspective (mutations may have already landed and synced; they
+/// just don't form an undoable group).
+fn Document::txn_abort(self : Document) -> Unit {
+  if self.txn_depth <= 0 {
+    return
+  }
+  self.txn_depth = self.txn_depth - 1
+  if self.txn_depth == 0 {
+    self.txn_buffer.clear()
+  }
+}
+
+///|
+/// Run `action` inside an implicit transaction and commit on both success and
+/// raise. The "commit on raise" semantics are deliberate for per-method
+/// hooks: if `insert_text("abc")` fails partway, the already-applied chars
+/// stay in the document and must remain undoable. Standalone public mutations
+/// use this wrapper. Explicit `Document::transaction` uses txn_abort instead
+/// so an all-or-nothing contract is preserved at the user-facing boundary.
 fn[T, E : Error] Document::with_implicit_transaction(
   self : Document,
   action : () -> T raise E,
@@ -296,12 +315,22 @@ pub fn Document::redo(self : Document) -> Bool raise DocumentError {
 /// Group the mutations inside `action` so they undo and redo as one unit.
 ///
 /// Nested transactions flatten into the outermost one. If `action` raises,
-/// the transaction still closes; any items already buffered are discarded.
+/// the buffered items are discarded without committing — the user-facing
+/// contract is all-or-nothing. Mutations that already landed on the document
+/// (and synced to peers) stay; they just don't form an undoable group.
 pub fn[T, E : Error] Document::transaction(
   self : Document,
   action : () -> T raise E,
 ) -> T raise E {
-  self.with_implicit_transaction(action)
+  self.txn_open()
+  let result = action() catch {
+    e => {
+      self.txn_abort()
+      raise e
+    }
+  }
+  self.txn_close()
+  result
 }
 
 ///|

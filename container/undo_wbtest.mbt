@@ -74,3 +74,30 @@ test "undo: record outside any txn is a no-op" {
   inspect(doc.txn_buffer.length(), content="0")
   inspect(doc.undo_stack.length(), content="0")
 }
+
+///|
+test "undo: undo_execution_mode is reset after a successful undo" {
+  // Invariant: the flag is scoped to the replay pass only. If it leaked past
+  // the pass, subsequent local mutations would silently skip undo recording.
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=@mt.root_id)
+  doc.insert_text(block, 0, "x")
+  let _ = doc.undo()
+  inspect(doc.undo_execution_mode, content="false")
+  // Prove recording is still armed: a new edit lands on the undo stack.
+  doc.insert_text(block, 0, "y")
+  inspect(doc.can_undo(), content="true")
+}
+
+///|
+test "undo: undo_execution_mode is reset after a successful redo" {
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=@mt.root_id)
+  doc.insert_text(block, 0, "x")
+  let _ = doc.undo()
+  let _ = doc.redo()
+  inspect(doc.undo_execution_mode, content="false")
+  // Prove recording is still armed post-redo.
+  doc.insert_text(block, 0, "y")
+  inspect(doc.can_undo(), content="true")
+}

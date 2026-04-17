@@ -106,6 +106,27 @@ test "undo: empty transaction pushes no group" {
   inspect(doc.can_undo(), content="false")
 }
 
+///|
+test "undo: failed explicit transaction does not push an undo group" {
+  // User-facing transactions are all-or-nothing from the undo perspective:
+  // if `action` raises, partial mutations may have already landed (and synced)
+  // but must not form an undoable group.
+  let doc = @container.Document::new("alice")
+  let block = doc.create_node(parent=@container.root_id)
+  // Run a transaction that applies two ops then raises on the third.
+  let result = try? doc.transaction(() => {
+    doc.insert_text(block, 0, "ok")
+    doc.delete_node(block)
+    // Block is now trashed → insert_text raises TargetNotFound.
+    doc.insert_text(block, 0, "fail")
+  })
+  inspect(result is Err(_), content="true")
+  // Exactly one undoable group remains — the original create_node. If the
+  // failed transaction had committed, there would be two.
+  let _ = doc.undo()
+  inspect(doc.can_undo(), content="false")
+}
+
 // ---------------------------------------------------------------------------
 // Task 3.11 — redo round-trip and redo-cleared-on-new-edit
 // ---------------------------------------------------------------------------
