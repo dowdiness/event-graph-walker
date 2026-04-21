@@ -9,10 +9,10 @@ This document describes the performance benchmarks for the eg-walker CRDT implem
 moon bench --release
 
 # Run benchmarks for specific package
-moon bench --package causal_graph --release
-moon bench --package branch --release
-moon bench --package merge --release
-moon bench --package oplog --release
+moon bench --package internal/causal_graph --release
+moon bench --package internal/branch --release
+moon bench --package internal/oplog --release
+# Merge benchmarks live in the branch package (see section 4 below)
 
 # Run specific benchmark test
 moon bench --package causal_graph --release -f "walker - linear history"
@@ -22,7 +22,7 @@ moon bench --package causal_graph --release -f "walker - linear history"
 
 ## Benchmark Categories
 
-### 1. Walker Performance (`causal_graph/walker_benchmark.mbt`)
+### 1. Walker Performance (`internal/causal_graph/walker_benchmark.mbt`)
 
 Tests the event graph walker's ability to traverse operations in topological order.
 
@@ -54,7 +54,7 @@ Tests the event graph walker's ability to traverse operations in topological ord
 - [ ] Batch operation processing
 - [ ] Parallel walking of independent branches
 
-### 2. Branch Performance (`branch/branch_benchmark.mbt`)
+### 2. Branch Performance (`internal/branch/branch_benchmark.mbt`)
 
 Tests branch checkout and advance operations for document state reconstruction.
 
@@ -95,7 +95,7 @@ Tests branch checkout and advance operations for document state reconstruction.
 - [ ] Character buffer pooling
 - [ ] Parallel operation application
 
-### 3. Version Vector Performance (`causal_graph/version_vector_benchmark.mbt`)
+### 3. Version Vector Performance (`internal/causal_graph/version_vector_benchmark.mbt`)
 
 Tests version vector operations for efficient frontier representation.
 
@@ -131,7 +131,7 @@ Tests version vector operations for efficient frontier representation.
 - [ ] Bloom filters for quick includes checks
 - [ ] Cached frontier conversions
 
-### 4. Merge Performance (`merge/merge_benchmark.mbt`)
+### 4. Merge Performance (`internal/branch/branch_merge_benchmark.mbt`)
 
 Tests the three-phase retreat-advance-apply merge algorithm.
 
@@ -172,7 +172,7 @@ Tests the three-phase retreat-advance-apply merge algorithm.
 - [ ] Lazy conflict resolution
 - [ ] Smart retreat (avoid unnecessary undo)
 
-### 5. OpLog Performance (`oplog/oplog_benchmark.mbt`)
+### 5. OpLog Performance (`internal/oplog/oplog_benchmark.mbt`)
 
 Tests operation log storage and retrieval performance.
 

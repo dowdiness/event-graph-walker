@@ -1,6 +1,14 @@
 # Eg-walker Implementation Status for MoonBit
 
-> **🎉 STATUS: IMPLEMENTATION COMPLETE** (330 tests passing)
+> **📚 HISTORICAL RECORD.** This document tracks the journey of implementing eg-walker phases 1–4. File paths throughout reference the **pre-restructure layout** and have since shifted:
+> - MoonBit packages now live under `internal/` (e.g. `/causal_graph/graph.mbt` → `internal/causal_graph/graph.mbt`). See [STABILIZATION_ROADMAP.md](./STABILIZATION_ROADMAP.md) for the public-API-sealing work.
+> - The merge algorithm lives in `internal/branch/branch_merge.mbt`, not `/merge/merge.mbt`.
+> - Network sync assets (`signaling-server.js`, the TypeScript client) now live in the **canopy parent repo** at `examples/web/`, not in a sibling `web/` directory of this submodule.
+> - The `/crdt.mbt` FFI described in Phase 4 has been superseded by the current public-API surface; see [FORMAL_SPECIFICATION.md](./FORMAL_SPECIFICATION.md) and the current `.mbti` files for the authoritative interface.
+>
+> For current design docs, prefer `STABILIZATION_ROADMAP.md`, `OPTIMIZATION_ROADMAP.md`, `NETWORK_SYNC.md`, and `BENCHMARKS.md`.
+
+> **🎉 STATUS: IMPLEMENTATION COMPLETE** (330 tests passing at the time this doc was last updated)
 >
 > All phases of the eg-walker CRDT are fully implemented:
 > - ✅ Phase 1: Event Graph Walker
