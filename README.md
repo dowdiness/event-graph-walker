@@ -1,8 +1,8 @@
 # Event Graph Walker
 
 - [Repository](https://github.com/dowdiness/event-graph-walker)
-- Used as a git submodule in [dowdiness/crdt](https://github.com/dowdiness/crdt)
-- [Demo App](https://lambda-editor.koji-ishimoto.workers.dev/) as Collaborative Editor
+- Used as a git submodule in [dowdiness/canopy](https://github.com/dowdiness/canopy)
+- [Live demo](https://canopy-ideal.pages.dev) — collaborative editor built on top of this library
 
 A MoonBit implementation of the **eg-walker** CRDT algorithm with **FugueMax** sequence CRDT for collaborative text editing, and **Kleppmann's movable-tree CRDT** for collaborative tree editing.
 
@@ -362,7 +362,7 @@ moon test
 ```
 
 The module includes:
-- 395 unit and property-based tests across all components
+- A broad suite of unit and property-based tests across all components
 - QuickCheck convergence properties for both the text CRDT and the movable-tree CRDT
 - Benchmarks for performance profiling
 
@@ -374,7 +374,7 @@ The module includes:
 - **Branch advance** - O(k) where k = new operations
 - **Position mapping** - O(1) after first access (lazy cache, invalidated on mutation)
 
-See the performance documentation in the [crdt monorepo](https://github.com/dowdiness/crdt/tree/main/docs/performance) for detailed benchmarks.
+See the performance documentation in the [canopy monorepo](https://github.com/dowdiness/canopy/tree/main/docs/performance) for detailed benchmarks.
 
 ## Integration
 
