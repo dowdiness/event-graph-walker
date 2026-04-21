@@ -310,8 +310,6 @@ Performance analysis completed with comprehensive results:
 - Branch advance has high variance (needs investigation)
 - All targets met for typical document sizes (≤1000 ops)
 
-See [PERFORMANCE_ANALYSIS.md](./PERFORMANCE_ANALYSIS.md) for complete baseline results and optimization roadmap.
-
 ### Optimization Status
 
 Based on eg-walker paper findings:

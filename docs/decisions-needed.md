@@ -22,22 +22,6 @@ Items from `/moonbit-housekeeping triage` classified as `needs-human-review`. Re
 
 ---
 
-### Orphaned api-hardening plan files — archive?
-
-**Source:** `docs/plans/2026-03-03-api-hardening.md`, `docs/plans/2026-03-03-api-hardening-design.md`
-**Context:** PR #6 (`refactor: API hardening — seal internals and clean public surface`) merged 2026-03-04. The `internal/` directory structure matches the plan exactly. Work is done but plan files remain in `docs/plans/`.
-**Blocks:** Nothing.
-**Evidence:**
-- Triage classified as `done` with high confidence
-- PR #6 merged, all 8 internal packages present: branch, causal_graph, core, document, fractional_index, fugue, movable_tree, oplog
-- STABILIZATION_ROADMAP.md Phase 1 & Phase 2 marked ✅ Complete
-**Options:**
-1. Move both plan files to `docs/plans/archive/` per archive convention (CLAUDE.md)
-2. Delete them
-**Added:** 2026-04-21
-
----
-
 ### Non-pre-authorized stale branches/worktrees — prune?
 
 **Source:** Triage prune_candidates not covered by the initial prune authorization

@@ -2,7 +2,7 @@
 
 ## Core API
 
-### Graph-Level Methods (`causal_graph/walker.mbt`)
+### Graph-Level Methods (`internal/causal_graph/walker.mbt`)
 
 ```moonbit
 /// Walk from a frontier, returning RLE-compressed LVs in topological order.
@@ -30,7 +30,7 @@ pub fn CausalGraph::graph_diff(
 ) -> (Array[Int], Array[Int])
 ```
 
-### OpLog-Level Methods (`oplog/walker.mbt`)
+### OpLog-Level Methods (`internal/oplog/walker.mbt`)
 
 ```moonbit
 /// Walk and collect operations in causal order

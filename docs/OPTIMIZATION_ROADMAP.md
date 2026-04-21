@@ -3,7 +3,7 @@
 > **Status (2026-03-24):** Phases 1, 2b, 3, and binary lifting LCA are all complete. This roadmap was written during Phase 1 and has not been updated with details of later phases. See the archived plans in the parent repo's `docs/archive/completed-phases/` for implementation details of each phase.
 
 **Status**: Phase 1 **COMPLETED** ✅ (2026-01-09)
-**For detailed performance data**: See [PERFORMANCE_ANALYSIS.md](./PERFORMANCE_ANALYSIS.md)
+**For detailed performance data**: See [BENCHMARKS.md](./BENCHMARKS.md) and [benchmarks/](./benchmarks/) for snapshots.
 
 ---
 
@@ -119,10 +119,9 @@ match children.get(current) {
 
 ## References
 
-**Detailed Analysis**: [PERFORMANCE_ANALYSIS.md](./PERFORMANCE_ANALYSIS.md)
-- Complete benchmark results (56 tests across 5 modules)
-- Performance analysis for each component
-- Optimization details and trade-offs
+**Detailed Analysis**: [BENCHMARKS.md](./BENCHMARKS.md)
+- Current benchmark commands and categories
+- Snapshots archived under [benchmarks/](./benchmarks/)
 
 **Architecture**: [EG_WALKER_IMPLEMENTATION.md](./EG_WALKER_IMPLEMENTATION.md)
 - Eg-walker CRDT algorithm details

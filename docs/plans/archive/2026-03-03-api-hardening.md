@@ -8,7 +8,7 @@
 
 **Tech Stack:** MoonBit, `moon check` / `moon test` / `moon info` / `moon fmt`
 
-**Design doc:** `docs/plans/2026-03-03-api-hardening-design.md`
+**Design doc:** `docs/plans/archive/2026-03-03-api-hardening-design.md`
 
 ---
 
