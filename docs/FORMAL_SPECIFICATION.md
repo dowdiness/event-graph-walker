@@ -1,5 +1,11 @@
 # Formal Specification: eg-walker CRDT System
 
+> Status note: this document is formal/specification material, not the main
+> user guide. Some sections include path drift, planned work, or aspirational
+> claims that are not implemented in this repository. Treat current code,
+> generated `.mbti` files, tests, and the package README as authoritative for
+> implemented behavior.
+
 > Mathematical specification of the eg-walker collaborative editing system
 > implemented in MoonBit. Every law is numbered, mapped to its property test,
 > or marked **UNTESTED**.
