@@ -35,3 +35,21 @@ Items from `/moonbit-housekeeping triage` classified as `needs-human-review`. Re
 1. Decide RLE question first (above), then prune together
 2. Prune `fix/undo-abort-on-empty-stack` now if clearly superseded; keep `work/claude` pending RLE decision
 **Added:** 2026-04-21
+
+---
+
+### v0.2.0 mooncakes publish — dep chain plan
+
+**Source:** `moon publish --dry-run` on 2026-04-22; `moon.mod.json` path-only deps
+**Context:** v0.2.0 is landed on `main` (commits `0d99084`, `0f80444`) with full CHANGELOG + independent Codex review. Git tag + GitHub release were **yanked** because `moon publish --dry-run` fails: `dowdiness/btree` (and three other deps) use `path` without `version`. Mooncakes publish needs every transitive dep to resolve to a published version.
+**Blocks:** mooncakes publish of `dowdiness/event-graph-walker@0.2.0`. Library is consumable via git/submodule today but not via `moon add`.
+**Evidence:**
+- `moon.mod.json` deps: `dowdiness/btree` (v0.1.0 local), `dowdiness/rle` (v0.1.0 local), `dowdiness/order-tree` (v0.1.0 local), `dowdiness/alga` (v0.2.0 local, has own github repo)
+- None are on mooncakes yet (v0.1.0 of event-graph-walker shipped self-contained, before these deps were introduced)
+- `project_v0_2_0_publish_blocker.md` memory has the full publish order and re-cut procedure
+**Options:**
+1. Publish the dep chain (rle → btree → alga → order-tree → event-graph-walker), each with own CHANGELOG/tag/release/publish. 2–4 hours across the chain. Preserves the "CRDT-independent library" direction.
+2. Vendor rle/btree/order-tree/alga back under `event-graph-walker/internal/` so the module is self-contained for mooncakes. Large unwind.
+3. Hybrid: add `{ "path": "...", "version": "0.1.0" }` form alongside path — still requires deps to be on mooncakes, just decouples dev from publish.
+**Recommendation:** Option 1 when the user returns; the refactor direction is deliberate.
+**Added:** 2026-04-22
