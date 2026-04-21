@@ -21,13 +21,15 @@ The network sync implementation uses:
 
 ## Quick Start
 
+> **Note:** `event-graph-walker` is a submodule of the parent **canopy** repo. The web UI, signaling server, and build wiring live in the parent repo at `examples/web/`. The commands below assume you are in the canopy parent repo (one level above this submodule).
+
 ### 1. Start the Signaling Server
 
 The signaling server coordinates peer discovery and WebRTC setup:
 
 ```bash
-# From the crdt directory
-cd web
+# From the canopy parent repo
+cd examples/web
 node signaling-server.js
 ```
 
@@ -36,14 +38,13 @@ The server will start on `ws://localhost:8080` by default.
 ### 2. Build and Start the Web Interface
 
 ```bash
-# Build MoonBit code for JavaScript
-cd ../
+# Build event-graph-walker for JavaScript (from the submodule)
+cd event-graph-walker
 moon build --target js
-cp target/js/release/build/crdt.js web/public/
-cp target/js/release/build/crdt.d.ts web/public/
 
-# Start the dev server
-cd web
+# Install and start the web dev server (from the parent canopy repo)
+cd ../examples/web
+npm install  # first time only
 npm run dev
 ```
 
@@ -195,11 +196,11 @@ The signaling server accepts WebSocket connections and handles these message typ
 For production use, deploy the signaling server with:
 
 ```bash
-# Set custom port
+# Set custom port (from canopy/examples/web/)
 PORT=3000 node signaling-server.js
 
 # Or use a process manager
-pm2 start signaling-server.js --name crdt-signaling
+pm2 start signaling-server.js --name canopy-signaling
 ```
 
 ### Environment Variables
@@ -220,7 +221,7 @@ pm2 start signaling-server.js --name crdt-signaling
 
 ### "Connection failed" Error
 
-- Ensure signaling server is running: `node web/signaling-server.js`
+- Ensure signaling server is running: `cd examples/web && node signaling-server.js` (from canopy parent repo)
 - Check console for WebSocket connection errors
 - Verify port 8080 is not blocked by firewall
 

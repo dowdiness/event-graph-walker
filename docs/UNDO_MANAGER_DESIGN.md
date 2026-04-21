@@ -1,5 +1,12 @@
 # UndoManager Design Plan for eg-walker CRDT
 
+> **📚 DESIGN RECORD — some paths no longer match the shipped code.** This document describes the plan as drafted; the actual implementation diverged in a few places. Reader beware of the following:
+> - The `Undoable` trait ships in `undo/undoable.mbt` (not `document/undoable.mbt`).
+> - The Phase 3 plan references `core/change.mbt` and a `Change` type. **Neither exists in the current tree** — the `Change` type was never created; `RawToLv` lives in `internal/core/traits.mbt`. This design item is **not implemented** despite the ✅ markers below. See `docs/decisions-needed.md`.
+> - All MoonBit packages have been moved under `internal/` since this doc was written (e.g. `oplog/` → `internal/oplog/`, `fugue/` → `internal/fugue/`). The `undo/`, `text/`, and `document/` facade packages remain at the top level.
+>
+> Phase 1 + Phase 2 shipped and are correct. Phase 3 (TypeScript wire-up, compaction) is unstarted. Verify against the source before implementing from this doc.
+
 ## Overview
 
 Add an LV-based UndoManager as a **separate `undo/` package** in `event-graph-walker/` that plugs into `TextState` via a small `Undoable` trait. Solves P2-1 (remote ops polluting undo stack) and P2-2 (stale positions after concurrent edits).

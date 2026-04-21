@@ -16,22 +16,22 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| ~~Missing remote batch validation~~ | `oplog/oplog.mbt:192-216` | ✅ Fixed: Added HashSet-based duplicate detection with `DuplicateOperation` error. |
-| Inconsistent error handling in origin mapping | `branch/branch_merge.mbt:100` | Re-examined: Both `origin_left` and `origin_right` consistently raise `MissingOrigin`. No fix needed. |
+| ~~Missing remote batch validation~~ | `internal/oplog/oplog.mbt:192-216` | ✅ Fixed: Added HashSet-based duplicate detection with `DuplicateOperation` error. |
+| Inconsistent error handling in origin mapping | `internal/branch/branch_merge.mbt:100` | Re-examined: Both `origin_left` and `origin_right` consistently raise `MissingOrigin`. No fix needed. |
 
 ### Medium Priority
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| ~~Undocumented private functions~~ | `walker.mbt:30,81`, `tree.mbt:152,159,213`, `runs.mbt:88,109` | ✅ Fixed: Added `///|` doc comments with invariants and complexity analysis. |
-| ~~Unclear delete operation semantics~~ | `core/operation.mbt:39-47` | ✅ Fixed: Added doc comment explaining `origin_left` is the tombstone ID. |
+| ~~Undocumented private functions~~ | `internal/causal_graph/walker.mbt:30,81`, `internal/fugue/tree.mbt:152,159,213` (RLE-related `runs.mbt` reference dropped — module not present in the current tree, see `docs/RLE_DESIGN_PLAN.md` and `docs/decisions-needed.md`) | ✅ Fixed: Added `///|` doc comments with invariants and complexity analysis. |
+| ~~Unclear delete operation semantics~~ | `internal/core/operation.mbt:39-47` | ✅ Fixed: Added doc comment explaining `origin_left` is the tombstone ID. |
 | ~~Asymmetric sync API~~ | `text/sync.mbt` | ✅ Fixed: Added module-level documentation explaining the sender-side filtering pattern. |
 
 ### Low Priority
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| ~~Frontier allows duplicates~~ | `core/graph_types.mbt:7` | ✅ Fixed: Added `from_array_dedup()` constructor and `has_duplicates()` validation. Documented uniqueness invariant. |
+| ~~Frontier allows duplicates~~ | `internal/core/graph_types.mbt:7` | ✅ Fixed: Added `from_array_dedup()` constructor and `has_duplicates()` validation. Documented uniqueness invariant. |
 | ~~Inconsistent doc formatting~~ | Multiple files | ✅ Fixed: Standardized on `///|` for module headers and public APIs. |
 
 ## Phase 2: Test Coverage Gaps ✅
@@ -71,10 +71,10 @@ From `OPTIMIZATION_ROADMAP.md` and `EG_WALKER_IMPLEMENTATION.md`:
 
 | Issue | Location | Severity | Description |
 |-------|----------|----------|-------------|
-| ~~O(n²) frontier comparison~~ | `branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses sorted array comparison O(n log n) instead of O(n²) nested `.contains()`. Preserves element multiplicity. |
-| ~~Unnecessary array copies~~ | `branch.mbt:71,108,124`, `oplog.mbt:159` | Medium | ✅ Fixed: Added `frontier_ref()` and `ops_ref()` methods for internal/read-only access without copying. Public methods still return defensive copies for safety. |
-| ~~O(n) position mapping~~ | `document/document.mbt:59-79` | Medium | ✅ Fixed: Added lazy `position_cache: Array[(Int, @fugue.Item)]?` that caches visible items. Invalidated on any modification. First access is O(n), subsequent lookups O(1). |
-| Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` | Low | Already mitigated by lazy `prefix: PrefixSums?` cache, but worth monitoring. |
+| ~~O(n²) frontier comparison~~ | `internal/branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses sorted array comparison O(n log n) instead of O(n²) nested `.contains()`. Preserves element multiplicity. |
+| ~~Unnecessary array copies~~ | `internal/branch/branch.mbt:71,108,124`, `internal/oplog/oplog.mbt:159` | Medium | ✅ Fixed: Added `frontier_ref()` and `ops_ref()` methods for internal/read-only access without copying. Public methods still return defensive copies for safety. |
+| ~~O(n) position mapping~~ | `internal/document/document.mbt:59-79` | Medium | ✅ Fixed: Added lazy `position_cache: Array[(Int, @fugue.Item)]?` that caches visible items. Invalidated on any modification. First access is O(n), subsequent lookups O(1). |
+| Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` (RLE module not present — see `docs/RLE_DESIGN_PLAN.md`) | Low | Historical note: when RLE was in-tree the lazy `prefix: PrefixSums?` cache mitigated rebuild cost. Re-evaluate if RLE is revived. |
 
 ## Phase 5: Ecosystem Integration
 
