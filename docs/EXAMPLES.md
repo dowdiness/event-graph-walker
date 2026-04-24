@@ -112,13 +112,14 @@ alice_doc.sync().apply(bob_msg)
 
 // Undo only reverts alice's last edit, leaving bob's "Hi " intact
 if alice_mgr.can_undo() {
+  // Capture version BEFORE undo so export_since() sees the inverse ops that undo appends
+  let ver_before_undo = alice_doc.version()
   try {
     alice_mgr.undo(alice_doc)
     println(alice_doc.text())  // "Hi Hello" (bob's "Hi " is still there)
 
     // Propagate the undo to peers using export_since() to capture the inverse ops
-    let ver_after_undo = alice_doc.version()
-    let undo_msg = alice_doc.sync().export_since(ver_after_undo)
+    let undo_msg = alice_doc.sync().export_since(ver_before_undo)
     // send undo_msg to peers...
     let _ = undo_msg  // (in real code: send over network)
   } catch {

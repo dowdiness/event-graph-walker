@@ -15,7 +15,7 @@ moon bench --package internal/oplog --release
 # Merge benchmarks live in the branch package (see section 4 below)
 
 # Run specific benchmark test
-moon bench --package causal_graph --release -f "walker - linear history"
+moon bench --package internal/causal_graph --release -f "walker - linear history"
 ```
 
 **Important**: Always use `--release` flag for accurate performance measurements!

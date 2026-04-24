@@ -9,7 +9,7 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 
 Package metadata in `moon.mod.json`:
 
-- Version: `0.1.0`
+- Version: `0.2.0`
 - Repository: <https://github.com/dowdiness/event-graph-walker>
 - License: `Apache-2.0`
 - Description: `Implementation of the eg-walker CRDT algorithm with FugueMax sequence CRDT`

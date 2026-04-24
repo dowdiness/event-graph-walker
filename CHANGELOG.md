@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No changes yet._
+### ⚠ BREAKING CHANGES
+
+- `Document::apply_remote_sync_message` now returns `SyncReport` instead of
+  `Unit`. The report includes applied tree ops, applied text ops,
+  duplicates, and pending ops. (`051524c`)
+- Inserts at position 0 on non-empty text now land at the beginning of the
+  document rather than the end. The prior Fugue `find_parent_and_side`
+  rule was inconsistent with Algorithm 1 of the Fugue paper. (`ab9cfbc`)
+
+### Added
+
+- Document-level undo grouping: multiple operations can be grouped into a
+  single undoable unit at the `Document` level. (`3e9cdf2`)
+- Positional move operations: `move_node_before` and `move_node_after` move
+  tree nodes relative to siblings. (`9d175ed`)
+- `Document` text operations: `insert_text`, `delete_text`, `replace_text`,
+  `get_text`, and `text_len`. (`a062000`)
+- `TextBlock` with per-block `FugueTree`, supporting multi-block documents.
+  (`a06bd6a`)
+- `container/` package introduced with the top-level `Document` struct that
+  composes the CRDT substrate. (`6d17462`)
+
+### Changed
+
+- Positional move sync has convergence and `SyncReport` test coverage.
+  (`8e46d83`)
+- Position cache updates incrementally on `apply_remote`; previously the
+  cache was rebuilt from scratch on every remote apply. (`c3bfbb4`,
+  `976c652`)
+- `CausalGraph` internals migrated to the iter-based `DirectedGraph` API
+  with flat arrays and a children index. (`bfe915f`, `e010461`)
+- `BTreeElem` implemented for the internal `VisibleRun` to satisfy the
+  updated `order-tree` dependency. (`777327f`)
+- Dropped deprecated MoonBit v0.9 syntax: `derive(Show)` → `derive(Debug)`,
+  `substring()` → slice syntax, `not()` → `!()`. (`2fe392b`, `21529fb`,
+  `223cc78`, `8461520`)
+
+### Fixed
+
+- `export_sync_message` raises `DocumentError` on failure instead of
+  aborting, so callers can handle the error. (`eace9bb`)
+- Position cache guarded against `FugueMax` position rewriting that could
+  corrupt incremental state. (`187faa2`)
 
 ## [0.2.0] - 2026-04-22
 
