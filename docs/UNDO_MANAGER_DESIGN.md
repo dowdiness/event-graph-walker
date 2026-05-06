@@ -2,8 +2,10 @@
 
 > **📚 DESIGN RECORD — some paths no longer match the shipped code.** This document describes the plan as drafted; the actual implementation diverged in a few places. Reader beware of the following:
 > - The `Undoable` trait ships in `undo/undoable.mbt` (not `document/undoable.mbt`).
+> - The shipped `Undoable` trait signatures diverge from this plan: `delete_lv` and `undelete_lv` return `Unit raise UndoError`, **not** `@oplog.Op raise DocumentError` as drafted below. Op emission moved into the document layer.
+> - The `undo/moon.pkg` snippet below lists `dowdiness/event-graph-walker/document` and `dowdiness/event-graph-walker/oplog` as imports; the actual `undo/moon.pkg` has no non-test imports.
 > - The Phase 3 plan references `core/change.mbt` and a `Change` type. **Neither exists in the current tree** — the `Change` type was never created; `RawToLv` lives in `internal/core/traits.mbt`. This design item is **not implemented** despite the ✅ markers below. See `docs/decisions-needed.md`.
-> - All MoonBit packages have been moved under `internal/` since this doc was written (e.g. `oplog/` → `internal/oplog/`, `fugue/` → `internal/fugue/`). The `undo/`, `text/`, and `document/` facade packages remain at the top level.
+> - All MoonBit packages have been moved under `internal/` since this doc was written (e.g. `oplog/` → `internal/oplog/`, `fugue/` → `internal/fugue/`, `core/traits.mbt` → `internal/core/traits.mbt`). The shipped top-level facade packages are `text/`, `tree/`, `undo/`, and `container/`. No `document/` facade was ever created — references to `@document.*` in the body should be read as the implementation that now lives in `internal/document/` or as the `container/` facade.
 >
 > Phase 1 + Phase 2 shipped and are correct. Phase 3 (TypeScript wire-up, compaction) is unstarted. Verify against the source before implementing from this doc.
 
@@ -48,7 +50,7 @@ event-graph-walker/
 └── ...
 ```
 
-### `undo/moon.pkg.json`
+### `undo/moon.pkg`
 
 ```json
 {
@@ -441,7 +443,7 @@ let msg = doc.sync().export_since(ver_before)
 
 | File | Action | ~Lines |
 |------|--------|--------|
-| `event-graph-walker/undo/moon.pkg.json` | Create | 12 |
+| `event-graph-walker/undo/moon.pkg` | Create | 12 |
 | `event-graph-walker/undo/types.mbt` | Create | ~30 |
 | `event-graph-walker/undo/undo_manager.mbt` | Create | ~250 |
 | `event-graph-walker/undo/undo_manager_test.mbt` | Create | ~200 |
@@ -458,7 +460,7 @@ let msg = doc.sync().export_since(ver_before)
 
 **Phase 1 (local-only undo/redo):** ✅ Complete
 - ✅ `core/` package added (`Change`, `RawToLv`)
-- ✅ `document/undoable.mbt` trait added
+- ✅ `undo/undoable.mbt` trait added (originally planned at `document/undoable.mbt`; relocated to the `undo/` package during implementation)
 - ✅ `Document` implements `@core.RawToLv`
 - ✅ `fugue` tombstone revive + LV lookup (`mark_visible`, `undelete`, `lv_to_position`)
 - ✅ `text` implements `Undoable` for `TextState`
@@ -479,17 +481,21 @@ let msg = doc.sync().export_since(ver_before)
 
 ### Phase 2 Implementation Summary
 
+> Paths in this table are the as-shipped locations after the package
+> reorganization (everything below `oplog/`, `document/`, `branch/` now lives
+> under `internal/`).
+
 | Step | File | Status |
 |------|------|--------|
-| 1. Add `Undelete` variant | `oplog/operation.mbt` | ✅ |
-| 2. Add `Op::new_undelete` | `oplog/operation.mbt` | ✅ |
-| 3. Add `Op::is_undelete`, `Op::get_delete_target` | `oplog/operation.mbt` | ✅ |
-| 4. `Document::undelete`, `Document::delete_by_lv` | `document/document.mbt` | ✅ |
-| 5. Handle in `apply_remote` | `document/document.mbt` | ✅ |
-| 6. Handle in branch apply/merge | `branch/branch.mbt`, `branch/branch_merge.mbt` | ✅ |
-| 7. Serialize/deserialize | `oplog/operation.mbt` | ✅ (derived) |
+| 1. Add `Undelete` variant | `internal/core/operation.mbt` | ✅ |
+| 2. Add `Op::new_undelete` | `internal/core/operation.mbt` | ✅ |
+| 3. Add `Op::is_undelete`, `Op::get_delete_target` | `internal/core/operation.mbt` | ✅ |
+| 4. `Document::undelete`, `Document::delete_by_lv` | `internal/document/document.mbt` | ✅ |
+| 5. Handle in `apply_remote` | `internal/document/document.mbt` | ✅ |
+| 6. Handle in branch apply/merge | `internal/branch/branch.mbt`, `internal/branch/branch_merge.mbt` | ✅ |
+| 7. Serialize/deserialize | `internal/core/operation.mbt` | ✅ (derived) |
 | 8. Update `UndoManager.undo()`/`redo()` | `undo/undo_manager.mbt` | ✅ |
-| 9. Update `Undoable` trait | `document/undoable.mbt` | ✅ |
+| 9. Update `Undoable` trait | `undo/undoable.mbt` | ✅ |
 | 10. Sync integration tests | `undo/undo_manager_test.mbt` | ✅ |
 
 ### Conflict Resolution Semantics

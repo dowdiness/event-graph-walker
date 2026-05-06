@@ -1,5 +1,7 @@
 # Network Synchronization for CRDT Collaboration
 
+> **📚 HISTORICAL RECORD — does not match the current integration.** This document describes a pre-restructure design with TypeScript classes (`LambdaEditor`, `NetworkSync`) that no longer exist in `examples/web/src/`. The current network integration uses the MoonBit `text/` and `container/` sync APIs (`SyncMessage::to_json_string` / `from_json_string`, `apply_remote_sync_message`) exposed through the generated WASM FFI; wiring lives in the canopy parent repo at `examples/web/`. The architecture diagram and protocol notes below remain conceptually relevant; the API reference section does not.
+
 This document describes how to use the network synchronization feature for real-time collaborative editing.
 
 ## Architecture
@@ -91,43 +93,20 @@ interface SyncMessage {
 
 ## API Reference
 
-### LambdaEditor
+The previous TypeScript `LambdaEditor` and `NetworkSync` wrapper classes have
+been removed. Network sync is now driven directly through the MoonBit public
+API (exposed via WASM FFI):
 
-```typescript
-class LambdaEditor {
-  // Enable network synchronization
-  async enableNetworkSync(wsUrl: string): Promise<void>
+- **Serialize**: `SyncMessage::to_json_string`
+- **Deserialize**: `SyncMessage::from_json_string`
+- **Apply remote message** (text-only): `TextState::sync().apply(msg)`
+- **Apply remote message** (full document): `Document::apply_remote_sync_message(msg) -> SyncReport`
+- **Export since a known version**: `TextState::sync().export_since(ver)` / `Document::export_sync_message_since(ver)`
+- **Export full state**: `TextState::sync().export_all()` / `Document::export_sync_message()`
+- **Version tracking**: `Version::to_json_string` / `Version::from_json_string`
 
-  // Disable network synchronization
-  disableNetworkSync(): void
-
-  // Get current network status
-  getNetworkStatus(): { connected: boolean; peers: number } | null
-}
-```
-
-### NetworkSync
-
-```typescript
-class NetworkSync {
-  constructor(handle: number, agentId: string)
-
-  // Connect to signaling server
-  async connect(wsUrl: string): Promise<void>
-
-  // Disconnect from network
-  disconnect(): void
-
-  // Broadcast current operations to peers
-  broadcastOperations(): void
-
-  // Set callback for remote text changes
-  setTextChangeCallback(callback: (text: string) => void): void
-
-  // Get connection status
-  getStatus(): { connected: boolean; peers: number }
-}
-```
+See `docs/EXAMPLES.md` for worked sync, undo, and checkout examples. Transport
+wiring (WebRTC + signaling) lives in the canopy parent repo at `examples/web/`.
 
 ## Signaling Server API
 

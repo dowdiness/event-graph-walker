@@ -1,6 +1,6 @@
 # Performance Optimization Roadmap
 
-> **Status (2026-03-24):** Phases 1, 2b, 3, and binary lifting LCA are all complete. This roadmap was written during Phase 1 and has not been updated with details of later phases. See the archived plans in the parent repo's `docs/archive/completed-phases/` for implementation details of each phase.
+> **Status (2026-03-24):** Phases 1, 2b, 3, and binary lifting LCA are all complete. This roadmap was written during Phase 1 and has not been updated with details of later phases. See the archived plans in the parent canopy repo's `docs/archive/` (e.g. `2026-03-17-rle-phase*.md`, `2026-03-18-crdt-append-performance*.md`, `2026-03-18-lww-delete-undelete.md`) for implementation details of each phase.
 
 **Status**: Phase 1 **COMPLETED** ✅ (2026-01-09)
 **For detailed performance data**: See [BENCHMARKS.md](./BENCHMARKS.md) and [benchmarks/](./benchmarks/) for snapshots.
@@ -28,21 +28,21 @@ The critical O(n²) bottleneck in topological sort has been eliminated by buildi
 
 ### ✅ Completed (2026-01-09)
 
-**Walker O(n²) Fix** (`causal_graph/walker.mbt` lines 87-177)
+**Walker O(n²) Fix** (`internal/causal_graph/walker.mbt` lines 87-177)
 - Built children map: `HashMap[Int, Array[Int]]` during initialization
 - Replaced nested loop `for candidate in versions` with direct map lookup
 - Impact: 138x speedup at 10k ops, linear scaling across all sizes
-- Files: `causal_graph/walker.mbt`
-- Tests: All 330 tests passing
+- Files: `internal/causal_graph/walker.mbt`
+- Tests: All tests passing (current count: 524 across the workspace)
 
 ### ✅ Completed (2026-02-04)
 
-**Document Position Cache** (`document/document.mbt`)
+**Document Position Cache** (`internal/document/document.mbt`)
 - Added lazy `position_cache: OrderTree[VisibleRun]?` for visible items
 - O(log n) position→LV lookup via `OrderTree::find`
 - Automatically invalidated on any mutation (insert, delete, sync apply)
 - Cache invalidation happens *before* tree mutations for exception safety
-- Files: `document/document.mbt`, `document/document_wbtest.mbt`
+- Files: `internal/document/document.mbt`, `internal/document/document_wbtest.mbt`
 
 ### ✅ Completed (2026-03-31)
 
@@ -53,11 +53,11 @@ The critical O(n²) bottleneck in topological sort has been eliminated by buildi
 - Result: O(n) → O(log n). Single non-seq insert: 1.47ms → 4.79µs (306x) at 1000 chars
 - See `docs/benchmarks/2026-03-31-incremental-position-cache.md`
 
-**Zero-Copy Reference Methods** (`branch/branch.mbt`, `oplog/oplog.mbt`)
-- Added `Branch::frontier_ref()` - returns frontier without copying
-- Added `OpLog::ops_ref()` - returns operations without copying
-- For internal/read-only use; callers must not mutate returned arrays
-- Public methods (`get_frontier()`, `get_all_ops()`) still return defensive copies
+**Zero-Copy Reference Methods** — *Not shipped.* This item was previously
+marked ✅ but `Branch::frontier_ref()` and `OpLog::ops_ref()` were never
+added. Public `get_frontier()` and `get_all_ops()` still return defensive
+copies. Re-evaluate whether internal zero-copy reads are worth introducing
+when a profiling case justifies them.
 
 **Code Change**:
 ```moonbit
@@ -105,7 +105,7 @@ match children.get(current) {
 | 10,000 ops | 28ms (target: <500ms) ✅ |
 | 100,000 ops | ~280ms (estimated) ✅ |
 | Linear scaling | O(n + edges) ✅ |
-| Tests | 330/330 passing ✅ |
+| Tests | 524 passing ✅ |
 | Memory | Stable ✅ |
 
 ### Recommendation

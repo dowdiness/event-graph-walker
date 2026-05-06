@@ -260,13 +260,9 @@ grep -A 2 "time:" benchmark_results.txt | grep -E "ms|s"
 
 ### 2. Profile Specific Operations
 
-```moonbit
-// Add timing to critical paths
-let start = @time.now()
-// ... operation ...
-let elapsed = @time.now() - start
-println("Operation took: \{elapsed}ms")
-```
+Use `moon bench --release` with a focused `*_benchmark.mbt` file rather than ad-hoc
+timing — the bench harness handles warmup, iteration count, and statistical reporting.
+See existing files like `internal/causal_graph/walker_benchmark.mbt` for the pattern.
 
 ### 3. Memory Profiling
 
@@ -360,6 +356,6 @@ test "component - operation (size)" (b : @bench.T) {
 
 ---
 
-**Last Updated**: 2026-01-09
-**Total Benchmarks**: 60+ across 5 modules
+**Last Updated**: 2026-05-06
+**Total Benchmarks**: 104 across 9 files (`internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/jump_ancestors_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`)
 **Status**: Ready for profiling and optimization

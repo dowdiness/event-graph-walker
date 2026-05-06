@@ -1,6 +1,6 @@
 # Roadmap to v1.0 Stable
 
-The library has all core algorithms implemented, 395 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
+The library has all core algorithms implemented, 524 tests (including property tests), and a 138x walker optimization. The remaining work is hardening, not building new features.
 
 ## Phase 1: Error Handling & API Hardening ✅
 
@@ -72,8 +72,8 @@ From `OPTIMIZATION_ROADMAP.md` and `EG_WALKER_IMPLEMENTATION.md`:
 | Issue | Location | Severity | Description |
 |-------|----------|----------|-------------|
 | ~~O(n²) frontier comparison~~ | `internal/branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses sorted array comparison O(n log n) instead of O(n²) nested `.contains()`. Preserves element multiplicity. |
-| ~~Unnecessary array copies~~ | `internal/branch/branch.mbt:71,108,124`, `internal/oplog/oplog.mbt:159` | Medium | ✅ Fixed: Added `frontier_ref()` and `ops_ref()` methods for internal/read-only access without copying. Public methods still return defensive copies for safety. |
-| ~~O(n) position mapping~~ | `internal/document/document.mbt:59-79` | Medium | ✅ Fixed: Added lazy `position_cache: Array[(Int, @fugue.Item)]?` that caches visible items. Invalidated on any modification. First access is O(n), subsequent lookups O(1). |
+| Unnecessary array copies | `internal/branch/branch.mbt`, `internal/oplog/oplog.mbt` | Medium | Not addressed. `get_frontier()` and `get_all_ops()` still return defensive copies; the planned `frontier_ref()` / `ops_ref()` zero-copy variants were never added. Revisit if profiling shows defensive copies dominating cost. |
+| ~~O(n) position mapping~~ | `internal/document/document.mbt` | Medium | ✅ Fixed: Added lazy `position_cache: @order_tree.OrderTree[VisibleRun]?` that caches visible items. Initial fix used a flat `Array[(Int, @fugue.Item)]?` with O(1) lookup but O(n) rebuild on mutation; later upgraded to `OrderTree` with O(log n) lookup and incremental updates (see `docs/OPTIMIZATION_ROADMAP.md`). |
 | Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` (RLE module not present — see `docs/RLE_DESIGN_PLAN.md`) | Low | Historical note: when RLE was in-tree the lazy `prefix: PrefixSums?` cache mitigated rebuild cost. Re-evaluate if RLE is revived. |
 
 ## Phase 5: Ecosystem Integration
