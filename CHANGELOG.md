@@ -18,8 +18,13 @@ left unset until the publish call is made.
 
 - **Internal packages sealed.** The following packages moved under `internal/`
   and are no longer importable from outside this module: `causal_graph`,
-  `document`, `oplog`, `branch`, `fugue`. Consumers must switch to the public
-  facades (`text`, `tree`, `undo`, `container`).
+  `core`, `document`, `oplog`, `branch`, `fugue`, `fractional_index`,
+  `movable_tree`. Consumers must switch to the public facades (`text`,
+  `tree`, `undo`, `container`). Note: a handful of internal type names
+  (`@movable_tree.TreeNodeId`, `@movable_tree.TreeOp`,
+  `@causal_graph.VersionVector`, `@core.RawVersion`) still appear in facade
+  signatures as opaque values — consumers receive and pass them but cannot
+  import the defining packages.
 - **`rle` package removed** from the public API. It shipped in 0.1.0 but was
   never an intended public surface.
 - **`TextDoc` renamed to `TextState`** for consistency with the new
@@ -38,13 +43,18 @@ left unset until the publish call is made.
   `TextError::from_branch_error`, `TextError::from_document_error`,
   `TextError::from_oplog_error`, `Version::from_frontier`,
   `Version::to_frontier`, plus the `Show` impls for `Pos`, `Range`, and
-  `SyncMessage`. These leaked internal representations. Equivalent behavior
-  is available through the public `text` methods, or through
-  `SyncMessage::to_json_string` / `from_json_string` and
-  `Version::to_json_string` / `from_json_string` for serialization.
-- **`Document::apply_remote_sync_message` returns `SyncReport`** (was `Unit`).
-  The report names applied tree ops, applied text ops, duplicates, and
-  pending ops. (`051524c`)
+  `SyncMessage`. These leaked internal representations. Sync wire-format
+  helpers (`SyncMessage::to_json_string` / `from_json_string`,
+  `Version::to_json_string` / `from_json_string`) cover the JSON
+  serialization path; the removed inspection / construction helpers
+  (`Change`, `TextSpan`, `to_rle`, `to_spans`, `get_heads`, `get_ops`,
+  `SyncMessage::new`, `SyncSession::new`, `Version::from_frontier`,
+  `Version::to_frontier`) have no like-for-like replacements — if you
+  depended on them, file an issue.
+
+  (`Document::apply_remote_sync_message` returning `SyncReport` instead of
+  `Unit` is documented under Added below — `Document` is new in 0.2.0 and
+  has no 0.1.0 predecessor, so it's not a 0.1.0→0.2.0 break.)
 - **Inserts at position 0 on non-empty text now land at the beginning of the
   document** rather than the end. The prior `find_parent_and_side` rule
   diverged from Algorithm 1 of the Fugue paper; see ADR
@@ -55,7 +65,9 @@ left unset until the publish call is made.
 ### Added
 
 - **New `tree/` public facade** — MovableTree CRDT (Kleppmann's undo-do-redo
-  algorithm + fractional indexing) exposed through `TreeState`. (`1a25cfb`)
+  algorithm + fractional indexing) exposed through `TreeState`. The CRDT
+  shipped as `TreeDoc` in `1a25cfb` and was renamed to `TreeState` in
+  `2b69807` for consistency with `TextState`.
 - **New `undo/` public facade** — `UndoManager` plus `Undoable` trait. Text
   integration is via `TextState::insert_and_record`,
   `TextState::delete_and_record`, `TextState::replace_range_and_record`,
@@ -69,21 +81,26 @@ left unset until the publish call is made.
 - **Positional move operations** — `Document::move_node_before` and
   `Document::move_node_after` reposition tree nodes relative to siblings.
   (`9d175ed`)
-- **`SyncReport` from remote sync** — `apply_remote_sync_message` returns a
-  `SyncReport` describing which operations were applied. (`051524c`)
-- **Container sync substrate (Phase 3)** — bidirectional sync between
-  container peers over a message-passing channel. (`68bda63`)
+- **`SyncReport` from remote sync** — `Document::apply_remote_sync_message`
+  returns a `SyncReport` with sync-layer counters (`applied_tree_ops`,
+  `applied_text_ops`, `duplicate_ops`, `pending_ops`). Counters reflect
+  version-record dedup, not payload-layer state changes; see the
+  `SyncReport` doc comment in `container/document.mbt` for the full
+  semantics, including caveats about mixing direct `apply_remote_op` with
+  sync-message ingestion. (`051524c`)
+- **Container sync substrate** — bidirectional sync between container peers
+  over a message-passing channel. (`68bda63`)
 - **Document text operations** — `insert_text`, `delete_text`, `replace_text`,
   `get_text`, `text_len` on `Document`. (`a062000`)
-- **`TextBlock` with per-block `FugueTree`** — multi-block documents share a
-  single global logical-version space (Path A). (`a06bd6a`)
+- **`TextBlock` with per-block `FugueTree`** — multi-block documents have
+  one Fugue text CRDT per block, with all blocks sharing the document's
+  global logical-version (LV) space so cross-block ordering remains
+  causally consistent. (`a06bd6a`)
 - **`create_node_after`** — positional sibling insertion in the tree. (`5bed0cf`)
 - **Public `TreeNodeId` surface** — public constructor and field accessors;
   `tree_node_id_key`, `tree_node_id_eq` for external consumers; `TreeNodeId`
   re-exported from the tree and container facades. (`d2d8944`, `1754355`,
   `a0c34e5`)
-- **`BTreeElem` for `VisibleRun`** — visible-run sequences participate in the
-  balanced-tree index. (`777327f`)
 - **Text range operations** — `TextState::delete_range` and
   `TextState::replace_range` on the public text API.
 - **Sync message and version JSON serialization** —
@@ -92,9 +109,9 @@ left unset until the publish call is made.
 
 ### Changed
 
-- **CausalGraph migrated to iter-based `DirectedGraph`** — uses the `alga`
-  dependency; internals use flat arrays and a children index for better cache
-  locality. (`bfe915f`, `e010461`)
+- **CausalGraph internals rewritten** for better cache locality (flat arrays
+  + children index, on top of the `alga` graph dep). No public API change;
+  improves walker / merge throughput on large oplogs. (`bfe915f`, `e010461`)
 - **`export_sync_message` raises instead of aborting** — now raises
   `DocumentError` on failure so callers can recover. (`eace9bb`)
 - **MoonBit v0.9 syntax migration** — `derive(Show)` → `derive(Debug)` plus
@@ -127,8 +144,9 @@ left unset until the publish call is made.
 Initial release published to mooncakes:
 <https://mooncakes.io/docs/dowdiness/event-graph-walker@0.1.0>. No prior
 changelog was maintained. Public surface was a flat set of packages (`text`,
-`causal_graph`, `document`, `oplog`, `branch`, `fugue`, `rle`); all except
-`text` are superseded by the staged work above.
+`causal_graph`, `document`, `oplog`, `branch`, `fugue`, `rle`); `rle` is
+removed entirely, the rest are sealed under `internal/` and superseded by
+the new public facades described above.
 
 [Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/dowdiness/event-graph-walker/releases/tag/v0.1.0
