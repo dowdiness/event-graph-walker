@@ -7,58 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### ⚠ BREAKING CHANGES
-
-- `Document::apply_remote_sync_message` now returns `SyncReport` instead of
-  `Unit`. The report includes applied tree ops, applied text ops,
-  duplicates, and pending ops. (`051524c`)
-- Inserts at position 0 on non-empty text now land at the beginning of the
-  document rather than the end. The prior Fugue `find_parent_and_side`
-  rule was inconsistent with Algorithm 1 of the Fugue paper. (`ab9cfbc`)
-
-### Added
-
-- Document-level undo grouping: multiple operations can be grouped into a
-  single undoable unit at the `Document` level. (`3e9cdf2`)
-- Positional move operations: `move_node_before` and `move_node_after` move
-  tree nodes relative to siblings. (`9d175ed`)
-- `Document` text operations: `insert_text`, `delete_text`, `replace_text`,
-  `get_text`, and `text_len`. (`a062000`)
-- `TextBlock` with per-block `FugueTree`, supporting multi-block documents.
-  (`a06bd6a`)
-- `container/` package introduced with the top-level `Document` struct that
-  composes the CRDT substrate. (`6d17462`)
-
-### Changed
-
-- Positional move sync has convergence and `SyncReport` test coverage.
-  (`8e46d83`)
-- Position cache updates incrementally on `apply_remote`; previously the
-  cache was rebuilt from scratch on every remote apply. (`c3bfbb4`,
-  `976c652`)
-- `CausalGraph` internals migrated to the iter-based `DirectedGraph` API
-  with flat arrays and a children index. (`bfe915f`, `e010461`)
-- `BTreeElem` implemented for the internal `VisibleRun` to satisfy the
-  updated `order-tree` dependency. (`777327f`)
-- Dropped deprecated MoonBit v0.9 syntax: `derive(Show)` → `derive(Debug)`,
-  `substring()` → slice syntax, `not()` → `!()`. (`2fe392b`, `21529fb`,
-  `223cc78`, `8461520`)
-
-### Fixed
-
-- `export_sync_message` raises `DocumentError` on failure instead of
-  aborting, so callers can handle the error. (`eace9bb`)
-- Position cache guarded against `FugueMax` position rewriting that could
-  corrupt incremental state. (`187faa2`)
-
-## [0.2.0] - 2026-04-22
-
-First tracked release after 0.1.0 shipped to mooncakes. 0.1.0 exposed the
-eg-walker internals (`causal_graph`, `document`, `oplog`, `branch`, `fugue`,
-`rle`) as public top-level packages. This release moves all of them behind
-`internal/` and introduces stable public facades for text, tree, undo, and
-container document APIs. **Upgrades from 0.1.0 are not source-compatible** —
-see BREAKING CHANGES below.
+Staged for the next mooncakes release after 0.1.0. A `v0.2.0` git tag was
+cut on 2026-04-22 (`0f80444`) but yanked before publishing because four
+upstream path-deps (`rle`, `btree`, `order-tree`, `alga`) were not on
+mooncakes. Those deps are now version-pinned, so the staged work below can
+be promoted to a real release on demand. The version label and date are
+left unset until the publish call is made.
 
 ### ⚠ BREAKING CHANGES
 
@@ -88,20 +42,28 @@ see BREAKING CHANGES below.
   is available through the public `text` methods, or through
   `SyncMessage::to_json_string` / `from_json_string` and
   `Version::to_json_string` / `from_json_string` for serialization.
+- **`Document::apply_remote_sync_message` returns `SyncReport`** (was `Unit`).
+  The report names applied tree ops, applied text ops, duplicates, and
+  pending ops. (`051524c`)
+- **Inserts at position 0 on non-empty text now land at the beginning of the
+  document** rather than the end. The prior `find_parent_and_side` rule
+  diverged from Algorithm 1 of the Fugue paper; see ADR
+  `docs/decisions/2026-03-31-fugue-find-parent-and-side-fix.md`. Saved
+  documents created with the old rule will not round-trip identically.
+  (`ab9cfbc`)
 
 ### Added
 
 - **New `tree/` public facade** — MovableTree CRDT (Kleppmann's undo-do-redo
-  algorithm + fractional indexing) exposed through `TreeState`. Entirely new
-  since 0.1.0. (`1a25cfb`)
+  algorithm + fractional indexing) exposed through `TreeState`. (`1a25cfb`)
 - **New `undo/` public facade** — `UndoManager` plus `Undoable` trait. Text
   integration is via `TextState::insert_and_record`,
   `TextState::delete_and_record`, `TextState::replace_range_and_record`,
-  `TextState::delete_range_and_record`. Entirely new since 0.1.0.
+  `TextState::delete_range_and_record`.
 - **New `container/` public facade** — top-level `Document` struct. Initial
   commit (`6d17462`) shipped the tree-backed `Document`; block-text ops
   (`a062000`), sync substrate (`68bda63`), and document-level undo grouping
-  (`3e9cdf2`) landed in follow-up commits. Entirely new since 0.1.0.
+  (`3e9cdf2`) landed in follow-up commits.
 - **Document-level undo grouping** — multiple ops within a single document
   transaction are grouped as a single undoable unit. (`3e9cdf2`)
 - **Positional move operations** — `Document::move_node_before` and
@@ -109,10 +71,12 @@ see BREAKING CHANGES below.
   (`9d175ed`)
 - **`SyncReport` from remote sync** — `apply_remote_sync_message` returns a
   `SyncReport` describing which operations were applied. (`051524c`)
-- **Container sync substrate (Phase 3)** — full bidirectional sync between
+- **Container sync substrate (Phase 3)** — bidirectional sync between
   container peers over a message-passing channel. (`68bda63`)
 - **Document text operations** — `insert_text`, `delete_text`, `replace_text`,
   `get_text`, `text_len` on `Document`. (`a062000`)
+- **`TextBlock` with per-block `FugueTree`** — multi-block documents share a
+  single global logical-version space (Path A). (`a06bd6a`)
 - **`create_node_after`** — positional sibling insertion in the tree. (`5bed0cf`)
 - **Public `TreeNodeId` surface** — public constructor and field accessors;
   `tree_node_id_key`, `tree_node_id_eq` for external consumers; `TreeNodeId`
@@ -133,12 +97,16 @@ see BREAKING CHANGES below.
   locality. (`bfe915f`, `e010461`)
 - **`export_sync_message` raises instead of aborting** — now raises
   `DocumentError` on failure so callers can recover. (`eace9bb`)
+- **MoonBit v0.9 syntax migration** — `derive(Show)` → `derive(Debug)` plus
+  manual `Show` impls where used by `inspect`; `substring()` → slice syntax;
+  `not()` → `!()`. Consumers building this package need MoonBit ≥ v0.9.
+  (`21529fb`, `2fe392b`, `223cc78`, `8461520`)
 
 ### Fixed
 
 - **Fugue `find_parent_and_side`** aligned with Algorithm 1 of the Fugue
-  paper, correcting parent-side assignment during concurrent inserts.
-  (`ab9cfbc`)
+  paper (see ADR `docs/decisions/2026-03-31-fugue-find-parent-and-side-fix.md`),
+  correcting parent-side assignment during concurrent inserts. (`ab9cfbc`)
 - **Position cache** guards against `FugueMax` position rewriting, preventing
   stale cache entries after tombstone promotion. (`187faa2`)
 - **`create_node_after`** correctly handles equal-positions and missing-after
@@ -160,9 +128,7 @@ Initial release published to mooncakes:
 <https://mooncakes.io/docs/dowdiness/event-graph-walker@0.1.0>. No prior
 changelog was maintained. Public surface was a flat set of packages (`text`,
 `causal_graph`, `document`, `oplog`, `branch`, `fugue`, `rle`); all except
-`text` have been superseded in 0.2.0.
+`text` are superseded by the staged work above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...v0.2.0
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/dowdiness/event-graph-walker/releases/tag/v0.1.0
-

@@ -3,10 +3,10 @@
   "version": "0.2.0",
   "deps": {
     "moonbitlang/quickcheck": "0.11.2",
-    "dowdiness/btree": { "path": "../lib/btree" },
-    "dowdiness/rle": { "path": "../rle" },
-    "dowdiness/order-tree": { "path": "../order-tree" },
-    "dowdiness/alga": { "path": "../alga" }
+    "dowdiness/btree": "0.1.0",
+    "dowdiness/rle": "0.2.0",
+    "dowdiness/order-tree": "0.1.0",
+    "dowdiness/alga": "0.3.0"
   },
   "readme": "README.md",
   "repository": "https://github.com/dowdiness/event-graph-walker",
