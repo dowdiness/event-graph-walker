@@ -28,7 +28,7 @@ The critical O(n²) bottleneck in topological sort has been eliminated by buildi
 
 ### ✅ Completed (2026-01-09)
 
-**Walker O(n²) Fix** (`internal/causal_graph/walker.mbt` lines 87-177)
+**Walker O(n²) Fix** (`internal/causal_graph/walker.mbt`; children-map traversal lives around line 47 in the current layout)
 - Built children map: `HashMap[Int, Array[Int]]` during initialization
 - Replaced nested loop `for candidate in versions` with direct map lookup
 - Impact: 138x speedup at 10k ops, linear scaling across all sizes

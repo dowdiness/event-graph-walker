@@ -103,7 +103,9 @@ let branch = Branch::checkout(oplog, frontier)
 let updated = branch.advance(target_frontier)
 
 // merge() uses diff_frontiers_lvs (RLE-compressed, topologically sorted)
+// Raises BranchError on inconsistent input (e.g. unknown frontier).
 merge(tree, oplog, current_frontier, target_frontier)
+// Returns Unit raise BranchError
 ```
 
 ## Algorithm Details
