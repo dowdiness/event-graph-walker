@@ -7,12 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Staged for the next mooncakes release after 0.1.0. A `v0.2.0` git tag was
-cut on 2026-04-22 (`0f80444`) but yanked before publishing because four
-upstream path-deps (`rle`, `btree`, `order-tree`, `alga`) were not on
-mooncakes. Those deps are now version-pinned, so the staged work below can
-be promoted to a real release on demand. The version label and date are
-left unset until the publish call is made.
+## [0.2.0] - 2026-05-06
+
+First tracked release after 0.1.0 shipped to mooncakes. 0.1.0 exposed the
+eg-walker internals (`causal_graph`, `document`, `oplog`, `branch`, `fugue`,
+`rle`) as public top-level packages. This release moves all of them behind
+`internal/` and introduces stable public facades for text, tree, undo, and
+container document APIs. **Upgrades from 0.1.0 are not source-compatible** —
+see BREAKING CHANGES below.
 
 ### ⚠ BREAKING CHANGES
 
@@ -148,5 +150,6 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dowdiness/event-graph-walker/releases/tag/v0.1.0
