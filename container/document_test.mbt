@@ -45,11 +45,11 @@ test "Document: nested children" {
 test "Document: properties" {
   let doc = @container.Document::new("alice")
   let node = doc.create_node(parent=@container.root_id)
-  inspect(doc.get_property(node, "color"), content="None")
+  inspect(doc.get_property(node, "color") is None, content="true")
   doc.set_property(node, "color", "red")
-  inspect(doc.get_property(node, "color"), content="Some(\"red\")")
+  @debug.debug_inspect(doc.get_property(node, "color"), content="Some(\"red\")")
   doc.set_property(node, "color", "blue")
-  inspect(doc.get_property(node, "color"), content="Some(\"blue\")")
+  @debug.debug_inspect(doc.get_property(node, "color"), content="Some(\"blue\")")
 }
 
 ///|
@@ -105,10 +105,10 @@ test "Document: two peers converge" {
   inspect(doc_a.is_alive(b1), content="true")
   inspect(doc_b.is_alive(a1), content="true")
   inspect(doc_b.is_alive(b1), content="true")
-  inspect(doc_a.get_property(a1, "label"), content="Some(\"A1\")")
-  inspect(doc_a.get_property(b1, "label"), content="Some(\"B1\")")
-  inspect(doc_b.get_property(a1, "label"), content="Some(\"A1\")")
-  inspect(doc_b.get_property(b1, "label"), content="Some(\"B1\")")
+  @debug.debug_inspect(doc_a.get_property(a1, "label"), content="Some(\"A1\")")
+  @debug.debug_inspect(doc_a.get_property(b1, "label"), content="Some(\"B1\")")
+  @debug.debug_inspect(doc_b.get_property(a1, "label"), content="Some(\"A1\")")
+  @debug.debug_inspect(doc_b.get_property(b1, "label"), content="Some(\"B1\")")
 }
 
 ///|
@@ -176,7 +176,7 @@ test "Document: property ops replay after out-of-order create" {
   doc_b.apply_remote_op(ops[1])
   doc_b.apply_remote_op(ops[0])
   inspect(doc_b.is_alive(node), content="true")
-  inspect(doc_b.get_property(node, "label"), content="Some(\"ready\")")
+  @debug.debug_inspect(doc_b.get_property(node, "label"), content="Some(\"ready\")")
 }
 
 ///|

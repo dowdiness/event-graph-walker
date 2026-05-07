@@ -59,12 +59,12 @@ pub impl @qc.Shrink for QcInsertOpSet with shrink(self) {
     let half = len / 2
     if half > 0 {
       results.push({
-        ops: ops[:half].to_array(),
+        ops: ops[:half].to_owned(),
         shuffle_seed: self.shuffle_seed,
       })
     }
     results.push({
-      ops: ops[:len - 1].to_array(),
+      ops: ops[:len - 1].to_owned(),
       shuffle_seed: self.shuffle_seed,
     })
   }
@@ -412,11 +412,11 @@ pub impl @qc.Shrink for InsertSetWithDeletes with shrink(self) {
     results.push({ inserts: [], delete_count: 0 })
     let half = len / 2
     if half > 0 {
-      let trimmed = self.inserts[:half].to_array()
+      let trimmed = self.inserts[:half].to_owned()
       let dc = if self.delete_count > half { half } else { self.delete_count }
       results.push({ inserts: trimmed, delete_count: dc })
     }
-    let trimmed = self.inserts[:len - 1].to_array()
+    let trimmed = self.inserts[:len - 1].to_owned()
     let dc = if self.delete_count > len - 1 {
       len - 1
     } else {

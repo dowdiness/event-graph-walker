@@ -69,10 +69,10 @@ impl @qc.Shrink for TreeScenario with shrink(self) {
     results.push({ actions: [] })
     let half = len / 2
     if half > 0 {
-      results.push({ actions: self.actions[:half].to_array() })
+      results.push({ actions: self.actions[:half].to_owned() })
     }
     if len > 1 {
-      results.push({ actions: self.actions[:len - 1].to_array() })
+      results.push({ actions: self.actions[:len - 1].to_owned() })
     }
   }
   results.iter()

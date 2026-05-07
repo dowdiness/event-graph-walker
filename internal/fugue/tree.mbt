@@ -628,7 +628,7 @@ fn[T] FugueTree::find_parent_and_side(
 test "find parent and side at start" {
   let tree : FugueTree[String] = FugueTree::new()
   let (parent, side) = tree.find_parent_and_side(None, None)
-  inspect(parent, content="Some(Lv(-1))")
+  @debug.debug_inspect(parent, content="Some(Lv(-1))")
   inspect(side, content="Right")
 }
 
@@ -644,7 +644,7 @@ test "find parent and side with origin_left" {
     agent: ReplicaId("agent0"),
   })
   let (parent, side) = tree.find_parent_and_side(Some(Lv(0)), None)
-  inspect(parent, content="Some(Lv(0))")
+  @debug.debug_inspect(parent, content="Some(Lv(0))")
   inspect(side, content="Right")
 }
 

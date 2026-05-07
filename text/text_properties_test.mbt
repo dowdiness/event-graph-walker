@@ -68,9 +68,9 @@ impl @qc.Shrink for RealOps with shrink(self) {
     results.push({ edits: [] })
     let half = len / 2
     if half > 0 {
-      results.push({ edits: edits[:half].to_array() })
+      results.push({ edits: edits[:half].to_owned() })
     }
-    results.push({ edits: edits[:len - 1].to_array() })
+    results.push({ edits: edits[:len - 1].to_owned() })
   }
   results.iter()
 }
@@ -249,7 +249,7 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
 
   // Apply first half of edits
   let mid = ops.edits.length() / 2
-  if !apply_edits(doc, ops.edits[:mid].to_array()) {
+  if !apply_edits(doc, ops.edits[:mid].to_owned()) {
     return true
   }
 
@@ -258,7 +258,7 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
   let saved_text = doc.text()
 
   // Apply remaining edits
-  if !apply_edits(doc, ops.edits[mid:].to_array()) {
+  if !apply_edits(doc, ops.edits[mid:].to_owned()) {
     return true
   }
 

@@ -15,8 +15,10 @@ test "branch get_version_vector - single agent" {
   ignore(try! oplog.insert("y", 0, -1))
   ignore(try! oplog.insert("z", 1, -1))
   let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
-  let vv = branch.get_version_vector()
-  inspect(vv.0.get("alice"), content="Some(2)")
+  let _vv = branch.get_version_vector()
+  @debug.debug_inspect(_vv.0.get("alice"), content=(
+    #|Some(2)
+  ))
 }
 
 ///|
@@ -34,9 +36,13 @@ test "branch get_version_vector - multiple agents" {
   let bob_ops = oplog_bob.get_all_ops()
   let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
   let branch = try! branch.merge_remote_ops(bob_ops)
-  let vv = branch.get_version_vector()
-  inspect(vv.0.get("alice"), content="Some(1)")
-  inspect(vv.0.get("bob"), content="Some(1)")
+  let _vv = branch.get_version_vector()
+  @debug.debug_inspect(_vv.0.get("alice"), content=(
+    #|Some(1)
+  ))
+  @debug.debug_inspect(_vv.0.get("bob"), content=(
+    #|Some(1)
+  ))
 }
 
 ///|
@@ -132,7 +138,9 @@ test "version vector efficiency - many operations from same agent" {
   // Version vector is even more compact - just one entry
   let vv = branch.get_version_vector()
   inspect(vv.0.length(), content="1")
-  inspect(vv.0.get("alice"), content="Some(99)")
+  @debug.debug_inspect(vv.0.get("alice"), content=(
+    #|Some(99)
+  ))
 }
 
 ///|
@@ -154,7 +162,11 @@ test "version vector with concurrent operations" {
   let branch = try! branch.merge_remote_ops(bob_ops)
 
   // Version vector should have both agents at their latest seq
-  let vv = branch.get_version_vector()
-  inspect(vv.0.get("alice"), content="Some(1)")
-  inspect(vv.0.get("bob"), content="Some(1)")
+  let _vv = branch.get_version_vector()
+  @debug.debug_inspect(_vv.0.get("alice"), content=(
+    #|Some(1)
+  ))
+  @debug.debug_inspect(_vv.0.get("bob"), content=(
+    #|Some(1)
+  ))
 }

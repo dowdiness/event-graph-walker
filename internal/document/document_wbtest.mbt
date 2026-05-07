@@ -162,7 +162,7 @@ test "cursor invalidated on delete" {
   for i = 0; i < 5; i = i + 1 {
     ignore(try! doc.insert(i, "x"))
   }
-  inspect(doc.cursor is Some(_), content="true")
+  @debug.debug_inspect(doc.cursor is Some(_), content="true")
   try! doc.delete_range(2, 3)
   inspect(doc.cursor is None, content="true")
 }
@@ -190,7 +190,9 @@ test "incremental insert: sequential append preserves cache" {
   // Insert first char (cursor miss -> builds cache during lookup, then invalidates)
   let _ = try! doc.insert(0, "a")
   // Build cache explicitly by reading a position
-  inspect(doc.lv_at_position(0), content="Some(0)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
   // Now cache exists
   assert_true(doc.position_cache is Some(_))
   // Sequential single-char insert at end — should use incremental path
@@ -198,8 +200,12 @@ test "incremental insert: sequential append preserves cache" {
   // Cache should still exist (not invalidated) because incremental insert updated it
   assert_true(doc.position_cache is Some(_))
   // Verify correctness through the preserved cache
-  inspect(doc.lv_at_position(0), content="Some(0)")
-  inspect(doc.lv_at_position(1), content="Some(1)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(1), content=(
+    #|Some(1)
+  ))
 }
 
 ///|
@@ -207,7 +213,9 @@ test "incremental insert: non-sequential preserves cache" {
   let doc = Document::new("test")
   let _ = try! doc.insert(0, "abc")
   // Build cache by reading
-  inspect(doc.lv_at_position(0), content="Some(0)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
   assert_true(doc.position_cache is Some(_))
   // Insert at middle (not sequential append) — cache maintained incrementally
   // This is a cursor-miss: cursor was at position 2 (end), now inserting at 1
@@ -215,21 +223,39 @@ test "incremental insert: non-sequential preserves cache" {
   // Verify cache is preserved (incremental OrderTree.insert_at, not full rebuild)
   assert_true(doc.position_cache is Some(_))
   // Verify positions are correct after incremental update
-  inspect(doc.lv_at_position(0), content="Some(0)")
-  inspect(doc.lv_at_position(1), content="Some(3)") // 'x' has LV 3
-  inspect(doc.lv_at_position(2), content="Some(1)")
-  inspect(doc.lv_at_position(3), content="Some(2)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(1), content=(
+    #|Some(3)
+  )) // 'x' has LV 3
+  @debug.debug_inspect(doc.lv_at_position(2), content=(
+    #|Some(1)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(3), content=(
+    #|Some(2)
+  ))
   // Sequential insert after middle insertion — exercises the partial-hit branch:
   // cursor is at position 1 with at_end=false, so current_pos (2) == c.position + 1
   // but c.at_end is false → partial hit → looks up origin_right from cache
   let _ = try! doc.insert(2, "y")
   assert_true(doc.position_cache is Some(_))
   // doc is now "a x y b c" → positions: a(0) x(3) y(4) b(1) c(2)
-  inspect(doc.lv_at_position(0), content="Some(0)")
-  inspect(doc.lv_at_position(1), content="Some(3)") // x
-  inspect(doc.lv_at_position(2), content="Some(4)") // y
-  inspect(doc.lv_at_position(3), content="Some(1)") // b
-  inspect(doc.lv_at_position(4), content="Some(2)") // c
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(1), content=(
+    #|Some(3)
+  )) // x
+  @debug.debug_inspect(doc.lv_at_position(2), content=(
+    #|Some(4)
+  )) // y
+  @debug.debug_inspect(doc.lv_at_position(3), content=(
+    #|Some(1)
+  )) // b
+  @debug.debug_inspect(doc.lv_at_position(4), content=(
+    #|Some(2)
+  )) // c
 }
 
 ///|
@@ -237,7 +263,9 @@ test "incremental insert: multi-char non-sequential paste preserves cache" {
   let doc = Document::new("test")
   let _ = try! doc.insert(0, "hello")
   // Prime cache
-  inspect(doc.lv_at_position(0), content="Some(0)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
   assert_true(doc.position_cache is Some(_))
   // Paste "abc" at position 2 (non-sequential: cursor was at 4)
   let _ = try! doc.insert(2, "abc")
@@ -248,14 +276,30 @@ test "incremental insert: multi-char non-sequential paste preserves cache" {
   // Verify position→LV mapping:
   // pos 0→LV 0 (h), pos 1→LV 1 (e), pos 2→LV 5 (a), pos 3→LV 6 (b),
   // pos 4→LV 7 (c), pos 5→LV 2 (l), pos 6→LV 3 (l), pos 7→LV 4 (o)
-  inspect(doc.lv_at_position(0), content="Some(0)")
-  inspect(doc.lv_at_position(1), content="Some(1)")
-  inspect(doc.lv_at_position(2), content="Some(5)")
-  inspect(doc.lv_at_position(3), content="Some(6)")
-  inspect(doc.lv_at_position(4), content="Some(7)")
-  inspect(doc.lv_at_position(5), content="Some(2)")
-  inspect(doc.lv_at_position(6), content="Some(3)")
-  inspect(doc.lv_at_position(7), content="Some(4)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(1), content=(
+    #|Some(1)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(2), content=(
+    #|Some(5)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(3), content=(
+    #|Some(6)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(4), content=(
+    #|Some(7)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(5), content=(
+    #|Some(2)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(6), content=(
+    #|Some(3)
+  ))
+  @debug.debug_inspect(doc.lv_at_position(7), content=(
+    #|Some(4)
+  ))
 }
 
 ///|
@@ -263,7 +307,9 @@ test "incremental insert: delete_range then non-sequential insert" {
   let doc = Document::new("test")
   let _ = try! doc.insert(0, "abcde")
   // Prime cache
-  inspect(doc.lv_at_position(0), content="Some(0)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
   assert_true(doc.position_cache is Some(_))
   // delete_range invalidates cache
   try! doc.delete_range(1, 3) // delete "bc"
@@ -283,7 +329,9 @@ test "incremental insert: remote op between local inserts resets cache" {
   // Alice types "abc"
   let _ = try! doc_a.insert(0, "abc")
   // Prime Alice's cache
-  inspect(doc_a.lv_at_position(0), content="Some(0)")
+  @debug.debug_inspect(doc_a.lv_at_position(0), content=(
+    #|Some(0)
+  ))
   assert_true(doc_a.position_cache is Some(_))
   // Bob inserts "x" at position 0
   let _ = try! doc_b.insert(0, "x")
@@ -315,13 +363,19 @@ test "lv_to_position after incremental append" {
   let doc = Document::new("test")
   let _ = try! doc.insert(0, "a")
   // Prime cache so incremental path can fire
-  inspect(doc.lv_at_position(0), content="Some(0)")
+  @debug.debug_inspect(doc.lv_at_position(0), content=(
+    #|Some(0)
+  ))
   assert_true(doc.position_cache is Some(_))
   // Sequential append — incremental path preserves cache
   let _ = try! doc.insert(1, "b")
   assert_true(doc.position_cache is Some(_))
   // lv_to_position should work on the preserved cache
-  inspect(doc.lv_to_position(0), content="Some(0)")
-  inspect(doc.lv_to_position(1), content="Some(1)")
-  inspect(doc.lv_to_position(99), content="None")
+  @debug.debug_inspect(doc.lv_to_position(0), content=(
+    #|Some(0)
+  ))
+  @debug.debug_inspect(doc.lv_to_position(1), content=(
+    #|Some(1)
+  ))
+  inspect(doc.lv_to_position(99) is None, content="true")
 }

@@ -76,7 +76,7 @@ pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
   }
   let origin_right = self.origin_right
   let content = match self.content {
-    Inserts(chars) => Insert(chars[offset].to_string())
+    Inserts(chars) => Insert("\{chars[offset]}")
     Deletes => Delete
     Undeletes => Undelete
   }

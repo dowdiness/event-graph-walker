@@ -97,13 +97,13 @@ impl @qc.Shrink for MultiAgentTrace with shrink(self) {
     if half > 0 {
       results.push({
         num_agents: self.num_agents,
-        actions: self.actions[:half].to_array(),
+        actions: self.actions[:half].to_owned(),
       })
     }
     // Try dropping last action
     results.push({
       num_agents: self.num_agents,
-      actions: self.actions[:len - 1].to_array(),
+      actions: self.actions[:len - 1].to_owned(),
     })
   }
   results.iter()

@@ -498,7 +498,7 @@ test "adjust_delete_count: updates merge-time tracker without changing visibilit
   })
   try! tree.adjust_delete_count(lv, 1)
   inspect(tree.visible_count(), content="1")
-  inspect(
+  @debug.debug_inspect(
     match tree[lv] {
       Some(item) => item.delete_count
       None => -999
@@ -506,7 +506,7 @@ test "adjust_delete_count: updates merge-time tracker without changing visibilit
     content="1",
   )
   try! tree.adjust_delete_count(lv, -2)
-  inspect(
+  @debug.debug_inspect(
     match tree[lv] {
       Some(item) => item.delete_count
       None => -999
@@ -577,8 +577,8 @@ test "get(root_lv) returns None — root is a virtual sentinel" {
   // Root (LV=-1) is not stored in the items array. It is a virtual sentinel
   // used only for parent/children relationships. Traversal, LCA, and all
   // operations handle root via root_children and special-case guards.
-  inspect(tree[@fugue.root_lv], content="None")
-  inspect(tree[@fugue.Lv(99)], content="None") // out-of-range also None
+  inspect(tree[@fugue.root_lv] is None, content="true")
+  inspect(tree[@fugue.Lv(99)] is None, content="true") // out-of-range also None
 }
 
 ///|
@@ -620,14 +620,14 @@ test "spike: struct mut field in Option-wrapped array modifies in-place" {
     Some(item) => item.flag = true
     None => ()
   }
-  inspect(
+  @debug.debug_inspect(
     match arr[0] {
       Some(item) => item.flag
       None => false
     },
     content="true",
   )
-  inspect(
+  @debug.debug_inspect(
     match arr[1] {
       Some(item) => item.flag
       None => false
