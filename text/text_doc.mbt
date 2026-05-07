@@ -37,6 +37,12 @@ pub fn TextState::is_empty(self : TextState) -> Bool {
 }
 
 ///|
+/// Read-only snapshot of the document's causal DAG.
+pub fn TextState::causal_snapshot(self : TextState) -> @history.CausalSnapshot {
+  self.inner.causal_snapshot()
+}
+
+///|
 /// Insert text at the given position
 pub fn TextState::insert(
   self : TextState,

@@ -52,6 +52,12 @@ pub fn Document::get_frontier(self : Document) -> @core.Frontier {
 }
 
 ///|
+/// Read-only snapshot of the document's causal DAG.
+pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
+  @history.CausalSnapshot::from_graph(self.oplog.causal_graph())
+}
+
+///|
 /// Get the current frontier as an array of LVs
 pub fn Document::get_frontier_array(self : Document) -> Array[Int] {
   self.oplog.get_frontier().0.copy()

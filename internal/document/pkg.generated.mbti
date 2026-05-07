@@ -2,6 +2,7 @@
 package "dowdiness/event-graph-walker/internal/document"
 
 import {
+  "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/internal/branch",
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/fugue",
@@ -29,6 +30,7 @@ pub struct Document {
 }
 pub fn Document::agent_id(Self) -> String
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
+pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::delete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError

@@ -5,6 +5,7 @@ import {
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/branch",
   "dowdiness/event-graph-walker/internal/document",
+  "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/undo",
   "dowdiness/rle",
   "moonbitlang/core/bench",

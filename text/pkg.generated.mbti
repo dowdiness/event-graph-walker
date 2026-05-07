@@ -2,6 +2,7 @@
 package "dowdiness/event-graph-walker/text"
 
 import {
+  "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/undo",
   "moonbitlang/core/debug",
 }
@@ -61,6 +62,7 @@ pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TextError
 pub(all) struct TextState {
   // private fields
 }
+pub fn TextState::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn TextState::checkout(Self, Version) -> TextView raise TextError
 pub fn TextState::delete(Self, Pos) -> Unit raise TextError
 pub fn TextState::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
