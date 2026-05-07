@@ -189,6 +189,22 @@ pub fn CausalGraph::get_frontier(self : CausalGraph) -> @core.Frontier {
 }
 
 ///|
+/// Number of operations recorded in the graph (LV count).
+pub fn CausalGraph::op_count(self : CausalGraph) -> Int {
+  self.next_lv
+}
+
+///|
+/// Number of direct successors (outdegree) of an LV in the causal DAG.
+/// Returns 0 for out-of-range LVs.
+pub fn CausalGraph::children_count(self : CausalGraph, lv : Int) -> Int {
+  if lv < 0 || lv >= self.next_lv {
+    return 0
+  }
+  self.children[lv].length()
+}
+
+///|
 pub fn CausalGraph::is_ancestor(
   self : CausalGraph,
   lv1 : Int,

@@ -1,0 +1,13 @@
+import {
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/causal_graph",
+  "moonbitlang/core/debug",
+}
+
+import {
+  "dowdiness/event-graph-walker/text",
+} for "test"
+
+options(
+  is_main: false,
+)

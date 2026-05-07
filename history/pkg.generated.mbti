@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/history"
+
+import {
+  "dowdiness/event-graph-walker/internal/causal_graph",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct CausalSnapshot {
+  // private fields
+}
+pub fn CausalSnapshot::children_count(Self, Int) -> Int
+pub fn CausalSnapshot::entry(Self, Int) -> SnapshotEntry?
+pub fn CausalSnapshot::from_graph(@causal_graph.CausalGraph) -> Self
+pub fn CausalSnapshot::frontier(Self) -> Array[Int]
+pub fn CausalSnapshot::op_count(Self) -> Int
+
+pub struct SnapshotEntry {
+  // private fields
+}
+pub fn SnapshotEntry::agent(Self) -> String
+pub fn SnapshotEntry::parents(Self) -> ArrayView[Int]
+pub fn SnapshotEntry::seq(Self) -> Int
+
+// Type aliases
+
+// Traits
+

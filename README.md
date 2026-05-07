@@ -6,10 +6,11 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 - `dowdiness/event-graph-walker/tree` - movable-tree facade for document trees, outlines, and block editors
 - `dowdiness/event-graph-walker/undo` - undo/redo support for text documents
 - `dowdiness/event-graph-walker/container` - higher-level document API combining tree nodes, block text, sync, and undo
+- `dowdiness/event-graph-walker/history` - read-only `CausalSnapshot` view over a document's causal DAG (for visualization and history-aware tooling)
 
 Package metadata in `moon.mod.json`:
 
-- Version: `0.2.0`
+- Version: `0.3.0`
 - Repository: <https://github.com/dowdiness/event-graph-walker>
 - License: `Apache-2.0`
 - Description: `Implementation of the eg-walker CRDT algorithm with FugueMax sequence CRDT`
@@ -27,6 +28,7 @@ Use the public facade packages first:
    - [`tree/pkg.generated.mbti`](tree/pkg.generated.mbti)
    - [`undo/pkg.generated.mbti`](undo/pkg.generated.mbti)
    - [`container/pkg.generated.mbti`](container/pkg.generated.mbti)
+   - [`history/pkg.generated.mbti`](history/pkg.generated.mbti)
 4. Use the [docs index](docs/README.md) to find deeper implementation, benchmark, roadmap, and historical/spec material.
 
 ## Text Quick Start

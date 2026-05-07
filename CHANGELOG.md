@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-07
+
+### Added
+
+- New public package `dowdiness/event-graph-walker/history` exposing a
+  read-only `CausalSnapshot` view over a document's causal DAG. The snapshot
+  type is intentionally narrow — it provides `op_count`, `frontier`, `entry`,
+  and `children_count` accessors plus an opaque `SnapshotEntry` with
+  `parents`, `agent`, `seq` accessors. The internal `CausalGraph` storage
+  layout, its `@alga.DirectedGraph` impl, and `GraphEntry` field shape are
+  unreachable from downstream consumers — the only construction primitive
+  (`CausalSnapshot::from_graph`) takes `@causal_graph.CausalGraph` from the
+  internal `causal_graph` package, which downstream cannot import.
+- `Document::causal_snapshot()` and `TextState::causal_snapshot()` accessors
+  that return a `CausalSnapshot` aliased to the live document. Snapshots are
+  cheap to construct but reflect future mutations of the document; callers
+  that need a frozen view should copy what they need.
+- `CausalGraph::op_count()` and `CausalGraph::children_count(lv)` public
+  accessors (used by the new `history` package; safe for direct use within
+  the module).
+
+### Notes
+
+- This is an additive release. Existing consumers do not need to change.
+
 ## [0.2.0] - 2026-05-06
 
 First tracked release after 0.1.0 shipped to mooncakes. 0.1.0 exposed the
