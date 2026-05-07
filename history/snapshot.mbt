@@ -15,9 +15,13 @@ pub struct CausalSnapshot {
 }
 
 ///|
-/// Construct a snapshot from a causal graph. Crate-internal: the public
-/// entry points are `Document::causal_snapshot` and
-/// `TextState::causal_snapshot`.
+/// Internal construction primitive — wraps a `CausalGraph` reference into a
+/// snapshot. Exposed publicly only because MoonBit visibility is
+/// package-strict and cross-package callers (`internal/document`, `text`)
+/// have no other way to build the wrapper. Not callable from outside this
+/// module: `@causal_graph.CausalGraph` lives in `internal/causal_graph`,
+/// which downstream consumers cannot import. The supported public entry
+/// points remain `Document::causal_snapshot` and `TextState::causal_snapshot`.
 pub fn CausalSnapshot::from_graph(
   graph : @causal_graph.CausalGraph,
 ) -> CausalSnapshot {

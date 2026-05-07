@@ -15,8 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read-only `CausalSnapshot` view over a document's causal DAG. The snapshot
   type is intentionally narrow — it provides `op_count`, `frontier`, `entry`,
   and `children_count` accessors plus an opaque `SnapshotEntry` with
-  `parents`, `agent`, `seq` accessors. The internal `CausalGraph` representation,
-  `@alga.DirectedGraph` impl, and `GraphEntry` field shape are not exposed.
+  `parents`, `agent`, `seq` accessors. The internal `CausalGraph` storage
+  layout, its `@alga.DirectedGraph` impl, and `GraphEntry` field shape are
+  unreachable from downstream consumers — the only construction primitive
+  (`CausalSnapshot::from_graph`) takes `@causal_graph.CausalGraph` from the
+  internal `causal_graph` package, which downstream cannot import.
 - `Document::causal_snapshot()` and `TextState::causal_snapshot()` accessors
   that return a `CausalSnapshot` aliased to the live document. Snapshots are
   cheap to construct but reflect future mutations of the document; callers
