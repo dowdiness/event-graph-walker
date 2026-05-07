@@ -28,12 +28,12 @@ pub impl Show for BlockScenario with output(self, logger) {
 
 ///|
 fn insert_string(text : String, pos : Int, chunk : String) -> String {
-  text[:pos].to_string() + chunk + text[pos:].to_string()
+  text[:pos].to_owned() + chunk + text[pos:].to_owned()
 }
 
 ///|
 fn delete_string_at(text : String, pos : Int) -> String {
-  text[:pos].to_string() + text[pos + 1:].to_string()
+  text[:pos].to_owned() + text[pos + 1:].to_owned()
 }
 
 ///|
@@ -105,10 +105,10 @@ impl @qc.Shrink for BlockScenario with shrink(self) {
     results.push({ edits: [] })
     let half = len / 2
     if half > 0 {
-      results.push({ edits: self.edits[:half].to_array() })
+      results.push({ edits: self.edits[:half].to_owned() })
     }
     if len > 1 {
-      results.push({ edits: self.edits[:len - 1].to_array() })
+      results.push({ edits: self.edits[:len - 1].to_owned() })
     }
   }
   results.iter()

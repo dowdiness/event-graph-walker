@@ -15,8 +15,8 @@ fn verify_compression_equivalence(oplog : OpLog) -> Unit raise {
     assert_eq(op.agent(), from_array.agent())
     assert_eq(op.seq(), from_array.seq())
     assert_eq(op.content(), from_array.content())
-    assert_eq(op.origin_left(), from_array.origin_left())
-    assert_eq(op.origin_right(), from_array.origin_right())
+    @debug.assert_eq(op.origin_left(), from_array.origin_left())
+    @debug.assert_eq(op.origin_right(), from_array.origin_right())
     assert_eq(op.parents(), from_array.parents())
   }
   inspect(oplog.get_op(-1) is None, content="true")

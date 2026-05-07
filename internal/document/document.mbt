@@ -161,7 +161,7 @@ pub fn Document::insert(
   let mut cache_valid = self.position_cache is Some(_)
 
   for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i:i + 1].to_string()
+    let ch = text[i:i + 1].to_owned()
 
     // Cursor fast-path: skip cache lookup for sequential append
     let (origin_left, origin_right) = match self.cursor {

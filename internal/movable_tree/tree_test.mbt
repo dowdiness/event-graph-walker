@@ -9,7 +9,7 @@ test "create: single node under root" {
   tree.apply_create(id, @movable_tree.root_id, pos)
   inspect(tree.contains(id), content="true")
   inspect(tree.is_alive(id), content="true")
-  inspect(
+  @debug.debug_inspect(
     tree.parent(id),
     content=(
       #|Some({ agent: "__ROOT__", counter: -1 })
@@ -35,7 +35,7 @@ test "move: reparent a node" {
   // Move child under parent
   let new_pos = @fi.FractionalIndex::between(left=None, right=None)
   tree.apply_move(child_id, parent_id, new_pos)
-  inspect(
+  @debug.debug_inspect(
     tree.parent(child_id),
     content=(
       #|Some({ agent: "alice", counter: 0 })
@@ -58,7 +58,7 @@ test "delete: move to trash" {
   tree.apply_move(id, @movable_tree.trash_id, trash_pos)
   inspect(tree.is_alive(id), content="false")
   inspect(tree.contains(id), content="true")
-  inspect(
+  @debug.debug_inspect(
     tree.parent(id),
     content=(
       #|Some({ agent: "__TRASH__", counter: -2 })
@@ -136,7 +136,7 @@ test "remove_node: completely removes node" {
   // Remove the node entirely
   tree.remove_node(id)
   inspect(tree.contains(id), content="false")
-  inspect(tree.parent(id), content="None")
+  inspect(tree.parent(id) is None, content="true")
   inspect(tree.children(@movable_tree.root_id).length(), content="0")
 }
 
@@ -184,13 +184,13 @@ test "properties: set and get" {
   let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
   tree.apply_create(id, @movable_tree.root_id, pos)
   // No property yet
-  inspect(tree.get_property(id, "color"), content="None")
+  inspect(tree.get_property(id, "color") is None, content="true")
   // Set property
   tree.set_property(id, "color", "red")
-  inspect(tree.get_property(id, "color"), content="Some(\"red\")")
+  @debug.debug_inspect(tree.get_property(id, "color"), content="Some(\"red\")")
   // Overwrite property
   tree.set_property(id, "color", "blue")
-  inspect(tree.get_property(id, "color"), content="Some(\"blue\")")
+  @debug.debug_inspect(tree.get_property(id, "color"), content="Some(\"blue\")")
 }
 
 ///|
@@ -220,6 +220,6 @@ test "get_position: returns correct position" {
   let pos = @fi.FractionalIndex::new([42])
   let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
   tree.apply_create(id, @movable_tree.root_id, pos)
-  inspect(tree.get_position(id), content="Some(FractionalIndex([42]))")
-  inspect(tree.get_position({ agent: "nobody", counter: 99 }), content="None")
+  @debug.debug_inspect(tree.get_position(id), content="Some(FractionalIndex([42]))")
+  inspect(tree.get_position({ agent: "nobody", counter: 99 }) is None, content="true")
 }

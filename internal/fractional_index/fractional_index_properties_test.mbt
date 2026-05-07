@@ -51,7 +51,7 @@ pub impl @qc.Shrink for OrderedPair with shrink(self) {
   // Try reducing elements of left
   let left_elems = self.left.elements()
   if left_elems.length() > 1 {
-    let shorter = left_elems[:left_elems.length() - 1].to_array()
+    let shorter = left_elems[:left_elems.length() - 1].to_owned()
     let candidate = @fractional_index.FractionalIndex::new(shorter)
     if candidate < self.right {
       results.push({ left: candidate, right: self.right })
@@ -60,7 +60,7 @@ pub impl @qc.Shrink for OrderedPair with shrink(self) {
   // Try reducing elements of right
   let right_elems = self.right.elements()
   if right_elems.length() > 1 {
-    let shorter = right_elems[:right_elems.length() - 1].to_array()
+    let shorter = right_elems[:right_elems.length() - 1].to_owned()
     let candidate = @fractional_index.FractionalIndex::new(shorter)
     if self.left < candidate {
       results.push({ left: self.left, right: candidate })
@@ -86,7 +86,7 @@ pub impl @qc.Shrink for SingleKey with shrink(self) {
   let results : Array[SingleKey] = []
   let elems = self.key.elements()
   if elems.length() > 1 {
-    let shorter = elems[:elems.length() - 1].to_array()
+    let shorter = elems[:elems.length() - 1].to_owned()
     results.push({ key: @fractional_index.FractionalIndex::new(shorter) })
   }
   results.iter()

@@ -66,7 +66,7 @@ fn normalize(elements : Array[Int]) -> Array[Int] {
   if last_nonzero < 0 {
     return []
   }
-  elements[:last_nonzero + 1].to_array()
+  elements[:last_nonzero + 1].to_owned()
 }
 
 ///|
@@ -80,7 +80,7 @@ fn successor_after(left : FractionalIndex) -> FractionalIndex {
   for i = result.length() - 1; i >= 0; i = i - 1 {
     if result[i] < max_value - 1 {
       result[i] = result[i] + 1
-      return FractionalIndex::new(result[:i + 1].to_array())
+      return FractionalIndex::new(result[:i + 1].to_owned())
     }
   }
   result.push(max_value / 2)

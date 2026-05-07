@@ -22,13 +22,13 @@ test "roundtrip: insert op -> OpRun -> Op" {
   inspect(d.agent(), content="alice")
   inspect(d.seq(), content="4")
   inspect(d.content(), content="Insert(\"x\")")
-  inspect(
+  @debug.debug_inspect(
     d.origin_left(),
     content=(
       #|Some({ agent: "alice", seq: 3 })
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     d.origin_right(),
     content=(
       #|Some({ agent: "bob", seq: 0 })
@@ -58,13 +58,13 @@ test "roundtrip: delete op -> OpRun -> Op" {
   inspect(d.agent(), content="bob")
   inspect(d.seq(), content="6")
   inspect(d.content(), content="Delete")
-  inspect(
+  @debug.debug_inspect(
     d.origin_left(),
     content=(
       #|Some({ agent: "alice", seq: 2 })
     ),
   )
-  inspect(d.origin_right(), content="None")
+  inspect(d.origin_right() is None, content="true")
 }
 
 ///|
@@ -81,7 +81,7 @@ test "roundtrip: undelete op -> OpRun -> Op" {
   guard decompressed is Some(d) else { fail("expected Some") }
   inspect(d.lv(), content="20")
   inspect(d.content(), content="Undelete")
-  inspect(
+  @debug.debug_inspect(
     d.origin_left(),
     content=(
       #|Some({ agent: "alice", seq: 5 })
@@ -93,8 +93,8 @@ test "roundtrip: undelete op -> OpRun -> Op" {
 test "decompress: offset out of bounds returns None" {
   let op = Op::new_insert(0, [], "a", 0, "x", None, None)
   let run = OpRun::from_op(op)
-  inspect(run.decompress(-1), content="None")
-  inspect(run.decompress(1), content="None")
+  inspect(run.decompress(-1) is None, content="true")
+  inspect(run.decompress(1) is None, content="true")
 }
 
 ///|
@@ -286,13 +286,13 @@ test "decompress: multi-op insert run at various offsets" {
       #|[{ agent: "bob", seq: 3 }]
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     op0.origin_left(),
     content=(
       #|Some({ agent: "bob", seq: 3 })
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     op0.origin_right(),
     content=(
       #|Some({ agent: "carol", seq: 0 })
@@ -309,13 +309,13 @@ test "decompress: multi-op insert run at various offsets" {
       #|[{ agent: "alice", seq: 5 }]
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     op1.origin_left(),
     content=(
       #|Some({ agent: "alice", seq: 5 })
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     op1.origin_right(),
     content=(
       #|Some({ agent: "carol", seq: 0 })
@@ -332,13 +332,13 @@ test "decompress: multi-op insert run at various offsets" {
       #|[{ agent: "alice", seq: 6 }]
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     op2.origin_left(),
     content=(
       #|Some({ agent: "alice", seq: 6 })
     ),
   )
-  inspect(
+  @debug.debug_inspect(
     op2.origin_right(),
     content=(
       #|Some({ agent: "carol", seq: 0 })

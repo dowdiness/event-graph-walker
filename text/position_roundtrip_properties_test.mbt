@@ -28,7 +28,7 @@ fn prop_insert_position_roundtrip(ops : RealOps) -> Bool {
         }
         let text = doc.text()
         // Core invariant: character is at the requested position
-        if text[pos:pos + 1].to_string() != ch {
+        if text[pos:pos + 1].to_owned() != ch {
           return false
         }
         // Length increased by exactly 1
@@ -67,7 +67,7 @@ test "position roundtrip: insert at 0 on non-empty doc" {
   do_insert(doc, 0, "X")
   let text = doc.text()
   // X must be at position 0, not at the end
-  inspect(text[0:1].to_string(), content="X")
+  inspect(text[0:1].to_owned(), content="X")
   inspect(text, content="Xabc")
 }
 

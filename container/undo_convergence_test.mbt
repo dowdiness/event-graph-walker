@@ -229,9 +229,9 @@ test "undo: set_property undo restores prior value" {
   let n = doc.create_node(parent=@container.root_id)
   doc.set_property(n, "type", "paragraph")
   doc.set_property(n, "type", "heading")
-  inspect(doc.get_property(n, "type"), content="Some(\"heading\")")
+  @debug.debug_inspect(doc.get_property(n, "type"), content="Some(\"heading\")")
   let _ = doc.undo()
-  inspect(doc.get_property(n, "type"), content="Some(\"paragraph\")")
+  @debug.debug_inspect(doc.get_property(n, "type"), content="Some(\"paragraph\")")
 }
 
 ///|
@@ -241,11 +241,11 @@ test "undo: set_property undo on absent key produces Some(\"\") (v1 limit)" {
   // op in v1. We lock in the documented behavior here to catch regressions.
   let doc = @container.Document::new("alice")
   let n = doc.create_node(parent=@container.root_id)
-  inspect(doc.get_property(n, "foo"), content="None")
+  inspect(doc.get_property(n, "foo") is None, content="true")
   doc.set_property(n, "foo", "bar")
-  inspect(doc.get_property(n, "foo"), content="Some(\"bar\")")
+  @debug.debug_inspect(doc.get_property(n, "foo"), content="Some(\"bar\")")
   let _ = doc.undo()
-  inspect(doc.get_property(n, "foo"), content="Some(\"\")")
+  @debug.debug_inspect(doc.get_property(n, "foo"), content="Some(\"\")")
 }
 
 // ---------------------------------------------------------------------------
@@ -288,10 +288,10 @@ test "undo: remote ops never record to the receiver's undo stack" {
   let bob = @container.Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   inspect(bob.get_text(block), content="hi")
-  inspect(bob.get_property(block, "type"), content="Some(\"paragraph\")")
+  @debug.debug_inspect(bob.get_property(block, "type"), content="Some(\"paragraph\")")
   inspect(bob.can_undo(), content="false")
   inspect(bob.undo(), content="false")
   // State is unchanged.
   inspect(bob.get_text(block), content="hi")
-  inspect(bob.get_property(block, "type"), content="Some(\"paragraph\")")
+  @debug.debug_inspect(bob.get_property(block, "type"), content="Some(\"paragraph\")")
 }
