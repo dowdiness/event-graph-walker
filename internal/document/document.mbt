@@ -52,7 +52,13 @@ pub fn Document::get_frontier(self : Document) -> @core.Frontier {
 }
 
 ///|
-/// Read-only snapshot of the document's causal DAG.
+/// Read-only view of the document's causal DAG.
+///
+/// The returned `CausalSnapshot` is a live alias over the internal causal
+/// graph — it reflects subsequent mutations to this `Document`. It is not a
+/// point-in-time copy; callers needing a stable baseline must capture the
+/// fields they care about (e.g. `frontier()`, which already returns a fresh
+/// array) before further edits.
 pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
   @history.CausalSnapshot::from_graph(self.oplog.causal_graph())
 }
