@@ -22,6 +22,12 @@ pub fn TextError::is_retryable(Self) -> Bool
 pub fn TextError::message(Self) -> String
 
 // Types and methods
+pub(all) enum MalformedContentReason {
+  MalformedUtf16
+  MultipleCodepoints
+} derive(Eq, @debug.Debug)
+pub impl Show for MalformedContentReason
+
 pub(all) struct Pos {
   // private fields
 } derive(Eq, @debug.Debug)
@@ -38,6 +44,7 @@ pub fn Range::new(Pos, Pos) -> Self
 pub(all) enum SyncFailure {
   MissingDependency(hint~ : String)
   MalformedMessage(detail~ : String)
+  MalformedContent(reason~ : MalformedContentReason)
   Timeout(detail~ : String)
   Cancelled(detail~ : String)
 } derive(@debug.Debug)
