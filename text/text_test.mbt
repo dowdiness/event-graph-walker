@@ -128,6 +128,38 @@ test "TextError::is_retryable for sync errors" {
 }
 
 ///|
+/// MalformedContent (#31): Op content rejection surfaces as a typed
+/// SyncFailure variant — not Internal — so consumers can pattern-match
+/// without parsing diagnostic strings.
+test "TextError::SyncFailed(MalformedContent) — message and help" {
+  let err : TextError = TextError::SyncFailed(
+    SyncFailure::MalformedContent(reason=MalformedContentReason::MalformedUtf16),
+  )
+  inspect(
+    err.message(),
+    content="Sync failed: malformed Op content - MalformedUtf16",
+  )
+  inspect(
+    err.help(),
+    content="Discard this message and consider isolating the peer",
+  )
+  inspect(err.is_retryable(), content="false")
+}
+
+///|
+test "TextError::SyncFailed(MalformedContent) — multi-codepoint reason" {
+  let multi : TextError = TextError::SyncFailed(
+    SyncFailure::MalformedContent(
+      reason=MalformedContentReason::MultipleCodepoints,
+    ),
+  )
+  inspect(
+    multi.message(),
+    content="Sync failed: malformed Op content - MultipleCodepoints",
+  )
+}
+
+///|
 test "SyncSession::export_all and apply" {
   let doc1 = TextState::new("alice")
   let doc2 = TextState::new("bob")

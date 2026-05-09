@@ -5,12 +5,32 @@
 pub(all) enum SyncFailure {
   MissingDependency(hint~ : String)
   MalformedMessage(detail~ : String)
+  /// Remote Op carried content that violates the per-codepoint invariant
+  /// (empty, lone surrogate, or multi-codepoint). Surfaced from
+  /// `apply_remote` / `merge_remote` validation.
+  MalformedContent(reason~ : MalformedContentReason)
   Timeout(detail~ : String)
   Cancelled(detail~ : String)
 } derive(Debug)
 
 ///|
 pub impl Show for SyncFailure with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
+
+///|
+/// Programmatic classification of malformed Op content. Mirrors
+/// `@document.ContentErrorReason` at the public API layer so consumers
+/// can pattern-match without depending on internal types.
+pub(all) enum MalformedContentReason {
+  /// Insert Op text contained a lone surrogate (not part of a valid pair).
+  MalformedUtf16
+  /// Insert Op text contained more than one Unicode scalar value.
+  MultipleCodepoints
+} derive(Debug, Eq)
+
+///|
+pub impl Show for MalformedContentReason with output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -33,6 +53,8 @@ pub fn TextError::message(self : TextError) -> String {
       "Sync failed: missing dependency - \{hint}"
     SyncFailed(MalformedMessage(detail~)) =>
       "Sync failed: malformed message - \{detail}"
+    SyncFailed(MalformedContent(reason~)) =>
+      "Sync failed: malformed Op content - \{reason}"
     SyncFailed(Timeout(detail~)) => "Sync timed out: \{detail}"
     SyncFailed(Cancelled(detail~)) => "Sync cancelled: \{detail}"
     VersionNotFound => "Version not found in document history"
@@ -49,6 +71,8 @@ pub fn TextError::help(self : TextError) -> String {
     SyncFailed(MissingDependency(_)) =>
       "Sync more operations from the peer and retry"
     SyncFailed(MalformedMessage(_)) =>
+      "Discard this message and consider isolating the peer"
+    SyncFailed(MalformedContent(_)) =>
       "Discard this message and consider isolating the peer"
     SyncFailed(Timeout(_)) =>
       "Check network connectivity and retry the sync operation"
@@ -77,6 +101,7 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
     InvalidPosition(_) => false
     SyncFailed(MissingDependency(_)) => true
     SyncFailed(MalformedMessage(_)) => false
+    SyncFailed(MalformedContent(_)) => false
     SyncFailed(Timeout(_)) => true
     SyncFailed(Cancelled(_)) => false
     VersionNotFound => true
@@ -100,8 +125,15 @@ fn TextError::from_document_error(
     Fugue(@fugue.FugueError::MissingItem(id~)) =>
       TextError::Internal(detail="fugue error: missing item id=\{id}")
     Branch(branch_err) => TextError::from_branch_error(branch_err)
-    ContentError(reason~) =>
-      TextError::Internal(detail="malformed Op content: \{reason}")
+    ContentError(reason~) => {
+      let mapped : MalformedContentReason = match reason {
+        @document.ContentErrorReason::MalformedUtf16 =>
+          MalformedContentReason::MalformedUtf16
+        @document.ContentErrorReason::MultipleCodepoints =>
+          MalformedContentReason::MultipleCodepoints
+      }
+      TextError::SyncFailed(SyncFailure::MalformedContent(reason=mapped))
+    }
   }
 }
 
