@@ -149,7 +149,7 @@ test "cursor fast-path: sequential append matches cache lookup" {
   inspect(doc.to_text(), content="xxxxxxxxxx")
   match doc.cursor {
     Some(c) => {
-      inspect(c.position, content="9")
+      inspect(c.next_position, content="10")
       inspect(c.at_end, content="true")
     }
     None => fail("Expected cursor to be set after sequential append")

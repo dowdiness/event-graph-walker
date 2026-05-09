@@ -21,9 +21,17 @@ pub(all) suberror DocumentError {
   OpLog(@oplog.OpLogError)
   Fugue(@fugue.FugueError)
   Branch(@branch.BranchError)
+  ContentError(reason~ : ContentErrorReason)
 }
 
 // Types and methods
+pub(all) enum ContentErrorReason {
+  EmptyContent
+  MalformedUtf16
+  MultipleCodepoints
+} derive(Eq, @debug.Debug)
+pub impl Show for ContentErrorReason
+
 pub struct Document {
   agent_id : String
   // private fields
