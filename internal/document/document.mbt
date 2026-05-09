@@ -5,10 +5,11 @@
 ///| Manages the FugueTree, OpLog, and CausalGraph together
 
 ///|
-/// Cursor for fast sequential append. Caches the last insert position
-/// and LV to skip position_to_lv() on the next sequential insert.
+/// Cursor for fast sequential append. Caches the position immediately
+/// after the last insert and the LV of that op, to skip position_to_lv()
+/// on the next sequential insert.
 struct InsertCursor {
-  position : Int // last insert position (0-based)
+  next_position : Int // position right after the last-inserted item
   lv : Int // LV of last inserted item
   at_end : Bool // whether origin_right was None (end of document)
 } derive(Debug)
@@ -149,8 +150,16 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
 ///|
 /// Insert text at a cursor position.
 ///
-/// Splits multi-character strings into individual character operations.
-/// Returns the last operation created (or a no-op for empty strings).
+/// `position` is an item-space offset — the unit the position cache,
+/// `position_to_lv`, and `lv_at_position` use (one slot per CRDT item).
+/// The public `text` facade (`TextState::insert`) bounds positions
+/// against `visible_count()` (also item-space) and forwards them
+/// through unchanged.
+///
+/// Iterates `text` by Unicode codepoint (not UTF-16 code unit). Each
+/// codepoint produces a single Op carrying its 1- or 2-code-unit string,
+/// so a non-BMP character like `"😀"` becomes one atomic Op rather than
+/// two splittable surrogate-half ops. See issue #31.
 pub fn Document::insert(
   self : Document,
   position : Int,
@@ -159,13 +168,12 @@ pub fn Document::insert(
   let mut current_pos = position
   let mut last_op : @core.Op? = None
   let mut cache_valid = self.position_cache is Some(_)
-
-  for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i:i + 1].to_owned()
+  for ch in text {
+    let ch_str = ch.to_string()
 
     // Cursor fast-path: skip cache lookup for sequential append
     let (origin_left, origin_right) = match self.cursor {
-      Some(c) if current_pos == c.position + 1 => {
+      Some(c) if current_pos == c.next_position => {
         let ol = c.lv
         let or = if c.at_end {
           -1 // origin_right = None (end of document)
@@ -197,11 +205,9 @@ pub fn Document::insert(
         (ol, or)
       }
     }
-
-    let op = self.oplog.insert(ch, origin_left, origin_right) catch {
+    let op = self.oplog.insert(ch_str, origin_left, origin_right) catch {
       e => raise DocumentError::OpLog(e)
     }
-
     let (timestamp, agent) = match self.oplog.causal_graph()[op.lv()] {
       Some(entry) => (entry.timestamp, entry.agent)
       None =>
@@ -209,10 +215,9 @@ pub fn Document::insert(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
-
     self.tree.insert({
       id: @fugue.Lv(op.lv()),
-      content: ch,
+      content: ch_str,
       origin_left: if origin_left == -1 {
         None
       } else {
@@ -229,30 +234,81 @@ pub fn Document::insert(
     if cache_valid {
       match self.position_cache {
         Some(cache) =>
-          cache.insert_at(current_pos, { start_lv: op.lv(), text: ch, count: 1 })
+          cache.insert_at(current_pos, {
+            start_lv: op.lv(),
+            text: ch_str,
+            count: 1,
+          })
         None => cache_valid = false
       }
     }
-    // Update cursor (no invalidation here — done per-branch above or once after loop)
+    last_op = Some(op)
+    current_pos = current_pos + 1
     self.cursor = Some({
-      position: current_pos,
+      next_position: current_pos,
       lv: op.lv(),
       at_end: origin_right == -1,
     })
-
-    last_op = Some(op)
-    current_pos = current_pos + 1
   }
   if !cache_valid {
     self.invalidate_cache()
   }
-
   match last_op {
     Some(op) => op
     None =>
       self.oplog.insert("", -1, -1) catch {
         e => raise DocumentError::OpLog(e)
       }
+  }
+}
+
+///|
+/// Validate that an Op's Insert content carries exactly one Unicode scalar
+/// value (codepoint) and is well-formed UTF-16. Used at every remote-ingress
+/// point (`apply_remote`, `merge_remote`) so peer ops or replayed logs that
+/// carry lone surrogates or batched text can't reach the FugueTree and
+/// produce malformed convergence (issue #31).
+fn validate_insert_content(text : String) -> Unit raise DocumentError {
+  let len = text.length()
+  if len == 0 {
+    // Pre-Step-2 Document::insert("") creates an empty fallback Op that ships
+    // through sync. Allow empty content through validation so upgraded peers
+    // can still apply ops produced by pre-fix peers. New code paths produce
+    // one Op per codepoint (never empty) so this branch is purely a
+    // backward-compat pass-through.
+    return
+  }
+  let cu0 = text[0].to_int()
+  let consumed = if cu0 >= 0xD800 && cu0 <= 0xDBFF {
+    // High surrogate — must be immediately followed by a low surrogate.
+    if len < 2 {
+      raise DocumentError::ContentError(reason=MalformedUtf16)
+    }
+    let cu1 = text[1].to_int()
+    if cu1 < 0xDC00 || cu1 > 0xDFFF {
+      raise DocumentError::ContentError(reason=MalformedUtf16)
+    }
+    2
+  } else if cu0 >= 0xDC00 && cu0 <= 0xDFFF {
+    // Bare low surrogate — invalid.
+    raise DocumentError::ContentError(reason=MalformedUtf16)
+  } else {
+    1
+  }
+  if consumed != len {
+    raise DocumentError::ContentError(reason=MultipleCodepoints)
+  }
+}
+
+///|
+/// Validate every Insert op in `ops` before any storage mutation. Delete /
+/// Undelete ops carry no text content and are passed through.
+fn validate_remote_ops(ops : ArrayView[@core.Op]) -> Unit raise DocumentError {
+  for op in ops {
+    match op.content() {
+      @core.Insert(text) => validate_insert_content(text)
+      @core.Delete | @core.Undelete => ()
+    }
   }
 }
 
@@ -433,6 +489,12 @@ pub fn Document::apply_remote(
   op : @core.Op,
 ) -> Unit raise DocumentError {
   self.cursor = None
+  // Validate Insert content before touching the oplog so malformed peer ops
+  // can't persist (issue #31).
+  match op.content() {
+    @core.Insert(text) => validate_insert_content(text)
+    @core.Delete | @core.Undelete => ()
+  }
   let applied_ops = self.oplog.apply_remote(op) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -592,6 +654,10 @@ pub fn Document::merge_remote(
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
   self.cursor = None
+  // Validate Insert content for the entire batch before touching state, so
+  // a malformed op anywhere in the batch fails the whole call atomically
+  // (issue #31).
+  validate_remote_ops(remote_ops[:])
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }

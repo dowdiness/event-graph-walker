@@ -100,6 +100,8 @@ fn TextError::from_document_error(
     Fugue(@fugue.FugueError::MissingItem(id~)) =>
       TextError::Internal(detail="fugue error: missing item id=\{id}")
     Branch(branch_err) => TextError::from_branch_error(branch_err)
+    ContentError(reason~) =>
+      TextError::Internal(detail="malformed Op content: \{reason}")
   }
 }
 
