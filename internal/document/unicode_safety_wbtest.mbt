@@ -1,28 +1,23 @@
-///| Step 1 of issue #31 — empirical demonstration of the bug.
+///| Unicode safety regression suite for issue #31.
 ///
-/// Probes three questions:
-///   α: Document::insert non-BMP input aborts via String::sub mid-surrogate.
-///      Reproducer pinned with `panic` prefix.
-///   β1: When ops with lone-surrogate content are ingested via apply_remote
-///      and the agent_id tiebreaker favors the surrogate-pair sibling, the
-///      result is well-formed (the high and low halves stay contiguous).
-///   β2: When the agent_id tiebreaker favors a concurrent foreign op
-///      instead, FugueMax places that op BETWEEN the two surrogates and
-///      to_text() returns a malformed UTF-16 string. This is the
-///      "concurrent peers split a surrogate pair" scenario described in
-///      the issue.
-///
-/// MoonBit source code cannot literally express a lone surrogate
-/// (`\u{D83D}` is rejected at lex time, surrogate values are not valid
-/// `Char`s), so lone-surrogate strings are synthesized via
-/// `Bytes::to_unchecked_string` over UTF-16LE bytes. This is the path
-/// malformed peer ops would take after JSON/binary deserialization.
+/// History:
+///   - PR #34 (Step 1) added these tests as panic / inspect probes pinning
+///     the broken behavior of current main: Document::insert aborted on
+///     non-BMP input, and apply_remote happily ingested lone-surrogate
+///     ops which then merged into a malformed `\uD83D X \uDE00` document
+///     when agent_id tiebreaking placed a concurrent op between the
+///     surrogate halves.
+///   - This file (Step 2) flips them to assert the fixed behavior:
+///     Document::insert iterates per-codepoint and produces atomic Ops,
+///     and apply_remote / merge_remote validate Op content and reject
+///     lone surrogates before any state mutation.
 
 ///|
-/// Construct a String containing a single UTF-16 code unit. MoonBit's
-/// String literals reject lone-surrogate escapes at lex time and `Char`
-/// rejects surrogates as non-scalar values, so this is the only path to
-/// a malformed-UTF-16 String. Bytes are interpreted as UTF-16LE.
+/// Construct a String containing a single UTF-16 code unit, including
+/// values in the surrogate range. MoonBit's String literals reject
+/// lone-surrogate escapes at lex time and `Char` rejects surrogates as
+/// non-scalar values, so this is the only path to a malformed-UTF-16
+/// String. Bytes are interpreted as UTF-16LE.
 fn lone_code_unit(code_unit : Int) -> String {
   let lo = (code_unit & 0xFF).to_byte()
   let hi = ((code_unit >> 8) & 0xFF).to_byte()
@@ -30,101 +25,127 @@ fn lone_code_unit(code_unit : Int) -> String {
 }
 
 ///|
-/// α: confirms Document::insert aborts on non-BMP input. The whole call
-/// stack — Document::insert → text[i:i+1] → String::sub — panics. Pinned
-/// here so the eg-walker test suite carries a reproducer independent of
-/// any consumer.
-test "panic α #31: Document::insert non-BMP aborts via String::sub" {
-  let doc = Document::new("test")
-  let _ = try? doc.insert(0, "😀")
+/// α — Document::insert accepts non-BMP input and produces a single
+/// atomic Op for the whole codepoint. Replaces the prior `panic` test
+/// asserting String::sub aborted mid-surrogate.
+test "α #31: Document::insert accepts non-BMP and stores one atomic Op" {
+  let doc = Document::new("alice")
+  let last = try! doc.insert(0, "😀")
+  inspect(doc.to_text(), content="😀")
+  // visible_count returns item count (one item per codepoint after Step 2).
+  // For "😀" that's 1 item even though to_text().length() is 2 code units.
+  inspect(doc.visible_count(), content="1")
+  // The returned Op carries the full codepoint, not a surrogate half.
+  match last.content() {
+    @core.Insert(text) => inspect(text, content="😀")
+    _ => fail("expected Insert content")
+  }
 }
 
 ///|
-/// Shared op shape for β1/β2:
-///   op0: insert U+D83D (high surrogate) at start. agent=peer_a, seq=0.
-///   op1: insert U+DE00 (low surrogate) with origin_left=op0.
-///        agent=peer_a, seq=1, parents=[op0].
-///   opX: insert "X" with origin_left=op0, concurrent with op1.
-///        agent varies between β1 and β2, parents=[op0].
+/// β3 — Document::insert advances cursor by `utf16_len` per codepoint,
+/// so a mixed BMP/non-BMP string lays out correctly.
+test "β3 #31: Document::insert mixed BMP/non-BMP advances cursor by utf16_len" {
+  let doc = Document::new("alice")
+  let _ = try! doc.insert(0, "a😀b")
+  inspect(doc.to_text(), content="a😀b")
+  inspect(doc.visible_count(), content="3") // 3 items: 'a', '😀', 'b'
+}
+
+///|
+/// β5 — non-BMP insert MIDWAY through an existing document positions
+/// subsequent inserts correctly. Caller passes UTF-16 code-unit offsets
+/// (`"ab"`, then position 1 to insert between a and b). Internally the
+/// loop must keep its item-space position in sync so the second
+/// codepoint of the input ("X") lands BEFORE "b", not at the end.
 ///
-/// FugueMax tie-breaks siblings under op0 by Lamport timestamp first,
-/// then by agent_id (lexicographic). Both ops here have the same Lamport
-/// (one beyond op0), so agent_id decides.
-///
-/// β1 — agent_id tiebreaker favors op1 (peer_a < peer_b lexically).
-/// Result is the CLEAN ordering [D83D, DE00, X]. FugueMax happens to
-/// place the surrogate pair contiguously here.
-test "β1 #31: apply_remote with peer_a/peer_b — clean ordering" {
+/// Pre-Codex-review this case would have produced "a😀bX" because
+/// current_pos advanced by 2 code units (past "b" in item-space) after
+/// the emoji insert.
+test "β5 #31: insert at mid-doc with mixed codepoints lands correctly" {
+  let doc = Document::new("alice")
+  let _ = try! doc.insert(0, "ab")
+  let _ = try! doc.insert(1, "😀X")
+  inspect(doc.to_text(), content="a😀Xb")
+}
+
+///|
+/// β1 — apply_remote rejects an Op whose Insert content is a lone
+/// surrogate. After Step 2, validate_insert_content runs before any
+/// oplog or tree mutation.
+test "β1 #31: apply_remote rejects lone high surrogate with ContentError" {
   let high = lone_code_unit(0xD83D)
-  let low = lone_code_unit(0xDE00)
   inspect(high.length(), content="1")
+  let doc = Document::new("peer_a")
+  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, high, None, None)
+  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  inspect(
+    result is Err(DocumentError::ContentError(reason=MalformedUtf16)),
+    content="true",
+  )
+  // The doc remains empty — rejection is atomic.
+  inspect(doc.to_text(), content="")
+  inspect(doc.visible_count(), content="0")
+}
+
+///|
+/// β2 — same construction as β1 but tries the lone low surrogate. Same
+/// rejection. Pre-fix this scenario could lead to a malformed merge with
+/// concurrent ops; post-fix the malformed Op never reaches the FugueTree.
+test "β2 #31: apply_remote rejects lone low surrogate with ContentError" {
+  let low = lone_code_unit(0xDE00)
   inspect(low.length(), content="1")
   let doc = Document::new("peer_a")
-  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, high, None, None)
-  doc.apply_remote(op0) catch {
-    _ => ()
-  }
-  let op0_raw = @core.RawVersion::new("peer_a", 0)
-  let op1 = @core.Op::new_insert(
-    -1,
-    [op0_raw],
-    "peer_a",
-    1,
-    low,
-    Some(op0_raw),
-    None,
+  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, low, None, None)
+  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  inspect(
+    result is Err(DocumentError::ContentError(reason=MalformedUtf16)),
+    content="true",
   )
-  doc.apply_remote(op1) catch {
-    _ => ()
-  }
-  let opX = @core.Op::new_insert(
-    -1,
-    [op0_raw],
-    "peer_b",
-    0,
-    "X",
-    Some(op0_raw),
-    None,
-  )
-  doc.apply_remote(opX) catch {
-    _ => ()
-  }
-  let text = doc.to_text()
-  inspect(text.length(), content="3")
-  inspect(text.code_unit_at(0).to_string(), content="55357") // D83D
-  inspect(text.code_unit_at(1).to_string(), content="56832") // DE00 (low surrogate, kept contiguous)
-  inspect(text.code_unit_at(2).to_string(), content="88") // 'X'
+  inspect(doc.to_text(), content="")
 }
 
 ///|
-/// β2 — agent_id tiebreaker favors opX (agent "aaa" < "peer_a"
-/// lexically). FugueMax places opX BETWEEN op0 and op1 in the visible
-/// sequence, splitting the surrogate pair. Result is the MALFORMED
-/// ordering [D83D, X, DE00]. This demonstrates that bug #31 IS reachable
-/// through `apply_remote` whenever a lone-surrogate op lands with an
-/// agent_id that loses the tie-break to a sibling.
-test "β2 #31: apply_remote where opX agent_id sorts before op1 — surrogate split" {
-  let high = lone_code_unit(0xD83D)
-  let low = lone_code_unit(0xDE00)
+/// Multiple-codepoint Op content is also rejected. Document::insert never
+/// produces such ops, but a malicious / buggy peer could send one.
+test "β #31: apply_remote rejects multi-codepoint Insert content" {
   let doc = Document::new("peer_a")
-  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, high, None, None)
-  doc.apply_remote(op0) catch {
-    _ => ()
-  }
-  let op0_raw = @core.RawVersion::new("peer_a", 0)
-  let op1 = @core.Op::new_insert(
-    -1,
-    [op0_raw],
-    "peer_a",
-    1,
-    low,
-    Some(op0_raw),
-    None,
+  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, "ab", None, None)
+  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  inspect(
+    result is Err(DocumentError::ContentError(reason=MultipleCodepoints)),
+    content="true",
   )
-  doc.apply_remote(op1) catch {
-    _ => ()
-  }
-  // agent "aaa" sorts lexically BEFORE "peer_a" → opX wins the tiebreak.
+}
+
+///|
+/// Empty-content Op is also rejected on ingest. (Document::insert's
+/// internal empty-string fallback returns a synthesized op via oplog
+/// directly without going through apply_remote, so that path is
+/// unaffected.)
+test "β #31: apply_remote rejects empty Insert content" {
+  let doc = Document::new("peer_a")
+  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, "", None, None)
+  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  inspect(
+    result is Err(DocumentError::ContentError(reason=EmptyContent)),
+    content="true",
+  )
+}
+
+///|
+/// Concurrent merge with well-formed emoji ops can NOT split the
+/// surrogate pair, because the surrogate halves are now atomic at the
+/// Op level. This is the post-fix counterpart of pre-fix β2 (the
+/// malformed-merge scenario from the issue body).
+test "β4 #31: concurrent insert next to atomic emoji op cannot split surrogates" {
+  let doc = Document::new("peer_a")
+  // Local insert produces one atomic Op for "😀".
+  let _ = try! doc.insert(0, "😀")
+  let op0_raw = @core.RawVersion::new("peer_a", 0)
+  // Concurrent peer "aaa" inserts "X" with origin_left=op0 (i.e., "right
+  // after op0" from aaa's perspective). agent_id "aaa" wins the tiebreak,
+  // but op0's content is "😀" — there's nowhere "between" for X to land.
   let opX = @core.Op::new_insert(
     -1,
     [op0_raw],
@@ -134,13 +155,22 @@ test "β2 #31: apply_remote where opX agent_id sorts before op1 — surrogate sp
     Some(op0_raw),
     None,
   )
-  doc.apply_remote(opX) catch {
-    _ => ()
-  }
+  try! doc.apply_remote(opX)
   let text = doc.to_text()
-  inspect(text.length(), content="3")
-  inspect(text.code_unit_at(0).to_string(), content="55357") // D83D
-  // BUG: `X` lands between the surrogates.
-  inspect(text.code_unit_at(1).to_string(), content="88") // 'X'
-  inspect(text.code_unit_at(2).to_string(), content="56832") // DE00
+  // Either "😀X" or "X😀" depending on how FugueMax tiebreaks at the
+  // Item level; both are well-formed. Assert no surrogate split.
+  let cu0 = text.code_unit_at(0).to_int()
+  let cu1 = text.code_unit_at(1).to_int()
+  let cu2 = text.code_unit_at(2).to_int()
+  // Surrogate halves must remain adjacent: a high surrogate is always
+  // followed immediately by a low surrogate.
+  let high_pair_at_0 = cu0 >= 0xD800 &&
+    cu0 <= 0xDBFF &&
+    cu1 >= 0xDC00 &&
+    cu1 <= 0xDFFF
+  let high_pair_at_1 = cu1 >= 0xD800 &&
+    cu1 <= 0xDBFF &&
+    cu2 >= 0xDC00 &&
+    cu2 <= 0xDFFF
+  inspect(high_pair_at_0 || high_pair_at_1, content="true")
 }

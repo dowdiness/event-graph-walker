@@ -5,10 +5,11 @@
 ///| Manages the FugueTree, OpLog, and CausalGraph together
 
 ///|
-/// Cursor for fast sequential append. Caches the last insert position
-/// and LV to skip position_to_lv() on the next sequential insert.
+/// Cursor for fast sequential append. Caches the position immediately
+/// after the last insert and the LV of that op, to skip position_to_lv()
+/// on the next sequential insert.
 struct InsertCursor {
-  position : Int // last insert position (0-based)
+  next_position : Int // position right after the last-inserted item
   lv : Int // LV of last inserted item
   at_end : Bool // whether origin_right was None (end of document)
 } derive(Debug)
@@ -149,23 +150,32 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
 ///|
 /// Insert text at a cursor position.
 ///
-/// Splits multi-character strings into individual character operations.
-/// Returns the last operation created (or a no-op for empty strings).
+/// `position` is a UTF-16 code-unit offset (the unit canopy and the
+/// ProseMirror bridge use for cursors). Internally we maintain an
+/// item-space position alongside the code-unit position because the
+/// position cache and `position_to_lv`/`lv_at_position` operate in
+/// item-space (one slot per CRDT item) — not code units.
+///
+/// Iterates `text` by Unicode codepoint (not UTF-16 code unit). Each
+/// codepoint produces a single Op carrying its 1- or 2-code-unit string,
+/// so a non-BMP character like `"😀"` becomes one atomic Op rather than
+/// two splittable surrogate-half ops. See issue #31.
 pub fn Document::insert(
   self : Document,
   position : Int,
   text : String,
 ) -> @core.Op raise DocumentError {
   let mut current_pos = position
+  let mut current_item_pos = self.code_unit_pos_to_item_pos(position)
   let mut last_op : @core.Op? = None
   let mut cache_valid = self.position_cache is Some(_)
-
-  for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i:i + 1].to_owned()
+  for ch in text {
+    let ch_str = ch.to_string()
+    let ch_utf16 = ch.utf16_len()
 
     // Cursor fast-path: skip cache lookup for sequential append
     let (origin_left, origin_right) = match self.cursor {
-      Some(c) if current_pos == c.position + 1 => {
+      Some(c) if current_pos == c.next_position => {
         let ol = c.lv
         let or = if c.at_end {
           -1 // origin_right = None (end of document)
@@ -175,7 +185,7 @@ pub fn Document::insert(
           if !cache_valid {
             cache_valid = true
           }
-          match self.lv_at_position(current_pos) {
+          match self.lv_at_position(current_item_pos) {
             Some(lv) => lv
             None => -1
           }
@@ -189,19 +199,17 @@ pub fn Document::insert(
         if !cache_valid {
           cache_valid = true
         }
-        let ol = self.position_to_lv(current_pos)
-        let or = match self.lv_at_position(current_pos) {
+        let ol = self.position_to_lv(current_item_pos)
+        let or = match self.lv_at_position(current_item_pos) {
           Some(lv) => lv
           None => -1
         }
         (ol, or)
       }
     }
-
-    let op = self.oplog.insert(ch, origin_left, origin_right) catch {
+    let op = self.oplog.insert(ch_str, origin_left, origin_right) catch {
       e => raise DocumentError::OpLog(e)
     }
-
     let (timestamp, agent) = match self.oplog.causal_graph()[op.lv()] {
       Some(entry) => (entry.timestamp, entry.agent)
       None =>
@@ -209,10 +217,9 @@ pub fn Document::insert(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
-
     self.tree.insert({
       id: @fugue.Lv(op.lv()),
-      content: ch,
+      content: ch_str,
       origin_left: if origin_left == -1 {
         None
       } else {
@@ -229,30 +236,143 @@ pub fn Document::insert(
     if cache_valid {
       match self.position_cache {
         Some(cache) =>
-          cache.insert_at(current_pos, { start_lv: op.lv(), text: ch, count: 1 })
+          cache.insert_at(current_item_pos, {
+            start_lv: op.lv(),
+            text: ch_str,
+            count: 1,
+          })
         None => cache_valid = false
       }
     }
-    // Update cursor (no invalidation here — done per-branch above or once after loop)
+    last_op = Some(op)
+    current_pos = current_pos + ch_utf16
+    current_item_pos = current_item_pos + 1
     self.cursor = Some({
-      position: current_pos,
+      next_position: current_pos,
       lv: op.lv(),
       at_end: origin_right == -1,
     })
-
-    last_op = Some(op)
-    current_pos = current_pos + 1
   }
   if !cache_valid {
     self.invalidate_cache()
   }
-
   match last_op {
     Some(op) => op
     None =>
       self.oplog.insert("", -1, -1) catch {
         e => raise DocumentError::OpLog(e)
       }
+  }
+}
+
+///|
+/// Convert a UTF-16 code-unit offset (caller-facing position) to an
+/// item-space offset (cache-facing). Walks the position cache run-by-run
+/// accumulating `text.length()` (code units) and `count` (items) until
+/// reaching the target.
+///
+/// If the input lands mid-codepoint (e.g., between the high and low
+/// halves of a non-BMP item), this function snaps to the *start* of that
+/// codepoint's item in item-space — the insertion happens before the
+/// item rather than rejecting. This preserves the "insert always
+/// succeeds" contract Document::insert had under the per-code-unit world
+/// for ASCII inputs.
+fn Document::code_unit_pos_to_item_pos(
+  self : Document,
+  code_unit_pos : Int,
+) -> Int {
+  if code_unit_pos <= 0 {
+    return 0
+  }
+  let cache = self.get_position_cache()
+  let mut acc_cu = 0
+  let mut acc_items = 0
+  for run in cache.iter() {
+    let run_cu = run.text.length()
+    if acc_cu + run_cu >= code_unit_pos {
+      let offset_within_run = code_unit_pos - acc_cu
+      let item_within_run = utf16_offset_to_item_offset(
+        run.text,
+        offset_within_run,
+      )
+      return acc_items + item_within_run
+    }
+    acc_cu = acc_cu + run_cu
+    acc_items = acc_items + run.count
+  }
+  // Past end — return total item count.
+  acc_items
+}
+
+///|
+/// Inverse of `visible_run::item_offset_to_utf16`. Given the run's
+/// concatenated text and a UTF-16 code-unit offset within it, return the
+/// item offset (item index) within the run.
+///
+/// Mid-codepoint inputs (between the high and low halves of a non-BMP
+/// item) snap to the start of that item.
+fn utf16_offset_to_item_offset(text : String, utf16_offset : Int) -> Int {
+  let mut items = 0
+  let mut cu = 0
+  while cu < text.length() && cu < utf16_offset {
+    let code_unit = text[cu].to_int()
+    if code_unit >= 0xD800 && code_unit <= 0xDBFF {
+      cu = cu + 2
+    } else {
+      cu = cu + 1
+    }
+    items = items + 1
+  }
+  // If we overshot (utf16_offset landed mid-codepoint), the item we just
+  // counted hasn't fully been "passed" — snap back to its start.
+  if cu > utf16_offset {
+    items = items - 1
+  }
+  items
+}
+
+///|
+/// Validate that an Op's Insert content carries exactly one Unicode scalar
+/// value (codepoint) and is well-formed UTF-16. Used at every remote-ingress
+/// point (`apply_remote`, `merge_remote`) so peer ops or replayed logs that
+/// carry lone surrogates or batched text can't reach the FugueTree and
+/// produce malformed convergence (issue #31).
+fn validate_insert_content(text : String) -> Unit raise DocumentError {
+  let len = text.length()
+  if len == 0 {
+    raise DocumentError::ContentError(reason=EmptyContent)
+  }
+  let cu0 = text[0].to_int()
+  let consumed = if cu0 >= 0xD800 && cu0 <= 0xDBFF {
+    // High surrogate — must be immediately followed by a low surrogate.
+    if len < 2 {
+      raise DocumentError::ContentError(reason=MalformedUtf16)
+    }
+    let cu1 = text[1].to_int()
+    if cu1 < 0xDC00 || cu1 > 0xDFFF {
+      raise DocumentError::ContentError(reason=MalformedUtf16)
+    }
+    2
+  } else if cu0 >= 0xDC00 && cu0 <= 0xDFFF {
+    // Bare low surrogate — invalid.
+    raise DocumentError::ContentError(reason=MalformedUtf16)
+  } else {
+    1
+  }
+  if consumed != len {
+    raise DocumentError::ContentError(reason=MultipleCodepoints)
+  }
+}
+
+///|
+/// Validate every Insert op in `ops` before any storage mutation. Delete /
+/// Undelete ops carry no text content and are passed through.
+fn validate_remote_ops(ops : ArrayView[@core.Op]) -> Unit raise DocumentError {
+  for op in ops {
+    match op.content() {
+      @core.Insert(text) => validate_insert_content(text)
+      @core.Delete | @core.Undelete => ()
+    }
   }
 }
 
@@ -433,6 +553,12 @@ pub fn Document::apply_remote(
   op : @core.Op,
 ) -> Unit raise DocumentError {
   self.cursor = None
+  // Validate Insert content before touching the oplog so malformed peer ops
+  // can't persist (issue #31).
+  match op.content() {
+    @core.Insert(text) => validate_insert_content(text)
+    @core.Delete | @core.Undelete => ()
+  }
   let applied_ops = self.oplog.apply_remote(op) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -592,6 +718,10 @@ pub fn Document::merge_remote(
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
   self.cursor = None
+  // Validate Insert content for the entire batch before touching state, so
+  // a malformed op anywhere in the batch fails the whole call atomically
+  // (issue #31).
+  validate_remote_ops(remote_ops[:])
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }
