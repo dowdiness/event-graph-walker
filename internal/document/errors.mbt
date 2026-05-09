@@ -20,8 +20,6 @@ pub(all) suberror DocumentError {
 
 ///|
 pub(all) enum ContentErrorReason {
-  /// Insert Op text was the empty string.
-  EmptyContent
   /// Insert Op text contained a lone surrogate (not part of a valid pair).
   MalformedUtf16
   /// Insert Op text contained more than one Unicode scalar value.

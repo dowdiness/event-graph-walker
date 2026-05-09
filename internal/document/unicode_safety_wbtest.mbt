@@ -54,19 +54,37 @@ test "β3 #31: Document::insert mixed BMP/non-BMP advances cursor by utf16_len" 
 
 ///|
 /// β5 — non-BMP insert MIDWAY through an existing document positions
-/// subsequent inserts correctly. Caller passes UTF-16 code-unit offsets
-/// (`"ab"`, then position 1 to insert between a and b). Internally the
-/// loop must keep its item-space position in sync so the second
-/// codepoint of the input ("X") lands BEFORE "b", not at the end.
-///
-/// Pre-Codex-review this case would have produced "a😀bX" because
-/// current_pos advanced by 2 code units (past "b" in item-space) after
-/// the emoji insert.
+/// subsequent inserts correctly. Caller passes item-space offsets
+/// (`"ab"`, then position 1 to insert between a and b). The
+/// codepoint-iteration loop advances by one item per codepoint so the
+/// second codepoint of the input ("X") lands BEFORE "b", not at the
+/// end.
 test "β5 #31: insert at mid-doc with mixed codepoints lands correctly" {
   let doc = Document::new("alice")
   let _ = try! doc.insert(0, "ab")
   let _ = try! doc.insert(1, "😀X")
   inspect(doc.to_text(), content="a😀Xb")
+}
+
+///|
+/// β6 — Document::insert position is item-space (one slot per CRDT
+/// item), not UTF-16 code-unit. After inserting "😀" (one item, two
+/// code units), inserting at position 1 means "after the emoji" — not
+/// "between the surrogate halves." Item-space and code-unit space
+/// happen to coincide for ASCII, so β5 (which prefixes "ab") cannot
+/// distinguish them; β6 specifically pins the contract.
+///
+/// Codex pre-merge review on PR #35 caught this: the first draft of
+/// Step 2 advanced `current_pos` by `Char::utf16_len()` and mixed it
+/// with item-space cache APIs, producing `"X😀"` (Y at item 0, before
+/// the emoji) instead of `"😀Y"` here.
+test "β6 #31: insert position is item-space — Y after emoji, not mid-surrogate" {
+  let doc = Document::new("alice")
+  let _ = try! doc.insert(0, "😀")
+  // Item-space position 1 = after the emoji (one item exists).
+  let _ = try! doc.insert(1, "Y")
+  inspect(doc.to_text(), content="😀Y")
+  inspect(doc.visible_count(), content="2")
 }
 
 ///|
@@ -119,18 +137,16 @@ test "β #31: apply_remote rejects multi-codepoint Insert content" {
 }
 
 ///|
-/// Empty-content Op is also rejected on ingest. (Document::insert's
-/// internal empty-string fallback returns a synthesized op via oplog
-/// directly without going through apply_remote, so that path is
-/// unaffected.)
-test "β #31: apply_remote rejects empty Insert content" {
+/// Empty-content Insert Ops produced by pre-Step-2 peers (via
+/// Document::insert("")) ship through sync and must remain applyable.
+/// validate_insert_content allows them through as a backward-compat
+/// pass-through; new code paths never produce empty Ops.
+test "β #31: apply_remote accepts empty Insert content (backward compat)" {
   let doc = Document::new("peer_a")
   let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, "", None, None)
-  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
-  inspect(
-    result is Err(DocumentError::ContentError(reason=EmptyContent)),
-    content="true",
-  )
+  try! doc.apply_remote(op0)
+  // Empty op leaves the visible document unchanged.
+  inspect(doc.to_text(), content="")
 }
 
 ///|

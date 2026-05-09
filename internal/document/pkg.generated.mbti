@@ -26,7 +26,6 @@ pub(all) suberror DocumentError {
 
 // Types and methods
 pub(all) enum ContentErrorReason {
-  EmptyContent
   MalformedUtf16
   MultipleCodepoints
 } derive(Eq, @debug.Debug)
