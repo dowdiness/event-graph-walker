@@ -180,18 +180,25 @@ pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int]) -> Array[@core.Op] {
 ///|
 /// Collect operations for an RLE-compressed list of LV ranges.
 ///
-/// Expands the compressed ranges and looks up each LV, silently skipping
-/// any invalid index. This is the compressed counterpart of `get_ops`.
+/// Expands the compressed ranges by slicing operation runs directly, silently
+/// skipping any invalid index. This is the compressed counterpart of `get_ops`.
 pub fn OpLog::get_ops_rle(
   self : OpLog,
   lvs : @rle.Rle[@core.LvRange],
 ) -> Array[@core.Op] {
   let result : Array[@core.Op] = []
   for range in lvs.iter() {
-    for lv = range.start; lv < range.end(); lv = lv + 1 {
-      match self.get_op(lv) {
-        Some(op) => result.push(op)
-        None => ()
+    // LVs are assigned densely, so an LV range is also a positional slice of
+    // the operation runs. Slicing runs once avoids an RLE lookup per LV.
+    for slice in self.operations.range_clamped(
+      start=range.start,
+      end=range.end(),
+    ) {
+      for offset in slice.start..<slice.end {
+        match slice.value.decompress(offset) {
+          Some(op) => result.push(op)
+          None => ()
+        }
       }
     }
   }
