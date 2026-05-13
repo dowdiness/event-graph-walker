@@ -29,7 +29,7 @@ test "document: text on deleted node fails" {
   } catch {
     _ => Err(())
   }
-  inspect(result, content="Err(())")
+  @debug.debug_inspect(result, content="Err(())")
 }
 
 ///|
@@ -73,7 +73,7 @@ test "document: delete from empty block fails" {
   } catch {
     _ => Err(())
   }
-  inspect(result, content="Err(())")
+  @debug.debug_inspect(result, content="Err(())")
 }
 
 ///|
@@ -87,7 +87,7 @@ test "document: insert at invalid position" {
   } catch {
     _ => Err(())
   }
-  inspect(result, content="Err(())")
+  @debug.debug_inspect(result, content="Err(())")
 }
 
 ///|
@@ -146,7 +146,7 @@ test "document: text after delete_node" {
   } catch {
     _ => Err(())
   }
-  inspect(result, content="Err(())")
+  @debug.debug_inspect(result, content="Err(())")
 }
 
 ///|

@@ -189,8 +189,8 @@ pub fn TreeState::new(replica_id : String) -> TreeState raise TreeError {
     next_counter: 0,
     lamport_clock: -1,
     ops: [],
-    seen_ops: Map::new(),
-    property_state: Map::new(),
+    seen_ops: Map::default(),
+    property_state: Map::default(),
   }
 }
 

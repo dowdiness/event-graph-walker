@@ -5,7 +5,7 @@ test "fresh document produces empty snapshot" {
   let doc = @text.TextState::new("alice")
   let snap = doc.causal_snapshot()
   inspect(snap.op_count(), content="0")
-  inspect(snap.frontier(), content="[]")
+  @debug.debug_inspect(snap.frontier(), content="[]")
 }
 
 ///|
@@ -14,7 +14,7 @@ test "single insert produces single-entry snapshot" {
   doc.insert(@text.Pos::at(0), "a")
   let snap = doc.causal_snapshot()
   inspect(snap.op_count(), content="1")
-  inspect(snap.frontier(), content="[0]")
+  @debug.debug_inspect(snap.frontier(), content="[0]")
   let entry = snap.entry(0).unwrap()
   inspect(entry.agent(), content="alice")
   inspect(entry.seq(), content="0")
@@ -29,7 +29,7 @@ test "two-op chain: parents and outdegree" {
   doc.insert(@text.Pos::at(1), "b")
   let snap = doc.causal_snapshot()
   inspect(snap.op_count(), content="2")
-  inspect(snap.frontier(), content="[1]")
+  @debug.debug_inspect(snap.frontier(), content="[1]")
   inspect(snap.children_count(0), content="1")
   inspect(snap.children_count(1), content="0")
   let e1 = snap.entry(1).unwrap()
@@ -79,7 +79,7 @@ test "merge: post-merge op has parents.length() == 2" {
   let entry = snap.entry(merge_lv).unwrap()
   inspect(entry.parents().length(), content="2")
   // Frontier collapses back to a single tip after the merge.
-  inspect(snap.frontier(), content="[\{merge_lv}]")
+  @debug.debug_inspect(snap.frontier(), content="[\{merge_lv}]")
 }
 
 ///|

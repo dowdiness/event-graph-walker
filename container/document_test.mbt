@@ -49,7 +49,10 @@ test "Document: properties" {
   doc.set_property(node, "color", "red")
   @debug.debug_inspect(doc.get_property(node, "color"), content="Some(\"red\")")
   doc.set_property(node, "color", "blue")
-  @debug.debug_inspect(doc.get_property(node, "color"), content="Some(\"blue\")")
+  @debug.debug_inspect(
+    doc.get_property(node, "color"),
+    content="Some(\"blue\")",
+  )
 }
 
 ///|
@@ -176,7 +179,10 @@ test "Document: property ops replay after out-of-order create" {
   doc_b.apply_remote_op(ops[1])
   doc_b.apply_remote_op(ops[0])
   inspect(doc_b.is_alive(node), content="true")
-  @debug.debug_inspect(doc_b.get_property(node, "label"), content="Some(\"ready\")")
+  @debug.debug_inspect(
+    doc_b.get_property(node, "label"),
+    content="Some(\"ready\")",
+  )
 }
 
 ///|

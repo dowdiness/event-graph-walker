@@ -4,6 +4,52 @@
 // using Arbitrary and Shrink traits for automatic test generation and minimization.
 
 ///|
+struct VersionVectorPair {
+  a : VersionVector
+  b : VersionVector
+} derive(Debug)
+
+///|
+impl Show for VersionVectorPair with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
+
+///|
+impl @quickcheck.Arbitrary for VersionVectorPair with arbitrary(size, rs) {
+  {
+    a: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+    b: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+  }
+}
+
+///|
+impl @qc.Shrink for VersionVectorPair
+
+///|
+struct VersionVectorTriple {
+  a : VersionVector
+  b : VersionVector
+  c : VersionVector
+} derive(Debug)
+
+///|
+impl Show for VersionVectorTriple with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
+
+///|
+impl @quickcheck.Arbitrary for VersionVectorTriple with arbitrary(size, rs) {
+  {
+    a: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+    b: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+    c: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+  }
+}
+
+///|
+impl @qc.Shrink for VersionVectorTriple
+
+///|
 /// Property: Reflexivity - a version vector is always <= itself
 fn prop_reflexivity(vv : VersionVector) -> Bool {
   vv <= vv
@@ -16,10 +62,10 @@ test "property: version vector reflexivity (a <= a)" {
 
 ///|
 /// Property: Transitivity - if a <= b and b <= c, then a <= c
-fn prop_transitivity(
-  vvs : (VersionVector, VersionVector, VersionVector),
-) -> Bool {
-  let (vv_a, vv_b, vv_c) = vvs
+fn prop_transitivity(vvs : VersionVectorTriple) -> Bool {
+  let vv_a = vvs.a
+  let vv_b = vvs.b
+  let vv_c = vvs.c
   // Only check transitivity when the premise holds
   if vv_a <= vv_b && vv_b <= vv_c {
     vv_a <= vv_c
@@ -35,8 +81,9 @@ test "property: version vector transitivity" {
 
 ///|
 /// Property: Antisymmetry - if a <= b and b <= a, then a == b
-fn prop_antisymmetry(pair : (VersionVector, VersionVector)) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_antisymmetry(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   if vv_a <= vv_b && vv_b <= vv_a {
     vv_a == vv_b
   } else {
@@ -51,8 +98,9 @@ test "property: version vector antisymmetry" {
 
 ///|
 /// Property: Merge commutativity - merge(a, b) == merge(b, a)
-fn prop_merge_commutative(pair : (VersionVector, VersionVector)) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_merge_commutative(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   let merged_ab = vv_a.merge(vv_b)
   let merged_ba = vv_b.merge(vv_a)
   merged_ab == merged_ba
@@ -77,10 +125,10 @@ test "property: merge is idempotent" {
 
 ///|
 /// Property: Merge associativity - merge(merge(a, b), c) == merge(a, merge(b, c))
-fn prop_merge_associative(
-  triple : (VersionVector, VersionVector, VersionVector),
-) -> Bool {
-  let (vv_a, vv_b, vv_c) = triple
+fn prop_merge_associative(triple : VersionVectorTriple) -> Bool {
+  let vv_a = triple.a
+  let vv_b = triple.b
+  let vv_c = triple.c
   let merged_abc = vv_a.merge(vv_b).merge(vv_c)
   let merged_bca = vv_a.merge(vv_b.merge(vv_c))
   merged_abc == merged_bca
@@ -93,8 +141,9 @@ test "property: merge is associative" {
 
 ///|
 /// Property: Merge increases or maintains version numbers
-fn prop_merge_preserves(pair : (VersionVector, VersionVector)) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_merge_preserves(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   let merged = vv_a.merge(vv_b)
   // Merged version should be >= both inputs
   vv_a <= merged && vv_b <= merged
@@ -107,8 +156,9 @@ test "property: merge preserves or increases versions" {
 
 ///|
 /// Property: Concurrent symmetry - concurrent(a, b) == concurrent(b, a)
-fn prop_concurrent_symmetric(pair : (VersionVector, VersionVector)) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_concurrent_symmetric(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   vv_a.concurrent(vv_b) == vv_b.concurrent(vv_a)
 }
 
@@ -119,10 +169,9 @@ test "property: concurrent is symmetric" {
 
 ///|
 /// Property: If not concurrent, one must be <= the other
-fn prop_total_order_or_concurrent(
-  pair : (VersionVector, VersionVector),
-) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_total_order_or_concurrent(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   if !vv_a.concurrent(vv_b) {
     // One must be <= the other
     vv_a <= vv_b || vv_b <= vv_a
@@ -170,8 +219,9 @@ test "property: set with larger value increases version" {
 
 ///|
 /// Property: Includes is consistent with <=
-fn prop_includes_consistent(pair : (VersionVector, VersionVector)) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_includes_consistent(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   // If vv_a <= vv_b, then all versions in vv_a should be included in vv_b
   if vv_a <= vv_b {
     let mut all_included = true
@@ -219,8 +269,9 @@ test "property: empty has length zero" {
 
 ///|
 /// Property: Equality is symmetric
-fn prop_equality_symmetric(pair : (VersionVector, VersionVector)) -> Bool {
-  let (vv_a, vv_b) = pair
+fn prop_equality_symmetric(pair : VersionVectorPair) -> Bool {
+  let vv_a = pair.a
+  let vv_b = pair.b
   (vv_a == vv_b) == (vv_b == vv_a)
 }
 
@@ -231,10 +282,10 @@ test "property: equality is symmetric" {
 
 ///|
 /// Property: Equality is transitive
-fn prop_equality_transitive(
-  triple : (VersionVector, VersionVector, VersionVector),
-) -> Bool {
-  let (vv_a, vv_b, vv_c) = triple
+fn prop_equality_transitive(triple : VersionVectorTriple) -> Bool {
+  let vv_a = triple.a
+  let vv_b = triple.b
+  let vv_c = triple.c
   if vv_a == vv_b && vv_b == vv_c {
     vv_a == vv_c
   } else {
@@ -273,10 +324,10 @@ test "property: agents returns all agent IDs" {
 /// merge(a, b) is not just *an* upper bound — it is the *smallest* one.
 /// For any c that is an upper bound of both a and b, merge(a, b) <= c.
 /// Together with prop_merge_preserves, this makes merge a semilattice join.
-fn prop_merge_is_lub(
-  triple : (VersionVector, VersionVector, VersionVector),
-) -> Bool {
-  let (vv_a, vv_b, vv_c) = triple
+fn prop_merge_is_lub(triple : VersionVectorTriple) -> Bool {
+  let vv_a = triple.a
+  let vv_b = triple.b
+  let vv_c = triple.c
   if vv_a <= vv_c && vv_b <= vv_c {
     vv_a.merge(vv_b) <= vv_c
   } else {
@@ -308,10 +359,10 @@ test "property: merge with empty is identity" {
 ///
 /// If a <= b, then for any c, merge(a, c) <= merge(b, c).
 /// This ensures that learning more (advancing a to b) never makes the merge smaller.
-fn prop_merge_monotone(
-  triple : (VersionVector, VersionVector, VersionVector),
-) -> Bool {
-  let (vv_a, vv_b, vv_c) = triple
+fn prop_merge_monotone(triple : VersionVectorTriple) -> Bool {
+  let vv_a = triple.a
+  let vv_b = triple.b
+  let vv_c = triple.c
   if vv_a <= vv_b {
     vv_a.merge(vv_c) <= vv_b.merge(vv_c)
   } else {

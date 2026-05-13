@@ -80,7 +80,7 @@ test "LvRange - Rle iter_units roundtrip" {
   let ints = [0, 1, 2, 5, 6, 7]
   let rle : @rle.Rle[@core.LvRange] = @rle.Rle::from_sorted_ints(ints)
   let expanded = rle.iter_units().collect()
-  inspect(expanded, content="[0, 1, 2, 5, 6, 7]")
+  @debug.debug_inspect(expanded, content="[0, 1, 2, 5, 6, 7]")
 }
 
 ///|
@@ -96,5 +96,5 @@ test "LvRange - Rle from_sorted_ints single" {
   inspect(@rle.HasLength::length(rle), content="1")
   inspect(@rle.Spanning::span(rle), content="1")
   let expanded = rle.iter_units().collect()
-  inspect(expanded, content="[42]")
+  @debug.debug_inspect(expanded, content="[42]")
 }

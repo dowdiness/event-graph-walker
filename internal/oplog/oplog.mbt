@@ -190,10 +190,8 @@ pub fn OpLog::get_ops_rle(
   for range in lvs.iter() {
     // LVs are assigned densely, so an LV range is also a positional slice of
     // the operation runs. Slicing runs once avoids an RLE lookup per LV.
-    for slice in self.operations.range_clamped(
-      start=range.start,
-      end=range.end(),
-    ) {
+    for
+      slice in self.operations.range_clamped(start=range.start, end=range.end()) {
       for offset in slice.start..<slice.end {
         match slice.value.decompress(offset) {
           Some(op) => result.push(op)

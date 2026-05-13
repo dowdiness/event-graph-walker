@@ -41,10 +41,10 @@ fn without_child(
 ///|
 /// Create a new empty MovableTree with root and trash caches initialized.
 pub fn MovableTree::new() -> MovableTree {
-  let children_cache : Map[TreeNodeId, Array[TreeNodeId]] = Map::new()
+  let children_cache : Map[TreeNodeId, Array[TreeNodeId]] = Map::default()
   children_cache.set(root_id, [])
   children_cache.set(trash_id, [])
-  { nodes: Map::new(), children_cache }
+  { nodes: Map::default(), children_cache }
 }
 
 ///|
@@ -60,7 +60,7 @@ pub fn MovableTree::apply_create(
   if !(self.nodes.get(id) is None) {
     return
   }
-  let node : TreeNode = { id, parent, position, properties: Map::new() }
+  let node : TreeNode = { id, parent, position, properties: Map::default() }
   self.nodes.set(id, node)
   // Update children cache
   match self.children_cache.get(parent) {
