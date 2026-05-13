@@ -727,6 +727,13 @@ fn[T] FugueTree::children_with_items(
 /// For nodes with same parent and side, sort by timestamp then ID.
 /// Uses an explicit stack to avoid call-stack overflow on deep trees (500+ nodes).
 ///
+/// Calls `visit(node_id, item, position)` for each emitted node. `position` is
+/// the 0-based index in the emitted sequence: visible items only when
+/// `visible_only=true`, or all items including tombstones when
+/// `visible_only=false`. Returning `Some(value)` stops traversal immediately and
+/// returns that value; returning `None` continues. If traversal completes without
+/// an early stop, this returns `None`.
+///
 /// Stack frame phases:
 ///   0 = first visit: compute sorted left/right children, push left children
 ///   1 = left children done: emit current node, push right children
