@@ -385,14 +385,22 @@ pub fn[T] FugueTree::undelete(
 /// Find visible position of an item by LV.
 /// Returns None if deleted or missing.
 pub fn[T : Eq] FugueTree::lv_to_position(self : FugueTree[T], id : Lv) -> Int? {
-  let visible = self.get_visible_items()
-  for i = 0; i < visible.length(); i = i + 1 {
-    let (lv, _) = visible[i]
-    if lv == id {
-      return Some(i)
-    }
+  match self[id] {
+    Some(item) if item.is_visible() => ()
+    _ => return None
   }
-  None
+
+  self.traverse_tree_until(root_lv, visible_only=true, fn(
+    node_id,
+    _,
+    position,
+  ) {
+    if node_id == id {
+      Some(position)
+    } else {
+      None
+    }
+  })
 }
 
 ///|
@@ -697,44 +705,58 @@ fn[T] partition_children(
 }
 
 ///|
+/// Collect existing children with their items for traversal.
+fn[T] FugueTree::children_with_items(
+  self : FugueTree[T],
+  node_id : Lv,
+) -> Array[(ItemId, Item[T])] {
+  let children : Array[(ItemId, Item[T])] = []
+  for child_id in self.get_children_raw(node_id) {
+    if child_id.0 < self.items.length() {
+      match self.items[child_id.0] {
+        Some(item) => children.push((child_id, item))
+        None => ()
+      }
+    }
+  }
+  children
+}
+
+///|
 /// In-order tree traversal: Left children → Node → Right children
 /// For nodes with same parent and side, sort by timestamp then ID.
 /// Uses an explicit stack to avoid call-stack overflow on deep trees (500+ nodes).
+///
+/// Calls `visit(node_id, item, position)` for each emitted node. `position` is
+/// the 0-based index in the emitted sequence: visible items only when
+/// `visible_only=true`, or all items including tombstones when
+/// `visible_only=false`. Returning `Some(value)` stops traversal immediately and
+/// returns that value; returning `None` continues. If traversal completes without
+/// an early stop, this returns `None`.
 ///
 /// Stack frame phases:
 ///   0 = first visit: compute sorted left/right children, push left children
 ///   1 = left children done: emit current node, push right children
 ///   2 = right children done: pop frame
-fn[T : Eq] FugueTree::traverse_tree(
+fn[T : Eq, R] FugueTree::traverse_tree_until(
   self : FugueTree[T],
   start_id : Lv,
-  result : Array[(Lv, Item[T])],
   visible_only~ : Bool,
-) -> Unit {
+  visit : (Lv, Item[T], Int) -> R?,
+) -> R? {
   // Stack entries: (node_id, phase, sorted_left, sorted_right)
   // We store the sorted children arrays to avoid recomputing them between phases.
   let stack : Array[
     (Lv, Int, Array[(ItemId, Item[T])], Array[(ItemId, Item[T])]),
   ] = []
   stack.push((start_id, 0, [], []))
+  let mut position = 0
   while stack.length() > 0 {
     let top = stack.length() - 1
     let (node_id, phase, sorted_left, sorted_right) = stack[top]
     if phase == 0 {
       // Phase 0: first visit — compute children and push left subtrees
-      let child_lvs = self.get_children_raw(node_id)
-      let children_with_items : Array[(ItemId, Item[T])] = []
-      for child_id in child_lvs {
-        if child_id.0 < self.items.length() {
-          match self.items[child_id.0] {
-            Some(item) => children_with_items.push((child_id, item))
-            None => ()
-          }
-        } else {
-          ()
-        }
-      }
-      let (left, right) = partition_children(children_with_items)
+      let (left, right) = partition_children(self.children_with_items(node_id))
       left.sort_by(compare_children)
       right.sort_by(compare_children)
       // Advance to phase 1 and store sorted children
@@ -754,7 +776,11 @@ fn[T : Eq] FugueTree::traverse_tree(
         match self[node_id] {
           Some(item) =>
             if !visible_only || item.is_visible() {
-              result.push((node_id, item))
+              match visit(node_id, item, position) {
+                Some(value) => return Some(value)
+                None => ()
+              }
+              position = position + 1
             }
           None => ()
         }
@@ -775,4 +801,22 @@ fn[T : Eq] FugueTree::traverse_tree(
       let _ = stack.pop()
     }
   }
+  None
+}
+
+///|
+fn[T : Eq] FugueTree::traverse_tree(
+  self : FugueTree[T],
+  start_id : Lv,
+  result : Array[(Lv, Item[T])],
+  visible_only~ : Bool,
+) -> Unit {
+  let _ = self.traverse_tree_until(start_id, visible_only~, fn(
+    node_id,
+    item,
+    _,
+  ) -> Unit? {
+    result.push((node_id, item))
+    None
+  })
 }

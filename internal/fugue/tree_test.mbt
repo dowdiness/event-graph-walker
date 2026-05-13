@@ -67,6 +67,23 @@ test "delete item" {
 }
 
 ///|
+test "lv_to_position matches visible traversal and skips tombstones" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  tree.insert(ins(2, "C", 0, -1, 2, "agent0"))
+  tree.insert(ins(1, "X", 0, 2, 1, "agent1"))
+  tree.insert(ins(3, "Y", 0, 2, 3, "agent2"))
+  try! tree.delete(@fugue.Lv(1))
+
+  inspect(tree.to_text(), content="AYC")
+  @debug.debug_inspect(tree.lv_to_position(@fugue.Lv(0)), content="Some(0)")
+  @debug.debug_inspect(tree.lv_to_position(@fugue.Lv(3)), content="Some(1)")
+  @debug.debug_inspect(tree.lv_to_position(@fugue.Lv(2)), content="Some(2)")
+  inspect(tree.lv_to_position(@fugue.Lv(1)) is None, content="true")
+  inspect(tree.lv_to_position(@fugue.Lv(999)) is None, content="true")
+}
+
+///|
 test "get item by id" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
