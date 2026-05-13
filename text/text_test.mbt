@@ -278,6 +278,38 @@ test "TextState::replace_range_and_record undo and redo restore range edit" {
 }
 
 ///|
+test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
+  let doc = TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert_and_record(Pos::at(0), "a😀b", mgr, timestamp_ms=1000)
+  inspect(doc.text(), content="a😀b")
+  inspect(doc.len(), content="3")
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+  let _ = mgr.redo(doc)
+  inspect(doc.text(), content="a😀b")
+}
+
+///|
+test "TextState::replace_range_and_record inserts non-BMP text atomically" {
+  let doc = TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert_and_record(Pos::at(0), "ab", mgr, timestamp_ms=1000)
+  let _ = doc.replace_range_and_record(
+    Range::from_ints(1, 1),
+    "😀X",
+    mgr,
+    timestamp_ms=2000,
+  )
+  inspect(doc.text(), content="a😀Xb")
+  inspect(doc.len(), content="4")
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="ab")
+  let _ = mgr.redo(doc)
+  inspect(doc.text(), content="a😀Xb")
+}
+
+///|
 test "TextView::runs iterates over runs" {
   let doc = TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")

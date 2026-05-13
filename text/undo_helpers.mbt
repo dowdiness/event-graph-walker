@@ -14,12 +14,14 @@ pub fn TextState::insert_and_record(
   if pos_val > doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
-  for i = 0; i < text.length(); i = i + 1 {
-    let ch = text[i:i + 1].to_owned()
-    let op = self.inner.insert(pos_val + i, ch) catch {
+  let mut offset = 0
+  for ch in text {
+    let ch_text = ch.to_string()
+    let op = self.inner.insert(pos_val + offset, ch_text) catch {
       err => raise TextError::from_document_error(err, doc_len)
     }
-    mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch))
+    mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch_text))
+    offset = offset + 1
   }
 }
 
