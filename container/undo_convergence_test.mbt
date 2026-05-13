@@ -231,7 +231,10 @@ test "undo: set_property undo restores prior value" {
   doc.set_property(n, "type", "heading")
   @debug.debug_inspect(doc.get_property(n, "type"), content="Some(\"heading\")")
   let _ = doc.undo()
-  @debug.debug_inspect(doc.get_property(n, "type"), content="Some(\"paragraph\")")
+  @debug.debug_inspect(
+    doc.get_property(n, "type"),
+    content="Some(\"paragraph\")",
+  )
 }
 
 ///|
@@ -288,10 +291,16 @@ test "undo: remote ops never record to the receiver's undo stack" {
   let bob = @container.Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   inspect(bob.get_text(block), content="hi")
-  @debug.debug_inspect(bob.get_property(block, "type"), content="Some(\"paragraph\")")
+  @debug.debug_inspect(
+    bob.get_property(block, "type"),
+    content="Some(\"paragraph\")",
+  )
   inspect(bob.can_undo(), content="false")
   inspect(bob.undo(), content="false")
   // State is unchanged.
   inspect(bob.get_text(block), content="hi")
-  @debug.debug_inspect(bob.get_property(block, "type"), content="Some(\"paragraph\")")
+  @debug.debug_inspect(
+    bob.get_property(block, "type"),
+    content="Some(\"paragraph\")",
+  )
 }

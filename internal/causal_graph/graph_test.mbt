@@ -2,7 +2,7 @@
 /// Tests for CausalGraph
 test "create empty graph" {
   let graph = CausalGraph::new()
-  inspect(graph.get_frontier().0, content="[]")
+  @debug.debug_inspect(graph.get_frontier().0, content="[]")
 }
 
 ///|
@@ -10,7 +10,7 @@ test "add single version" {
   let graph = CausalGraph::new()
   let lv = try! graph.add_version([], "agent1")
   inspect(lv, content="0")
-  inspect(graph.get_frontier().0, content="[0]")
+  @debug.debug_inspect(graph.get_frontier().0, content="[0]")
 }
 
 ///|
@@ -19,7 +19,7 @@ test "add version with parent" {
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([lv0], "agent1")
   inspect(lv1, content="1")
-  inspect(graph.get_frontier().0, content="[1]")
+  @debug.debug_inspect(graph.get_frontier().0, content="[1]")
 }
 
 ///|

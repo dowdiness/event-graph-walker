@@ -25,7 +25,7 @@ pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
 /// Use this when constructing a frontier from potentially untrusted input
 /// or when merging multiple frontiers.
 pub fn Frontier::from_array_dedup(values : Array[Int]) -> Frontier {
-  let seen : @hashset.HashSet[Int] = @hashset.new()
+  let seen : @hashset.HashSet[Int] = @hashset.HashSet::default()
   let deduped : Array[Int] = []
   for v in values {
     if !seen.contains(v) {
@@ -43,7 +43,7 @@ pub fn Frontier::has_duplicates(self : Frontier) -> Bool {
   if self.0.length() <= 1 {
     return false
   }
-  let seen : @hashset.HashSet[Int] = @hashset.new()
+  let seen : @hashset.HashSet[Int] = @hashset.HashSet::default()
   for v in self.0 {
     if seen.contains(v) {
       return true

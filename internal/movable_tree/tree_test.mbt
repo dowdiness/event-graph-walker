@@ -220,6 +220,12 @@ test "get_position: returns correct position" {
   let pos = @fi.FractionalIndex::new([42])
   let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
   tree.apply_create(id, @movable_tree.root_id, pos)
-  @debug.debug_inspect(tree.get_position(id), content="Some(FractionalIndex([42]))")
-  inspect(tree.get_position({ agent: "nobody", counter: 99 }) is None, content="true")
+  @debug.debug_inspect(
+    tree.get_position(id),
+    content="Some(FractionalIndex([42]))",
+  )
+  inspect(
+    tree.get_position({ agent: "nobody", counter: 99 }) is None,
+    content="true",
+  )
 }

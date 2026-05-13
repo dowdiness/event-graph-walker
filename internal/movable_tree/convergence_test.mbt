@@ -94,7 +94,7 @@ test "convergence: two peers same ops different order" {
   let ids = [a, b]
   let snap1 = tree_snapshot(tree1, ids)
   let snap2 = tree_snapshot(tree2, ids)
-  inspect(snap1, content=snap2.to_string())
+  @debug.debug_inspect(snap1, content=@debug.to_string(snap2))
   // Verify the actual structure: A under root, B under A
   @debug.debug_inspect(
     tree1.parent(a),
@@ -397,7 +397,7 @@ test "convergence: six orderings all converge" {
       log.apply(tree, ops[orderings[o][i]])
     }
     let snap = tree_snapshot(tree, ids)
-    inspect(snap, content=ref_snap.to_string())
+    @debug.debug_inspect(snap, content=@debug.to_string(ref_snap))
   }
   // Verify the actual structure: A under root, B under A, C under B
   @debug.debug_inspect(

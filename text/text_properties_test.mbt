@@ -17,7 +17,18 @@ struct RealOps {
 } derive(Debug)
 
 ///|
+struct RealOpsPair {
+  left : RealOps
+  right : RealOps
+} derive(Debug)
+
+///|
 impl Show for RealOps with output(self, logger) {
+  logger.write_string(@debug.to_string(self))
+}
+
+///|
+impl Show for RealOpsPair with output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -74,6 +85,17 @@ impl @qc.Shrink for RealOps with shrink(self) {
   }
   results.iter()
 }
+
+///|
+impl @quickcheck.Arbitrary for RealOpsPair with arbitrary(size, rs) {
+  {
+    left: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+    right: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
+  }
+}
+
+///|
+impl @qc.Shrink for RealOpsPair
 
 ///|
 /// Apply a single TextEdit to a document, returning success.
@@ -334,8 +356,9 @@ test "property: SyncMessage is_empty consistent with op_count" {
 
 ///|
 /// Property: Bidirectional sync results in convergence
-fn prop_bidirectional_sync_converges(pair : (RealOps, RealOps)) -> Bool {
-  let (ops1, ops2) = pair
+fn prop_bidirectional_sync_converges(pair : RealOpsPair) -> Bool {
+  let ops1 = pair.left
+  let ops2 = pair.right
   let doc1 = @text.TextState::new("alice")
   let doc2 = @text.TextState::new("bob")
 

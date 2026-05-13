@@ -58,5 +58,5 @@ test "from_array_dedup on empty array" {
 ///|
 test "from_array_dedup on unique array is identity" {
   let frontier = Frontier::from_array_dedup([1, 2, 3])
-  inspect(frontier.0, content="[1, 2, 3]")
+  @debug.debug_inspect(frontier.0, content="[1, 2, 3]")
 }

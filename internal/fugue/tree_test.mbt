@@ -624,14 +624,16 @@ test "LCA: not invalidated by delete/undelete" {
 }
 
 ///|
+struct MutSpike {
+  mut flag : Bool
+}
+
+///|
 test "spike: struct mut field in Option-wrapped array modifies in-place" {
   // Gate test for Phase 2b: verify that mutating a `mut` field through a
   // pattern-matched binding from Array[T?] modifies the stored value.
   // This mirrors the production path: items : Array[Item[T]?], and
   // delete/undelete do `match self[id] { Some(item) => item.deleted = true }`.
-  struct MutSpike {
-    mut flag : Bool
-  }
   let arr : Array[MutSpike?] = [Some({ flag: false }), Some({ flag: false })]
   match arr[0] {
     Some(item) => item.flag = true

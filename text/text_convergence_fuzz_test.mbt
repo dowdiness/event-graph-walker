@@ -266,8 +266,9 @@ test "property: multi-agent convergence with undo/redo" {
 /// Property: Convergence is independent of sync order.
 /// Two agents make concurrent edits. Syncing A->B then B->A
 /// must produce the same result as B->A then A->B.
-fn prop_sync_order_independence(pair : (RealOps, RealOps)) -> Bool {
-  let (ops1, ops2) = pair
+fn prop_sync_order_independence(pair : RealOpsPair) -> Bool {
+  let ops1 = pair.left
+  let ops2 = pair.right
   // Path 1: A->B then B->A
   let a1 = @text.TextState::new("alice")
   let b1 = @text.TextState::new("bob")
@@ -316,8 +317,9 @@ test "property: sync order independence" {
 ///|
 /// Property: Undo under concurrency still converges.
 /// Agent A types, agent B types concurrently, A undoes, then full sync.
-fn prop_undo_concurrent_convergence(pair : (RealOps, RealOps)) -> Bool {
-  let (ops1, ops2) = pair
+fn prop_undo_concurrent_convergence(pair : RealOpsPair) -> Bool {
+  let ops1 = pair.left
+  let ops2 = pair.right
   let doc_a = @text.TextState::new("alice")
   let doc_b = @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")

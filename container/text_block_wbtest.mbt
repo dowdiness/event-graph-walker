@@ -64,7 +64,7 @@ test "text_block: insert out of bounds" {
   } catch {
     _ => Err(())
   }
-  inspect(result, content="Err(())")
+  @debug.debug_inspect(result, content="Err(())")
 }
 
 ///|
@@ -77,7 +77,7 @@ test "text_block: delete out of bounds" {
   } catch {
     _ => Err(())
   }
-  inspect(result, content="Err(())")
+  @debug.debug_inspect(result, content="Err(())")
 }
 
 ///|
