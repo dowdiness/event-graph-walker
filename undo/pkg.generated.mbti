@@ -30,9 +30,9 @@ pub fn UndoManager::is_tracking(Self) -> Bool
 pub fn UndoManager::new(String, capture_timeout_ms? : Int) -> Self
 pub fn UndoManager::record_delete(Self, Int, String, Int, content? : String?) -> Unit
 pub fn UndoManager::record_insert(Self, Int, String, Int, content? : String?) -> Unit
-pub fn[D : Undoable] UndoManager::redo(Self, D) -> Unit raise UndoError
+pub fn[D : Undoable] UndoManager::redo(Self, D) -> Bool raise UndoError
 pub fn UndoManager::set_tracking(Self, Bool) -> Unit
-pub fn[D : Undoable] UndoManager::undo(Self, D) -> Unit raise UndoError
+pub fn[D : Undoable] UndoManager::undo(Self, D) -> Bool raise UndoError
 
 pub enum UndoOpType {
   Insert

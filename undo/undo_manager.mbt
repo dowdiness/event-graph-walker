@@ -92,14 +92,16 @@ fn UndoManager::record_item(
 
 ///|
 /// Pop undo group and apply inverses locally. Push inverse group to redo stack.
+/// Returns `true` if a group was popped (work was done), `false` if the undo
+/// stack was empty. Mirrors `Document::undo`'s contract so a `try { ... }
+/// catch { _ => false }` wrapper can use the return value directly as
+/// "did undo happen?" without prechecking `can_undo()`.
 /// For peer sync after undo: capture version before calling, then export_since.
-/// No-op when the undo stack is empty — mirrors `Document::undo`, so callers
-/// don't need to gate on `can_undo()` to avoid an abort-style panic.
 pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
-) -> Unit raise UndoError {
-  guard self.undo_stack.length() > 0 else { return }
+) -> Bool raise UndoError {
+  guard self.undo_stack.length() > 0 else { return false }
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
@@ -142,16 +144,18 @@ pub fn[D : Undoable] UndoManager::undo(
     self.redo_stack.push({ items: redo_items, timestamp: group.timestamp })
   }
   self.tracking_enabled = was_tracking
+  true
 }
 
 ///|
 /// Pop redo group and reapply. Push inverse group back to undo stack.
-/// No-op when the redo stack is empty (see `undo` for the rationale).
+/// Returns `true` if a group was popped, `false` if the redo stack was empty
+/// (see `undo` for the rationale).
 pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
-) -> Unit raise UndoError {
-  guard self.redo_stack.length() > 0 else { return }
+) -> Bool raise UndoError {
+  guard self.redo_stack.length() > 0 else { return false }
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
@@ -194,6 +198,7 @@ pub fn[D : Undoable] UndoManager::redo(
     self.undo_stack.push({ items: undo_items, timestamp: group.timestamp })
   }
   self.tracking_enabled = was_tracking
+  true
 }
 
 ///|

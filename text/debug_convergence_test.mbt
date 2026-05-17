@@ -32,16 +32,12 @@ test "debug: minimal undo+sync divergence (fixed)" {
 
   // Agent 1 undoes -> undeletes "f"
   if mgr1.can_undo() {
-    mgr1.undo(doc1) catch {
-      _ => ()
-    }
+    let _ = mgr1.undo(doc1) catch { _ => false }
   }
 
   // Agent 1 redoes -> deletes "f" again
   if mgr1.can_redo() {
-    mgr1.redo(doc1) catch {
-      _ => ()
-    }
+    let _ = mgr1.redo(doc1) catch { _ => false }
   }
 
   // Now full sync
@@ -90,9 +86,7 @@ test "debug: delete/undelete conflict - simplest case (fixed)" {
 
   // Alice undoes her delete -> undeletes "x"
   if mgr_a.can_undo() {
-    mgr_a.undo(doc_a) catch {
-      _ => ()
-    }
+    let _ = mgr_a.undo(doc_a) catch { _ => false }
   }
 
   // Full sync

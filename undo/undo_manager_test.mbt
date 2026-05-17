@@ -171,7 +171,7 @@ test "undo-insert reflects in doc text" {
   let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  mgr.undo(doc)
+  let _ = mgr.undo(doc)
   inspect(doc.text(), content="")
 }
 
@@ -182,7 +182,7 @@ test "undo-delete reflects in doc text" {
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   doc.delete_and_record(@text.Pos::at(0), mgr, timestamp_ms=2000)
   inspect(doc.text(), content="")
-  mgr.undo(doc)
+  let _ = mgr.undo(doc)
   inspect(doc.text(), content="H")
 }
 
@@ -191,9 +191,9 @@ test "redo reflects in doc text" {
   let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  mgr.undo(doc)
+  let _ = mgr.undo(doc)
   inspect(doc.text(), content="")
-  mgr.redo(doc)
+  let _ = mgr.redo(doc)
   inspect(doc.text(), content="H")
 }
 
@@ -208,7 +208,7 @@ test "undo syncs to peer via export_all" {
   doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="H")
   // Alice undoes
-  mgr.undo(doc_a)
+  let _ = mgr.undo(doc_a)
   inspect(doc_a.text(), content="")
   // Sync undo to Bob (export_all includes the delete op from undo)
   doc_b.sync().apply(doc_a.sync().export_all())
@@ -421,43 +421,104 @@ test "redo after peer sync preserves state" {
 }
 
 ///|
-/// Calling `undo` on an empty stack must be a no-op (not a panic). Without
-/// this, a toolbar Undo button pressed at session start aborts the host —
-/// `try { mgr.undo(doc) } catch { _ => false }` can't recover from a `guard`
-/// panic, only from `raise UndoError`.
-test "undo on empty stack is a no-op" {
+/// Calling `undo` on an empty stack must return `false` (not panic). Without
+/// this contract, a toolbar Undo button pressed at session start aborts the
+/// host — `try { mgr.undo(doc) } catch { _ => false }` cannot recover from a
+/// bare `guard` panic.
+test "undo on empty stack returns false" {
   let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   inspect(mgr.can_undo(), content="false")
-  let _ = mgr.undo(doc)
+  inspect(mgr.undo(doc), content="false")
   inspect(doc.text(), content="")
   inspect(mgr.can_undo(), content="false")
   inspect(mgr.can_redo(), content="false")
 }
 
 ///|
-/// Symmetric: empty redo stack is a no-op.
-test "redo on empty stack is a no-op" {
+/// Symmetric: empty redo stack returns `false`.
+test "redo on empty stack returns false" {
   let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   inspect(mgr.can_redo(), content="false")
-  let _ = mgr.redo(doc)
+  inspect(mgr.redo(doc), content="false")
   inspect(doc.text(), content="")
   inspect(mgr.can_redo(), content="false")
 }
 
 ///|
-/// More undos than recorded edits must drain to a no-op rather than abort
-/// once the stack runs out. Mirrors the toolbar use-case where a user hammers
-/// Undo past the first recorded edit.
-test "undo past start drains to no-op" {
+/// `undo` returns `true` when it actually pops a group, `false` once the
+/// stack is drained. Mirrors the toolbar use-case where a user hammers
+/// Undo past the first recorded edit — the second call must not panic.
+test "undo past start drains and signals via return" {
   let doc = @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  let _ = mgr.undo(doc)
+  inspect(mgr.undo(doc), content="true")
   inspect(doc.text(), content="")
-  // One more undo with nothing left — must not panic.
-  let _ = mgr.undo(doc)
+  // One more undo with nothing left — must return false, not panic.
+  inspect(mgr.undo(doc), content="false")
   inspect(doc.text(), content="")
   inspect(mgr.can_undo(), content="false")
+}
+
+///|
+/// `redo` past the most-recent redo group must also drain to `false`, not
+/// abort. Covers the realistic "undid once, redid once, hit Redo again" flow
+/// that the symmetric no-op-on-fresh-manager test doesn't exercise.
+test "redo past last drains and signals via return" {
+  let doc = @text.TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  inspect(mgr.undo(doc), content="true")
+  inspect(mgr.redo(doc), content="true")
+  inspect(doc.text(), content="H")
+  // Redo stack is now empty.
+  inspect(mgr.can_redo(), content="false")
+  inspect(mgr.redo(doc), content="false")
+  inspect(doc.text(), content="H")
+}
+
+///|
+/// Oscillating undo↔redo across the start boundary — the canonical "mash both
+/// buttons" stress shape — must not panic and must converge in both
+/// directions. Catches any subtle state corruption introduced by the no-op
+/// branch (e.g. leaving `tracking_enabled` flipped, or pushing a phantom
+/// empty group onto the opposite stack).
+test "oscillating undo/redo across boundary stays consistent" {
+  let doc = @text.TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  inspect(mgr.undo(doc), content="true")
+  inspect(mgr.redo(doc), content="true")
+  inspect(mgr.undo(doc), content="true")
+  inspect(mgr.redo(doc), content="true")
+  inspect(mgr.undo(doc), content="true")
+  inspect(doc.text(), content="")
+  // Past the boundary on both sides.
+  inspect(mgr.undo(doc), content="false")
+  inspect(mgr.redo(doc), content="true")
+  inspect(doc.text(), content="H")
+  inspect(mgr.redo(doc), content="false")
+  inspect(doc.text(), content="H")
+}
+
+///|
+/// The no-op path must leave `tracking_enabled` in its original state. The
+/// real branch toggles tracking off-and-on around the inverse-application
+/// loop; if the no-op branch accidentally took the same path it would leave
+/// tracking permanently disabled, and the next user edit would be silently
+/// untracked.
+test "no-op undo preserves tracking state and recordability" {
+  let doc = @text.TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  inspect(mgr.is_tracking(), content="true")
+  // Empty-stack call — exercises the early-return branch.
+  inspect(mgr.undo(doc), content="false")
+  inspect(mgr.is_tracking(), content="true")
+  // A subsequent real edit must still be recorded.
+  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  inspect(mgr.can_undo(), content="true")
+  inspect(mgr.undo(doc), content="true")
+  inspect(doc.text(), content="")
 }

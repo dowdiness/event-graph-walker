@@ -144,15 +144,11 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
       }
       FuzzUndo(agent) =>
         if mgrs[agent].can_undo() {
-          mgrs[agent].undo(docs[agent]) catch {
-            _ => ()
-          }
+          let _ = mgrs[agent].undo(docs[agent]) catch { _ => false }
         }
       FuzzRedo(agent) =>
         if mgrs[agent].can_redo() {
-          mgrs[agent].redo(docs[agent]) catch {
-            _ => ()
-          }
+          let _ = mgrs[agent].redo(docs[agent]) catch { _ => false }
         }
       FuzzSync(from, to) => {
         let msg = docs[from].sync().export_all() catch { _ => continue }
@@ -345,9 +341,7 @@ fn prop_undo_concurrent_convergence(pair : RealOpsPair) -> Bool {
 
   // A undoes once (if possible)
   if mgr_a.can_undo() {
-    mgr_a.undo(doc_a) catch {
-      _ => ()
-    }
+    let _ = mgr_a.undo(doc_a) catch { _ => false }
   }
 
   // Full sync
