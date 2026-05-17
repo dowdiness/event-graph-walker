@@ -92,12 +92,21 @@ fn UndoManager::record_item(
 
 ///|
 /// Pop undo group and apply inverses locally. Push inverse group to redo stack.
+/// Returns `true` only if at least one inverse was actually applied to `doc`;
+/// `false` if the undo stack was empty OR every item in the popped group was
+/// a no-op (concurrent peer deletion → `lv_to_position` returned `None`, or
+/// `UndoError::ItemNotFound`). The "popped but no-op" case is treated as
+/// `false` so callers don't trigger post-undo machinery (cursor adjustment,
+/// peer broadcast, dirty flag, redo-stack push) on a document that didn't
+/// change. Mirrors `Document::undo`'s contract so a
+/// `try { mgr.undo(doc) } catch { _ => false }` wrapper can use the return
+/// value directly as "did undo happen?" without prechecking `can_undo()`.
 /// For peer sync after undo: capture version before calling, then export_since.
 pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
-) -> Unit raise UndoError {
-  guard self.undo_stack.length() > 0
+) -> Bool raise UndoError {
+  guard self.undo_stack.length() > 0 else { return false }
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
@@ -135,20 +144,30 @@ pub fn[D : Undoable] UndoManager::undo(
       }
     }
   }
-  if redo_items.length() > 0 {
+  let any_applied = redo_items.length() > 0
+  if any_applied {
     redo_items.rev_in_place()
     self.redo_stack.push({ items: redo_items, timestamp: group.timestamp })
   }
   self.tracking_enabled = was_tracking
+  // Return whether anything actually changed. Popping a group whose items
+  // are all stale (peer-deleted, `ItemNotFound`) leaves the document
+  // untouched and no redo group is pushed — those cases must surface as
+  // `false` so callers don't run post-undo machinery (cursor adjustment,
+  // peer broadcast, dirty flag) on a no-op.
+  any_applied
 }
 
 ///|
 /// Pop redo group and reapply. Push inverse group back to undo stack.
+/// Returns `true` only if at least one item in the popped group was
+/// actually reapplied; `false` if the redo stack was empty OR every item
+/// was a no-op (see `undo` for the rationale).
 pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
-) -> Unit raise UndoError {
-  guard self.redo_stack.length() > 0
+) -> Bool raise UndoError {
+  guard self.redo_stack.length() > 0 else { return false }
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
@@ -186,11 +205,13 @@ pub fn[D : Undoable] UndoManager::redo(
       }
     }
   }
-  if undo_items.length() > 0 {
+  let any_applied = undo_items.length() > 0
+  if any_applied {
     undo_items.rev_in_place()
     self.undo_stack.push({ items: undo_items, timestamp: group.timestamp })
   }
   self.tracking_enabled = was_tracking
+  any_applied
 }
 
 ///|
