@@ -93,11 +93,13 @@ fn UndoManager::record_item(
 ///|
 /// Pop undo group and apply inverses locally. Push inverse group to redo stack.
 /// For peer sync after undo: capture version before calling, then export_since.
+/// No-op when the undo stack is empty — mirrors `Document::undo`, so callers
+/// don't need to gate on `can_undo()` to avoid an abort-style panic.
 pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
 ) -> Unit raise UndoError {
-  guard self.undo_stack.length() > 0
+  guard self.undo_stack.length() > 0 else { return }
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
@@ -144,11 +146,12 @@ pub fn[D : Undoable] UndoManager::undo(
 
 ///|
 /// Pop redo group and reapply. Push inverse group back to undo stack.
+/// No-op when the redo stack is empty (see `undo` for the rationale).
 pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
 ) -> Unit raise UndoError {
-  guard self.redo_stack.length() > 0
+  guard self.redo_stack.length() > 0 else { return }
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false

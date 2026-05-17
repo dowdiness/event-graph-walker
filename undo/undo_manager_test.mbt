@@ -419,3 +419,45 @@ test "redo after peer sync preserves state" {
   inspect(doc_a.text(), content="Test")
   inspect(doc_b.text(), content="Test")
 }
+
+///|
+/// Calling `undo` on an empty stack must be a no-op (not a panic). Without
+/// this, a toolbar Undo button pressed at session start aborts the host —
+/// `try { mgr.undo(doc) } catch { _ => false }` can't recover from a `guard`
+/// panic, only from `raise UndoError`.
+test "undo on empty stack is a no-op" {
+  let doc = @text.TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  inspect(mgr.can_undo(), content="false")
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+  inspect(mgr.can_undo(), content="false")
+  inspect(mgr.can_redo(), content="false")
+}
+
+///|
+/// Symmetric: empty redo stack is a no-op.
+test "redo on empty stack is a no-op" {
+  let doc = @text.TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  inspect(mgr.can_redo(), content="false")
+  let _ = mgr.redo(doc)
+  inspect(doc.text(), content="")
+  inspect(mgr.can_redo(), content="false")
+}
+
+///|
+/// More undos than recorded edits must drain to a no-op rather than abort
+/// once the stack runs out. Mirrors the toolbar use-case where a user hammers
+/// Undo past the first recorded edit.
+test "undo past start drains to no-op" {
+  let doc = @text.TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+  // One more undo with nothing left — must not panic.
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+  inspect(mgr.can_undo(), content="false")
+}
