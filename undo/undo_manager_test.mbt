@@ -504,6 +504,42 @@ test "oscillating undo/redo across boundary stays consistent" {
 }
 
 ///|
+/// When a group is popped but every item is stale — peer deleted the
+/// inserted LVs concurrently, so `lv_to_position` returns `None` for each
+/// inverse — no inverse is actually applied and no redo group is pushed.
+/// The Bool return must be `false` in that case, not `true`, so callers
+/// using it as "did undo happen?" don't run post-undo machinery (cursor
+/// adjust, broadcast, dirty flag) on a no-op. Caught by chatgpt-codex on
+/// PR #42.
+test "undo returns false when every item in the popped group is stale" {
+  let doc_a = @text.TextState::new("alice")
+  let doc_b = @text.TextState::new("bob")
+  let mgr_a = @undo.UndoManager::new("alice")
+
+  // Alice inserts "X" and records it for undo.
+  doc_a.insert_and_record(@text.Pos::at(0), "X", mgr_a, timestamp_ms=1000)
+  inspect(doc_a.text(), content="X")
+
+  // Sync to Bob, then Bob deletes Alice's "X". Sync back.
+  doc_b.sync().apply(doc_a.sync().export_all())
+  inspect(doc_b.text(), content="X")
+  let _ = doc_b.delete(@text.Pos::at(0))
+  doc_a.sync().apply(doc_b.sync().export_all())
+  inspect(doc_a.text(), content="")
+
+  // Alice's only undo item is an Insert whose LV is now deleted upstream.
+  // Popping the group runs `lv_to_position(...) == None`, skips, and pushes
+  // no redo item. Return must be `false`.
+  inspect(mgr_a.can_undo(), content="true")
+  inspect(mgr_a.undo(doc_a), content="false")
+  inspect(doc_a.text(), content="")
+  // The popped group is consumed even on no-op (the LVs are stale forever,
+  // so retaining the group would be useless), and nothing makes it to redo.
+  inspect(mgr_a.can_undo(), content="false")
+  inspect(mgr_a.can_redo(), content="false")
+}
+
+///|
 /// The no-op path must leave `tracking_enabled` in its original state. The
 /// real branch toggles tracking off-and-on around the inverse-application
 /// loop; if the no-op branch accidentally took the same path it would leave
