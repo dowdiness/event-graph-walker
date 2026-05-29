@@ -22,7 +22,7 @@ pub struct RawVersion {
 } derive(Eq, Compare, Debug, ToJson, FromJson)
 
 ///|
-pub impl Show for RawVersion with output(self, logger) {
+pub impl Show for RawVersion with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -40,13 +40,13 @@ pub fn RawVersion::to_string(self : RawVersion) -> String {
 
 ///|
 /// Implement Hash for RawVersion
-pub impl Hash for RawVersion with hash(self) {
+pub impl Hash for RawVersion with fn hash(self) {
   self.agent.hash() + self.seq.hash() * 31
 }
 
 ///|
 /// Implement Hash for RawVersion with hash_combine
-pub impl Hash for RawVersion with hash_combine(self, hasher) {
+pub impl Hash for RawVersion with fn hash_combine(self, hasher) {
   hasher.combine_string(self.agent)
   hasher.combine_int(self.seq)
 }

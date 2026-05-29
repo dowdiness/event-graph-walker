@@ -4,7 +4,7 @@
 /// (chars joined to string for compact JSON). Deletes/Undeletes as strings.
 
 ///|
-pub impl ToJson for OpRunContent with to_json(self) {
+pub impl ToJson for OpRunContent with fn to_json(self) {
   match self {
     Inserts(chars) => {
       let text = String::from_array(chars)
@@ -16,7 +16,7 @@ pub impl ToJson for OpRunContent with to_json(self) {
 }
 
 ///|
-pub impl @json.FromJson for OpRunContent with from_json(json, path) {
+pub impl @json.FromJson for OpRunContent with fn from_json(json, path) {
   match json {
     Json::String("Deletes") => Deletes
     Json::String("Undeletes") => Undeletes
@@ -39,7 +39,7 @@ pub impl @json.FromJson for OpRunContent with from_json(json, path) {
 }
 
 ///|
-pub impl ToJson for OpRun with to_json(self) {
+pub impl ToJson for OpRun with fn to_json(self) {
   Json::object({
     "start_lv": self.start_lv.to_json(),
     "agent": self.agent.to_json(),
@@ -53,7 +53,7 @@ pub impl ToJson for OpRun with to_json(self) {
 }
 
 ///|
-pub impl @json.FromJson for OpRun with from_json(json, path) {
+pub impl @json.FromJson for OpRun with fn from_json(json, path) {
   match json {
     Json::Object(m) => {
       let start_lv : Int = @json.from_json(

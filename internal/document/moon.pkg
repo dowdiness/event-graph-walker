@@ -6,9 +6,9 @@ import {
   "dowdiness/event-graph-walker/internal/branch",
   "dowdiness/event-graph-walker/history",
   "dowdiness/rle",
-  "dowdiness/btree" @btree,
+  "dowdiness/btree",
   "dowdiness/order-tree" @order_tree,
-  "moonbitlang/core/bench" @bench,
+  "moonbitlang/core/bench",
   "moonbitlang/core/debug",
 }
 

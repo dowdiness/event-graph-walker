@@ -23,18 +23,18 @@ struct RealOpsPair {
 } derive(Debug)
 
 ///|
-impl Show for RealOps with output(self, logger) {
+impl Show for RealOps with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-impl Show for RealOpsPair with output(self, logger) {
+impl Show for RealOpsPair with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
 /// Arbitrary instance for RealOps
-impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
+impl @quickcheck.Arbitrary for RealOps with fn arbitrary(size, random_state) {
   let chars : Array[Char] = [
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
     'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -71,7 +71,7 @@ impl @quickcheck.Arbitrary for RealOps with arbitrary(size, random_state) {
 
 ///|
 /// Shrink instance for RealOps
-impl @qc.Shrink for RealOps with shrink(self) {
+impl @qc.Shrink for RealOps with fn shrink(self) {
   let results : Array[RealOps] = []
   let edits = self.edits
   let len = edits.length()
@@ -87,7 +87,7 @@ impl @qc.Shrink for RealOps with shrink(self) {
 }
 
 ///|
-impl @quickcheck.Arbitrary for RealOpsPair with arbitrary(size, rs) {
+impl @quickcheck.Arbitrary for RealOpsPair with fn arbitrary(size, rs) {
   {
     left: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
     right: @quickcheck.Arbitrary::arbitrary(size, rs.split()),

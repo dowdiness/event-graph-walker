@@ -2,6 +2,6 @@
 
 ///|
 /// Implement RawToLv for Document
-pub impl @core.RawToLv for Document with raw_to_lv(self, raw) {
+pub impl @core.RawToLv for Document with fn raw_to_lv(self, raw) {
   self.oplog.causal_graph().raw_to_lv(raw)
 }

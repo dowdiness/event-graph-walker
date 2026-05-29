@@ -43,7 +43,7 @@ pub fn TextView::runs(self : TextView) -> Iter[String] {
 }
 
 ///|
-pub impl Show for TextView with output(self, logger) {
+pub impl Show for TextView with fn output(self, logger) {
   logger.write_string("TextView { text: \"")
   logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")

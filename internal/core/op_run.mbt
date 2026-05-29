@@ -106,7 +106,7 @@ pub fn OpRun::decompress_into(self : OpRun, result : Array[Op]) -> Unit {
 
 ///|
 /// Two OpRuns can merge when they represent a contiguous linear typing run.
-pub impl @rle.Mergeable for OpRun with can_merge(a : OpRun, b : OpRun) -> Bool {
+pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Bool {
   if a.agent != b.agent {
     return false
   }
@@ -152,7 +152,7 @@ pub impl @rle.Mergeable for OpRun with can_merge(a : OpRun, b : OpRun) -> Bool {
 }
 
 ///|
-pub impl @rle.Mergeable for OpRun with merge(a : OpRun, b : OpRun) -> OpRun {
+pub impl @rle.Mergeable for OpRun with fn merge(a : OpRun, b : OpRun) -> OpRun {
   let content = match (a.content, b.content) {
     (Inserts(chars_a), Inserts(chars_b)) => {
       // Mutate a's array in place (a is consumed by merge)
@@ -178,16 +178,16 @@ pub impl @rle.Mergeable for OpRun with merge(a : OpRun, b : OpRun) -> OpRun {
 }
 
 ///|
-pub impl @rle.HasLength for OpRun with length(self : OpRun) -> Int {
+pub impl @rle.HasLength for OpRun with fn length(self : OpRun) -> Int {
   self.count
 }
 
 ///|
-pub impl @rle.Spanning for OpRun with span(self : OpRun) -> Int {
+pub impl @rle.Spanning for OpRun with fn span(self : OpRun) -> Int {
   self.count
 }
 
 ///|
-pub impl @rle.Spanning for OpRun with logical_length(self : OpRun) -> Int {
+pub impl @rle.Spanning for OpRun with fn logical_length(self : OpRun) -> Int {
   self.count
 }

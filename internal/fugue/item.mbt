@@ -33,7 +33,7 @@
 pub(all) struct Lv(Int) derive(Debug, Eq, Compare, Default, Hash)
 
 ///|
-pub impl Show for Lv with output(self, logger) {
+pub impl Show for Lv with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 /// Replica-local causal-graph handle for an operation.
@@ -51,7 +51,7 @@ pub impl Show for Lv with output(self, logger) {
 pub(all) struct ItemId(Int) derive(Debug, Eq, Compare, Default, Hash)
 
 ///|
-pub impl Show for ItemId with output(self, logger) {
+pub impl Show for ItemId with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -75,7 +75,7 @@ pub enum Side {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for Side with output(self, logger) {
+pub impl Show for Side with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -123,7 +123,7 @@ pub(all) struct Item[T] {
 } derive(Debug, Eq)
 
 ///|
-pub impl[T : Debug] Show for Item[T] with output(self, logger) {
+pub impl[T : Debug] Show for Item[T] with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -138,7 +138,7 @@ pub impl[T : Debug] Show for Item[T] with output(self, logger) {
 /// Returns an integer indicating the relative order: negative if `self` comes
 /// before `other`, zero if they are equal, positive if `self` comes after
 /// `other`.
-impl[T : Eq] Compare for Item[T] with compare(self, other) -> Int {
+impl[T : Eq] Compare for Item[T] with fn compare(self, other) -> Int {
   // First compare by Lamport timestamp for causal ordering
   let ts_cmp = self.timestamp.compare(other.timestamp)
   if ts_cmp != 0 {

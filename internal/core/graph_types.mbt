@@ -6,7 +6,7 @@
 pub(all) struct Frontier(Array[Int]) derive(Eq, Debug, ToJson, FromJson)
 
 ///|
-pub impl Show for Frontier with output(self, logger) {
+pub impl Show for Frontier with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 

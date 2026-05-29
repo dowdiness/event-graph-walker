@@ -8,12 +8,12 @@ pub(all) struct OrderedPair {
 } derive(Debug)
 
 ///|
-impl Show for OrderedPair with output(self, logger) {
+impl Show for OrderedPair with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl @quickcheck.Arbitrary for OrderedPair with arbitrary(size, rs) {
+pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
   // Generate 1-4 elements in [0, 65535]
   let len_a = rs.next_uint64().to_int().abs() % 4 + 1
   let elems_a : Array[Int] = []
@@ -46,7 +46,7 @@ pub impl @quickcheck.Arbitrary for OrderedPair with arbitrary(size, rs) {
 
 ///|
 /// Shrink instance for OrderedPair — try smaller element values.
-pub impl @qc.Shrink for OrderedPair with shrink(self) {
+pub impl @qc.Shrink for OrderedPair with fn shrink(self) {
   let results : Array[OrderedPair] = []
   // Try reducing elements of left
   let left_elems = self.left.elements()
@@ -76,13 +76,13 @@ pub(all) struct SingleKey {
 } derive(Debug)
 
 ///|
-impl Show for SingleKey with output(self, logger) {
+impl Show for SingleKey with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
 /// Shrink instance for SingleKey — try shorter element lists.
-pub impl @qc.Shrink for SingleKey with shrink(self) {
+pub impl @qc.Shrink for SingleKey with fn shrink(self) {
   let results : Array[SingleKey] = []
   let elems = self.key.elements()
   if elems.length() > 1 {
@@ -93,7 +93,7 @@ pub impl @qc.Shrink for SingleKey with shrink(self) {
 }
 
 ///|
-pub impl @quickcheck.Arbitrary for SingleKey with arbitrary(size, rs) {
+pub impl @quickcheck.Arbitrary for SingleKey with fn arbitrary(size, rs) {
   let len = rs.next_uint64().to_int().abs() % 4 + 1
   let elems : Array[Int] = []
   let _ = size

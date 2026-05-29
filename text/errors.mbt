@@ -14,7 +14,7 @@ pub(all) enum SyncFailure {
 } derive(Debug)
 
 ///|
-pub impl Show for SyncFailure with output(self, logger) {
+pub impl Show for SyncFailure with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -30,7 +30,7 @@ pub(all) enum MalformedContentReason {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for MalformedContentReason with output(self, logger) {
+pub impl Show for MalformedContentReason with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
