@@ -10,7 +10,7 @@ pub(all) struct TreeNodeId {
 } derive(Eq, Hash, Debug, Compare)
 
 ///|
-pub impl Show for TreeNodeId with output(self, logger) {
+pub impl Show for TreeNodeId with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 

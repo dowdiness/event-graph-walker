@@ -54,7 +54,7 @@ pub(all) struct Version {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for Version with output(self, logger) {
+pub impl Show for Version with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 

@@ -7,7 +7,7 @@ pub(all) struct TextState {
 }
 
 ///|
-pub impl @debug.Debug for TextState with to_repr(self) {
+pub impl @debug.Debug for TextState with fn to_repr(self) {
   @debug.Repr::literal("TextState(len=" + self.len().to_string() + ")")
 }
 
@@ -136,7 +136,7 @@ pub fn TextState::checkout(
 }
 
 ///|
-pub impl Show for TextState with output(self, logger) {
+pub impl Show for TextState with fn output(self, logger) {
   logger.write_string("TextState { text: \"")
   logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")

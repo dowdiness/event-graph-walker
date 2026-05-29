@@ -19,7 +19,7 @@ struct TreeScenario {
 } derive(Debug)
 
 ///|
-impl Show for TreeScenario with output(self, logger) {
+impl Show for TreeScenario with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -27,7 +27,7 @@ impl Show for TreeScenario with output(self, logger) {
 /// Arbitrary instance for TreeScenario.
 /// Generates 2-6 actions that form a valid sequence:
 /// nodes are always created before being moved or deleted.
-impl @quickcheck.Arbitrary for TreeScenario with arbitrary(size, rs) {
+impl @quickcheck.Arbitrary for TreeScenario with fn arbitrary(size, rs) {
   let num_actions = rs.split().next_uint64().to_int().abs() % 5 + 2
   let _ = size
   let actions : Array[TreeAction] = []
@@ -62,7 +62,7 @@ impl @quickcheck.Arbitrary for TreeScenario with arbitrary(size, rs) {
 
 ///|
 /// Shrink instance for TreeScenario — try smaller prefixes.
-impl @qc.Shrink for TreeScenario with shrink(self) {
+impl @qc.Shrink for TreeScenario with fn shrink(self) {
   let results : Array[TreeScenario] = []
   let len = self.actions.length()
   if len > 0 {

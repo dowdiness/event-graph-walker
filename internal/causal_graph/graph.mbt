@@ -24,7 +24,7 @@ pub struct CausalGraph {
 }
 
 ///|
-pub impl @debug.Debug for CausalGraph with to_repr(self) {
+pub impl @debug.Debug for CausalGraph with fn to_repr(self) {
   @debug.Repr::literal(
     "CausalGraph(entries=" + self.entries.length().to_string() + ")",
   )
@@ -330,7 +330,7 @@ pub fn CausalGraph::graph_diff(
 }
 
 ///|
-pub impl Show for CausalGraph with output(self, logger) {
+pub impl Show for CausalGraph with fn output(self, logger) {
   logger.write_string("CausalGraph(")
   logger.write_string(self.next_lv.to_string())
   logger.write_string(" versions)")

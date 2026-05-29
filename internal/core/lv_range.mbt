@@ -10,37 +10,41 @@ pub(all) struct LvRange {
 } derive(Eq, Debug)
 
 ///|
-pub impl @rle.HasLength for LvRange with length(self) {
+pub impl @rle.HasLength for LvRange with fn length(self) {
   self.count
 }
 
 ///|
-pub impl @rle.Spanning for LvRange with span(self) {
+pub impl @rle.Spanning for LvRange with fn span(self) {
   self.count
 }
 
 ///|
-pub impl @rle.Spanning for LvRange with logical_length(self) {
+pub impl @rle.Spanning for LvRange with fn logical_length(self) {
   self.count
 }
 
 ///|
-pub impl @rle.Mergeable for LvRange with can_merge(a, b) {
+pub impl @rle.Mergeable for LvRange with fn can_merge(a, b) {
   a.start + a.count == b.start
 }
 
 ///|
-pub impl @rle.Mergeable for LvRange with merge(a, b) {
+pub impl @rle.Mergeable for LvRange with fn merge(a, b) {
   { start: a.start, count: a.count + b.count }
 }
 
 ///|
-pub impl @rle.FromRange for LvRange with from_range(start, count) {
+pub impl @rle.FromRange for LvRange with fn from_range(start, count) {
   { start, count }
 }
 
 ///|
-pub impl @rle.Addressable for LvRange with address(self, _global_start, offset) {
+pub impl @rle.Addressable for LvRange with fn address(
+  self,
+  _global_start,
+  offset,
+) {
   self.start + offset
 }
 

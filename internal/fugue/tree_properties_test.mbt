@@ -17,13 +17,13 @@ pub(all) struct QcInsertOpSet {
 } derive(Debug)
 
 ///|
-impl Show for QcInsertOpSet with output(self, logger) {
+impl Show for QcInsertOpSet with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
 /// Arbitrary instance for QcInsertOpSet
-pub impl @quickcheck.Arbitrary for QcInsertOpSet with arbitrary(
+pub impl @quickcheck.Arbitrary for QcInsertOpSet with fn arbitrary(
   size,
   random_state,
 ) {
@@ -50,7 +50,7 @@ pub impl @quickcheck.Arbitrary for QcInsertOpSet with arbitrary(
 
 ///|
 /// Shrink instance for QcInsertOpSet
-pub impl @qc.Shrink for QcInsertOpSet with shrink(self) {
+pub impl @qc.Shrink for QcInsertOpSet with fn shrink(self) {
   let results : Array[QcInsertOpSet] = []
   let ops = self.ops
   let len = ops.length()
@@ -202,19 +202,22 @@ pub(all) struct ChainLen {
 } derive(Debug)
 
 ///|
-impl Show for ChainLen with output(self, logger) {
+impl Show for ChainLen with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl @quickcheck.Arbitrary for ChainLen with arbitrary(size, _random_state) {
+pub impl @quickcheck.Arbitrary for ChainLen with fn arbitrary(
+  size,
+  _random_state,
+) {
   let size_cap = if size < 0 { 0 } else { size }
   let len = if size_cap < 3 { 3 } else { 3 + size_cap % 10 }
   { len, }
 }
 
 ///|
-pub impl @qc.Shrink for ChainLen with shrink(self) {
+pub impl @qc.Shrink for ChainLen with fn shrink(self) {
   let results : Array[ChainLen] = []
   if self.len > 3 {
     results.push({ len: 3 })
@@ -371,12 +374,12 @@ pub(all) struct InsertSetWithDeletes {
 } derive(Debug)
 
 ///|
-impl Show for InsertSetWithDeletes with output(self, logger) {
+impl Show for InsertSetWithDeletes with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with arbitrary(
+pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with fn arbitrary(
   size,
   random_state,
 ) {
@@ -405,7 +408,7 @@ pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with arbitrary(
 }
 
 ///|
-pub impl @qc.Shrink for InsertSetWithDeletes with shrink(self) {
+pub impl @qc.Shrink for InsertSetWithDeletes with fn shrink(self) {
   let results : Array[InsertSetWithDeletes] = []
   let len = self.inserts.length()
   if len > 0 {
@@ -533,13 +536,13 @@ pub(all) struct ConcurrentInsertSeq {
 } derive(Debug)
 
 ///|
-impl Show for ConcurrentInsertSeq with output(self, logger) {
+impl Show for ConcurrentInsertSeq with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
 /// Arbitrary instance for ConcurrentInsertSeq
-pub impl @quickcheck.Arbitrary for ConcurrentInsertSeq with arbitrary(
+pub impl @quickcheck.Arbitrary for ConcurrentInsertSeq with fn arbitrary(
   size,
   random_state,
 ) {
@@ -555,7 +558,7 @@ pub impl @quickcheck.Arbitrary for ConcurrentInsertSeq with arbitrary(
 
 ///|
 /// Shrink instance for ConcurrentInsertSeq
-pub impl @qc.Shrink for ConcurrentInsertSeq with shrink(self) {
+pub impl @qc.Shrink for ConcurrentInsertSeq with fn shrink(self) {
   let results : Array[ConcurrentInsertSeq] = []
   if self.len_a > 0 || self.len_b > 0 || self.ts_a > 0 || self.ts_b > 0 {
     results.push({ len_a: 0, len_b: 0, ts_a: 0, ts_b: 0 })
@@ -742,12 +745,12 @@ pub(all) struct TieBreakCase {
 } derive(Debug)
 
 ///|
-impl Show for TieBreakCase with output(self, logger) {
+impl Show for TieBreakCase with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl @quickcheck.Arbitrary for TieBreakCase with arbitrary(
+pub impl @quickcheck.Arbitrary for TieBreakCase with fn arbitrary(
   _size,
   random_state,
 ) {
@@ -768,7 +771,7 @@ pub impl @quickcheck.Arbitrary for TieBreakCase with arbitrary(
 }
 
 ///|
-pub impl @qc.Shrink for TieBreakCase with shrink(_self) {
+pub impl @qc.Shrink for TieBreakCase with fn shrink(_self) {
   let results : Array[TieBreakCase] = []
   results.push({ agent_a: "agent-0", agent_b: "agent-1", id_a: 10, id_b: 11 })
   results.iter()
@@ -838,18 +841,18 @@ pub(all) struct BranchingTree {
 } derive(Debug)
 
 ///|
-impl Show for BranchingTree with output(self, logger) {
+impl Show for BranchingTree with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl @quickcheck.Arbitrary for BranchingTree with arbitrary(size, rs) {
+pub impl @quickcheck.Arbitrary for BranchingTree with fn arbitrary(size, rs) {
   let len = if size < 3 { 3 } else if size > 50 { 50 } else { size }
   { len: rs.next_positive_int() % len + 3 }
 }
 
 ///|
-pub impl @qc.Shrink for BranchingTree with shrink(self) {
+pub impl @qc.Shrink for BranchingTree with fn shrink(self) {
   let results : Array[BranchingTree] = []
   if self.len > 3 {
     results.push({ len: 3 })

@@ -12,7 +12,7 @@ enum BlockEdit {
 } derive(Debug)
 
 ///|
-pub impl Show for BlockEdit with output(self, logger) {
+pub impl Show for BlockEdit with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -22,7 +22,7 @@ struct BlockScenario {
 } derive(Debug)
 
 ///|
-pub impl Show for BlockScenario with output(self, logger) {
+pub impl Show for BlockScenario with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -37,7 +37,7 @@ fn delete_string_at(text : String, pos : Int) -> String {
 }
 
 ///|
-impl @quickcheck.Arbitrary for BlockScenario with arbitrary(size, rs) {
+impl @quickcheck.Arbitrary for BlockScenario with fn arbitrary(size, rs) {
   let size_cap = if size < 0 { 0 } else { size }
   let count = size_cap % 8 + 1
   let chars : Array[Char] = ['a', 'b', 'c', 'd', 'e', 'f']
@@ -98,7 +98,7 @@ impl @quickcheck.Arbitrary for BlockScenario with arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for BlockScenario with shrink(self) {
+impl @qc.Shrink for BlockScenario with fn shrink(self) {
   let results : Array[BlockScenario] = []
   let len = self.edits.length()
   if len > 0 {

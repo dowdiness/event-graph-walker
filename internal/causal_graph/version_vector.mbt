@@ -21,7 +21,7 @@ pub struct VersionVector(Map[String, Int]) derive (
 )
 
 ///|
-pub impl Show for VersionVector with output(self, logger) {
+pub impl Show for VersionVector with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -51,7 +51,7 @@ pub impl Show for VersionVector with output(self, logger) {
 /// inspect(vv2.compare(vv1), content="1")   // vv2 > vv1
 /// ```
 ///
-pub impl Compare for VersionVector with compare(self, other) {
+pub impl Compare for VersionVector with fn compare(self, other) {
   if self == other {
     return 0
   }
@@ -90,7 +90,7 @@ pub impl Compare for VersionVector with compare(self, other) {
 /// inspect(vv1 <= vv4, content="false") // vv1 has bob but vv4 doesn't
 /// ```
 ///
-pub impl Compare for VersionVector with op_le(self, other) {
+pub impl Compare for VersionVector with fn op_le(self, other) {
   // For self <= other, every agent in self must have seq <= seq in other
   let mut is_le = true
   self.0.each(fn(agent, seq) {
@@ -107,7 +107,7 @@ pub impl Compare for VersionVector with op_le(self, other) {
 ///|
 /// Arbitrary instance for VersionVector - generates random version vectors
 /// Uses a fixed set of agent names and random sequence numbers
-pub impl @quickcheck.Arbitrary for VersionVector with arbitrary(
+pub impl @quickcheck.Arbitrary for VersionVector with fn arbitrary(
   size,
   random_state,
 ) {
@@ -133,7 +133,7 @@ pub impl @quickcheck.Arbitrary for VersionVector with arbitrary(
 /// 1. Remove agents (fewer agents = simpler)
 /// 2. Decrease sequence numbers for each agent (smaller numbers = simpler)
 /// 3. Combination of both
-pub impl @qc.Shrink for VersionVector with shrink(vv) {
+pub impl @qc.Shrink for VersionVector with fn shrink(vv) {
   let agents = vv.agents()
 
   // Strategy 1: Shrink by removing agents

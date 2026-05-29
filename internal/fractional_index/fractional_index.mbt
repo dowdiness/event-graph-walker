@@ -89,7 +89,7 @@ fn successor_after(left : FractionalIndex) -> FractionalIndex {
 
 ///|
 /// Lexicographic comparison with implicit zero-padding.
-pub impl Compare for FractionalIndex with compare(self, other) -> Int {
+pub impl Compare for FractionalIndex with fn compare(self, other) -> Int {
   let len = if self.elements.length() > other.elements.length() {
     self.elements.length()
   } else {
@@ -109,12 +109,12 @@ pub impl Compare for FractionalIndex with compare(self, other) -> Int {
 }
 
 ///|
-pub impl Eq for FractionalIndex with equal(self, other) -> Bool {
+pub impl Eq for FractionalIndex with fn equal(self, other) -> Bool {
   self.compare(other) == 0
 }
 
 ///|
-pub impl Show for FractionalIndex with output(self, logger) -> Unit {
+pub impl Show for FractionalIndex with fn output(self, logger) -> Unit {
   logger.write_string("FractionalIndex([")
   for i = 0; i < self.elements.length(); i = i + 1 {
     if i > 0 {
@@ -126,7 +126,7 @@ pub impl Show for FractionalIndex with output(self, logger) -> Unit {
 }
 
 ///|
-pub impl Debug for FractionalIndex with to_repr(self) -> Repr {
+pub impl Debug for FractionalIndex with fn to_repr(self) -> Repr {
   Repr::literal(self.to_string())
 }
 

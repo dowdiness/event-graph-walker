@@ -17,20 +17,20 @@ struct VisibleRun {
 } derive(Debug, Eq)
 
 ///|
-pub impl @rle.HasLength for VisibleRun with length(self) -> Int {
+pub impl @rle.HasLength for VisibleRun with fn length(self) -> Int {
   self.count
 }
 
 ///|
 /// span = count (one item per position in the item space).
 /// This is the coordinate space for OrderTree::find — position-based lookup.
-pub impl @rle.Spanning for VisibleRun with span(self) -> Int {
+pub impl @rle.Spanning for VisibleRun with fn span(self) -> Int {
   self.count
 }
 
 ///|
 /// logical_length = text.length() (visible character count in UTF-16 code units).
-pub impl @rle.Spanning for VisibleRun with logical_length(self) -> Int {
+pub impl @rle.Spanning for VisibleRun with fn logical_length(self) -> Int {
   self.text.length()
 }
 
@@ -38,12 +38,12 @@ pub impl @rle.Spanning for VisibleRun with logical_length(self) -> Int {
 /// Two runs can merge when they have consecutive LVs.
 /// Safety: this merge condition is valid only when runs are appended in
 /// document order (tree traversal). Do not use with arbitrary insertion.
-pub impl @rle.Mergeable for VisibleRun with can_merge(self, other) -> Bool {
+pub impl @rle.Mergeable for VisibleRun with fn can_merge(self, other) -> Bool {
   self.start_lv + self.count == other.start_lv
 }
 
 ///|
-pub impl @rle.Mergeable for VisibleRun with merge(self, other) -> VisibleRun {
+pub impl @rle.Mergeable for VisibleRun with fn merge(self, other) -> VisibleRun {
   {
     start_lv: self.start_lv,
     text: self.text + other.text,
@@ -53,7 +53,7 @@ pub impl @rle.Mergeable for VisibleRun with merge(self, other) -> VisibleRun {
 
 ///|
 /// Sliceable enables split/insert/delete on OrderTree[VisibleRun].
-pub impl @rle.Sliceable for VisibleRun with slice(
+pub impl @rle.Sliceable for VisibleRun with fn slice(
   self,
   start~ : Int,
   end~ : Int,

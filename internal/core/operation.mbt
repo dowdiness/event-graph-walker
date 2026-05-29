@@ -9,7 +9,7 @@ pub enum OpContent {
 } derive(Eq, Debug, FromJson, ToJson)
 
 ///|
-pub impl Show for OpContent with output(self, logger) {
+pub impl Show for OpContent with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -26,7 +26,7 @@ pub struct Op {
 } derive(Debug, FromJson, ToJson)
 
 ///|
-pub impl Show for Op with output(self, logger) {
+pub impl Show for Op with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
 
