@@ -8,6 +8,12 @@ import {
   "moonbitlang/core/debug",
 }
 
+import {
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+  "moonbitlang/core/quickcheck/splitmix",
+} for "test"
+
 options(
   is_main: false,
 )
