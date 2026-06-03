@@ -10,11 +10,6 @@ struct VersionVectorPair {
 } derive(Debug)
 
 ///|
-impl Show for VersionVectorPair with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 impl @quickcheck.Arbitrary for VersionVectorPair with fn arbitrary(size, rs) {
   {
     a: @quickcheck.Arbitrary::arbitrary(size, rs.split()),
@@ -31,11 +26,6 @@ struct VersionVectorTriple {
   b : VersionVector
   c : VersionVector
 } derive(Debug)
-
-///|
-impl Show for VersionVectorTriple with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
 
 ///|
 impl @quickcheck.Arbitrary for VersionVectorTriple with fn arbitrary(size, rs) {

@@ -8,7 +8,7 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 - `dowdiness/event-graph-walker/container` - higher-level document API combining tree nodes, block text, sync, and undo
 - `dowdiness/event-graph-walker/history` - read-only `CausalSnapshot` view over a document's causal DAG (for visualization and history-aware tooling)
 
-Package metadata in `moon.mod.json`:
+Package metadata in `moon.mod`:
 
 - Version: `0.3.0`
 - Repository: <https://github.com/dowdiness/event-graph-walker>
@@ -154,7 +154,7 @@ event-graph-walker/
 ├── container/            # Advanced document API: tree + block text + sync + undo
 ├── internal/             # Implementation packages, not the first-time API path
 ├── docs/                 # User docs, design notes, benchmarks, and historical material
-└── moon.mod.json
+└── moon.mod
 ```
 
 The generated `.mbti` files are the authoritative public API surface. Prefer the facade packages above unless you are modifying internals.

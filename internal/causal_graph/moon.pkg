@@ -11,6 +11,10 @@ import {
   "moonbitlang/quickcheck" @qc,
 }
 
+import {
+  "moonbitlang/core/quickcheck/splitmix",
+} for "test"
+
 options(
   is_main: false,
 )
