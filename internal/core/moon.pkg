@@ -3,9 +3,12 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/hashset",
   "dowdiness/rle",
+}
+
+import {
   "moonbitlang/core/quickcheck",
   "moonbitlang/core/quickcheck/splitmix",
-}
+} for "wbtest"
 
 options(
   is_main: false,
