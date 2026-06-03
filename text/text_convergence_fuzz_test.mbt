@@ -25,11 +25,6 @@ struct MultiAgentTrace {
 } derive(Debug)
 
 ///|
-impl Show for MultiAgentTrace with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
   let chars : Array[String] = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]
   let num_agents = 2 + rs.split().next_uint64().to_int().abs() % 4 // 2-5 agents

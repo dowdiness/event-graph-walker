@@ -17,11 +17,6 @@ pub(all) struct QcInsertOpSet {
 } derive(Debug)
 
 ///|
-impl Show for QcInsertOpSet with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 /// Arbitrary instance for QcInsertOpSet
 pub impl @quickcheck.Arbitrary for QcInsertOpSet with fn arbitrary(
   size,
@@ -202,11 +197,6 @@ pub(all) struct ChainLen {
 } derive(Debug)
 
 ///|
-impl Show for ChainLen with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 pub impl @quickcheck.Arbitrary for ChainLen with fn arbitrary(
   size,
   _random_state,
@@ -374,11 +364,6 @@ pub(all) struct InsertSetWithDeletes {
 } derive(Debug)
 
 ///|
-impl Show for InsertSetWithDeletes with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with fn arbitrary(
   size,
   random_state,
@@ -534,11 +519,6 @@ pub(all) struct ConcurrentInsertSeq {
   ts_a : Int
   ts_b : Int
 } derive(Debug)
-
-///|
-impl Show for ConcurrentInsertSeq with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
 
 ///|
 /// Arbitrary instance for ConcurrentInsertSeq
@@ -745,11 +725,6 @@ pub(all) struct TieBreakCase {
 } derive(Debug)
 
 ///|
-impl Show for TieBreakCase with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 pub impl @quickcheck.Arbitrary for TieBreakCase with fn arbitrary(
   _size,
   random_state,
@@ -839,11 +814,6 @@ test "property: fugue tie-breaking (agent then id)" {
 pub(all) struct BranchingTree {
   len : Int
 } derive(Debug)
-
-///|
-impl Show for BranchingTree with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
 
 ///|
 pub impl @quickcheck.Arbitrary for BranchingTree with fn arbitrary(size, rs) {

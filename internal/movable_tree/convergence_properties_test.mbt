@@ -19,11 +19,6 @@ struct TreeScenario {
 } derive(Debug)
 
 ///|
-impl Show for TreeScenario with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 /// Arbitrary instance for TreeScenario.
 /// Generates 2-6 actions that form a valid sequence:
 /// nodes are always created before being moved or deleted.

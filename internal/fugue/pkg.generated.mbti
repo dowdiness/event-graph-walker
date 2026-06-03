@@ -72,8 +72,6 @@ pub(all) struct Item[T] {
 pub impl[T : @debug.Debug] Show for Item[T]
 
 pub(all) struct ItemId(Int) derive(Compare, Default, Eq, Hash, @debug.Debug)
-#deprecated
-pub fn ItemId::inner(Self) -> Int
 pub impl Show for ItemId
 
 pub enum ItemState {
@@ -92,13 +90,9 @@ pub impl Show for ItemState
 type JumpAncestors derive(@debug.Debug)
 
 pub(all) struct Lv(Int) derive(Compare, Default, Eq, Hash, @debug.Debug)
-#deprecated
-pub fn Lv::inner(Self) -> Int
 pub impl Show for Lv
 
 pub(all) struct ReplicaId(String) derive(Compare, Eq, @debug.Debug)
-#deprecated
-pub fn ReplicaId::inner(Self) -> String
 
 pub enum Side {
   Left
@@ -107,8 +101,6 @@ pub enum Side {
 pub impl Show for Side
 
 pub(all) struct Timestamp(Int) derive(Compare, Default, Eq, @debug.Debug)
-#deprecated
-pub fn Timestamp::inner(Self) -> Int
 
 // Type aliases
 

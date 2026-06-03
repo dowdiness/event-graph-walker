@@ -8,11 +8,6 @@ pub(all) struct OrderedPair {
 } derive(Debug)
 
 ///|
-impl Show for OrderedPair with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
   // Generate 1-4 elements in [0, 65535]
   let len_a = rs.next_uint64().to_int().abs() % 4 + 1
@@ -74,11 +69,6 @@ pub impl @qc.Shrink for OrderedPair with fn shrink(self) {
 pub(all) struct SingleKey {
   key : @fractional_index.FractionalIndex
 } derive(Debug)
-
-///|
-impl Show for SingleKey with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
 
 ///|
 /// Shrink instance for SingleKey — try shorter element lists.

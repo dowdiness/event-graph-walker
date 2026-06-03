@@ -23,16 +23,6 @@ struct RealOpsPair {
 } derive(Debug)
 
 ///|
-impl Show for RealOps with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
-impl Show for RealOpsPair with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 /// Arbitrary instance for RealOps
 impl @quickcheck.Arbitrary for RealOps with fn arbitrary(size, random_state) {
   let chars : Array[Char] = [
