@@ -481,6 +481,87 @@ test "property: checkout_version_vector equals checkout via to_frontier" {
 }
 
 ///|
+fn prop_get_frontier_returns_defensive_copy(trace : BranchTrace) -> Bool {
+  let oplog = trace.replay()
+  let snapshot = trace.to_snapshot()
+  let branch = try! Branch::checkout(oplog, snapshot.frontier)
+  let frontier = branch.get_frontier()
+  frontier.0.push(-1)
+  !branch.at_frontier(frontier) && branch_matches_snapshot(branch, snapshot)
+}
+
+///|
+test "property: get_frontier returns defensive copy" {
+  @qc.quick_check_fn(prop_get_frontier_returns_defensive_copy)
+}
+
+///|
+fn prop_advance_to_version_vector_matches_advance(trace : BranchTrace) -> Bool {
+  let oplog = trace.replay()
+  let from_snapshot = trace.from_snapshot()
+  let to_snapshot = trace.to_snapshot()
+  let from_branch = try! Branch::checkout(oplog, from_snapshot.frontier)
+  let to_vv = @causal_graph.VersionVector::from_frontier(
+    oplog.causal_graph(),
+    to_snapshot.frontier,
+  )
+  let via_vv = try! from_branch.advance_to_version_vector(to_vv)
+  let via_frontier = try! Branch::checkout(oplog, to_snapshot.frontier)
+  branches_match(via_vv, via_frontier) &&
+  branch_matches_snapshot(via_frontier, to_snapshot)
+}
+
+///|
+test "property: advance_to_version_vector matches advance(to_frontier)" {
+  @qc.quick_check_fn(prop_advance_to_version_vector_matches_advance)
+}
+
+///|
+fn prop_at_version_vector_matches_frontier(trace : BranchTrace) -> Bool {
+  let oplog = trace.replay()
+  let snapshot = trace.to_snapshot()
+  let branch = try! Branch::checkout(oplog, snapshot.frontier)
+  let vv = @causal_graph.VersionVector::from_frontier(
+    oplog.causal_graph(),
+    snapshot.frontier,
+  )
+  if !branch.at_version_vector(vv) {
+    return false
+  }
+  let agents = vv.agents()
+  if agents.length() == 0 {
+    true
+  } else {
+    let agent = agents[0]
+    match vv.0.get(agent) {
+      Some(seq) => branch.at_version_vector(vv.set(agent, seq + 1)) == false
+      None => false
+    }
+  }
+}
+
+///|
+test "property: at_version_vector is exact" {
+  @qc.quick_check_fn(prop_at_version_vector_matches_frontier)
+}
+
+///|
+fn prop_merge_remote_ops_idempotent(trace : BranchTrace) -> Bool {
+  let oplog = replay_ops(trace.local_ops())
+  let branch = try! Branch::checkout(oplog, oplog.get_frontier())
+  let remote_ops = trace.remote_ops()
+  let merged = try! branch.merge_remote_ops(remote_ops)
+  let merged_again = try! merged.merge_remote_ops(remote_ops)
+  branches_match(merged, merged_again) &&
+  branch_matches_snapshot(merged, trace.full_snapshot())
+}
+
+///|
+test "property: merge_remote_ops is idempotent" {
+  @qc.quick_check_fn(prop_merge_remote_ops_idempotent)
+}
+
+///|
 fn prop_merge_remote_ops_matches_full_checkout(trace : BranchTrace) -> Bool {
   let oplog = replay_ops(trace.local_ops())
   let branch = try! Branch::checkout(oplog, oplog.get_frontier())
