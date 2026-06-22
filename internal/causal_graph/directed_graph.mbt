@@ -9,20 +9,23 @@
 /// via the entries array. The DirectedGraph trait only exposes the forward
 /// direction. Backward traversal uses the dedicated methods (is_ancestor,
 /// transitive_closure_gen, graph_diff).
-pub impl @alga.DirectedGraph for CausalGraph with fn vertex_count(self) {
+pub impl @alga.VertexSet for CausalGraph with fn vertex_count(self) {
   self.next_lv
 }
 
 ///|
-pub impl @alga.DirectedGraph for CausalGraph with fn iter(self) {
+pub impl @alga.VertexSet for CausalGraph with fn iter(self) {
   (0).until(self.next_lv)
 }
 
 ///|
-pub impl @alga.DirectedGraph for CausalGraph with fn successors(self, v) {
+pub impl @alga.Successors for CausalGraph with fn successors(self, v) {
   if v >= 0 && v < self.next_lv {
     self.children[v].iter()
   } else {
     Iter::empty()
   }
 }
+
+///|
+pub impl @alga.DirectedGraph for CausalGraph
