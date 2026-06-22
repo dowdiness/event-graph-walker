@@ -7,7 +7,7 @@ import {
   "dowdiness/btree@0.1.0",
   "dowdiness/rle@0.2.2",
   "dowdiness/order-tree@0.1.0",
-  "dowdiness/alga@0.3.0",
+  "dowdiness/alga@0.4.0",
 }
 
 readme = "README.md"
