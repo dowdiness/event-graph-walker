@@ -1176,16 +1176,16 @@ pub fn Document::set_property(
   }
   let old_value = self.get_property(id, key)
   let _result : Result[Unit, DocumentError] = try {
-      self.with_implicit_transaction(() => {
-        self.emit_property_op(id, key, value)
-        self.record_undo_item(
-          PropertySet(target=id, key~, old_value~, new_value=value),
-        )
-      })
-      Ok(())
-    } catch {
-      e => Err(e)
-    }
+    self.with_implicit_transaction(() => {
+      self.emit_property_op(id, key, value)
+      self.record_undo_item(
+        PropertySet(target=id, key~, old_value~, new_value=value),
+      )
+    })
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
 }
 
 ///|
