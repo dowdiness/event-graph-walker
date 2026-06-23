@@ -27,9 +27,12 @@ test "apply_remote invalidates position cache on partial failure" {
   try! doc.apply_remote(bad_delete)
 
   // Parent insert is applied, then buffered malformed delete raises.
-  let result : Result[Unit, DocumentError] = try? doc.apply_remote(
-    parent_insert,
-  )
+  let result : Result[Unit, DocumentError] = try {
+    doc.apply_remote(parent_insert)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
   inspect(result is Err(_), content="true")
   inspect(doc.to_text(), content="A")
 

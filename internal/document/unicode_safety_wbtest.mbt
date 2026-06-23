@@ -96,7 +96,7 @@ test "β1 #31: apply_remote rejects lone high surrogate with ContentError" {
   inspect(high.length(), content="1")
   let doc = Document::new("peer_a")
   let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, high, None, None)
-  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  let result : Result[Unit, DocumentError] = try { doc.apply_remote(op0); Ok(()) } catch { e => Err(e) }
   inspect(
     result is Err(DocumentError::ContentError(reason=MalformedUtf16)),
     content="true",
@@ -115,7 +115,7 @@ test "β2 #31: apply_remote rejects lone low surrogate with ContentError" {
   inspect(low.length(), content="1")
   let doc = Document::new("peer_a")
   let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, low, None, None)
-  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  let result : Result[Unit, DocumentError] = try { doc.apply_remote(op0); Ok(()) } catch { e => Err(e) }
   inspect(
     result is Err(DocumentError::ContentError(reason=MalformedUtf16)),
     content="true",
@@ -129,7 +129,7 @@ test "β2 #31: apply_remote rejects lone low surrogate with ContentError" {
 test "β #31: apply_remote rejects multi-codepoint Insert content" {
   let doc = Document::new("peer_a")
   let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, "ab", None, None)
-  let result : Result[Unit, DocumentError] = try? doc.apply_remote(op0)
+  let result : Result[Unit, DocumentError] = try { doc.apply_remote(op0); Ok(()) } catch { e => Err(e) }
   inspect(
     result is Err(DocumentError::ContentError(reason=MultipleCodepoints)),
     content="true",

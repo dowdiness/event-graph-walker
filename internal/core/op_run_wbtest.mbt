@@ -349,7 +349,7 @@ test "decompress: multi-op insert run at various offsets" {
 
 ///|
 test "Rle[OpRun]: append auto-merges linear typing" {
-  let rle : @rle.Rle[OpRun] = @rle.Rle::new()
+  let rle : @rle.Rle[OpRun] = @rle.Rle::Rle()
   let op0 = Op::new_insert(
     0,
     [],
@@ -376,7 +376,7 @@ test "Rle[OpRun]: append auto-merges linear typing" {
 
 ///|
 test "Rle[OpRun]: non-mergeable ops stay separate" {
-  let rle : @rle.Rle[OpRun] = @rle.Rle::new()
+  let rle : @rle.Rle[OpRun] = @rle.Rle::Rle()
   let op0 = Op::new_insert(0, [], "alice", 0, "a", None, None)
   let op1 = Op::new_insert(1, [], "bob", 0, "b", None, None)
   let _ = rle.append(OpRun::from_op(op0))

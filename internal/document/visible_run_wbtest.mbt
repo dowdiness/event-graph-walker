@@ -53,7 +53,7 @@ test "VisibleRun: slice extracts subrange" {
 
 ///|
 test "VisibleRun: Rle append merges consecutive runs" {
-  let rle : @rle.Rle[VisibleRun] = @rle.Rle::new()
+  let rle : @rle.Rle[VisibleRun] = @rle.Rle::Rle()
   let _ = rle.append({ start_lv: 0, text: "a", count: 1 })
   let _ = rle.append({ start_lv: 1, text: "b", count: 1 })
   let _ = rle.append({ start_lv: 2, text: "c", count: 1 })
@@ -64,7 +64,7 @@ test "VisibleRun: Rle append merges consecutive runs" {
 
 ///|
 test "VisibleRun: Rle append keeps non-consecutive runs separate" {
-  let rle : @rle.Rle[VisibleRun] = @rle.Rle::new()
+  let rle : @rle.Rle[VisibleRun] = @rle.Rle::Rle()
   let _ = rle.append({ start_lv: 0, text: "ab", count: 2 })
   let _ = rle.append({ start_lv: 5, text: "cd", count: 2 })
   // Non-consecutive LVs — two separate runs
@@ -74,7 +74,7 @@ test "VisibleRun: Rle append keeps non-consecutive runs separate" {
 
 ///|
 test "VisibleRun: Rle find locates correct position" {
-  let rle : @rle.Rle[VisibleRun] = @rle.Rle::new()
+  let rle : @rle.Rle[VisibleRun] = @rle.Rle::Rle()
   let _ = rle.append({ start_lv: 0, text: "abc", count: 3 })
   let _ = rle.append({ start_lv: 10, text: "de", count: 2 })
   // Position 0 → run 0, offset 0

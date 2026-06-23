@@ -485,9 +485,12 @@ fn prop_fugue_delete_visibility(set : InsertSetWithDeletes) -> Bool {
   let delete_count = set.delete_count
   for i = 0; i < delete_count; i = i + 1 {
     let op = set.inserts[i]
-    let result : Result[Unit, @fugue.FugueError] = try? tree.delete(
-      @fugue.Lv(op.id),
-    )
+    let result : Result[Unit, @fugue.FugueError] = try {
+      tree.delete(@fugue.Lv(op.id))
+      Ok(())
+    } catch {
+      e => Err(e)
+    }
     match result {
       Ok(_) => ()
       Err(_) => return false

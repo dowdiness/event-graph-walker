@@ -6,10 +6,10 @@ test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
   // op2 reuses ("remote", 0) — same identity as op1
   let op2 = @core.Op::new_insert(-1, [], "remote", 0, "b", None, None)
-  let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
-    [op1, op2],
-    [],
-  )
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([op1, op2], [])
+    Ok(())
+  } catch { e => Err(e) }
   inspect(result is Err(_), content="true")
   match result {
     Err(DuplicateOperation(raw~)) => {
@@ -33,10 +33,10 @@ test "validate_remote_batch raises MissingRemoteParent for unknown parent" {
     None,
     None,
   )
-  let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
-    [op],
-    [],
-  )
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([op], [])
+    Ok(())
+  } catch { e => Err(e) }
   inspect(result is Err(_), content="true")
   match result {
     Err(MissingRemoteParent(raw~)) => {
@@ -54,10 +54,10 @@ test "validate_remote_batch accepts parent present in the batch" {
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
   let op1_raw = @core.RawVersion::new("remote", 0)
   let op2 = @core.Op::new_insert(-1, [op1_raw], "remote", 1, "b", None, None)
-  let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
-    [op1, op2],
-    [],
-  )
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([op1, op2], [])
+    Ok(())
+  } catch { e => Err(e) }
   inspect(result is Ok(_), content="true")
 }
 
@@ -67,10 +67,10 @@ test "validate_remote_batch raises MissingRemoteFrontier for unknown frontier en
   let op = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
   // frontier claims ("ghost", 99) but that op is neither local nor in the batch
   let ghost = @core.RawVersion::new("ghost", 99)
-  let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
-    [op],
-    [ghost],
-  )
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([op], [ghost])
+    Ok(())
+  } catch { e => Err(e) }
   inspect(result is Err(_), content="true")
   match result {
     Err(MissingRemoteFrontier(raw~)) => {
@@ -87,10 +87,10 @@ test "validate_remote_batch accepts frontier op present in the batch" {
   let op = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
   // frontier entry ("remote", 0) matches op in the batch — should be ok
   let op_raw = @core.RawVersion::new("remote", 0)
-  let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
-    [op],
-    [op_raw],
-  )
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([op], [op_raw])
+    Ok(())
+  } catch { e => Err(e) }
   inspect(result is Ok(_), content="true")
 }
 
@@ -103,10 +103,10 @@ test "validate_remote_batch accepts frontier op already present in oplog" {
   let alice_raw = @core.RawVersion::new("alice", 0)
   // A new batch from "remote" with alice's already-applied op in the frontier
   let new_op = @core.Op::new_insert(-1, [], "remote", 0, "y", None, None)
-  let result : Result[Unit, OpLogError] = try? oplog.validate_remote_batch(
-    [new_op],
-    [alice_raw],
-  )
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([new_op], [alice_raw])
+    Ok(())
+  } catch { e => Err(e) }
   inspect(result is Ok(_), content="true")
 }
 
@@ -115,9 +115,10 @@ test "apply_remote raises MissingOrigin for delete with no origin_left" {
   let oplog = OpLog::new("local")
   // A delete with origin_left=None is malformed (protocol error)
   let bad_delete = @core.Op::new_delete(-1, [], "remote", 0, None)
-  let result : Result[Array[@core.Op], OpLogError] = try? oplog.apply_remote(
-    bad_delete,
-  )
+  let result : Result[Array[@core.Op], OpLogError] = try {
+    let v = oplog.apply_remote(bad_delete)
+    Ok(v)
+  } catch { e => Err(e) }
   inspect(result is Err(_), content="true")
   match result {
     Err(MissingOrigin) => ()
@@ -131,7 +132,7 @@ test "apply_remote is idempotent: already-applied op is silently skipped" {
   let op = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
   let _ = try! oplog.apply_remote(op)
   // Applying the same op again must not raise and must not add a duplicate
-  let result : Result[Array[@core.Op], OpLogError] = try? oplog.apply_remote(op)
+  let result : Result[Array[@core.Op], OpLogError] = try { let v = oplog.apply_remote(op); Ok(v) } catch { e => Err(e) }
   inspect(result is Ok(_), content="true")
   inspect(oplog.op_count(), content="1")
 }

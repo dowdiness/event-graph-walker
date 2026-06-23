@@ -39,6 +39,8 @@ pub fn CausalGraph::op_count(Self) -> Int
 pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
 pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
 pub impl @alga.DirectedGraph for CausalGraph
+pub impl @alga.Successors for CausalGraph
+pub impl @alga.VertexSet for CausalGraph
 pub impl Show for CausalGraph
 pub impl @debug.Debug for CausalGraph
 

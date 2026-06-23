@@ -140,7 +140,7 @@ pub fn SyncSession::export_since(
   let current_frontier = inner.get_frontier()
   let (_, advance_ops) = inner.diff_and_collect(peer_frontier, current_frontier)
   // Re-compress individual ops into runs via Rle::append (auto-merges adjacent)
-  let rle : @rle.Rle[@core.OpRun] = @rle.Rle::new()
+  let rle : @rle.Rle[@core.OpRun] = @rle.Rle::Rle()
   for op in advance_ops {
     let _ = rle.append(@core.OpRun::from_op(op))
   }
