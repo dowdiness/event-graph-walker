@@ -6,7 +6,7 @@ import {
   "moonbitlang/quickcheck@0.14.0",
   "dowdiness/btree@0.1.0",
   "dowdiness/rle@0.2.3",
-  "dowdiness/order-tree@0.1.0",
+  "dowdiness/order-tree@0.1.1",
   "dowdiness/alga@0.4.0",
 }
 
