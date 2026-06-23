@@ -114,12 +114,17 @@ test "undo: failed explicit transaction does not push an undo group" {
   let doc = @container.Document::new("alice")
   let block = doc.create_node(parent=@container.root_id)
   // Run a transaction that applies two ops then raises on the third.
-  let result = try? doc.transaction(() => {
-    doc.insert_text(block, 0, "ok")
-    doc.delete_node(block)
-    // Block is now trashed → insert_text raises TargetNotFound.
-    doc.insert_text(block, 0, "fail")
-  })
+  let result = try {
+    doc.transaction(() => {
+      doc.insert_text(block, 0, "ok")
+      doc.delete_node(block)
+      // Block is now trashed → insert_text raises TargetNotFound.
+      doc.insert_text(block, 0, "fail")
+    })
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
   inspect(result is Err(_), content="true")
   // Exactly one undoable group remains — the original create_node. If the
   // failed transaction had committed, there would be two.

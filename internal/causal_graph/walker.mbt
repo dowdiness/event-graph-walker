@@ -82,12 +82,12 @@ pub fn CausalGraph::diff_frontiers_lvs(
       reversed.map(fn(lv) { @core.LvRange::{ start: lv, count: 1 } }),
     )
   } else {
-    @rle.Rle::new()
+    @rle.Rle::Rle()
   }
   let advance_rle = if advance_set.length() > 0 {
     self.toposort_lv_set(advance_set)
   } else {
-    @rle.Rle::new()
+    @rle.Rle::Rle()
   }
   (retreat_rle, advance_rle)
 }

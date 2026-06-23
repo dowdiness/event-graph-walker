@@ -13,7 +13,7 @@ pub struct OpLog {
 /// Create a new OpLog
 pub fn OpLog::new(agent_id : String) -> OpLog {
   {
-    operations: @rle.Rle::new(),
+    operations: @rle.Rle::Rle(),
     pending: [],
     graph: @causal_graph.CausalGraph::new(),
     agent_id,
