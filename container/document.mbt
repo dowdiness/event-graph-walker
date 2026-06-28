@@ -1155,6 +1155,15 @@ pub fn Document::children(
 }
 
 ///|
+/// Get the parent of a node, or None if the node doesn't exist.
+pub fn Document::parent(
+  self : Document,
+  id : @mt.TreeNodeId,
+) -> @mt.TreeNodeId? {
+  self.tree.parent(id)
+}
+
+///|
 /// Check whether a node is alive (exists and not in the trash).
 pub fn Document::is_alive(self : Document, id : @mt.TreeNodeId) -> Bool {
   self.tree.is_alive(id)
