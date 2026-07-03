@@ -145,7 +145,6 @@ pub fn SyncSession::export_all(
   }
 }
 
-
 ///|
 /// Export operations since a peer's version
 pub fn SyncSession::export_since(
@@ -200,6 +199,7 @@ pub fn SyncSession::current_version(self : SyncSession) -> Version {
 
 ///| Private helpers for `to_canonical_bytes`.
 
+///|
 /// Write an unsigned integer as a LEB128 varint.
 /// All values in sync messages are well within Int range.
 fn write_uvarint(buf : Buffer, value : Int) -> Unit {
@@ -211,18 +211,22 @@ fn write_uvarint(buf : Buffer, value : Int) -> Unit {
   buf.write_byte(v.to_byte())
 }
 
+///|
 /// Write a UTF-8 string prefixed with a uvarint byte-length.
 fn write_string_utf8(buf : Buffer, s : String) -> Unit {
   let bytes = @utf8.encode(s)
   write_uvarint(buf, bytes.length())
   buf.write_bytes(bytes)
 }
+
+///|
 /// Write a single `RawVersion` as (agent, seq).
 fn write_raw_version(buf : Buffer, rv : @core.RawVersion) -> Unit {
   write_string_utf8(buf, rv.agent)
   write_uvarint(buf, rv.seq)
 }
 
+///|
 /// Sort `RawVersion` array by (agent, seq) for determinism.
 fn sort_raw_versions(vs : Array[@core.RawVersion]) -> Array[@core.RawVersion] {
   let sorted = vs.copy()
@@ -235,6 +239,7 @@ fn sort_raw_versions(vs : Array[@core.RawVersion]) -> Array[@core.RawVersion] {
   sorted
 }
 
+///|
 /// Write a full SyncMessage in canonical binary form.
 fn write_sync_message(buf : Buffer, msg : SyncMessage) -> Unit {
   // Runs
