@@ -205,7 +205,7 @@ pub fn SyncSession::current_version(self : SyncSession) -> Version {
 fn write_uvarint(buf : Buffer, value : Int) -> Unit {
   let mut v = value
   while v >= 0x80 {
-    buf.write_byte((v & 0x7F | 0x80).to_byte())
+    buf.write_byte(((v & 0x7F) | 0x80).to_byte())
     v = v >> 7
   }
   buf.write_byte(v.to_byte())
