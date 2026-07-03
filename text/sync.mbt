@@ -200,17 +200,27 @@ pub fn SyncSession::current_version(self : SyncSession) -> Version {
 
 ///| Private helpers for `to_canonical_bytes`.
 
+/// Write an unsigned integer as a LEB128 varint.
+/// All values in sync messages are well within Int range.
+fn write_uvarint(buf : Buffer, value : Int) -> Unit {
+  let mut v = value
+  while v >= 0x80 {
+    buf.write_byte((v & 0x7F | 0x80).to_byte())
+    v = v >> 7
+  }
+  buf.write_byte(v.to_byte())
+}
+
 /// Write a UTF-8 string prefixed with a uvarint byte-length.
 fn write_string_utf8(buf : Buffer, s : String) -> Unit {
   let bytes = @utf8.encode(s)
-  @bytecodec.write_uvarint(buf, bytes.length().to_uint64())
+  write_uvarint(buf, bytes.length())
   buf.write_bytes(bytes)
 }
-
 /// Write a single `RawVersion` as (agent, seq).
 fn write_raw_version(buf : Buffer, rv : @core.RawVersion) -> Unit {
   write_string_utf8(buf, rv.agent)
-  @bytecodec.write_uvarint(buf, rv.seq.to_uint64())
+  write_uvarint(buf, rv.seq)
 }
 
 /// Sort `RawVersion` array by (agent, seq) for determinism.
@@ -228,17 +238,17 @@ fn sort_raw_versions(vs : Array[@core.RawVersion]) -> Array[@core.RawVersion] {
 /// Write a full SyncMessage in canonical binary form.
 fn write_sync_message(buf : Buffer, msg : SyncMessage) -> Unit {
   // Runs
-  @bytecodec.write_uvarint(buf, msg.runs.length().to_uint64())
+  write_uvarint(buf, msg.runs.length())
   for run in msg.runs {
     write_string_utf8(buf, run.agent)
-    @bytecodec.write_uvarint(buf, run.start_seq.to_uint64())
-    @bytecodec.write_uvarint(buf, run.start_lv.to_uint64())
-    @bytecodec.write_uvarint(buf, run.count.to_uint64())
+    write_uvarint(buf, run.start_seq)
+    write_uvarint(buf, run.start_lv)
+    write_uvarint(buf, run.count)
     // Content
     match run.content {
       @core.Inserts(chars) => {
         buf.write_byte(b'\x00')
-        @bytecodec.write_uvarint(buf, chars.length().to_uint64())
+        write_uvarint(buf, chars.length())
         for ch in chars {
           buf.write_bytes(@utf8.encode(ch.to_string()))
         }
@@ -248,7 +258,7 @@ fn write_sync_message(buf : Buffer, msg : SyncMessage) -> Unit {
     }
     // Parents (sorted)
     let parents = sort_raw_versions(run.parents)
-    @bytecodec.write_uvarint(buf, parents.length().to_uint64())
+    write_uvarint(buf, parents.length())
     for p in parents {
       write_raw_version(buf, p)
     }
@@ -271,7 +281,7 @@ fn write_sync_message(buf : Buffer, msg : SyncMessage) -> Unit {
   }
   // Heads (sorted)
   let heads = sort_raw_versions(msg.heads)
-  @bytecodec.write_uvarint(buf, heads.length().to_uint64())
+  write_uvarint(buf, heads.length())
   for h in heads {
     write_raw_version(buf, h)
   }

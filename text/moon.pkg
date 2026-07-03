@@ -8,10 +8,8 @@ import {
   "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/undo" @undo,
   "dowdiness/rle" @rle,
-  "dowdiness/byte_codec" @bytecodec,
+  "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8" @utf8,
-  "moonbitlang/core/string",
-  "moonbitlang/core/bench",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
