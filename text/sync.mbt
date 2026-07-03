@@ -106,6 +106,22 @@ pub fn SyncMessage::from_json_string(
   }
 }
 
+///|
+/// Deterministic binary encoding for cryptographic hashing and signing.
+///
+/// Every field is written in fixed order. Variable-length collections
+/// (parents, heads) are sorted by `(agent, seq)` for determinism.
+/// Strings use UTF-8 encoding. All lengths are unsigned LEB128 varints.
+///
+/// This is the canonical form consumed by BFT adapters and other
+/// integrity-verification layers — it is NOT a wire format and does
+/// not replace `to_json_string` for general sync.
+pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
+  let buf = Buffer()
+  write_sync_message(buf, self)
+  buf.to_bytes()
+}
+
 ///| A sync session providing methods to synchronize a TextState with peers.
 
 ///|
@@ -128,6 +144,7 @@ pub fn SyncSession::export_all(
     err => raise TextError::from_document_error(err, self.doc.len())
   }
 }
+
 
 ///|
 /// Export operations since a peer's version
@@ -179,4 +196,83 @@ pub fn SyncSession::apply(
 /// Get the current version after sync operations
 pub fn SyncSession::current_version(self : SyncSession) -> Version {
   self.doc.version()
+}
+
+///| Private helpers for `to_canonical_bytes`.
+
+/// Write a UTF-8 string prefixed with a uvarint byte-length.
+fn write_string_utf8(buf : Buffer, s : String) -> Unit {
+  let bytes = @utf8.encode(s)
+  @bytecodec.write_uvarint(buf, bytes.length().to_uint64())
+  buf.write_bytes(bytes)
+}
+
+/// Write a single `RawVersion` as (agent, seq).
+fn write_raw_version(buf : Buffer, rv : @core.RawVersion) -> Unit {
+  write_string_utf8(buf, rv.agent)
+  @bytecodec.write_uvarint(buf, rv.seq.to_uint64())
+}
+
+/// Sort `RawVersion` array by (agent, seq) for determinism.
+fn sort_raw_versions(vs : Array[@core.RawVersion]) -> Array[@core.RawVersion] {
+  let sorted = vs.copy()
+  sorted.sort_by(fn(a, b) {
+    match a.agent.compare(b.agent) {
+      0 => a.seq.compare(b.seq)
+      other => other
+    }
+  })
+  sorted
+}
+
+/// Write a full SyncMessage in canonical binary form.
+fn write_sync_message(buf : Buffer, msg : SyncMessage) -> Unit {
+  // Runs
+  @bytecodec.write_uvarint(buf, msg.runs.length().to_uint64())
+  for run in msg.runs {
+    write_string_utf8(buf, run.agent)
+    @bytecodec.write_uvarint(buf, run.start_seq.to_uint64())
+    @bytecodec.write_uvarint(buf, run.start_lv.to_uint64())
+    @bytecodec.write_uvarint(buf, run.count.to_uint64())
+    // Content
+    match run.content {
+      @core.Inserts(chars) => {
+        buf.write_byte(b'\x00')
+        @bytecodec.write_uvarint(buf, chars.length().to_uint64())
+        for ch in chars {
+          buf.write_bytes(@utf8.encode(ch.to_string()))
+        }
+      }
+      @core.Deletes => buf.write_byte(b'\x01')
+      @core.Undeletes => buf.write_byte(b'\x02')
+    }
+    // Parents (sorted)
+    let parents = sort_raw_versions(run.parents)
+    @bytecodec.write_uvarint(buf, parents.length().to_uint64())
+    for p in parents {
+      write_raw_version(buf, p)
+    }
+    // origin_left
+    match run.origin_left {
+      Some(o) => {
+        buf.write_byte(b'\x01')
+        write_raw_version(buf, o)
+      }
+      None => buf.write_byte(b'\x00')
+    }
+    // origin_right
+    match run.origin_right {
+      Some(o) => {
+        buf.write_byte(b'\x01')
+        write_raw_version(buf, o)
+      }
+      None => buf.write_byte(b'\x00')
+    }
+  }
+  // Heads (sorted)
+  let heads = sort_raw_versions(msg.heads)
+  @bytecodec.write_uvarint(buf, heads.length().to_uint64())
+  for h in heads {
+    write_raw_version(buf, h)
+  }
 }
