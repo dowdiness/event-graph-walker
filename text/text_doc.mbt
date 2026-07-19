@@ -4,6 +4,8 @@
 /// A collaborative text document with automatic conflict resolution
 pub(all) struct TextState {
   priv inner : @document.Document
+  priv sync_limits : @sync.Limits
+  priv mut pending_sync_records : Array[@core.Op]
 }
 
 ///|
@@ -13,8 +15,24 @@ pub impl @debug.Debug for TextState with fn to_repr(self) {
 
 ///|
 /// Create a new empty document with the given agent ID
-pub fn TextState::new(agent_id : String) -> TextState {
-  TextState::{ inner: @document.Document::new(agent_id) }
+pub fn TextState::new(agent_id : String) -> TextState raise TextError {
+  TextState::new_with_sync_limits(agent_id, @sync.Limits::default())
+}
+
+///|
+/// Create a new empty document with explicit synchronization limits.
+pub fn TextState::new_with_sync_limits(
+  agent_id : String,
+  limits : @sync.Limits,
+) -> TextState raise TextError {
+  if agent_id == "" {
+    raise TextError::EmptyReplicaId
+  }
+  TextState::{
+    inner: @document.Document::new(agent_id),
+    sync_limits: limits,
+    pending_sync_records: [],
+  }
 }
 
 ///|
@@ -59,6 +77,9 @@ pub fn TextState::insert(
   let pos_val = pos.value()
   if pos_val > doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
+  }
+  if text.length() == 0 {
+    return
   }
   try {
     let _ = self.inner.insert(pos_val, text)
@@ -112,7 +133,7 @@ pub fn TextState::replace_range(
 ///|
 /// Get the current version of the document
 pub fn TextState::version(self : TextState) -> Version {
-  Version::from_frontier(self.inner.get_frontier())
+  Version::from_ops(self.inner.get_all_ops())
 }
 
 ///|
@@ -127,9 +148,19 @@ pub fn TextState::checkout(
   self : TextState,
   version : Version,
 ) -> TextView raise TextError {
+  let frontier : Array[Int] = []
+  for entry in version.entries {
+    let raw = @core.RawVersion::new(entry.replica_id, entry.sequence)
+    match self.inner.raw_to_lv(raw) {
+      Some(lv) => frontier.push(lv)
+      None => raise TextError::VersionNotFound
+    }
+  }
   try {
-    let branch = self.inner.checkout_branch(version.to_frontier())
-    TextView::from_branch(branch)
+    let branch = self.inner.checkout_branch(
+      @core.Frontier::from_array_dedup(frontier),
+    )
+    TextView::from_branch(branch, version)
   } catch {
     err => raise TextError::from_document_error(err, self.len())
   }
@@ -140,7 +171,7 @@ pub impl Show for TextState with fn output(self, logger) {
   logger.write_string("TextState { text: \"")
   logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")
-  self.version().to_frontier().output(logger)
+  self.version().output(logger)
   logger.write_string(" }")
 }
 

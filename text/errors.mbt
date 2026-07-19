@@ -1,44 +1,11 @@
 ///| User-friendly error types with diagnostics
 
 ///|
-/// Sync failure reasons
-pub(all) enum SyncFailure {
-  MissingDependency(hint~ : String)
-  MalformedMessage(detail~ : String)
-  /// Remote Op carried content that violates the per-codepoint invariant
-  /// (empty, lone surrogate, or multi-codepoint). Surfaced from
-  /// `apply_remote` / `merge_remote` validation.
-  MalformedContent(reason~ : MalformedContentReason)
-  Timeout(detail~ : String)
-  Cancelled(detail~ : String)
-} derive(Debug)
-
-///|
-pub impl Show for SyncFailure with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
-/// Programmatic classification of malformed Op content. Mirrors
-/// `@document.ContentErrorReason` at the public API layer so consumers
-/// can pattern-match without depending on internal types.
-pub(all) enum MalformedContentReason {
-  /// Insert Op text contained a lone surrogate (not part of a valid pair).
-  MalformedUtf16
-  /// Insert Op text contained more than one Unicode scalar value.
-  MultipleCodepoints
-} derive(Debug, Eq)
-
-///|
-pub impl Show for MalformedContentReason with fn output(self, logger) {
-  logger.write_string(@debug.to_string(self))
-}
-
-///|
 /// User-facing error type for the text facade
 pub(all) suberror TextError {
+  EmptyReplicaId
   InvalidPosition(pos~ : Int, len~ : Int)
-  SyncFailed(SyncFailure)
+  SyncFailed(@sync.Failure)
   VersionNotFound
   Internal(detail~ : String)
 }
@@ -47,16 +14,19 @@ pub(all) suberror TextError {
 /// User-facing short message
 pub fn TextError::message(self : TextError) -> String {
   match self {
+    EmptyReplicaId => "Replica ID must not be empty"
     InvalidPosition(pos~, len~) =>
       "Invalid position: \{pos} is out of bounds for text of length \{len}"
-    SyncFailed(MissingDependency(hint~)) =>
-      "Sync failed: missing dependency - \{hint}"
-    SyncFailed(MalformedMessage(detail~)) =>
+    SyncFailed(@sync.Failure::MissingDependency(replica_id~, sequence~)) =>
+      "Sync failed: missing dependency - \{replica_id}:\{sequence}"
+    SyncFailed(@sync.Failure::MalformedMessage(detail~)) =>
       "Sync failed: malformed message - \{detail}"
-    SyncFailed(MalformedContent(reason~)) =>
-      "Sync failed: malformed Op content - \{reason}"
-    SyncFailed(Timeout(detail~)) => "Sync timed out: \{detail}"
-    SyncFailed(Cancelled(detail~)) => "Sync cancelled: \{detail}"
+    SyncFailed(@sync.Failure::InvalidContent(detail~)) =>
+      "Sync failed: invalid content - \{detail}"
+    SyncFailed(@sync.Failure::ConflictingIdentity(replica_id~, sequence~)) =>
+      "Sync failed: conflicting identity - \{replica_id}:\{sequence}"
+    SyncFailed(@sync.Failure::LimitExceeded(kind~, limit~, actual~)) =>
+      "Sync failed: \{kind} limit \{limit} exceeded by \{actual}"
     VersionNotFound => "Version not found in document history"
     Internal(detail~) => "Internal error: \{detail}"
   }
@@ -66,17 +36,19 @@ pub fn TextError::message(self : TextError) -> String {
 /// Actionable guidance for the user
 pub fn TextError::help(self : TextError) -> String {
   match self {
+    EmptyReplicaId => "Supply a globally unique, non-empty replica ID"
     InvalidPosition(pos=_, len~) =>
       "Use a position between 0 and \{len} (inclusive for insert, exclusive for delete)"
-    SyncFailed(MissingDependency(_)) =>
+    SyncFailed(@sync.Failure::MissingDependency(_)) =>
       "Sync more operations from the peer and retry"
-    SyncFailed(MalformedMessage(_)) =>
+    SyncFailed(@sync.Failure::MalformedMessage(_)) =>
       "Discard this message and consider isolating the peer"
-    SyncFailed(MalformedContent(_)) =>
+    SyncFailed(@sync.Failure::InvalidContent(_)) =>
       "Discard this message and consider isolating the peer"
-    SyncFailed(Timeout(_)) =>
-      "Check network connectivity and retry the sync operation"
-    SyncFailed(Cancelled(_)) => "The operation was cancelled. Retry if needed."
+    SyncFailed(@sync.Failure::ConflictingIdentity(_)) =>
+      "Use a fresh globally unique replica ID and discard the conflicting message"
+    SyncFailed(@sync.Failure::LimitExceeded(_)) =>
+      "Reject the message or construct the state with appropriate sync limits"
     VersionNotFound => "The version may not be synced yet. Try syncing first."
     Internal(_) => "Please report this bug with the debug output"
   }
@@ -86,6 +58,7 @@ pub fn TextError::help(self : TextError) -> String {
 /// Full detail for logs/debugging
 pub fn TextError::debug(self : TextError) -> String {
   match self {
+    EmptyReplicaId => "TextError::EmptyReplicaId"
     InvalidPosition(pos~, len~) =>
       "TextError::InvalidPosition { pos: \{pos}, len: \{len} }"
     SyncFailed(failure) => "TextError::SyncFailed { reason: \{failure} }"
@@ -98,12 +71,13 @@ pub fn TextError::debug(self : TextError) -> String {
 /// Whether this error can be retried
 pub fn TextError::is_retryable(self : TextError) -> Bool {
   match self {
+    EmptyReplicaId => false
     InvalidPosition(_) => false
-    SyncFailed(MissingDependency(_)) => true
-    SyncFailed(MalformedMessage(_)) => false
-    SyncFailed(MalformedContent(_)) => false
-    SyncFailed(Timeout(_)) => true
-    SyncFailed(Cancelled(_)) => false
+    SyncFailed(@sync.Failure::MissingDependency(_)) => true
+    SyncFailed(@sync.Failure::MalformedMessage(_)) => false
+    SyncFailed(@sync.Failure::InvalidContent(_)) => false
+    SyncFailed(@sync.Failure::ConflictingIdentity(_)) => false
+    SyncFailed(@sync.Failure::LimitExceeded(_)) => false
     VersionNotFound => true
     Internal(_) => false
   }
@@ -119,20 +93,20 @@ fn TextError::from_document_error(
     InvalidPosition(pos~) => TextError::InvalidPosition(pos~, len=doc_len)
     MissingOrigin(raw~) =>
       TextError::SyncFailed(
-        SyncFailure::MissingDependency(hint="missing origin: \{raw}"),
+        @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),
       )
     OpLog(oplog_err) => TextError::from_oplog_error(oplog_err)
     Fugue(@fugue.FugueError::MissingItem(id~)) =>
       TextError::Internal(detail="fugue error: missing item id=\{id}")
     Branch(branch_err) => TextError::from_branch_error(branch_err)
     ContentError(reason~) => {
-      let mapped : MalformedContentReason = match reason {
+      let detail = match reason {
         @document.ContentErrorReason::MalformedUtf16 =>
-          MalformedContentReason::MalformedUtf16
+          "insert contains malformed UTF-16"
         @document.ContentErrorReason::MultipleCodepoints =>
-          MalformedContentReason::MultipleCodepoints
+          "insert must contain exactly one Unicode scalar value"
       }
-      TextError::SyncFailed(SyncFailure::MalformedContent(reason=mapped))
+      TextError::SyncFailed(@sync.Failure::InvalidContent(detail~))
     }
   }
 }
@@ -145,19 +119,21 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
       TextError::Internal(detail="missing local version: \{lv}")
     MissingOrigin =>
       TextError::SyncFailed(
-        SyncFailure::MalformedMessage(detail="delete operation missing origin"),
+        @sync.Failure::MalformedMessage(
+          detail="delete operation missing origin",
+        ),
       )
     MissingRemoteParent(raw~) =>
       TextError::SyncFailed(
-        SyncFailure::MissingDependency(hint="missing parent: \{raw}"),
+        @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),
       )
     MissingRemoteFrontier(raw~) =>
       TextError::SyncFailed(
-        SyncFailure::MissingDependency(hint="missing frontier: \{raw}"),
+        @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),
       )
     DuplicateOperation(raw~) =>
       TextError::SyncFailed(
-        SyncFailure::MalformedMessage(
+        @sync.Failure::MalformedMessage(
           detail="duplicate operation in batch: \{raw}",
         ),
       )
@@ -165,8 +141,8 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
       match error {
         @causal_graph.CausalGraphError::MissingParent(lv~) =>
           TextError::SyncFailed(
-            SyncFailure::MissingDependency(
-              hint="causal graph: missing parent at lv=\{lv}",
+            @sync.Failure::MalformedMessage(
+              detail="causal graph missing parent at local version \{lv}",
             ),
           )
         @causal_graph.CausalGraphError::MissingEntry(lv~) =>
@@ -182,7 +158,7 @@ fn TextError::from_branch_error(err : @branch.BranchError) -> TextError {
     MissingOp(lv~) => TextError::Internal(detail="missing op at lv: \{lv}")
     MissingOrigin(raw~) =>
       TextError::SyncFailed(
-        SyncFailure::MissingDependency(hint="missing origin: \{raw}"),
+        @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),
       )
     OpLog(oplog_err) => TextError::from_oplog_error(oplog_err)
     Fugue(@fugue.FugueError::MissingItem(id~)) =>

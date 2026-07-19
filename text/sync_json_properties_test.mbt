@@ -2,7 +2,7 @@
 
 ///|
 fn prop_version_json_roundtrip(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let versions : Array[Version] = []
   versions.push(doc.version())
   if !apply_edits(doc, ops.edits) {
@@ -10,7 +10,7 @@ fn prop_version_json_roundtrip(ops : RealOps) -> Bool {
   }
 
   // capture every intermediate version after each edit
-  let replay = @text.TextState::new("alice")
+  let replay = try! @text.TextState::new("alice")
   versions.push(replay.version())
   for edit in ops.edits {
     if !apply_edit(replay, edit) {
@@ -37,7 +37,7 @@ test "property: Version JSON round-trip preserves frontier" {
 
 ///|
 fn prop_sync_message_json_roundtrip_metadata(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   if !apply_edits(doc, ops.edits) {
     return false
   }
@@ -56,7 +56,7 @@ test "property: SyncMessage JSON round-trip keeps op_count and emptiness" {
 
 ///|
 fn prop_sync_message_roundtrip_apply_equivalence(ops : RealOps) -> Bool {
-  let origin = @text.TextState::new("alice")
+  let origin = try! @text.TextState::new("alice")
   if !apply_edits(origin, ops.edits) {
     return false
   }
@@ -65,15 +65,11 @@ fn prop_sync_message_roundtrip_apply_equivalence(ops : RealOps) -> Bool {
     _ => return false
   }
 
-  let peer_direct = @text.TextState::new("bob")
-  let peer_roundtrip = @text.TextState::new("bob")
+  let peer_direct = try! @text.TextState::new("bob")
+  let peer_roundtrip = try! @text.TextState::new("bob")
 
-  peer_direct.sync().apply(message) catch {
-    _ => return false
-  }
-  peer_roundtrip.sync().apply(roundtrip) catch {
-    _ => return false
-  }
+  let _ = peer_direct.sync().apply(message) catch { _ => return false }
+  let _ = peer_roundtrip.sync().apply(roundtrip) catch { _ => return false }
 
   peer_direct.text() == peer_roundtrip.text() &&
   peer_direct.text() == origin.text()
@@ -86,7 +82,7 @@ test "property: SyncMessage JSON round-trip preserves application result" {
 
 ///|
 fn prop_export_since_current_json_roundtrip_is_empty(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   if !apply_edits(doc, ops.edits) {
     return false
   }
@@ -115,7 +111,7 @@ fn prop_invalid_version_json_fails(seed : Int) -> Bool {
     e => Err(e)
   }
   match result {
-    Err(TextError::Internal(_)) => true
+    Err(TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
     _ => false
   }
 }
@@ -134,7 +130,7 @@ fn prop_invalid_sync_message_json_fails(seed : Int) -> Bool {
     e => Err(e)
   }
   match result {
-    Err(TextError::Internal(_)) => true
+    Err(TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
     _ => false
   }
 }
@@ -160,16 +156,13 @@ fn prop_malformed_sync_content_rejected(seed : Int) -> Bool {
   )
   let op_json = bad_op.to_json().stringify()
   let malformed = "{\"ops\":[" + op_json + "],\"heads\":[] }"
-  let message = SyncMessage::from_json_string(malformed) catch {
-    _ => return false
-  }
-  let target = @text.TextState::new("bob")
-  let result : Result[Unit, TextError] = Ok(target.sync().apply(message)) catch {
+  let result : Result[SyncMessage, TextError] = Ok(
+    SyncMessage::from_json_string(malformed),
+  ) catch {
     e => Err(e)
   }
   match result {
-    Err(TextError::SyncFailed(SyncFailure::MalformedContent(_))) => true
-    Err(TextError::SyncFailed(SyncFailure::MalformedMessage(_))) => true
+    Err(TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
     _ => false
   }
 }

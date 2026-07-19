@@ -18,7 +18,7 @@ fn do_insert(doc : TextState, pos : Int, ch : String) -> Unit {
 /// and the FugueMax tree. If FugueMax places a character at a different
 /// position than requested, this test catches it.
 fn prop_insert_position_roundtrip(ops : RealOps) -> Bool {
-  let doc = TextState::new("roundtrip")
+  let doc = try! TextState::new("roundtrip")
   for edit in ops.edits {
     match edit {
       Insert(pos, ch) => {
@@ -59,7 +59,7 @@ test "property: insert at position P places character at position P" {
 /// places the item as a right child of root (at the END), violating the
 /// position contract.
 test "position roundtrip: insert at 0 on non-empty doc" {
-  let doc = TextState::new("test")
+  let doc = try! TextState::new("test")
   do_insert(doc, 0, "a")
   do_insert(doc, 1, "b")
   do_insert(doc, 2, "c")
@@ -74,7 +74,7 @@ test "position roundtrip: insert at 0 on non-empty doc" {
 ///|
 /// Targeted test: multiple inserts at position 0 interleave correctly.
 test "position roundtrip: repeated insert at 0" {
-  let doc = TextState::new("test")
+  let doc = try! TextState::new("test")
   do_insert(doc, 0, "c")
   do_insert(doc, 0, "b")
   do_insert(doc, 0, "a")
@@ -85,7 +85,7 @@ test "position roundtrip: repeated insert at 0" {
 ///|
 /// Targeted test: insert at 0, then insert at end, then insert at 0 again.
 test "position roundtrip: alternating insert at 0 and end" {
-  let doc = TextState::new("test")
+  let doc = try! TextState::new("test")
   do_insert(doc, 0, "a")
   inspect(doc.text(), content="a")
   do_insert(doc, 1, "b")

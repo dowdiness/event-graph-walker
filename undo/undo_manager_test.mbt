@@ -2,7 +2,7 @@
 
 ///|
 test "basic undo insert" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="H")
@@ -12,7 +12,7 @@ test "basic undo insert" {
 
 ///|
 test "basic undo delete" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="H")
@@ -24,7 +24,7 @@ test "basic undo delete" {
 
 ///|
 test "undo-redo roundtrip" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="H")
@@ -36,7 +36,7 @@ test "undo-redo roundtrip" {
 
 ///|
 test "redo cleared on new edit" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   let _ = mgr.undo(doc)
@@ -47,7 +47,7 @@ test "redo cleared on new edit" {
 
 ///|
 test "time grouping within timeout" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=500)
   doc.insert_and_record(@text.Pos::at(0), "a", mgr, timestamp_ms=100)
   doc.insert_and_record(@text.Pos::at(1), "b", mgr, timestamp_ms=200)
@@ -60,7 +60,7 @@ test "time grouping within timeout" {
 
 ///|
 test "time grouping continuous typing uses last change" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=500)
   doc.insert_and_record(@text.Pos::at(0), "a", mgr, timestamp_ms=0)
   doc.insert_and_record(@text.Pos::at(1), "b", mgr, timestamp_ms=400)
@@ -74,7 +74,7 @@ test "time grouping continuous typing uses last change" {
 
 ///|
 test "time grouping split across timeout" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice", capture_timeout_ms=500)
   doc.insert_and_record(@text.Pos::at(0), "a", mgr, timestamp_ms=0)
   doc.insert_and_record(@text.Pos::at(1), "b", mgr, timestamp_ms=1000)
@@ -88,7 +88,7 @@ test "time grouping split across timeout" {
 
 ///|
 test "per-agent filtering" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "A", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="A")
@@ -103,7 +103,7 @@ test "per-agent filtering" {
 
 ///|
 test "suppress tracking" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   mgr.set_tracking(false)
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
@@ -116,7 +116,7 @@ test "suppress tracking" {
 
 ///|
 test "double undo-redo" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "a", mgr, timestamp_ms=0)
   doc.insert_and_record(@text.Pos::at(1), "b", mgr, timestamp_ms=1000)
@@ -133,7 +133,7 @@ test "double undo-redo" {
 
 ///|
 test "clear stacks" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(mgr.can_undo(), content="true")
@@ -144,7 +144,7 @@ test "clear stacks" {
 
 ///|
 test "multi-char insert undo" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "Hello", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="Hello")
@@ -154,7 +154,7 @@ test "multi-char insert undo" {
 
 ///|
 test "undo delete then redo delete" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "ab", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="ab")
@@ -168,7 +168,7 @@ test "undo delete then redo delete" {
 
 ///|
 test "undo-insert reflects in doc text" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   let _ = mgr.undo(doc)
@@ -177,7 +177,7 @@ test "undo-insert reflects in doc text" {
 
 ///|
 test "undo-delete reflects in doc text" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   doc.delete_and_record(@text.Pos::at(0), mgr, timestamp_ms=2000)
@@ -188,7 +188,7 @@ test "undo-delete reflects in doc text" {
 
 ///|
 test "redo reflects in doc text" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   let _ = mgr.undo(doc)
@@ -199,19 +199,19 @@ test "redo reflects in doc text" {
 
 ///|
 test "undo syncs to peer via export_all" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr = @undo.UndoManager::new("alice")
   // Alice inserts "H" and records for undo
   doc_a.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   // Sync to Bob
-  doc_b.sync().apply(doc_a.sync().export_all())
+  let _ = doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="H")
   // Alice undoes
   let _ = mgr.undo(doc_a)
   inspect(doc_a.text(), content="")
   // Sync undo to Bob (export_all includes the delete op from undo)
-  doc_b.sync().apply(doc_a.sync().export_all())
+  let _ = doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="")
 }
 
@@ -223,8 +223,8 @@ test "undo syncs to peer via export_all" {
 /// Test: Alice undoes her insert while Bob inserts concurrently
 /// Both documents should converge to the same state after full sync
 test "concurrent undo while peer inserts" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // Alice inserts "A" and syncs to Bob
@@ -233,7 +233,7 @@ test "concurrent undo while peer inserts" {
 
   // Sync Alice's insert to Bob
   let msg1 = doc_a.sync().export_all()
-  doc_b.sync().apply(msg1)
+  let _ = doc_b.sync().apply(msg1)
   inspect(doc_b.text(), content="A")
 
   // Concurrent operations: Alice undoes while Bob inserts "B"
@@ -248,8 +248,8 @@ test "concurrent undo while peer inserts" {
   // Full bidirectional sync using export_all for complete convergence
   let full_a = doc_a.sync().export_all()
   let full_b = doc_b.sync().export_all()
-  doc_a.sync().apply(full_b)
-  doc_b.sync().apply(full_a)
+  let _ = doc_a.sync().apply(full_b)
+  let _ = doc_b.sync().apply(full_a)
 
   // Both should converge to the same state
   inspect(doc_a.text() == doc_b.text(), content="true")
@@ -261,8 +261,8 @@ test "concurrent undo while peer inserts" {
 /// Test: Alice undoes delete (Undelete) while Bob has concurrent ops
 /// Verifies convergence with concurrent undelete and insert operations
 test "concurrent undelete while peer operations (add-wins)" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // Alice inserts "X" and deletes it
@@ -272,7 +272,7 @@ test "concurrent undelete while peer operations (add-wins)" {
 
   // Sync state to Bob
   let msg1 = doc_a.sync().export_all()
-  doc_b.sync().apply(msg1)
+  let _ = doc_b.sync().apply(msg1)
   inspect(doc_b.text(), content="")
 
   // Concurrent operations: Alice undoes delete (undelete), Bob inserts "Y"
@@ -286,8 +286,8 @@ test "concurrent undelete while peer operations (add-wins)" {
   // Full bidirectional sync for complete convergence
   let full_a = doc_a.sync().export_all()
   let full_b = doc_b.sync().export_all()
-  doc_a.sync().apply(full_b)
-  doc_b.sync().apply(full_a)
+  let _ = doc_a.sync().apply(full_b)
+  let _ = doc_b.sync().apply(full_a)
 
   // Both should converge to the same state
   let text_a = doc_a.text()
@@ -302,9 +302,9 @@ test "concurrent undelete while peer operations (add-wins)" {
 ///|
 /// Test: Three agents each undo their own insert, all converge to empty
 test "three-agent concurrent undos converge" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
-  let doc_c = @text.TextState::new("carol")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
+  let doc_c = try! @text.TextState::new("carol")
   let mgr_a = @undo.UndoManager::new("alice")
   let mgr_b = @undo.UndoManager::new("bob")
   let mgr_c = @undo.UndoManager::new("carol")
@@ -318,12 +318,12 @@ test "three-agent concurrent undos converge" {
   let msg_a = doc_a.sync().export_all()
   let msg_b = doc_b.sync().export_all()
   let msg_c = doc_c.sync().export_all()
-  doc_a.sync().apply(msg_b)
-  doc_a.sync().apply(msg_c)
-  doc_b.sync().apply(msg_a)
-  doc_b.sync().apply(msg_c)
-  doc_c.sync().apply(msg_a)
-  doc_c.sync().apply(msg_b)
+  let _ = doc_a.sync().apply(msg_b)
+  let _ = doc_a.sync().apply(msg_c)
+  let _ = doc_b.sync().apply(msg_a)
+  let _ = doc_b.sync().apply(msg_c)
+  let _ = doc_c.sync().apply(msg_a)
+  let _ = doc_c.sync().apply(msg_b)
 
   // Verify all have "ABC" (order depends on agent ordering)
   let initial_len = doc_a.len()
@@ -340,12 +340,12 @@ test "three-agent concurrent undos converge" {
   let undo_msg_a = doc_a.sync().export_all()
   let undo_msg_b = doc_b.sync().export_all()
   let undo_msg_c = doc_c.sync().export_all()
-  doc_a.sync().apply(undo_msg_b)
-  doc_a.sync().apply(undo_msg_c)
-  doc_b.sync().apply(undo_msg_a)
-  doc_b.sync().apply(undo_msg_c)
-  doc_c.sync().apply(undo_msg_a)
-  doc_c.sync().apply(undo_msg_b)
+  let _ = doc_a.sync().apply(undo_msg_b)
+  let _ = doc_a.sync().apply(undo_msg_c)
+  let _ = doc_b.sync().apply(undo_msg_a)
+  let _ = doc_b.sync().apply(undo_msg_c)
+  let _ = doc_c.sync().apply(undo_msg_a)
+  let _ = doc_c.sync().apply(undo_msg_b)
 
   // All should converge to empty document
   inspect(doc_a.text(), content="")
@@ -356,8 +356,8 @@ test "three-agent concurrent undos converge" {
 ///|
 /// Test: Full round-trip - A inserts, syncs, undoes, syncs undo, B converges
 test "undo ops arrive at peer after sync" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // Step 1: Alice inserts "Hello"
@@ -366,7 +366,7 @@ test "undo ops arrive at peer after sync" {
 
   // Step 2: Sync insert to Bob
   let msg1 = doc_a.sync().export_all()
-  doc_b.sync().apply(msg1)
+  let _ = doc_b.sync().apply(msg1)
   inspect(doc_b.text(), content="Hello")
 
   // Step 3: Alice undoes the insert (saves version before undo to export delta)
@@ -376,7 +376,7 @@ test "undo ops arrive at peer after sync" {
 
   // Step 4: Sync undo ops to Bob (export delta since pre-undo state)
   let undo_msg = doc_a.sync().export_since(pre_undo_version)
-  doc_b.sync().apply(undo_msg)
+  let _ = doc_b.sync().apply(undo_msg)
 
   // Step 5: Bob converges to same state
   inspect(doc_b.text(), content="")
@@ -385,14 +385,14 @@ test "undo ops arrive at peer after sync" {
 ///|
 /// Test: Undo then redo with sync in between preserves state
 test "redo after peer sync preserves state" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // Alice inserts and syncs
   doc_a.insert_and_record(@text.Pos::at(0), "Test", mgr_a, timestamp_ms=1000)
   let msg1 = doc_a.sync().export_all()
-  doc_b.sync().apply(msg1)
+  let _ = doc_b.sync().apply(msg1)
   inspect(doc_a.text(), content="Test")
   inspect(doc_b.text(), content="Test")
 
@@ -403,7 +403,7 @@ test "redo after peer sync preserves state" {
 
   // Sync undo to Bob via delta export
   let undo_msg = doc_a.sync().export_since(pre_undo_version)
-  doc_b.sync().apply(undo_msg)
+  let _ = doc_b.sync().apply(undo_msg)
   inspect(doc_b.text(), content="")
 
   // Alice redoes (save version before to export delta)
@@ -413,7 +413,7 @@ test "redo after peer sync preserves state" {
 
   // Sync redo to Bob via delta export
   let redo_msg = doc_a.sync().export_since(pre_redo_version)
-  doc_b.sync().apply(redo_msg)
+  let _ = doc_b.sync().apply(redo_msg)
 
   // Both should have "Test" again
   inspect(doc_a.text(), content="Test")
@@ -426,7 +426,7 @@ test "redo after peer sync preserves state" {
 /// host — `try { mgr.undo(doc) } catch { _ => false }` cannot recover from a
 /// bare `guard` panic.
 test "undo on empty stack returns false" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   inspect(mgr.can_undo(), content="false")
   inspect(mgr.undo(doc), content="false")
@@ -438,7 +438,7 @@ test "undo on empty stack returns false" {
 ///|
 /// Symmetric: empty redo stack returns `false`.
 test "redo on empty stack returns false" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   inspect(mgr.can_redo(), content="false")
   inspect(mgr.redo(doc), content="false")
@@ -451,7 +451,7 @@ test "redo on empty stack returns false" {
 /// stack is drained. Mirrors the toolbar use-case where a user hammers
 /// Undo past the first recorded edit — the second call must not panic.
 test "undo past start drains and signals via return" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(mgr.undo(doc), content="true")
@@ -467,7 +467,7 @@ test "undo past start drains and signals via return" {
 /// abort. Covers the realistic "undid once, redid once, hit Redo again" flow
 /// that the symmetric no-op-on-fresh-manager test doesn't exercise.
 test "redo past last drains and signals via return" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(mgr.undo(doc), content="true")
@@ -486,7 +486,7 @@ test "redo past last drains and signals via return" {
 /// branch (e.g. leaving `tracking_enabled` flipped, or pushing a phantom
 /// empty group onto the opposite stack).
 test "oscillating undo/redo across boundary stays consistent" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
   inspect(mgr.undo(doc), content="true")
@@ -512,8 +512,8 @@ test "oscillating undo/redo across boundary stays consistent" {
 /// adjust, broadcast, dirty flag) on a no-op. Caught by chatgpt-codex on
 /// PR #42.
 test "undo returns false when every item in the popped group is stale" {
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // Alice inserts "X" and records it for undo.
@@ -521,10 +521,10 @@ test "undo returns false when every item in the popped group is stale" {
   inspect(doc_a.text(), content="X")
 
   // Sync to Bob, then Bob deletes Alice's "X". Sync back.
-  doc_b.sync().apply(doc_a.sync().export_all())
+  let _ = doc_b.sync().apply(doc_a.sync().export_all())
   inspect(doc_b.text(), content="X")
   let _ = doc_b.delete(@text.Pos::at(0))
-  doc_a.sync().apply(doc_b.sync().export_all())
+  let _ = doc_a.sync().apply(doc_b.sync().export_all())
   inspect(doc_a.text(), content="")
 
   // Alice's only undo item is an Insert whose LV is now deleted upstream.
@@ -546,7 +546,7 @@ test "undo returns false when every item in the popped group is stale" {
 /// tracking permanently disabled, and the next user edit would be silently
 /// untracked.
 test "no-op undo preserves tracking state and recordability" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   inspect(mgr.is_tracking(), content="true")
   // Empty-stack call — exercises the early-return branch.

@@ -1,0 +1,42 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/sync"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+pub(all) suberror Failure {
+  MalformedMessage(detail~ : String)
+  InvalidContent(detail~ : String)
+  MissingDependency(replica_id~ : String, sequence~ : Int)
+  ConflictingIdentity(replica_id~ : String, sequence~ : Int)
+  LimitExceeded(kind~ : LimitKind, limit~ : Int, actual~ : Int)
+}
+pub impl Show for Failure
+
+// Types and methods
+pub(all) enum LimitKind {
+  EncodedBytes
+  DecodedOperations
+  PendingOperations
+  ParentsPerOperation
+} derive(Eq, @debug.Debug)
+pub impl Show for LimitKind
+
+pub(all) struct Limits {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Limits::Limits(max_encoded_bytes? : Int, max_decoded_operations? : Int, max_pending_operations? : Int, max_parents_per_operation? : Int) -> Self raise Failure
+pub fn Limits::max_decoded_operations(Self) -> Int
+pub fn Limits::max_encoded_bytes(Self) -> Int
+pub fn Limits::max_parents_per_operation(Self) -> Int
+pub fn Limits::max_pending_operations(Self) -> Int
+pub impl Default for Limits
+
+// Type aliases
+
+// Traits
+
