@@ -212,7 +212,7 @@ pub impl @qc.Shrink for VersionVector with fn shrink(vv) {
 /// ```
 ///
 pub fn VersionVector::new() -> VersionVector {
-  VersionVector({})
+  VersionVector(Map([]))
 }
 
 ///|
@@ -399,7 +399,7 @@ pub fn VersionVector::from_frontier(
   frontier : @core.Frontier,
 ) -> VersionVector {
   // For each agent, find the maximum sequence number in the frontier
-  let agent_max_seq = {}
+  let agent_max_seq = Map([])
 
   // Get transitive closure of frontier to include all reachable versions
   let (_, reachable_lvs) = graph.transitive_closure_gen(frontier)

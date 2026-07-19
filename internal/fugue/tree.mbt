@@ -466,7 +466,7 @@ fn[T : Eq] compare_children(
 ) -> Int {
   let (_, item_a) = a
   let (_, item_b) = b
-  item_a.compare(item_b)
+  Compare::compare(item_a, item_b)
 }
 
 ///|
