@@ -20,7 +20,7 @@ pub(all) struct DeleteWinner {
 /// Build the index by scanning all ops in the oplog once.
 /// O(total_ops) but done once per merge, not per retreated delete.
 pub fn DeleteIndex::build(oplog : @oplog.OpLog) -> DeleteIndex {
-  let index : Map[@core.RawVersion, Array[Int]] = {}
+  let index : Map[@core.RawVersion, Array[Int]] = Map([])
   let count = oplog.op_count()
   for lv = 0; lv < count; lv = lv + 1 {
     match oplog.get_op(lv) {
