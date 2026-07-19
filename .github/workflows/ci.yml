@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      NEW_MOON_MOD: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up MoonBit 0.10.4
+        uses: hustcer/setup-moonbit@v1.22
+        with:
+          version: 0.10.4+ade96c819
+          core-version: 0.10.4+ade96c819
+      - name: Verify
+        run: ./scripts/verify.sh
+      - name: Validate publish package
+        run: moon publish --dry-run --frozen

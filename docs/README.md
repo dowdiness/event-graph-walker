@@ -6,6 +6,7 @@ This index separates current user guidance from contributor notes, design work, 
 
 - [Package README](../README.md) - package overview, quick starts, public packages, and commands.
 - [Worked examples](EXAMPLES.md) - sync error handling, undo/redo, historical checkout, and incremental catch-up.
+- [Migrating to v0.4](MIGRATING_TO_0.4.md) - required source and wire changes from v0.3.
 
 ## Learning Path
 

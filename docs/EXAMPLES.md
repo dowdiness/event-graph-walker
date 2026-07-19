@@ -1,208 +1,126 @@
 # Examples
 
-Worked examples for common use cases. These build on the Quick Start in the [README](../README.md) — read that first.
+These examples use only v0.4 façade APIs. Equivalent cases are compiled as
+tests in `examples/examples_test.mbt`.
 
----
+## Text synchronization
 
-## Example 1: Sync with Error Handling
-
-Real networks fail. This example shows how to handle each `TextError` variant from the sync API and decide whether to retry, reconnect, or discard.
+Capture the receiving peer's version only after it has applied the baseline:
 
 ```moonbit
-import "dowdiness/event-graph-walker/text"
+let alice = @text.TextState::new("alice-laptop")
+let bob = @text.TextState::new("bob-laptop")
 
-fn sync_to_peer(
-  doc : @text.TextState,
-  peer : @text.TextState,
-) -> Unit {
-  let peer_version = peer.version()
-
-  try {
-    // Export only what the peer hasn't seen yet
-    let message = doc.sync().export_since(peer_version)
-    if not(message.is_empty()) {
-      peer.sync().apply(message)
-    }
-  } catch {
-    @text.TextError::SyncFailed(@text.MissingDependency(hint~)) => {
-      // Peer is missing an operation we depend on — fall back to full sync
-      println("Dependency gap detected: \{hint}. Sending full history.")
-      try {
-        let full = doc.sync().export_all()
-        peer.sync().apply(full)
-      } catch {
-        err => println("Full sync failed: " + err.message())
-      }
-    }
-    @text.TextError::SyncFailed(@text.MalformedMessage(detail~)) => {
-      // Message is corrupt or from an incompatible version — discard silently
-      println("Discarding malformed message: \{detail}")
-    }
-    @text.TextError::SyncFailed(@text.Timeout(detail~)) => {
-      // Network timeout — safe to retry
-      println("Sync timed out: \{detail}. Will retry.")
-    }
-    @text.TextError::SyncFailed(@text.Cancelled(detail~)) => {
-      // User cancelled — do nothing
-      println("Sync cancelled: \{detail}")
-    }
-    @text.TextError::VersionNotFound => {
-      // Peer's version is no longer in our history — full sync needed
-      println("Peer version unknown. Sending full history.")
-      try {
-        let full = doc.sync().export_all()
-        peer.sync().apply(full)
-      } catch {
-        err => println("Full sync failed: " + err.message())
-      }
-    }
-    err => {
-      // Other errors: log and decide based on is_retryable()
-      if err.is_retryable() {
-        println("Transient error: " + err.message() + ". Will retry.")
-      } else {
-        println("Fatal sync error: " + err.message())
-        println("Hint: " + err.help())
-      }
-    }
-  }
-}
-
-// Usage
-let alice = @text.TextState::new("alice")
 alice.insert(@text.Pos::at(0), "Hello")
-alice.insert(@text.Pos::at(5), " World")
+bob.sync().apply(alice.sync().export_all())
 
-let bob = @text.TextState::new("bob")
-sync_to_peer(alice, bob)
-println(bob.text())  // "Hello World"
-
-// Concurrent edits converge after sync in both directions
-bob.insert(@text.Pos::at(11), "!")
-sync_to_peer(bob, alice)
-println(alice.text())  // "Hello World!"
+let bob_version = bob.version()
+alice.insert(@text.Pos::at(5), "!")
+bob.sync().apply(alice.sync().export_since(bob_version))
 ```
 
----
-
-## Example 2: Undo/Redo with Collaborative Sync
-
-The `UndoManager` tracks which operations belong to the local user, so undo only reverts *your own* edits even when remote edits are interleaved. Use `insert_and_record` / `delete_and_record` for local edits; use `sync().apply()` for remote edits (those are never recorded).
+For a network transport, encode the opaque message rather than inspecting its
+operations:
 
 ```moonbit
-import "dowdiness/event-graph-walker/text"
-import "dowdiness/event-graph-walker/undo"
-
-// Create document and undo manager for alice
-let alice_doc = @text.TextState::new("alice")
-let alice_mgr = @undo.UndoManager::new("alice")
-
-// Helpers track local operations in the undo manager
-let now = 1000  // milliseconds timestamp
-
-alice_doc.insert_and_record(@text.Pos::at(0), "Hello", alice_mgr, timestamp_ms=now)
-alice_doc.insert_and_record(@text.Pos::at(5), " World", alice_mgr, timestamp_ms=now)
-println(alice_doc.text())  // "Hello World"
-
-// Remote op from bob arrives — apply directly, do NOT record
-let bob_doc = @text.TextState::new("bob")
-bob_doc.insert(@text.Pos::at(0), "Hi ")
-let bob_msg = bob_doc.sync().export_all()
-alice_doc.sync().apply(bob_msg)
-
-// Undo only reverts alice's last edit, leaving bob's "Hi " intact
-if alice_mgr.can_undo() {
-  // Capture version BEFORE undo so export_since() sees the inverse ops that undo appends
-  let ver_before_undo = alice_doc.version()
-  try {
-    alice_mgr.undo(alice_doc)
-    println(alice_doc.text())  // "Hi Hello" (bob's "Hi " is still there)
-
-    // Propagate the undo to peers using export_since() to capture the inverse ops
-    let undo_msg = alice_doc.sync().export_since(ver_before_undo)
-    // send undo_msg to peers...
-    let _ = undo_msg  // (in real code: send over network)
-  } catch {
-    err => println("Undo failed: \{err}")
-  }
-}
-
-// Redo restores alice's text
-if alice_mgr.can_redo() {
-  try {
-    alice_mgr.redo(alice_doc)
-    println(alice_doc.text())  // "Hi Hello World"
-    // propagate to peers the same way via export_since()
-  } catch {
-    err => println("Redo failed: \{err}")
-  }
-}
+let outbound = alice.sync().export_all().to_json_string()
+let inbound = @text.SyncMessage::from_json_string(outbound)
+let report = bob.sync().apply(inbound)
+println(report.applied_operations())
 ```
 
-**Key points:**
-- `insert_and_record` / `delete_and_record` both edit the document *and* record to the undo stack in one call.
-- `undo` / `redo` return `Unit` (raise `UndoError` on failure). To propagate the inverse operations to peers, call `export_since(version_before_undo)` after the call to capture the ops that were just applied.
-- `can_undo()` / `can_redo()` let you enable/disable buttons in the UI without triggering errors.
+On `TextError::SyncFailed(failure)`, use the shared `@sync.Failure`
+classification. Malformed content, conflicting identities, and exceeded
+limits are not retryable with the same payload. A message that remains pending
+because dependencies have not arrived can be followed by an earlier or full
+batch. Call `pending_sync_count()` to expose backpressure and
+`clear_pending_sync()` only when intentionally discarding that valid queued
+work.
 
----
-
-## Example 3: Historical Checkout and Incremental Catch-Up
-
-`TextState::checkout` returns a read-only `TextView` frozen at a past version. The live document is unaffected. This is useful for diffing, read-only preview, and letting a late-joining peer catch up incrementally.
+## Tree synchronization
 
 ```moonbit
-import "dowdiness/event-graph-walker/text"
+let alice = @tree.TreeState::new("alice-tree")
+let project = alice.create_node(parent=@tree.root_id)
+alice.set_property(project, "name", "project")
 
-let doc = @text.TextState::new("alice")
+let bob = @tree.TreeState::new("bob-tree")
+let report = bob.sync().apply(alice.sync().export_all())
+println(report.applied_operations())
+println(bob.get_property(project, "name"))
+```
 
-doc.insert(@text.Pos::at(0), "Hello")
-let v1 = doc.version()  // Snapshot version after "Hello"
+Tree JSON uses `event-graph-walker/tree-sync`; it is deliberately incompatible
+with text and container envelopes.
 
-doc.insert(@text.Pos::at(5), " World")
-let v2 = doc.version()  // Snapshot version after " World"
+## Text undo and redo
 
-doc.insert(@text.Pos::at(11), "!")
-println(doc.text())  // "Hello World!"
+`UndoManager::undo` and `redo` return `Bool`: `false` means the corresponding
+stack was empty.
 
-// Inspect an earlier version without changing the live document
-try {
-  let snapshot_v1 = doc.checkout(v1)
-  println(snapshot_v1.text())  // "Hello"
-  println(doc.text())           // "Hello World!" (unchanged)
+```moonbit
+let document = @text.TextState::new("alice-undo")
+let manager = @undo.UndoManager::new("alice-undo")
 
-  let snapshot_v2 = doc.checkout(v2)
-  println(snapshot_v2.text())  // "Hello World"
-} catch {
-  @text.TextError::VersionNotFound =>
-    println("Version no longer available")
-  err => println("Checkout failed: " + err.message())
+document.insert_and_record(
+  @text.Pos::at(0),
+  "Hello",
+  manager,
+  timestamp_ms=1_000,
+)
+
+let before_undo = document.version()
+if manager.undo(document) {
+  let inverse = document.sync().export_since(before_undo)
+  // Send `inverse` to peers.
 }
 
-// Late-joining peer: catch up incrementally from a known version
-let carol = @text.TextState::new("carol")
-
-// Carol received the first batch up to v1 previously
-let batch1 = doc.sync().export_since(carol.version())
-carol.sync().apply(batch1)
-println(carol.text())  // "Hello World!"
-
-// Or, if carol has v1 already, sync only the delta
-let carol_v1 = v1
-try {
-  let delta = doc.sync().export_since(carol_v1)
-  // carol.sync().apply(delta)  -- only needed if carol already has v1
-  println("Delta has \{delta.op_count()} operation(s)")
-} catch {
-  @text.TextError::VersionNotFound => {
-    // carol's version is older than what we track — full sync fallback
-    let full = doc.sync().export_all()
-    carol.sync().apply(full)
-  }
-  err => println("Sync error: " + err.message())
+if manager.redo(document) {
+  println(document.text())
 }
 ```
 
-**Key points:**
-- `doc.version()` returns a `Version` value that can be stored and passed to `checkout` or `export_since` later.
-- `checkout` returns a `TextView` (read-only view) — it has `text()` but no mutation methods.
-- `export_since(version)` efficiently sends only the operations the peer hasn't seen. Fall back to `export_all()` when `VersionNotFound` is raised.
+Remote operations applied through `sync().apply()` never enter the local undo
+manager.
+
+## Container document and undo
+
+```moonbit
+let document = @container.Document::new("alice-document")
+let paragraph = document.create_node(parent=@container.root_id)
+document.set_property(paragraph, "type", "paragraph")
+document.insert_text(paragraph, 0, "Hello")
+
+if document.undo() {
+  println(document.get_text(paragraph))
+}
+if document.redo() {
+  println(document.get_text(paragraph))
+}
+```
+
+Container undo/redo also returns `Bool`. A transaction groups its mutations as
+one undo item:
+
+```moonbit
+document.transaction(fn() {
+  document.set_property(paragraph, "status", "ready")
+  document.insert_text(paragraph, document.text_len(paragraph), "!")
+})
+```
+
+## Historical checkout
+
+```moonbit
+let document = @text.TextState::new("alice-history")
+document.insert(@text.Pos::at(0), "Hello")
+let saved = document.version()
+document.insert(@text.Pos::at(5), "!")
+
+let view = document.checkout(saved)
+println(view.text())      // Hello
+println(document.text())  // Hello!
+```
+
+Checkout requires every maximum sequence referenced by the version to exist
+locally and raises `VersionNotFound` otherwise.

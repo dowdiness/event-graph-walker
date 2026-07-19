@@ -1,0 +1,11 @@
+import {
+  "dowdiness/event-graph-walker/text",
+  "dowdiness/event-graph-walker/tree",
+  "dowdiness/event-graph-walker/container",
+  "dowdiness/event-graph-walker/undo",
+  "dowdiness/event-graph-walker/sync",
+} for "test"
+
+options(
+  is_main: false,
+)
