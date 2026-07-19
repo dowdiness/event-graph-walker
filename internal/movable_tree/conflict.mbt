@@ -92,12 +92,23 @@ priv struct LogEntry {
 pub struct TreeOpLog {
   priv entries : Array[LogEntry]
   priv seen : Map[String, Bool]
+  priv mut ordering_comparisons : Int
 }
 
 ///|
 /// Create a new empty operation log.
 pub fn TreeOpLog::new() -> TreeOpLog {
-  { entries: [], seen: Map::default() }
+  { entries: [], seen: Map::default(), ordering_comparisons: 0 }
+}
+
+///|
+fn TreeOpLog::compare_counted(
+  self : TreeOpLog,
+  a : TreeMoveOp,
+  b : TreeMoveOp,
+) -> Int {
+  self.ordering_comparisons = self.ordering_comparisons + 1
+  compare_ops(a, b)
 }
 
 ///|
@@ -112,6 +123,7 @@ pub fn TreeOpLog::copy(self : TreeOpLog) -> TreeOpLog {
       undo_info: entry.undo_info,
     }),
     seen: self.seen.copy(),
+    ordering_comparisons: self.ordering_comparisons,
   }
 }
 
@@ -294,16 +306,26 @@ pub fn TreeOpLog::apply(
     _ => ()
   }
   self.seen.set(key, true)
-  // Step 2: Find insertion point.
-  // Scan left-to-right; the first entry that sorts after the new op is where
-  // it belongs.  If no such entry exists, append at the end.
-  let mut insert_idx = self.entries.length()
-  for i = 0; i < self.entries.length(); i = i + 1 {
-    if compare_ops(op, self.entries[i].op) < 0 {
-      insert_idx = i
-      break
+  // Monotonic local histories dominate normal editing. Append them without
+  // touching any existing undo information or replaying a suffix.
+  if self.entries.is_empty() ||
+    self.compare_counted(self.entries[self.entries.length() - 1].op, op) <= 0 {
+    self.entries.push({ op, undo_info: do_op(tree, op) })
+    return
+  }
+  // Genuinely out-of-order delivery uses binary search for the first entry
+  // that sorts after the incoming operation.
+  let mut low = 0
+  let mut high = self.entries.length()
+  while low < high {
+    let middle = low + (high - low) / 2
+    if self.compare_counted(self.entries[middle].op, op) <= 0 {
+      low = middle + 1
+    } else {
+      high = middle
     }
   }
+  let insert_idx = low
   // Step 3: Undo — reverse the suffix that will be replayed.
   // Walk newest-to-oldest so each undo restores a consistent intermediate state.
   for i = self.entries.length() - 1; i >= insert_idx; i = i - 1 {

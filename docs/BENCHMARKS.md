@@ -2,6 +2,50 @@
 
 This document describes the performance benchmarks for the eg-walker CRDT implementation and provides guidance for performance profiling and optimization.
 
+## Post-v0.4 Performance Baselines
+
+`container/performance_benchmark.mbt` defines release-mode baselines for:
+
+- 1,000 and 10,000 sequential block-text operations;
+- 1,000 and 10,000 sequential tree operations;
+- 1,000 and 10,000 reverse-ordered causal batches; and
+- a valid batch whose dependency remains permanently missing.
+
+Run them with:
+
+```bash
+moon bench --release -p dowdiness/event-graph-walker/container
+```
+
+Deterministic comparison-count tests separately require 10,000 monotonic tree
+history records and 10,000 reverse-ordered protocol records to remain linear
+in ordering comparisons. Wall-clock benchmark noise therefore cannot hide an
+ordering-complexity regression.
+
+### PR #70 comparison
+
+One controlled local comparison against the published v0.4.0 `main` measured:
+
+| Scenario | v0.4.0 `main` | PR #70 | Change |
+| --- | ---: | ---: | ---: |
+| Sequential block text 1k | 80.82 ms | 67.20 ms | 16.9% faster |
+| Sequential block text 10k | 12.81 s | 11.25 s | 12.2% faster |
+| Sequential tree 1k | 55.93 ms | 54.93 ms | 1.8% faster |
+| Sequential tree 10k | 6.92 s | 6.16 s | 11.0% faster |
+| Reverse causal batch 1k | 36.34 ms | 31.12 ms | 14.4% faster |
+| Reverse causal batch 10k | 824.35 ms | 419.74 ms | 49.1% faster |
+| Permanently missing dependency | 17.76 µs | 15.75 µs | 11.3% faster |
+
+The measurement used an AMD Ryzen 7 6800H under virtualization, Moon
+0.1.20260713, moonc v0.10.4+2cc641edf, and the release-mode wasm-gc backend.
+The small differences should be treated as directional rather than stable
+cross-machine thresholds.
+
+The remaining 1k-to-10k growth is about 167x for block text and 112x for tree
+creation. [Issue #73](https://github.com/dowdiness/event-graph-walker/issues/73)
+tracks isolated microbenchmarks for the suspected costs before selecting
+another optimization.
+
 ## Running Benchmarks
 
 ```bash
