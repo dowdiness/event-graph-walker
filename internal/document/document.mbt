@@ -61,7 +61,25 @@ pub fn Document::get_frontier(self : Document) -> @core.Frontier {
 /// fields they care about (e.g. `frontier()`, which already returns a fresh
 /// array) before further edits.
 pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
-  @history.CausalSnapshot::from_graph(self.oplog.causal_graph())
+  let graph = self.oplog.causal_graph()
+  @history.CausalSnapshot::CausalSnapshot(
+    fn() { graph.op_count() },
+    fn(lv) {
+      match graph.get_entry(lv) {
+        Some(entry) =>
+          Some(
+            @history.SnapshotEntry::SnapshotEntry(
+              entry.parents,
+              entry.agent,
+              entry.seq,
+            ),
+          )
+        None => None
+      }
+    },
+    fn() { graph.get_frontier().0.copy() },
+    fn(lv) { graph.children_count(lv) },
+  )
 }
 
 ///|

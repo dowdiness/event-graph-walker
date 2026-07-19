@@ -8,17 +8,42 @@ fn op_timestamp(op : @mt.TreeOp) -> Int {
 }
 
 ///|
+/// Legacy raw-op characterization hook, kept test-local in v0.4.
+fn apply_remote_op_for_test(doc : Document, op : @mt.TreeOp) -> Unit {
+  if !doc.record_op(op) {
+    return
+  }
+  let (timestamp, agent) = match op {
+    @mt.Move(move_op) => (move_op.timestamp, move_op.agent)
+    @mt.SetProperty(prop_op) => (prop_op.timestamp, prop_op.agent)
+  }
+  if timestamp > doc.lamport_clock {
+    doc.lamport_clock = timestamp
+  }
+  let _ = doc.graph.add_version(doc.graph.get_frontier().0, agent) catch {
+    _ => 0
+  }
+  match op {
+    @mt.Move(move_op) => {
+      doc.apply_move_op(move_op)
+      doc.flush_pending_text_ops(move_op.target)
+    }
+    @mt.SetProperty(prop_op) => doc.apply_property_op(prop_op)
+  }
+}
+
+///|
 /// Test 1: Create nodes and query tree structure
 test "Document: create nodes and query structure" {
-  let doc = @container.Document::new("alice")
+  let doc = Document::new("alice")
   // Create two nodes under root
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
   // Both should be alive
   inspect(doc.is_alive(a), content="true")
   inspect(doc.is_alive(b), content="true")
   // Root should have two children
-  let children = doc.children(@container.root_id)
+  let children = doc.children(root_id)
   inspect(children.length(), content="2")
   // a was created first, b second — a should come before b
   inspect(children[0] == a, content="true")
@@ -28,8 +53,8 @@ test "Document: create nodes and query structure" {
 ///|
 /// Test 2: Create nested nodes and query children
 test "Document: nested children" {
-  let doc = @container.Document::new("alice")
-  let parent = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let parent = doc.create_node(parent=root_id)
   let child1 = doc.create_node(parent~)
   let child2 = doc.create_node(parent~)
   let children = doc.children(parent)
@@ -37,14 +62,14 @@ test "Document: nested children" {
   inspect(children[0] == child1, content="true")
   inspect(children[1] == child2, content="true")
   // Root should have exactly one child (the parent node)
-  inspect(doc.children(@container.root_id).length(), content="1")
+  inspect(doc.children(root_id).length(), content="1")
 }
 
 ///|
 /// Test 3: Properties — set and get
 test "Document: properties" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   inspect(doc.get_property(node, "color") is None, content="true")
   doc.set_property(node, "color", "red")
   @debug.debug_inspect(doc.get_property(node, "color"), content="Some(\"red\")")
@@ -58,12 +83,12 @@ test "Document: properties" {
 ///|
 /// Test 4: Move a node to a different parent
 test "Document: move node" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
   // Move b under a
   doc.move_node(target=b, new_parent=a)
-  inspect(doc.children(@container.root_id).length(), content="1")
+  inspect(doc.children(root_id).length(), content="1")
   inspect(doc.children(a).length(), content="1")
   inspect(doc.children(a)[0] == b, content="true")
 }
@@ -71,38 +96,38 @@ test "Document: move node" {
 ///|
 /// Test 5: Delete a node (move to trash)
 test "Document: delete node" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   inspect(doc.is_alive(node), content="true")
   doc.delete_node(node)
   inspect(doc.is_alive(node), content="false")
-  inspect(doc.children(@container.root_id).length(), content="0")
+  inspect(doc.children(root_id).length(), content="0")
 }
 
 ///|
 /// Test 6: Two peers converge after exchanging ops
 test "Document: two peers converge" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
   // Alice creates a node
-  let a1 = doc_a.create_node(parent=@container.root_id)
+  let a1 = doc_a.create_node(parent=root_id)
   doc_a.set_property(a1, "label", "A1")
   // Bob creates a node
-  let b1 = doc_b.create_node(parent=@container.root_id)
+  let b1 = doc_b.create_node(parent=root_id)
   doc_b.set_property(b1, "label", "B1")
   // Exchange ops: Alice -> Bob
-  let alice_ops = doc_a.export_ops()
+  let alice_ops = doc_a.ops.copy()
   for op in alice_ops {
-    doc_b.apply_remote_op(op)
+    apply_remote_op_for_test(doc_b, op)
   }
   // Exchange ops: Bob -> Alice
-  let bob_ops = doc_b.export_ops()
+  let bob_ops = doc_b.ops.copy()
   for op in bob_ops {
-    doc_a.apply_remote_op(op)
+    apply_remote_op_for_test(doc_a, op)
   }
   // Both should see 2 children of root
-  inspect(doc_a.children(@container.root_id).length(), content="2")
-  inspect(doc_b.children(@container.root_id).length(), content="2")
+  inspect(doc_a.children(root_id).length(), content="2")
+  inspect(doc_b.children(root_id).length(), content="2")
   // Both should recognize the nodes as alive
   inspect(doc_a.is_alive(a1), content="true")
   inspect(doc_a.is_alive(b1), content="true")
@@ -117,20 +142,20 @@ test "Document: two peers converge" {
 ///|
 /// Test 7: Children order is consistent across peers after sync
 test "Document: consistent children order across peers" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
   // Alice creates three nodes
-  let a1 = doc_a.create_node(parent=@container.root_id)
-  let a2 = doc_a.create_node(parent=@container.root_id)
-  let a3 = doc_a.create_node(parent=@container.root_id)
+  let a1 = doc_a.create_node(parent=root_id)
+  let a2 = doc_a.create_node(parent=root_id)
+  let a3 = doc_a.create_node(parent=root_id)
   // Sync alice -> bob
-  let ops = doc_a.export_ops()
+  let ops = doc_a.ops.copy()
   for op in ops {
-    doc_b.apply_remote_op(op)
+    apply_remote_op_for_test(doc_b, op)
   }
   // Both should see same order: a1, a2, a3
-  let children_a = doc_a.children(@container.root_id)
-  let children_b = doc_b.children(@container.root_id)
+  let children_a = doc_a.children(root_id)
+  let children_b = doc_b.children(root_id)
   inspect(children_a.length(), content="3")
   inspect(children_b.length(), content="3")
   // Verify same order
@@ -146,20 +171,20 @@ test "Document: consistent children order across peers" {
 ///|
 /// Test 8: Concurrent equal positions converge to the same sibling order
 test "Document: concurrent equal positions converge" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let a1 = doc_a.create_node(parent=@container.root_id)
-  let b1 = doc_b.create_node(parent=@container.root_id)
-  let alice_ops = doc_a.export_ops()
-  let bob_ops = doc_b.export_ops()
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let a1 = doc_a.create_node(parent=root_id)
+  let b1 = doc_b.create_node(parent=root_id)
+  let alice_ops = doc_a.ops.copy()
+  let bob_ops = doc_b.ops.copy()
   for op in alice_ops {
-    doc_b.apply_remote_op(op)
+    apply_remote_op_for_test(doc_b, op)
   }
   for op in bob_ops {
-    doc_a.apply_remote_op(op)
+    apply_remote_op_for_test(doc_a, op)
   }
-  let children_a = doc_a.children(@container.root_id)
-  let children_b = doc_b.children(@container.root_id)
+  let children_a = doc_a.children(root_id)
+  let children_b = doc_b.children(root_id)
   inspect(children_a.length(), content="2")
   inspect(children_b.length(), content="2")
   inspect(children_a[0] == children_b[0], content="true")
@@ -171,13 +196,13 @@ test "Document: concurrent equal positions converge" {
 ///|
 /// Test 9: Property ops survive out-of-order delivery
 test "Document: property ops replay after out-of-order create" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
   doc_a.set_property(node, "label", "ready")
-  let ops = doc_a.export_ops()
-  doc_b.apply_remote_op(ops[1])
-  doc_b.apply_remote_op(ops[0])
+  let ops = doc_a.ops.copy()
+  apply_remote_op_for_test(doc_b, ops[1])
+  apply_remote_op_for_test(doc_b, ops[0])
   inspect(doc_b.is_alive(node), content="true")
   @debug.debug_inspect(
     doc_b.get_property(node, "label"),
@@ -188,51 +213,51 @@ test "Document: property ops replay after out-of-order create" {
 ///|
 /// Test 10: Remote timestamps seed subsequent local timestamps
 test "Document: local timestamps advance past remote history" {
-  let doc_b = @container.Document::new("bob")
-  let doc_c = @container.Document::new("carol")
+  let doc_b = Document::new("bob")
+  let doc_c = Document::new("carol")
   let remote_id : @mt.TreeNodeId = { agent: "alice", counter: 0 }
   let remote_create : @mt.TreeOp = @mt.Move({
     timestamp: 10,
     target: remote_id,
-    new_parent: @container.root_id,
+    new_parent: @mt.root_id,
     position: @fi.FractionalIndex::between(left=None, right=None),
     agent: "alice",
   })
-  doc_b.apply_remote_op(remote_create)
-  doc_b.delete_node(remote_id)
-  let ops = doc_b.export_ops()
+  apply_remote_op_for_test(doc_b, remote_create)
+  doc_b.delete_node(TreeNodeId::from_inner(remote_id))
+  let ops = doc_b.ops.copy()
   inspect(ops.length(), content="2")
   inspect(op_timestamp(ops[1]) > 10, content="true")
   for op in ops {
-    doc_c.apply_remote_op(op)
+    apply_remote_op_for_test(doc_c, op)
   }
-  inspect(doc_c.is_alive(remote_id), content="false")
+  inspect(doc_c.is_alive(TreeNodeId::from_inner(remote_id)), content="false")
 }
 
 ///|
 /// Test 11: Move and delete across peers
 test "Document: move and delete across peers" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
   // Alice creates a parent and child
-  let parent = doc_a.create_node(parent=@container.root_id)
+  let parent = doc_a.create_node(parent=root_id)
   let child = doc_a.create_node(parent~)
   // Sync to Bob
-  let ops = doc_a.export_ops()
+  let ops = doc_a.ops.copy()
   for op in ops {
-    doc_b.apply_remote_op(op)
+    apply_remote_op_for_test(doc_b, op)
   }
   // Alice deletes the child, Bob moves it to root
   doc_a.delete_node(child)
-  doc_b.move_node(target=child, new_parent=@container.root_id)
+  doc_b.move_node(target=child, new_parent=root_id)
   // Exchange operations
-  let alice_ops = doc_a.export_ops()
-  let bob_ops = doc_b.export_ops()
+  let alice_ops = doc_a.ops.copy()
+  let bob_ops = doc_b.ops.copy()
   for op in bob_ops {
-    doc_a.apply_remote_op(op)
+    apply_remote_op_for_test(doc_a, op)
   }
   for op in alice_ops {
-    doc_b.apply_remote_op(op)
+    apply_remote_op_for_test(doc_b, op)
   }
   // Both peers should converge to the same state
   let alive_a = doc_a.is_alive(child)
@@ -243,12 +268,12 @@ test "Document: move and delete across peers" {
 ///|
 /// Test 12: Export ops returns operations in timestamp order
 test "Document: export ops in order" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.set_property(node, "color", "red")
-  let _ = doc.create_node(parent=@container.root_id)
+  let _ = doc.create_node(parent=root_id)
   doc.delete_node(node)
-  let ops = doc.export_ops()
+  let ops = doc.ops.copy()
   inspect(ops.length(), content="4")
   // Timestamps should be monotonically non-decreasing
   let mut prev_ts = -1
@@ -262,31 +287,41 @@ test "Document: export ops in order" {
 ///|
 /// Test 13: create_node rejects missing local parent ids
 test "panic Document: create node with missing parent" {
-  let doc = @container.Document::new("alice")
-  ignore(doc.create_node(parent={ agent: "missing", counter: 99 }))
+  let doc = Document::new("alice")
+  ignore(
+    doc.create_node(
+      parent=TreeNodeId::from_inner({ agent: "missing", counter: 99 }),
+    ),
+  )
 }
 
 ///|
 /// Test 14: move_node rejects unknown targets
 test "panic Document: move missing target" {
-  let doc = @container.Document::new("alice")
-  let parent = doc.create_node(parent=@container.root_id)
-  doc.move_node(target={ agent: "missing", counter: 99 }, new_parent=parent)
+  let doc = Document::new("alice")
+  let parent = doc.create_node(parent=root_id)
+  doc.move_node(
+    target=TreeNodeId::from_inner({ agent: "missing", counter: 99 }),
+    new_parent=parent,
+  )
 }
 
 ///|
 /// Test 15: move_node rejects missing local parent ids
 test "panic Document: move to missing parent" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
-  doc.move_node(target=node, new_parent={ agent: "missing", counter: 99 })
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
+  doc.move_node(
+    target=node,
+    new_parent=TreeNodeId::from_inner({ agent: "missing", counter: 99 }),
+  )
 }
 
 ///|
 /// Test 16: move_node rejects cycle-forming local moves
 test "panic Document: move would create a cycle" {
-  let doc = @container.Document::new("alice")
-  let parent = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let parent = doc.create_node(parent=root_id)
   let child = doc.create_node(parent~)
   doc.move_node(target=parent, new_parent=child)
 }
@@ -294,14 +329,14 @@ test "panic Document: move would create a cycle" {
 ///|
 /// Test 17: Empty replica_id is rejected
 test "panic Document: empty replica_id" {
-  ignore(@container.Document::new(""))
+  ignore(Document::new(""))
 }
 
 ///|
 /// Test 18: create_node rejects a deleted node as parent
 test "panic Document: create node under deleted parent" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.delete_node(node)
   // node is now in trash — creating a child under it should abort
   ignore(doc.create_node(parent=node))
@@ -310,9 +345,9 @@ test "panic Document: create node under deleted parent" {
 ///|
 /// Test 19: move_node rejects a deleted node as new parent
 test "panic Document: move node to deleted parent" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
   doc.delete_node(a)
   // a is now in trash — moving b under it should abort
   doc.move_node(target=b, new_parent=a)
@@ -321,10 +356,10 @@ test "panic Document: move node to deleted parent" {
 ///|
 /// Test 20: Node ids are unique per agent
 test "Document: unique node ids" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
-  let c = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
+  let c = doc.create_node(parent=root_id)
   inspect(a == b, content="false")
   inspect(b == c, content="false")
   inspect(a == c, content="false")
@@ -333,11 +368,11 @@ test "Document: unique node ids" {
 ///|
 /// Test 21: create_node_after inserts between siblings
 test "Document: create_node_after inserts between siblings" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
-  let c = doc.create_node_after(parent=@container.root_id, after=a)
-  let children = doc.children(@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
+  let c = doc.create_node_after(parent=root_id, after=a)
+  let children = doc.children(root_id)
   inspect(children.length(), content="3")
   inspect(children[0] == a, content="true")
   inspect(children[1] == c, content="true")
@@ -347,11 +382,11 @@ test "Document: create_node_after inserts between siblings" {
 ///|
 /// Test 22: create_node_after appends when after_id is last child
 test "Document: create_node_after appends after last" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
-  let c = doc.create_node_after(parent=@container.root_id, after=b)
-  let children = doc.children(@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
+  let c = doc.create_node_after(parent=root_id, after=b)
+  let children = doc.children(root_id)
   inspect(children.length(), content="3")
   inspect(children[0] == a, content="true")
   inspect(children[1] == b, content="true")
@@ -361,8 +396,8 @@ test "Document: create_node_after appends after last" {
 ///|
 /// Test 23: create_node_after with nested parent
 test "Document: create_node_after nested" {
-  let doc = @container.Document::new("alice")
-  let parent = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let parent = doc.create_node(parent=root_id)
   let x = doc.create_node(parent~)
   let y = doc.create_node(parent~)
   let z = doc.create_node_after(parent~, after=x)
@@ -376,11 +411,14 @@ test "Document: create_node_after nested" {
 ///|
 /// Test 24: create_node_after falls back to append when after is not a child
 test "Document: create_node_after fallback on missing after" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
   let orphan : @mt.TreeNodeId = { agent: "ghost", counter: 99 }
-  let b = doc.create_node_after(parent=@container.root_id, after=orphan)
-  let children = doc.children(@container.root_id)
+  let b = doc.create_node_after(
+    parent=root_id,
+    after=TreeNodeId::from_inner(orphan),
+  )
+  let children = doc.children(root_id)
   inspect(children.length(), content="2")
   inspect(children[0] == a, content="true")
   inspect(children[1] == b, content="true")
@@ -389,28 +427,28 @@ test "Document: create_node_after fallback on missing after" {
 ///|
 /// Test 25: create_node_after survives concurrent equal-position siblings
 test "Document: create_node_after with equal positions from concurrent inserts" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
   // Both peers create a node under root concurrently (same fractional position)
-  let a1 = doc_a.create_node(parent=@container.root_id)
-  let b1 = doc_b.create_node(parent=@container.root_id)
+  let a1 = doc_a.create_node(parent=root_id)
+  let b1 = doc_b.create_node(parent=root_id)
   // Sync both ways so both docs see both nodes
-  let alice_ops = doc_a.export_ops()
-  let bob_ops = doc_b.export_ops()
+  let alice_ops = doc_a.ops.copy()
+  let bob_ops = doc_b.ops.copy()
   for op in alice_ops {
-    doc_b.apply_remote_op(op)
+    apply_remote_op_for_test(doc_b, op)
   }
   for op in bob_ops {
-    doc_a.apply_remote_op(op)
+    apply_remote_op_for_test(doc_a, op)
   }
   // Both peers see 2 children — these have equal fractional positions
-  let children = doc_a.children(@container.root_id)
+  let children = doc_a.children(root_id)
   inspect(children.length(), content="2")
   // create_node_after on the first child must not crash
   let first = children[0]
-  let new_node = doc_a.create_node_after(parent=@container.root_id, after=first)
+  let new_node = doc_a.create_node_after(parent=root_id, after=first)
   inspect(doc_a.is_alive(new_node), content="true")
-  let updated = doc_a.children(@container.root_id)
+  let updated = doc_a.children(root_id)
   inspect(updated.length(), content="3")
   // Verify a1 and b1 are both still present
   let has_a1 = updated[0] == a1 || updated[1] == a1 || updated[2] == a1
@@ -426,15 +464,15 @@ test "Document: create_node_after with equal positions from concurrent inserts" 
 /// surface as desynced block ordering after two users drop the same block
 /// at different positions.
 test "Document: concurrent positional moves converge" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
   // Build a shared baseline of three siblings: x, y, z.
-  let x = doc_a.create_node(parent=@container.root_id)
-  let y = doc_a.create_node_after(parent=@container.root_id, after=x)
-  let z = doc_a.create_node_after(parent=@container.root_id, after=y)
+  let x = doc_a.create_node(parent=root_id)
+  let y = doc_a.create_node_after(parent=root_id, after=x)
+  let z = doc_a.create_node_after(parent=root_id, after=y)
   ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
-  inspect(doc_a.children(@container.root_id).length(), content="3")
-  inspect(doc_b.children(@container.root_id).length(), content="3")
+  inspect(doc_a.children(root_id).length(), content="3")
+  inspect(doc_b.children(root_id).length(), content="3")
 
   // Concurrent edits, both visibly relocating x:
   //   alice: move_node_after(x, after=z)   →  [y, z, x]
@@ -442,8 +480,8 @@ test "Document: concurrent positional moves converge" {
   // Both ops touch x's position, so the CRDT must arbitrate.
   let vv_a = doc_a.get_version_vector()
   let vv_b = doc_b.get_version_vector()
-  doc_a.move_node_after(target=x, parent=@container.root_id, after=z)
-  doc_b.move_node_before(target=x, parent=@container.root_id, before=z)
+  doc_a.move_node_after(target=x, parent=root_id, after=z)
+  doc_b.move_node_before(target=x, parent=root_id, before=z)
 
   // Cross-deliver only the new ops since each peer's prior frontier.
   let report_to_b = doc_b.apply_remote_sync_message(
@@ -458,8 +496,8 @@ test "Document: concurrent positional moves converge" {
   inspect(report_to_a.pending_ops, content="0")
 
   // After cross-sync, both peers see identical sibling order...
-  let children_a = doc_a.children(@container.root_id)
-  let children_b = doc_b.children(@container.root_id)
+  let children_a = doc_a.children(root_id)
+  let children_b = doc_b.children(root_id)
   inspect(children_a.length(), content="3")
   inspect(children_b.length(), content="3")
   inspect(children_a[0] == children_b[0], content="true")
@@ -493,15 +531,15 @@ test "Document: concurrent positional moves converge" {
 /// message should report exactly one applied tree op, no duplicates, and no
 /// pending ops. Re-delivering the same payload is a full no-op.
 test "Document: SyncReport accounts for positional move ops" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let x = doc_a.create_node(parent=@container.root_id)
-  let y = doc_a.create_node_after(parent=@container.root_id, after=x)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let x = doc_a.create_node(parent=root_id)
+  let y = doc_a.create_node_after(parent=root_id, after=x)
   ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
   let vv_b = doc_b.get_version_vector()
 
   // Alice swaps the two siblings; sync only the diff.
-  doc_a.move_node_after(target=x, parent=@container.root_id, after=y)
+  doc_a.move_node_after(target=x, parent=root_id, after=y)
   let delta = doc_a.export_sync_message_since(vv_b)
   inspect(delta.tree_ops.length(), content="1")
   inspect(delta.text_ops.length(), content="0")
@@ -524,13 +562,13 @@ test "Document: SyncReport accounts for positional move ops" {
 /// pending_sync_ops, then drains to applied when the missing ancestor
 /// arrives via a follow-up sync.
 test "Document: SyncReport defers move op until ancestor arrives" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let x = doc_a.create_node(parent=@container.root_id)
-  let y = doc_a.create_node_after(parent=@container.root_id, after=x)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let x = doc_a.create_node(parent=root_id)
+  let y = doc_a.create_node_after(parent=root_id, after=x)
 
   // Issue the swap, then capture the message ordered as: [creates..., swap].
-  doc_a.move_node_after(target=x, parent=@container.root_id, after=y)
+  doc_a.move_node_after(target=x, parent=root_id, after=y)
   let full = doc_a.export_sync_message()
   let swap = full.tree_ops[full.tree_ops.length() - 1]
 
@@ -538,10 +576,10 @@ test "Document: SyncReport defers move op until ancestor arrives" {
   let early = doc_b.apply_remote_sync_message({ tree_ops: [swap], text_ops: [] })
   inspect(early.applied_tree_ops, content="0")
   inspect(early.pending_ops, content="1")
-  inspect(doc_b.pending_sync_ops().length(), content="1")
+  inspect(doc_b.pending_sync_ops.copy().length(), content="1")
 
   // Deliver the rest; the queued swap should drain via flush_pending_sync_ops.
-  let preceding : Array[@container.VersionedTreeOp] = []
+  let preceding : Array[VersionedTreeOp] = []
   for i = 0; i < full.tree_ops.length() - 1; i = i + 1 {
     preceding.push(full.tree_ops[i])
   }
@@ -551,11 +589,11 @@ test "Document: SyncReport defers move op until ancestor arrives" {
   })
   inspect(rest.applied_tree_ops, content="3")
   inspect(rest.pending_ops, content="0")
-  inspect(doc_b.pending_sync_ops().length(), content="0")
+  inspect(doc_b.pending_sync_ops.copy().length(), content="0")
 
   // Final state matches Alice and both siblings survive exactly once.
-  let children_a = doc_a.children(@container.root_id)
-  let children_b = doc_b.children(@container.root_id)
+  let children_a = doc_a.children(root_id)
+  let children_b = doc_b.children(root_id)
   inspect(children_a.length(), content="2")
   inspect(children_b.length(), content="2")
   inspect(children_a[0] == children_b[0], content="true")

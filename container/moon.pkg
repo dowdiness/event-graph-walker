@@ -3,16 +3,22 @@ import {
   "dowdiness/event-graph-walker/internal/fractional_index" @fi,
   "dowdiness/event-graph-walker/internal/causal_graph" @cg,
   "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/sync",
+  "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/rle",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/bench",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
 }
+
+import {
+  "moonbitlang/core/debug",
+} for "test"
 
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/quickcheck",
   "moonbitlang/quickcheck" @qc,
-} for "test"
-
-import {
-  "moonbitlang/core/debug",
 } for "wbtest"

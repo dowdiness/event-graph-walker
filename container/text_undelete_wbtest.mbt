@@ -7,21 +7,21 @@
 /// covered in Phase 4.
 
 ///|
-fn find_insert_lv(doc : @container.Document, content : String) -> Int {
-  for op in doc.export_text_ops() {
+fn find_insert_id(doc : Document, content : String) -> @core.RawVersion {
+  for op in doc.text_ops.copy() {
     match op.op {
-      @container.Insert(ins) => if ins.content == content { return ins.id }
+      Insert(ins) => if ins.content == content { return ins.id }
       _ => ()
     }
   }
-  -1
+  @core.RawVersion::new("", -1)
 }
 
 ///|
-fn find_delete_target_ts(doc : @container.Document, target : Int) -> Int {
-  for op in doc.export_text_ops() {
+fn find_delete_target_ts(doc : Document, target : @core.RawVersion) -> Int {
+  for op in doc.text_ops.copy() {
     match op.op {
-      @container.Delete(d) => if d.target == target { return d.timestamp }
+      Delete(d) => if d.target == target { return d.timestamp }
       _ => ()
     }
   }
@@ -30,39 +30,30 @@ fn find_delete_target_ts(doc : @container.Document, target : Int) -> Int {
 
 ///|
 /// Two peers sharing one block containing a single char "x".
-fn setup_peers_with_x() -> (
-  @container.Document,
-  @container.Document,
-  @container.TreeNodeId,
-  Int,
-) raise @container.DocumentError {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+fn setup_peers_with_x() -> (Document, Document, TreeNodeId, @core.RawVersion) raise DocumentError {
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "x")
   let sync = alice.export_sync_message()
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(sync)
-  let x_lv = find_insert_lv(alice, "x")
-  (alice, bob, block, x_lv)
+  let x_id = find_insert_id(alice, "x")
+  (alice, bob, block, x_id)
 }
 
 ///|
 /// Task 1.5 — local Delete then synthesized Undelete round-trip.
 test "document: Undelete revives a locally-deleted char" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "hello")
   doc.delete_text(block, 0)
   inspect(doc.get_text(block), content="ello")
-  let h_lv = find_insert_lv(doc, "h")
-  let del_ts = find_delete_target_ts(doc, h_lv)
+  let h_id = find_insert_id(doc, "h")
+  let del_ts = find_delete_target_ts(doc, h_id)
   doc.apply_remote_text_op({
-    block,
-    op: @container.Undelete({
-      target: h_lv,
-      timestamp: del_ts + 1000,
-      agent: "alice",
-    }),
+    block: block.to_inner(),
+    op: Undelete({ target: h_id, timestamp: del_ts + 1000, agent: "alice" }),
   })
   inspect(doc.get_text(block), content="hello")
 }
@@ -71,13 +62,13 @@ test "document: Undelete revives a locally-deleted char" {
 /// Task 1.6 — convergence under two orderings (higher-ts Undelete beats Delete).
 test "document: Undelete converges across orderings (delete-then-undelete)" {
   let (alice, _, block, x_lv) = setup_peers_with_x()
-  let delete_op : @container.BlockTextOp = {
-    block,
-    op: @container.Delete({ target: x_lv, timestamp: 5, agent: "alice" }),
+  let delete_op : BlockTextOp = {
+    block: block.to_inner(),
+    op: Delete({ target: x_lv, timestamp: 5, agent: "alice" }),
   }
-  let undelete_op : @container.BlockTextOp = {
-    block,
-    op: @container.Undelete({ target: x_lv, timestamp: 10, agent: "bob" }),
+  let undelete_op : BlockTextOp = {
+    block: block.to_inner(),
+    op: Undelete({ target: x_lv, timestamp: 10, agent: "bob" }),
   }
   alice.apply_remote_text_op(delete_op)
   alice.apply_remote_text_op(undelete_op)
@@ -87,13 +78,13 @@ test "document: Undelete converges across orderings (delete-then-undelete)" {
 ///|
 test "document: Undelete converges across orderings (undelete-then-delete)" {
   let (_, bob, block, x_lv) = setup_peers_with_x()
-  let delete_op : @container.BlockTextOp = {
-    block,
-    op: @container.Delete({ target: x_lv, timestamp: 5, agent: "alice" }),
+  let delete_op : BlockTextOp = {
+    block: block.to_inner(),
+    op: Delete({ target: x_lv, timestamp: 5, agent: "alice" }),
   }
-  let undelete_op : @container.BlockTextOp = {
-    block,
-    op: @container.Undelete({ target: x_lv, timestamp: 10, agent: "bob" }),
+  let undelete_op : BlockTextOp = {
+    block: block.to_inner(),
+    op: Undelete({ target: x_lv, timestamp: 10, agent: "bob" }),
   }
   bob.apply_remote_text_op(undelete_op)
   bob.apply_remote_text_op(delete_op)
@@ -107,13 +98,13 @@ test "document: Undelete converges across orderings (undelete-then-delete)" {
 /// agent tie-break) is what's under test.
 test "document: Undelete wins tie-break against Delete at equal timestamp" {
   let (alice, bob, block, x_lv) = setup_peers_with_x()
-  let delete_op : @container.BlockTextOp = {
-    block,
-    op: @container.Delete({ target: x_lv, timestamp: 7, agent: "alice" }),
+  let delete_op : BlockTextOp = {
+    block: block.to_inner(),
+    op: Delete({ target: x_lv, timestamp: 7, agent: "alice" }),
   }
-  let undelete_op : @container.BlockTextOp = {
-    block,
-    op: @container.Undelete({ target: x_lv, timestamp: 7, agent: "alice" }),
+  let undelete_op : BlockTextOp = {
+    block: block.to_inner(),
+    op: Undelete({ target: x_lv, timestamp: 7, agent: "alice" }),
   }
   alice.apply_remote_text_op(delete_op)
   alice.apply_remote_text_op(undelete_op)

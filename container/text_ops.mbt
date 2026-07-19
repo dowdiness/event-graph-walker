@@ -32,23 +32,24 @@ fn Document::apply_block_text_op(
 /// Insert text at the given character position in a block's text content.
 pub fn Document::insert_text(
   self : Document,
-  id : @mt.TreeNodeId,
+  id : TreeNodeId,
   pos : Int,
   text : String,
 ) -> Unit raise DocumentError {
+  let id = id.to_inner()
   self.with_implicit_transaction(() => {
-    if !self.is_alive(id) {
+    if !self.tree.is_alive(id) {
       raise DocumentError::TargetNotFound
     }
     let block = self.get_or_create_text(id)
     for i, ch in text {
       let ch_content = ch.to_string()
-      let mut inserted_lv = 0
-      self.emit_text_op(id, (lv, ts) => {
-        inserted_lv = lv
-        block.make_insert_op_at(pos + i, lv, ch_content, ts, self.agent_id)
+      let mut inserted_id = @core.RawVersion::new("", 0)
+      self.emit_text_op(id, (version, ts) => {
+        inserted_id = version
+        block.make_insert_op_at(pos + i, version, ch_content, ts, self.agent_id)
       })
-      self.record_undo_item(TextInsert(block=id, lv=inserted_lv))
+      self.record_undo_item(TextInsert(block=id, id=inserted_id))
     }
   })
 }
@@ -57,11 +58,12 @@ pub fn Document::insert_text(
 /// Delete a character at the given position in a block's text content.
 pub fn Document::delete_text(
   self : Document,
-  id : @mt.TreeNodeId,
+  id : TreeNodeId,
   pos : Int,
 ) -> Unit raise DocumentError {
+  let id = id.to_inner()
   self.with_implicit_transaction(() => {
-    if !self.is_alive(id) {
+    if !self.tree.is_alive(id) {
       raise DocumentError::TargetNotFound
     }
     let block = self.get_or_create_text(id)
@@ -74,10 +76,11 @@ pub fn Document::delete_text(
       )
     }
     let (target_lv, _) = items[pos]
+    let target_id = block.stable_for_local(target_lv.0)
     self.emit_text_op(id, (_, ts) => {
       block.make_delete_op_at(pos, ts, self.agent_id)
     })
-    self.record_undo_item(TextDelete(block=id, lv=target_lv.0))
+    self.record_undo_item(TextDelete(block=id, id=target_id))
   })
 }
 
@@ -93,14 +96,18 @@ pub fn Document::delete_text(
 /// generated ops have arrived and been applied.
 pub fn Document::replace_text(
   self : Document,
-  id : @mt.TreeNodeId,
+  id : TreeNodeId,
   text : String,
 ) -> Unit raise DocumentError {
+  let id_inner = id.to_inner()
   self.with_implicit_transaction(() => {
-    if !self.is_alive(id) {
+    if !self.tree.is_alive(id_inner) {
       raise DocumentError::TargetNotFound
     }
-    let mut remaining = self.text_len(id)
+    let mut remaining = match self.blocks.get(id_inner) {
+      Some(block) => block.len()
+      None => 0
+    }
     while remaining > 0 {
       self.delete_text(id, remaining - 1)
       remaining = remaining - 1
@@ -113,8 +120,8 @@ pub fn Document::replace_text(
 
 ///|
 /// Get the text content of a block.
-pub fn Document::get_text(self : Document, id : @mt.TreeNodeId) -> String {
-  match self.blocks.get(id) {
+pub fn Document::get_text(self : Document, id : TreeNodeId) -> String {
+  match self.blocks.get(id.to_inner()) {
     Some(block) => block.text()
     None => ""
   }
@@ -122,23 +129,15 @@ pub fn Document::get_text(self : Document, id : @mt.TreeNodeId) -> String {
 
 ///|
 /// Get the text length of a block.
-pub fn Document::text_len(self : Document, id : @mt.TreeNodeId) -> Int {
-  match self.blocks.get(id) {
+pub fn Document::text_len(self : Document, id : TreeNodeId) -> Int {
+  match self.blocks.get(id.to_inner()) {
     Some(block) => block.len()
     None => 0
   }
 }
 
 ///|
-pub fn Document::export_text_ops(self : Document) -> Array[BlockTextOp] {
-  self.text_ops.copy()
-}
-
-///|
-pub fn Document::apply_remote_text_op(
-  self : Document,
-  op : BlockTextOp,
-) -> Unit {
+fn Document::apply_remote_text_op(self : Document, op : BlockTextOp) -> Unit {
   if !self.record_text_op(op) {
     return
   }

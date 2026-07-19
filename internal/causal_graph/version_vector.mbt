@@ -291,6 +291,15 @@ pub fn VersionVector::agents(self : VersionVector) -> Array[String] {
 }
 
 ///|
+/// Return the maximum sequence recorded for an agent.
+pub fn VersionVector::sequence_for(
+  self : VersionVector,
+  agent : String,
+) -> Int? {
+  self.0.get(agent)
+}
+
+///|
 /// Merges two version vectors by taking the maximum sequence number for each
 /// agent.
 ///

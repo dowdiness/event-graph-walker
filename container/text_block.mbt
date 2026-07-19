@@ -7,31 +7,31 @@
 /// Internal dense-ItemId refactoring is a future optimization.
 
 ///|
-pub(all) struct TextInsertOp {
-  id : Int
+priv struct TextInsertOp {
+  id : @core.RawVersion
   content : String
-  origin_left : Int?
-  origin_right : Int?
+  origin_left : @core.RawVersion?
+  origin_right : @core.RawVersion?
   timestamp : Int
   agent : String
 }
 
 ///|
-pub(all) struct TextDeleteOp {
-  target : Int
+priv struct TextDeleteOp {
+  target : @core.RawVersion
   timestamp : Int
   agent : String
 }
 
 ///|
-pub(all) struct TextUndeleteOp {
-  target : Int
+priv struct TextUndeleteOp {
+  target : @core.RawVersion
   timestamp : Int
   agent : String
 }
 
 ///|
-pub(all) enum TextOp {
+priv enum TextOp {
   Insert(TextInsertOp)
   Delete(TextDeleteOp)
   Undelete(TextUndeleteOp)
@@ -40,12 +40,50 @@ pub(all) enum TextOp {
 ///|
 priv struct TextBlock {
   tree : @fugue.FugueTree[String]
+  stable_to_local : Map[@core.RawVersion, Int]
+  local_to_stable : Map[Int, @core.RawVersion]
+  mut next_local_id : Int
   mut text_cache : String?
 }
 
 ///|
 fn TextBlock::new() -> TextBlock {
-  { tree: @fugue.FugueTree::new(), text_cache: None }
+  {
+    tree: @fugue.FugueTree::new(),
+    stable_to_local: Map::default(),
+    local_to_stable: Map::default(),
+    next_local_id: 0,
+    text_cache: None,
+  }
+}
+
+///|
+fn TextBlock::stable_for_local(
+  self : TextBlock,
+  local_id : Int,
+) -> @core.RawVersion raise DocumentError {
+  match self.local_to_stable.get(local_id) {
+    Some(id) => id
+    None =>
+      raise DocumentError::Internal(
+        detail="TextBlock missing stable identity for local item",
+      )
+  }
+}
+
+///|
+fn TextBlock::local_for_stable(
+  self : TextBlock,
+  stable_id : @core.RawVersion,
+) -> Int raise DocumentError {
+  match self.stable_to_local.get(stable_id) {
+    Some(id) => id
+    None =>
+      raise DocumentError::Internal(
+        detail="TextBlock missing local item for stable identity " +
+          stable_id.to_string(),
+      )
+  }
 }
 
 ///|
@@ -54,7 +92,7 @@ fn TextBlock::new() -> TextBlock {
 fn TextBlock::make_insert_op_at(
   self : TextBlock,
   pos : Int,
-  lv : Int,
+  id : @core.RawVersion,
   content : String,
   timestamp : Int,
   agent : String,
@@ -70,17 +108,17 @@ fn TextBlock::make_insert_op_at(
     )
   }
   let items = self.tree.get_visible_items()
-  let origin_left : Int? = if pos == 0 {
+  let origin_left : @core.RawVersion? = if pos == 0 {
     None
   } else {
-    Some(items[pos - 1].0.0)
+    Some(self.stable_for_local(items[pos - 1].0.0))
   }
-  let origin_right : Int? = if pos >= items.length() {
+  let origin_right : @core.RawVersion? = if pos >= items.length() {
     None
   } else {
-    Some(items[pos].0.0)
+    Some(self.stable_for_local(items[pos].0.0))
   }
-  Insert({ id: lv, content, origin_left, origin_right, timestamp, agent })
+  Insert({ id, content, origin_left, origin_right, timestamp, agent })
 }
 
 ///|
@@ -102,7 +140,11 @@ fn TextBlock::make_delete_op_at(
     )
   }
   let (item_lv, _) = items[pos]
-  Delete({ target: item_lv.0, timestamp: del_timestamp, agent: del_agent })
+  Delete({
+    target: self.stable_for_local(item_lv.0),
+    timestamp: del_timestamp,
+    agent: del_agent,
+  })
 }
 
 ///|
@@ -111,18 +153,34 @@ fn TextBlock::apply_op(
   op : TextOp,
 ) -> Unit raise DocumentError {
   match op {
-    Insert(insert_op) =>
+    Insert(insert_op) => {
+      if self.stable_to_local.get(insert_op.id) is Some(_) {
+        return
+      }
+      let local_id = self.next_local_id
+      self.next_local_id = self.next_local_id + 1
+      let origin_left = match insert_op.origin_left {
+        Some(id) => Some(@fugue.Lv(self.local_for_stable(id)))
+        None => None
+      }
+      let origin_right = match insert_op.origin_right {
+        Some(id) => Some(@fugue.Lv(self.local_for_stable(id)))
+        None => None
+      }
+      self.stable_to_local[insert_op.id] = local_id
+      self.local_to_stable[local_id] = insert_op.id
       self.tree.insert({
-        id: @fugue.Lv(insert_op.id),
+        id: @fugue.Lv(local_id),
         content: insert_op.content,
-        origin_left: insert_op.origin_left.map(fn(id) { @fugue.Lv(id) }),
-        origin_right: insert_op.origin_right.map(fn(id) { @fugue.Lv(id) }),
+        origin_left,
+        origin_right,
         timestamp: @fugue.Timestamp(insert_op.timestamp),
         agent: @fugue.ReplicaId(insert_op.agent),
       })
+    }
     Delete(delete_op) =>
       self.tree.delete_with_ts(
-        @fugue.Lv(delete_op.target),
+        @fugue.Lv(self.local_for_stable(delete_op.target)),
         delete_op.timestamp,
         delete_op.agent,
       ) catch {
@@ -134,7 +192,7 @@ fn TextBlock::apply_op(
       }
     Undelete(undelete_op) =>
       self.tree.undelete_with_ts(
-        @fugue.Lv(undelete_op.target),
+        @fugue.Lv(self.local_for_stable(undelete_op.target)),
         undelete_op.timestamp,
         undelete_op.agent,
       ) catch {
