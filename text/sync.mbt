@@ -95,6 +95,59 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
 }
 
 ///|
+/// Return whether `target` is reachable through the declared causal parents.
+///
+/// Origins and the implicit replica predecessor are deliberately excluded:
+/// they constrain applicability, but only `parents` define graph ancestry.
+fn parents_reach_identity(
+  parents : Array[@core.RawVersion],
+  target : @core.RawVersion,
+  known_ops : Map[String, @core.Op],
+) -> Bool {
+  let queue = parents.copy()
+  let visited : Map[String, Bool] = Map([])
+  let target_key = raw_key(target)
+  let mut index = 0
+  while index < queue.length() {
+    let current = queue[index]
+    index = index + 1
+    let current_key = raw_key(current)
+    if current_key == target_key {
+      return true
+    }
+    if visited.get(current_key) is None {
+      visited[current_key] = true
+      match known_ops.get(current_key) {
+        Some(parent_op) =>
+          for ancestor in parent_op.parents() {
+            queue.push(ancestor)
+          }
+        None => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Require every non-initial replica operation to causally descend from its
+/// predecessor, not merely wait for that predecessor to exist.
+fn validate_sequence_descent(
+  op : @core.Op,
+  known_ops : Map[String, @core.Op],
+) -> Unit raise @sync.Failure {
+  if op.seq() == 0 {
+    return
+  }
+  let predecessor = @core.RawVersion::new(op.agent(), op.seq() - 1)
+  if !parents_reach_identity(op.parents(), predecessor, known_ops) {
+    raise @sync.Failure::MalformedMessage(
+      detail="operation does not causally descend from its replica predecessor",
+    )
+  }
+}
+
+///|
 fn validate_insert_scalar(text : String) -> Unit raise @sync.Failure {
   let len = text.length()
   if len == 0 {
@@ -315,6 +368,7 @@ fn canonical_order_counted(
 pub(all) struct SyncMessage {
   priv operations : Array[@core.Op]
   priv heads : Array[@core.RawVersion]
+  priv encoded_size : Int?
 }
 
 ///|
@@ -322,6 +376,7 @@ pub(all) struct SyncMessage {
 fn SyncMessage::SyncMessage(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
+  encoded_size : Int?,
 ) -> SyncMessage raise @sync.Failure {
   let limits : @sync.Limits = @sync.Limits::default()
   if operations.length() > limits.max_decoded_operations() {
@@ -346,7 +401,7 @@ fn SyncMessage::SyncMessage(
     }
     seen_heads[raw_key(head)] = true
   }
-  { operations: ordered, heads: sorted_raw(heads) }
+  { operations: ordered, heads: sorted_raw(heads), encoded_size }
 }
 
 ///|
@@ -697,7 +752,7 @@ pub fn SyncMessage::from_json_string(
     for value in head_values {
       heads.push(decode_identity(value))
     }
-    SyncMessage::SyncMessage(operations, heads)
+    SyncMessage::SyncMessage(operations, heads, Some(encoded_size))
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
       raise TextError::SyncFailed(@sync.Failure::MalformedMessage(detail~))
@@ -735,7 +790,7 @@ pub fn SyncSession::export_all(
 ) -> SyncMessage raise TextError {
   let heads = current_heads(self.doc)
   map_sync_failure(fn() raise @sync.Failure {
-    SyncMessage::SyncMessage(self.doc.inner.get_all_ops(), heads)
+    SyncMessage::SyncMessage(self.doc.inner.get_all_ops(), heads, None)
   })
 }
 
@@ -752,7 +807,7 @@ pub fn SyncSession::export_since(
   }
   let heads = current_heads(self.doc)
   map_sync_failure(fn() raise @sync.Failure {
-    SyncMessage::SyncMessage(operations, heads)
+    SyncMessage::SyncMessage(operations, heads, None)
   })
 }
 
@@ -772,6 +827,19 @@ pub fn SyncSession::apply(
   message : SyncMessage,
 ) -> SyncReport raise TextError {
   let limits = self.doc.sync_limits
+  let encoded_size = match message.encoded_size {
+    Some(size) => size
+    None => @utf8.encode(message.to_json_string()).length()
+  }
+  if encoded_size > limits.max_encoded_bytes() {
+    raise TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=limits.max_encoded_bytes(),
+        actual=encoded_size,
+      ),
+    )
+  }
   if message.operations.length() > limits.max_decoded_operations() {
     raise TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
@@ -822,6 +890,13 @@ pub fn SyncSession::apply(
     }
   }
   let all_candidates = candidates.values().to_array()
+  let known_ops : Map[String, @core.Op] = Map([])
+  for local_op in self.doc.inner.get_all_ops() {
+    known_ops[raw_key(op_identity(local_op))] = local_op
+  }
+  for candidate in all_candidates {
+    known_ops[raw_key(op_identity(candidate))] = candidate
+  }
   let ordered = map_sync_failure(fn() raise @sync.Failure {
     canonical_order(all_candidates)
   })
@@ -837,6 +912,9 @@ pub fn SyncSession::apply(
       }
     }
     if ready {
+      map_sync_failure(fn() raise @sync.Failure {
+        validate_sequence_descent(op, known_ops)
+      })
       resolvable[raw_key(op_identity(op))] = true
       applicable.push(op)
     } else {
