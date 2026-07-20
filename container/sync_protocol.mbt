@@ -43,6 +43,23 @@ fn sync_record_parents(record : SyncOpRecord) -> Array[@core.RawVersion] {
 }
 
 ///|
+fn sync_record_timestamp(record : SyncOpRecord) -> Int {
+  match record {
+    Tree(versioned) =>
+      match versioned.op {
+        @mt.Move(op) => op.timestamp
+        @mt.SetProperty(op) => op.timestamp
+      }
+    Text(versioned) =>
+      match versioned.op {
+        Insert(op) => op.timestamp
+        Delete(op) => op.timestamp
+        Undelete(op) => op.timestamp
+      }
+  }
+}
+
+///|
 fn sync_record_key(record : SyncOpRecord) -> String {
   sync_raw_key(sync_record_version(record))
 }
@@ -194,6 +211,37 @@ fn validate_sync_sequence_descent(
 }
 
 ///|
+/// Require Lamport time to advance beyond the replica predecessor and every
+/// declared causal parent.
+fn validate_sync_lamport_descent(
+  record : SyncOpRecord,
+  known_records : Map[String, SyncOpRecord],
+) -> Unit raise @sync.Failure {
+  let id = sync_record_version(record)
+  let dependencies = sync_record_parents(record)
+  if id.seq > 0 {
+    dependencies.push(@core.RawVersion::new(id.agent, id.seq - 1))
+  }
+  let timestamp = sync_record_timestamp(record)
+  let checked : Map[String, Bool] = Map([])
+  for dependency in dependencies {
+    let key = sync_raw_key(dependency)
+    if checked.get(key) is None {
+      checked[key] = true
+      match known_records.get(key) {
+        Some(cause) =>
+          if timestamp <= sync_record_timestamp(cause) {
+            raise @sync.Failure::MalformedMessage(
+              detail="operation timestamp does not advance beyond its causal dependencies",
+            )
+          }
+        None => ()
+      }
+    }
+  }
+}
+
+///|
 /// Require every text item reference to resolve to an Insert in the same block.
 ///
 /// Global causal presence is insufficient because tree operations and inserts
@@ -257,6 +305,37 @@ fn validate_sync_text_references(
 }
 
 ///|
+/// Reject tree mutations that could manufacture or annotate an unestablished
+/// node. A missing move target is a create only when issued by its owner.
+fn validate_sync_tree_target(
+  record : SyncOpRecord,
+  tree_snapshot : @mt.MovableTree,
+) -> Unit raise @sync.Failure {
+  match record {
+    Tree(versioned) =>
+      match versioned.op {
+        @mt.Move(op) =>
+          if !tree_snapshot.contains(op.target) &&
+            (
+              op.target.agent != versioned.version.agent ||
+              op.new_parent == @mt.trash_id
+            ) {
+            raise @sync.Failure::InvalidContent(
+              detail="tree move target is not an owner-created node",
+            )
+          }
+        @mt.SetProperty(op) =>
+          if !tree_snapshot.contains(op.target) {
+            raise @sync.Failure::InvalidContent(
+              detail="tree property target is not established",
+            )
+          }
+      }
+    Text(_) => ()
+  }
+}
+
+///|
 /// Parse a raw record into the only representation accepted by the apply shell.
 ///
 /// The returned type preserves the knowledge gained by the state-aware checks;
@@ -268,7 +347,9 @@ fn parse_applicable_sync_record(
   tree_snapshot : @mt.MovableTree,
 ) -> ApplicableSyncOp raise @sync.Failure {
   validate_sync_sequence_descent(record, known_records)
+  validate_sync_lamport_descent(record, known_records)
   validate_sync_text_references(record, known_records)
+  validate_sync_tree_target(record, tree_snapshot)
   match record {
     Tree(op) => ApplyTree(op)
     Text(op) => {
