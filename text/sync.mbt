@@ -533,6 +533,17 @@ priv struct PreparedSync {
 }
 
 ///|
+/// Derive the public report from the parsed transition without observing or
+/// mutating document state.
+fn PreparedSync::report(self : PreparedSync) -> SyncReport {
+  {
+    applied_operations: self.applicable.length(),
+    duplicate_operations: self.duplicate_operations,
+    pending_operations: self.pending.length(),
+  }
+}
+
+///|
 pub fn SyncReport::applied_operations(self : SyncReport) -> Int {
   self.applied_operations
 }
@@ -940,27 +951,23 @@ fn prepare_sync(
   limits : @sync.Limits,
   local_ops : Array[@core.Op],
   pending_records : Array[@core.Op],
-) -> PreparedSync raise TextError {
+) -> PreparedSync raise @sync.Failure {
   let encoded_size = match message.encoded_size {
     Some(size) => size
     None => @utf8.encode(message.to_json_string()).length()
   }
   if encoded_size > limits.max_encoded_bytes() {
-    raise TextError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit=limits.max_encoded_bytes(),
-        actual=encoded_size,
-      ),
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::EncodedBytes,
+      limit=limits.max_encoded_bytes(),
+      actual=encoded_size,
     )
   }
   if message.operations.length() > limits.max_decoded_operations() {
-    raise TextError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::DecodedOperations,
-        limit=limits.max_decoded_operations(),
-        actual=message.operations.length(),
-      ),
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::DecodedOperations,
+      limit=limits.max_decoded_operations(),
+      actual=message.operations.length(),
     )
   }
   let local_payload_map = local_payloads(local_ops)
@@ -970,7 +977,7 @@ fn prepare_sync(
   }
   let mut duplicates = 0
   for op in message.operations {
-    map_sync_failure(fn() raise @sync.Failure { validate_op(op, limits) })
+    validate_op(op, limits)
     let id = op_identity(op)
     let key = raw_key(id)
     let payload = op_payload_key(op)
@@ -979,11 +986,9 @@ fn prepare_sync(
         if existing == payload {
           duplicates = duplicates + 1
         } else {
-          raise TextError::SyncFailed(
-            @sync.Failure::ConflictingIdentity(
-              replica_id=id.agent,
-              sequence=id.seq,
-            ),
+          raise @sync.Failure::ConflictingIdentity(
+            replica_id=id.agent,
+            sequence=id.seq,
           )
         }
       None =>
@@ -992,11 +997,9 @@ fn prepare_sync(
             if op_payload_key(existing) == payload {
               duplicates = duplicates + 1
             } else {
-              raise TextError::SyncFailed(
-                @sync.Failure::ConflictingIdentity(
-                  replica_id=id.agent,
-                  sequence=id.seq,
-                ),
+              raise @sync.Failure::ConflictingIdentity(
+                replica_id=id.agent,
+                sequence=id.seq,
               )
             }
           None => candidates[key] = op
@@ -1011,16 +1014,12 @@ fn prepare_sync(
   for candidate in all_candidates {
     known_ops[raw_key(op_identity(candidate))] = candidate
   }
-  let ordered = map_sync_failure(fn() raise @sync.Failure {
-    canonical_order(all_candidates)
-  })
+  let ordered = canonical_order(all_candidates)
   let resolved : Map[String, Unit] = Map([])
   let applicable : Array[ApplicableOp] = []
   let pending : Array[@core.Op] = []
   for op in ordered {
-    let parsed = map_sync_failure(fn() raise @sync.Failure {
-      parse_candidate(op, local_payload_map, resolved, known_ops)
-    })
+    let parsed = parse_candidate(op, local_payload_map, resolved, known_ops)
     match parsed {
       Apply(applicable_op) => {
         resolved[raw_key(op_identity(op))] = ()
@@ -1030,12 +1029,10 @@ fn prepare_sync(
     }
   }
   if pending.length() > limits.max_pending_operations() {
-    raise TextError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::PendingOperations,
-        limit=limits.max_pending_operations(),
-        actual=pending.length(),
-      ),
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::PendingOperations,
+      limit=limits.max_pending_operations(),
+      actual=pending.length(),
     )
   }
   { applicable, pending, duplicate_operations: duplicates }
@@ -1047,12 +1044,14 @@ pub fn SyncSession::apply(
   self : SyncSession,
   message : SyncMessage,
 ) -> SyncReport raise TextError {
-  let prepared = prepare_sync(
-    message,
-    self.doc.sync_limits,
-    self.doc.inner.get_all_ops(),
-    self.doc.pending_sync_records.copy(),
-  )
+  let prepared = map_sync_failure(fn() raise @sync.Failure {
+    prepare_sync(
+      message,
+      self.doc.sync_limits,
+      self.doc.inner.get_all_ops(),
+      self.doc.pending_sync_records.copy(),
+    )
+  })
   // Imperative shell: PreparedSync is only constructible after complete
   // preflight, so protocol failures cannot occur after the first mutation.
   for parsed_op in prepared.applicable {
@@ -1061,12 +1060,7 @@ pub fn SyncSession::apply(
     }
   }
   self.doc.pending_sync_records = prepared.pending
-  let report : SyncReport = {
-    applied_operations: prepared.applicable.length(),
-    duplicate_operations: prepared.duplicate_operations,
-    pending_operations: prepared.pending.length(),
-  }
-  report
+  prepared.report()
 }
 
 ///|
