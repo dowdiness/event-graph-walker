@@ -418,8 +418,8 @@ fn SyncMessage::SyncMessage(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
   encoded_size : Int?,
+  limits? : @sync.Limits = @sync.Limits::default(),
 ) -> SyncMessage raise @sync.Failure {
-  let limits : @sync.Limits = @sync.Limits::default()
   if operations.length() > limits.max_decoded_operations() {
     raise @sync.Failure::LimitExceeded(
       kind=@sync.LimitKind::DecodedOperations,
@@ -475,6 +475,39 @@ priv struct ApplicableOp {
 }
 
 ///|
+/// Provenance of an operation considered during synchronization preparation.
+///
+/// A malformed operation seen only in the current message rejects that
+/// message. A previously deferred operation retains that provenance even when
+/// resent, and is discarded once its dependencies make the malformation
+/// decidable, preventing one pending record from poisoning later attempts.
+priv enum SyncCandidate {
+  FromPending(@core.Op)
+  FromMessage(@core.Op)
+  FromPendingAndMessage(@core.Op)
+}
+
+///|
+fn SyncCandidate::raw(self : SyncCandidate) -> @core.Op {
+  match self {
+    FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op
+  }
+}
+
+///|
+/// Record an identical observation from the current message without losing
+/// whether the operation was already present in the pending queue.
+fn SyncCandidate::observe_message(
+  self : SyncCandidate,
+  op : @core.Op,
+) -> SyncCandidate {
+  match self {
+    FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(op)
+    FromMessage(_) => FromMessage(op)
+  }
+}
+
+///|
 /// Parse a dependency-resolved operation into the representation accepted by
 /// the commit shell.
 fn ApplicableOp::ApplicableOp(
@@ -500,6 +533,7 @@ fn ApplicableOp::raw(self : ApplicableOp) -> @core.Op {
 priv enum ParsedCandidate {
   Apply(ApplicableOp)
   Defer(@core.Op)
+  DiscardInvalidPending
 }
 
 ///|
@@ -518,6 +552,29 @@ fn parse_candidate(
     }
   }
   Apply(ApplicableOp::ApplicableOp(op, known_ops))
+}
+
+///|
+/// Parse a candidate according to its provenance.
+///
+/// New current-message failures remain atomic message failures. A pending
+/// record that only becomes provably malformed after its dependencies arrive
+/// is discarded from the next prepared queue, including when the peer resends
+/// it, while valid current-message operations remain applicable.
+fn parse_sync_candidate(
+  candidate : SyncCandidate,
+  local_payloads : Map[String, String],
+  resolved : Map[String, Unit],
+  known_ops : Map[String, @core.Op],
+) -> ParsedCandidate raise @sync.Failure {
+  match candidate {
+    FromMessage(op) =>
+      parse_candidate(op, local_payloads, resolved, known_ops)
+    FromPending(op) | FromPendingAndMessage(op) =>
+      try parse_candidate(op, local_payloads, resolved, known_ops) catch {
+        _ => DiscardInvalidPending
+      }
+  }
 }
 
 ///|
@@ -610,6 +667,42 @@ fn exact_object_fields(
 }
 
 ///|
+/// Typed wire representations used only after the strict exact-field gate.
+///
+/// Derived `FromJson` intentionally handles field type conversion, while the
+/// surrounding decoders retain responsibility for rejecting unknown fields
+/// and enforcing protocol semantics and resource limits.
+priv struct WireIdentity {
+  replica_id : String
+  sequence : Int
+} derive(FromJson)
+
+///|
+priv struct WireVersionEnvelope {
+  schema : Int
+  format : String
+  entries : Array[Json]
+} derive(FromJson)
+
+///|
+priv struct WireOperation {
+  id : Json
+  parents : Array[Json]
+  kind : String
+  content : Json
+  origin_left : Json
+  origin_right : Json
+} derive(FromJson)
+
+///|
+priv struct WireSyncEnvelope {
+  schema : Int
+  format : String
+  operations : Array[Json]
+  heads : Array[Json]
+} derive(FromJson)
+
+///|
 fn decode_identity(json : Json) -> @core.RawVersion raise {
   let object = match json {
     Json::Object(value) => value
@@ -618,14 +711,11 @@ fn decode_identity(json : Json) -> @core.RawVersion raise {
   guard exact_object_fields(object, ["replica_id", "sequence"]) else {
     fail("identity contains missing or unknown fields")
   }
-  let replica_id : String = @json.from_json(
-    object.get("replica_id").unwrap_or(Json::null()),
-  )
-  let sequence : Int = @json.from_json(
-    object.get("sequence").unwrap_or(Json::null()),
-  )
-  guard replica_id != "" && sequence >= 0 else { fail("identity is invalid") }
-  @core.RawVersion::new(replica_id, sequence)
+  let wire : WireIdentity = @json.from_json(json)
+  guard wire.replica_id != "" && wire.sequence >= 0 else {
+    fail("identity is invalid")
+  }
+  @core.RawVersion::new(wire.replica_id, wire.sequence)
 }
 
 ///|
@@ -654,21 +744,13 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
     guard exact_object_fields(object, ["schema", "format", "entries"]) else {
       fail("version envelope contains missing or unknown fields")
     }
-    let schema : Int = @json.from_json(
-      object.get("schema").unwrap_or(Json::null()),
-    )
-    let format : String = @json.from_json(
-      object.get("format").unwrap_or(Json::null()),
-    )
-    guard schema == 1 && format == text_version_format else {
+    let envelope : WireVersionEnvelope = @json.from_json(root)
+    guard envelope.schema == 1 && envelope.format == text_version_format else {
       fail("unsupported version envelope")
     }
-    let values : Array[Json] = @json.from_json(
-      object.get("entries").unwrap_or(Json::null()),
-    )
     let entries : Array[VersionEntry] = []
     let seen : Map[String, Bool] = Map([])
-    for value in values {
+    for value in envelope.entries {
       let raw = decode_identity(value)
       guard seen.get(raw.agent) is None else { fail("duplicate version entry") }
       seen[raw.agent] = true
@@ -758,13 +840,11 @@ fn decode_op(json : Json) -> @core.Op raise {
   ]) else {
     fail("operation contains missing or unknown fields")
   }
-  let id = decode_identity(object.get("id").unwrap_or(Json::null()))
-  let parent_values : Array[Json] = @json.from_json(
-    object.get("parents").unwrap_or(Json::null()),
-  )
+  let wire : WireOperation = @json.from_json(json)
+  let id = decode_identity(wire.id)
   let parents : Array[@core.RawVersion] = []
   let seen_parents : Map[String, Bool] = Map([])
-  for value in parent_values {
+  for value in wire.parents {
     let parent = decode_identity(value)
     guard seen_parents.get(raw_key(parent)) is None else {
       fail("duplicate parent")
@@ -772,20 +852,11 @@ fn decode_op(json : Json) -> @core.Op raise {
     seen_parents[raw_key(parent)] = true
     parents.push(parent)
   }
-  let kind : String = @json.from_json(
-    object.get("kind").unwrap_or(Json::null()),
-  )
-  let origin_left = decode_optional_identity(
-    object.get("origin_left").unwrap_or(Json::null()),
-  )
-  let origin_right = decode_optional_identity(
-    object.get("origin_right").unwrap_or(Json::null()),
-  )
-  match kind {
+  let origin_left = decode_optional_identity(wire.origin_left)
+  let origin_right = decode_optional_identity(wire.origin_right)
+  match wire.kind {
     "insert" => {
-      let content : String = @json.from_json(
-        object.get("content").unwrap_or(Json::null()),
-      )
+      let content : String = @json.from_json(wire.content)
       @core.Op::new_insert(
         0,
         parents,
@@ -797,13 +868,13 @@ fn decode_op(json : Json) -> @core.Op raise {
       )
     }
     "delete" => {
-      guard object.get("content") is Some(Json::Null) && origin_right is None else {
+      guard wire.content is Json::Null && origin_right is None else {
         fail("delete fields are invalid")
       }
       @core.Op::new_delete(0, parents, id.agent, id.seq, origin_left)
     }
     "undelete" => {
-      guard object.get("content") is Some(Json::Null) && origin_right is None else {
+      guard wire.content is Json::Null && origin_right is None else {
         fail("undelete fields are invalid")
       }
       @core.Op::new_undelete(0, parents, id.agent, id.seq, origin_left)
@@ -813,8 +884,9 @@ fn decode_op(json : Json) -> @core.Op raise {
 }
 
 ///|
-pub fn SyncMessage::from_json_string(
+fn decode_sync_json(
   json_str : String,
+  limits : @sync.Limits,
 ) -> SyncMessage raise TextError {
   if !is_well_formed_utf16(json_str) {
     raise TextError::SyncFailed(
@@ -822,7 +894,6 @@ pub fn SyncMessage::from_json_string(
     )
   }
   let encoded_size = @utf8.encode(json_str).length()
-  let limits : @sync.Limits = @sync.Limits::default()
   if encoded_size > limits.max_encoded_bytes() {
     raise TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
@@ -843,37 +914,31 @@ pub fn SyncMessage::from_json_string(
     ]) else {
       fail("sync envelope contains missing or unknown fields")
     }
-    let schema : Int = @json.from_json(
-      object.get("schema").unwrap_or(Json::null()),
-    )
-    let format : String = @json.from_json(
-      object.get("format").unwrap_or(Json::null()),
-    )
-    guard schema == 1 && format == text_sync_format else {
+    let envelope : WireSyncEnvelope = @json.from_json(root)
+    guard envelope.schema == 1 && envelope.format == text_sync_format else {
       fail("unsupported sync envelope")
     }
-    let operation_values : Array[Json] = @json.from_json(
-      object.get("operations").unwrap_or(Json::null()),
-    )
-    guard operation_values.length() <= limits.max_decoded_operations() else {
+    guard envelope.operations.length() <= limits.max_decoded_operations() else {
       raise @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::DecodedOperations,
         limit=limits.max_decoded_operations(),
-        actual=operation_values.length(),
+        actual=envelope.operations.length(),
       )
     }
     let operations : Array[@core.Op] = []
-    for value in operation_values {
+    for value in envelope.operations {
       operations.push(decode_op(value))
     }
-    let head_values : Array[Json] = @json.from_json(
-      object.get("heads").unwrap_or(Json::null()),
-    )
     let heads : Array[@core.RawVersion] = []
-    for value in head_values {
+    for value in envelope.heads {
       heads.push(decode_identity(value))
     }
-    SyncMessage::SyncMessage(operations, heads, Some(encoded_size))
+    SyncMessage::SyncMessage(
+      operations,
+      heads,
+      Some(encoded_size),
+      limits=limits,
+    )
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
       raise TextError::SyncFailed(@sync.Failure::MalformedMessage(detail~))
@@ -899,10 +964,30 @@ pub fn SyncMessage::from_json_string(
 }
 
 ///|
+/// Decode a synchronization message using the default protocol limits.
+///
+/// Use `TextState::sync().decode_json(...)` when decoding for a receiver with
+/// explicitly configured synchronization limits.
+pub fn SyncMessage::from_json_string(
+  json_str : String,
+) -> SyncMessage raise TextError {
+  decode_sync_json(json_str, @sync.Limits::default())
+}
+
+///|
 fn current_heads(doc : TextState) -> Array[@core.RawVersion] raise TextError {
   doc.inner.get_frontier_raw() catch {
     error => raise TextError::from_document_error(error, doc.len())
   }
+}
+
+///|
+/// Decode synchronization JSON using this receiver's configured limits.
+pub fn SyncSession::decode_json(
+  self : SyncSession,
+  json_str : String,
+) -> SyncMessage raise TextError {
+  decode_sync_json(json_str, self.doc.sync_limits)
 }
 
 ///|
@@ -971,9 +1056,9 @@ fn prepare_sync(
     )
   }
   let local_payload_map = local_payloads(local_ops)
-  let candidates : Map[String, @core.Op] = Map([])
+  let candidates : Map[String, SyncCandidate] = Map([])
   for pending in pending_records {
-    candidates[raw_key(op_identity(pending))] = pending
+    candidates[raw_key(op_identity(pending))] = FromPending(pending)
   }
   let mut duplicates = 0
   for op in message.operations {
@@ -994,19 +1079,23 @@ fn prepare_sync(
       None =>
         match candidates.get(key) {
           Some(existing) =>
-            if op_payload_key(existing) == payload {
+            if op_payload_key(existing.raw()) == payload {
               duplicates = duplicates + 1
+              candidates[key] = existing.observe_message(op)
             } else {
               raise @sync.Failure::ConflictingIdentity(
                 replica_id=id.agent,
                 sequence=id.seq,
               )
             }
-          None => candidates[key] = op
+          None => candidates[key] = FromMessage(op)
         }
     }
   }
-  let all_candidates = candidates.values().to_array()
+  let all_candidates : Array[@core.Op] = []
+  for candidate in candidates.values() {
+    all_candidates.push(candidate.raw())
+  }
   let known_ops : Map[String, @core.Op] = Map([])
   for local_op in local_ops {
     known_ops[raw_key(op_identity(local_op))] = local_op
@@ -1019,13 +1108,20 @@ fn prepare_sync(
   let applicable : Array[ApplicableOp] = []
   let pending : Array[@core.Op] = []
   for op in ordered {
-    let parsed = parse_candidate(op, local_payload_map, resolved, known_ops)
+    let candidate = candidates.get(raw_key(op_identity(op))).unwrap()
+    let parsed = parse_sync_candidate(
+      candidate,
+      local_payload_map,
+      resolved,
+      known_ops,
+    )
     match parsed {
       Apply(applicable_op) => {
         resolved[raw_key(op_identity(op))] = ()
         applicable.push(applicable_op)
       }
       Defer(pending_op) => pending.push(pending_op)
+      DiscardInvalidPending => ()
     }
   }
   if pending.length() > limits.max_pending_operations() {
