@@ -2,8 +2,8 @@
 
 ///|
 test "document: insert and read text" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.insert_text(node, 0, "Hello")
   inspect(doc.get_text(node), content="Hello")
   inspect(doc.text_len(node), content="5")
@@ -11,8 +11,8 @@ test "document: insert and read text" {
 
 ///|
 test "document: delete text" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.insert_text(node, 0, "Hello")
   doc.delete_text(node, 1)
   inspect(doc.get_text(node), content="Hllo")
@@ -20,8 +20,8 @@ test "document: delete text" {
 
 ///|
 test "document: text on deleted node fails" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.delete_node(node)
   let result = try {
     doc.insert_text(node, 0, "x")
@@ -34,9 +34,9 @@ test "document: text on deleted node fails" {
 
 ///|
 test "document: multiple blocks independent" {
-  let doc = @container.Document::new("alice")
-  let n1 = doc.create_node(parent=@container.root_id)
-  let n2 = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let n1 = doc.create_node(parent=root_id)
+  let n2 = doc.create_node(parent=root_id)
   doc.insert_text(n1, 0, "AAA")
   doc.insert_text(n2, 0, "BBB")
   inspect(doc.get_text(n1), content="AAA")
@@ -45,27 +45,27 @@ test "document: multiple blocks independent" {
 
 ///|
 test "document: get_text on node without text returns empty" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   inspect(doc.get_text(node), content="")
   inspect(doc.text_len(node), content="0")
 }
 
 ///|
 test "document: tree and text ops share causal graph" {
-  let doc = @container.Document::new("alice")
-  let n1 = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let n1 = doc.create_node(parent=root_id)
   doc.insert_text(n1, 0, "AB")
   inspect(doc.get_text(n1), content="AB")
-  let n2 = doc.create_node(parent=@container.root_id)
+  let n2 = doc.create_node(parent=root_id)
   doc.insert_text(n2, 0, "X")
   inspect(doc.get_text(n2), content="X")
 }
 
 ///|
 test "document: delete from empty block fails" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   // No text inserted — delete at pos 0 of empty block is out of bounds
   let result = try {
     doc.delete_text(node, 0)
@@ -78,8 +78,8 @@ test "document: delete from empty block fails" {
 
 ///|
 test "document: insert at invalid position" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.insert_text(node, 0, "AB")
   let result = try {
     doc.insert_text(node, 5, "X")
@@ -92,9 +92,9 @@ test "document: insert at invalid position" {
 
 ///|
 test "document: interleaved LV gaps across blocks" {
-  let doc = @container.Document::new("alice")
-  let n1 = doc.create_node(parent=@container.root_id)
-  let n2 = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let n1 = doc.create_node(parent=root_id)
+  let n2 = doc.create_node(parent=root_id)
   doc.insert_text(n1, 0, "A")
   doc.insert_text(n2, 0, "X")
   doc.insert_text(n1, 1, "B")
@@ -106,8 +106,8 @@ test "document: interleaved LV gaps across blocks" {
 
 ///|
 test "document: replace_text" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.insert_text(node, 0, "Hello")
   doc.replace_text(node, "World")
   inspect(doc.get_text(node), content="World")
@@ -115,16 +115,16 @@ test "document: replace_text" {
 
 ///|
 test "document: replace_text on empty block" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.replace_text(node, "New")
   inspect(doc.get_text(node), content="New")
 }
 
 ///|
 test "document: replace_text with empty string" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.insert_text(node, 0, "Hello")
   doc.replace_text(node, "")
   inspect(doc.get_text(node), content="")
@@ -133,8 +133,8 @@ test "document: replace_text with empty string" {
 
 ///|
 test "document: text after delete_node" {
-  let doc = @container.Document::new("alice")
-  let node = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let node = doc.create_node(parent=root_id)
   doc.insert_text(node, 0, "Hello")
   inspect(doc.get_text(node), content="Hello")
   doc.delete_node(node)
@@ -151,9 +151,9 @@ test "document: text after delete_node" {
 
 ///|
 test "document: mixed two-block edits preserve sibling isolation" {
-  let doc = @container.Document::new("alice")
-  let left = doc.create_node(parent=@container.root_id)
-  let right = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let left = doc.create_node(parent=root_id)
+  let right = doc.create_node(parent=root_id)
   doc.insert_text(left, 0, "abc")
   doc.insert_text(right, 0, "XYZ")
   doc.delete_text(left, 1)
@@ -165,10 +165,10 @@ test "document: mixed two-block edits preserve sibling isolation" {
 
 ///|
 test "document: sync message replays tree and text together" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
-  let sibling = doc_a.create_node_after(parent=@container.root_id, after=node)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
+  let sibling = doc_a.create_node_after(parent=root_id, after=node)
 
   doc_a.insert_text(node, 0, "ABC")
   doc_a.insert_text(sibling, 0, "Z")
@@ -186,9 +186,9 @@ test "document: sync message replays tree and text together" {
 
 ///|
 test "document: sync message carries replace_text history" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
 
   doc_a.insert_text(node, 0, "Hello")
   doc_a.replace_text(node, "World")
@@ -202,9 +202,9 @@ test "document: sync message carries replace_text history" {
 
 ///|
 test "document: replace_text sync can expose intermediate states" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
 
   doc_a.insert_text(node, 0, "Hello")
   ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
@@ -218,6 +218,7 @@ test "document: replace_text sync can expose intermediate states" {
     doc_b.apply_remote_sync_message({
       tree_ops: [],
       text_ops: [delta.text_ops[0]],
+      encoded_size: None,
     }),
   )
   inspect(doc_b.get_text(node) != "World", content="true")
@@ -225,6 +226,7 @@ test "document: replace_text sync can expose intermediate states" {
     doc_b.apply_remote_sync_message({
       tree_ops: [],
       text_ops: delta.text_ops[1:].iter().collect(),
+      encoded_size: None,
     }),
   )
   inspect(doc_b.get_text(node), content="World")
@@ -232,20 +234,20 @@ test "document: replace_text sync can expose intermediate states" {
 
 ///|
 test "document: remote text ops buffer until tree target exists" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
 
   doc_a.insert_text(node, 0, "AB")
 
-  let text_ops = doc_a.export_text_ops()
+  let text_ops = doc_a.text_ops.copy()
   inspect(text_ops.length(), content="2")
   doc_b.apply_remote_text_op(text_ops[0])
   doc_b.apply_remote_text_op(text_ops[1])
   inspect(doc_b.get_text(node), content="")
 
-  for op in doc_a.export_ops() {
-    doc_b.apply_remote_op(op)
+  for op in doc_a.ops.copy() {
+    apply_remote_op_for_test(doc_b, op)
   }
 
   inspect(doc_b.get_text(node), content="AB")
@@ -253,18 +255,18 @@ test "document: remote text ops buffer until tree target exists" {
 
 ///|
 test "document: remote delete buffers until target insert arrives" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
 
-  for op in doc_a.export_ops() {
-    doc_b.apply_remote_op(op)
+  for op in doc_a.ops.copy() {
+    apply_remote_op_for_test(doc_b, op)
   }
 
   doc_a.insert_text(node, 0, "AB")
   doc_a.delete_text(node, 1)
 
-  let text_ops = doc_a.export_text_ops()
+  let text_ops = doc_a.text_ops.copy()
   inspect(text_ops.length(), content="3")
   doc_b.apply_remote_text_op(text_ops[2])
   inspect(doc_b.get_text(node), content="")
@@ -278,10 +280,10 @@ test "document: remote delete buffers until target insert arrives" {
 
 ///|
 test "document: export_sync_message_since sends only missing mixed history" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let left = doc_a.create_node(parent=@container.root_id)
-  let right = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let left = doc_a.create_node(parent=root_id)
+  let right = doc_a.create_node(parent=root_id)
 
   doc_a.insert_text(left, 0, "AB")
   ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
@@ -306,9 +308,9 @@ test "document: export_sync_message_since sends only missing mixed history" {
 
 ///|
 test "document: remote tree ops buffer until causal parents arrive" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
   doc_a.delete_node(node)
 
   let message = doc_a.export_sync_message()
@@ -320,6 +322,7 @@ test "document: remote tree ops buffer until causal parents arrive" {
     doc_b.apply_remote_sync_message({
       tree_ops: [message.tree_ops[1]],
       text_ops: [],
+      encoded_size: None,
     }),
   )
   inspect(doc_b.is_alive(node), content="false")
@@ -327,6 +330,7 @@ test "document: remote tree ops buffer until causal parents arrive" {
     doc_b.apply_remote_sync_message({
       tree_ops: [message.tree_ops[0]],
       text_ops: [],
+      encoded_size: None,
     }),
   )
   inspect(doc_b.is_alive(node), content="false")
@@ -334,9 +338,9 @@ test "document: remote tree ops buffer until causal parents arrive" {
 
 ///|
 test "document: remote text ops buffer until causal parents arrive" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
 
   ignore(doc_b.apply_remote_sync_message(doc_a.export_sync_message()))
   let vv = doc_b.get_version_vector()
@@ -353,6 +357,7 @@ test "document: remote text ops buffer until causal parents arrive" {
     doc_b.apply_remote_sync_message({
       tree_ops: [],
       text_ops: [message.text_ops[1]],
+      encoded_size: None,
     }),
   )
   inspect(doc_b.get_text(node), content="")
@@ -360,6 +365,7 @@ test "document: remote text ops buffer until causal parents arrive" {
     doc_b.apply_remote_sync_message({
       tree_ops: [],
       text_ops: [message.text_ops[0]],
+      encoded_size: None,
     }),
   )
   inspect(doc_b.get_text(node), content="AB")
@@ -367,9 +373,9 @@ test "document: remote text ops buffer until causal parents arrive" {
 
 ///|
 test "document: SyncReport counts applied, duplicate, and pending ops" {
-  let doc_a = @container.Document::new("alice")
-  let doc_b = @container.Document::new("bob")
-  let node = doc_a.create_node(parent=@container.root_id)
+  let doc_a = Document::new("alice")
+  let doc_b = Document::new("bob")
+  let node = doc_a.create_node(parent=root_id)
   doc_a.insert_text(node, 0, "AB")
   let message = doc_a.export_sync_message()
 
@@ -379,7 +385,7 @@ test "document: SyncReport counts applied, duplicate, and pending ops" {
   inspect(report_first.applied_text_ops, content="2")
   inspect(report_first.duplicate_ops, content="0")
   inspect(report_first.pending_ops, content="0")
-  inspect(doc_b.pending_sync_ops().length(), content="0")
+  inspect(doc_b.pending_sync_ops.copy().length(), content="0")
 
   // Re-delivering the same payload is a full no-op.
   let report_dup = doc_b.apply_remote_sync_message(message)
@@ -389,12 +395,13 @@ test "document: SyncReport counts applied, duplicate, and pending ops" {
   inspect(report_dup.pending_ops, content="0")
 
   // Delivering a text op whose tree parent is missing defers it.
-  let doc_c = @container.Document::new("carol")
+  let doc_c = Document::new("carol")
   let report_pending = doc_c.apply_remote_sync_message({
     tree_ops: [],
     text_ops: [message.text_ops[0]],
+    encoded_size: None,
   })
   inspect(report_pending.applied_text_ops, content="0")
   inspect(report_pending.pending_ops, content="1")
-  inspect(doc_c.pending_sync_ops().length(), content="1")
+  inspect(doc_c.pending_sync_ops.copy().length(), content="1")
 }

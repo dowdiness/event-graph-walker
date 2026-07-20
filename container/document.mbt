@@ -4,53 +4,60 @@
 /// Lamport timestamps, version tracking, and multi-peer synchronization.
 
 ///|
-/// Re-export TreeNodeId so consumers don't need the internal package.
-pub using @mt {type TreeNodeId}
+/// Stable façade-owned tree node identifier.
+pub(all) struct TreeNodeId {
+  priv inner : @mt.TreeNodeId
+} derive(Eq, Hash, Debug, Compare)
 
 ///|
-/// Re-export the root sentinel so consumers don't need the internal package.
-pub let root_id : @mt.TreeNodeId = @mt.root_id
-
-///|
-/// Re-export the trash sentinel so consumers don't need the internal package.
-pub let trash_id : @mt.TreeNodeId = @mt.trash_id
-
-///|
-/// Stable string key for a node id, safe to use as a Map key.
-/// Format: "agent:counter".
-///
-/// **Important:** `agent` must not contain `:` — the JS bridge splits on the
-/// last `:` to recover `{agent, counter}`. Pass `Document::new` a replica_id
-/// without colons (e.g. a UUID or "user/device" with `/` separator).
-pub fn tree_node_id_key(id : @mt.TreeNodeId) -> String {
-  id.agent + ":" + id.counter.to_string()
+/// Construct a validated non-sentinel node identifier.
+pub fn TreeNodeId::TreeNodeId(
+  replica_id : String,
+  sequence : Int,
+) -> TreeNodeId raise DocumentError {
+  if replica_id == "" || sequence < 0 {
+    raise DocumentError::Internal(detail="invalid tree node identity")
+  }
+  { inner: { agent: replica_id, counter: sequence } }
 }
 
 ///|
-/// Equality check for node ids.
-/// Use this instead of `==` when TreeNodeId's Eq impl is not visible.
-pub fn tree_node_id_eq(a : @mt.TreeNodeId, b : @mt.TreeNodeId) -> Bool {
-  a.agent == b.agent && a.counter == b.counter
+fn TreeNodeId::from_inner(inner : @mt.TreeNodeId) -> TreeNodeId {
+  { inner, }
 }
 
 ///|
-/// Construct a TreeNodeId from agent and counter.
-/// Inverse of `tree_node_id_key`.
-pub fn tree_node_id_new(agent : String, counter : Int) -> @mt.TreeNodeId {
-  { agent, counter }
+fn TreeNodeId::to_inner(self : TreeNodeId) -> @mt.TreeNodeId {
+  self.inner
 }
 
 ///|
-/// Extract the agent field from a TreeNodeId.
-pub fn tree_node_id_agent(id : @mt.TreeNodeId) -> String {
-  id.agent
+pub fn TreeNodeId::replica_id(self : TreeNodeId) -> String {
+  self.inner.agent
 }
 
 ///|
-/// Extract the counter field from a TreeNodeId.
-pub fn tree_node_id_counter(id : @mt.TreeNodeId) -> Int {
-  id.counter
+pub fn TreeNodeId::sequence(self : TreeNodeId) -> Int {
+  self.inner.counter
 }
+
+///|
+pub fn TreeNodeId::key(self : TreeNodeId) -> String {
+  internal_node_key(self.inner)
+}
+
+///|
+fn internal_node_key(id : @mt.TreeNodeId) -> String {
+  id.agent.length().to_string() + ":" + id.agent + ":" + id.counter.to_string()
+}
+
+///|
+/// Virtual tree root.
+pub let root_id : TreeNodeId = TreeNodeId::from_inner(@mt.root_id)
+
+///|
+/// Virtual trash root.
+pub let trash_id : TreeNodeId = TreeNodeId::from_inner(@mt.trash_id)
 
 ///|
 /// A collaborative tree document backed by the movable-tree CRDT.
@@ -63,20 +70,20 @@ priv struct PropertyKey {
 } derive(Eq, Hash)
 
 ///|
-pub(all) struct BlockTextOp {
+priv struct BlockTextOp {
   block : @mt.TreeNodeId
   op : TextOp
 }
 
 ///|
-pub(all) struct VersionedTreeOp {
+priv struct VersionedTreeOp {
   version : @core.RawVersion
   parents : Array[@core.RawVersion]
   op : @mt.TreeOp
 }
 
 ///|
-pub(all) struct VersionedBlockTextOp {
+priv struct VersionedBlockTextOp {
   version : @core.RawVersion
   parents : Array[@core.RawVersion]
   block : @mt.TreeNodeId
@@ -85,8 +92,42 @@ pub(all) struct VersionedBlockTextOp {
 
 ///|
 pub(all) struct SyncMessage {
-  tree_ops : Array[VersionedTreeOp]
-  text_ops : Array[VersionedBlockTextOp]
+  priv tree_ops : Array[VersionedTreeOp]
+  priv text_ops : Array[VersionedBlockTextOp]
+  priv encoded_size : Int?
+}
+
+///|
+/// Custom constructor for an immutable sync message.
+fn SyncMessage::SyncMessage(
+  tree_ops : Array[VersionedTreeOp],
+  text_ops : Array[VersionedBlockTextOp],
+  encoded_size : Int?,
+) -> SyncMessage {
+  { tree_ops: tree_ops.copy(), text_ops: text_ops.copy(), encoded_size }
+}
+
+///|
+/// Opaque version vector for container synchronization and checkout.
+pub(all) struct Version {
+  priv inner : @cg.VersionVector
+} derive(Debug, Eq)
+
+///|
+fn Version::Version(inner : @cg.VersionVector) -> Version {
+  { inner, }
+}
+
+///|
+/// Empty document version.
+pub fn Version::empty() -> Version {
+  Version(@cg.VersionVector::new())
+}
+
+///|
+/// Sync session bound to one document.
+pub(all) struct SyncSession {
+  priv document : Document
 }
 
 ///|
@@ -96,40 +137,101 @@ priv enum SyncOpRecord {
 }
 
 ///|
-pub(all) enum PendingSyncOp {
+priv enum PendingSyncOp {
   Tree(VersionedTreeOp)
   Text(VersionedBlockTextOp)
 }
 
 ///|
-/// Summary of an `apply_remote_sync_message` call.
+/// Provenance of a synchronization candidate during pure preparation.
+priv enum SyncCandidate {
+  FromPending(SyncOpRecord)
+  FromMessage(SyncOpRecord)
+  FromPendingAndMessage(SyncOpRecord)
+}
+
+///|
+/// A synchronization operation whose receiver-specific causal and text
+/// reference invariants have been parsed successfully.
 ///
-/// - `applied_tree_ops` / `applied_text_ops` count ops that landed in the
-///   document state, whether on the initial pass or a later `flush_pending_sync_ops`
-///   iteration.
+/// Keeping this distinct from `SyncOpRecord` makes it impossible for the
+/// imperative apply shell to consume an unparsed wire record.
+priv enum ApplicableSyncOp {
+  ApplyTree(VersionedTreeOp)
+  ApplyText(VersionedBlockTextOp)
+}
+
+///|
+fn ApplicableSyncOp::raw(self : ApplicableSyncOp) -> SyncOpRecord {
+  match self {
+    ApplyTree(op) => Tree(op)
+    ApplyText(op) => Text(op)
+  }
+}
+
+///|
+fn SyncCandidate::raw(self : SyncCandidate) -> SyncOpRecord {
+  match self {
+    FromPending(record) | FromMessage(record) | FromPendingAndMessage(record) =>
+      record
+  }
+}
+
+///|
+fn SyncCandidate::observe_message(
+  self : SyncCandidate,
+  record : SyncOpRecord,
+) -> SyncCandidate {
+  match self {
+    FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(record)
+    FromMessage(_) => FromMessage(record)
+  }
+}
+
+///|
+/// A fully validated, receiver-specific synchronization transition.
+priv struct PreparedSync {
+  applicable : Array[ApplicableSyncOp]
+  pending : Array[SyncOpRecord]
+  duplicate_operations : Int
+}
+
+///|
+/// Summary of a `SyncSession::apply` call.
+///
+/// - `applied_tree_ops` / `applied_text_ops` count parsed operations committed
+///   to the document, including previously pending operations that became
+///   applicable during this call.
 /// - `duplicate_ops` counts ops whose version was already recorded (silent
 ///   idempotent skip — the frontier did not advance for them).
 /// - `pending_ops` is the number of ops that remain in the sync pending queue
-///   after the flush, waiting for ancestors that have not yet arrived. Inspect
-///   via `Document::pending_sync_ops` when `pending_ops > 0`.
-///
-/// Text ops that land in the causal graph but whose target block is not yet
-/// in the tree are routed to a separate per-block queue (`pending_text_ops`)
-/// and are still counted as `applied_text_ops` here — that queue is an
-/// internal handler-routing detail, not a sync-protocol pending state.
-///
-/// `applied_*_ops` reflects sync-layer version dedup, not payload-layer
-/// state change. If the same op was previously ingested via the direct
-/// `apply_remote_op` / `apply_remote_text_op` APIs and then arrives via a
-/// sync message under a fresh version record, it will be counted as applied
-/// even though the payload-level dedup makes the actual mutation a no-op.
-/// Mixing direct and sync ingestion of the same op stream is therefore not
-/// recommended if these counters need to mirror real state changes.
+/// after the call, waiting for causal dependencies that have not yet arrived.
+/// Inspect it via `SyncSession::pending_sync_count`.
 pub(all) struct SyncReport {
-  applied_tree_ops : Int
-  applied_text_ops : Int
-  duplicate_ops : Int
-  pending_ops : Int
+  priv applied_tree_ops : Int
+  priv applied_text_ops : Int
+  priv duplicate_ops : Int
+  priv pending_ops : Int
+}
+
+///|
+pub fn SyncReport::applied_tree_operations(self : SyncReport) -> Int {
+  self.applied_tree_ops
+}
+
+///|
+pub fn SyncReport::applied_text_operations(self : SyncReport) -> Int {
+  self.applied_text_ops
+}
+
+///|
+pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int {
+  self.duplicate_ops
+}
+
+///|
+pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
+  self.pending_ops
 }
 
 ///|
@@ -271,7 +373,7 @@ fn op_key(op : @mt.TreeOp) -> String {
 
 ///|
 fn text_op_key(op : BlockTextOp) -> String {
-  let block = encode_field(tree_node_id_key(op.block))
+  let block = encode_field(internal_node_key(op.block))
   match op.op {
     Insert(insert_op) =>
       "text-insert|" +
@@ -307,7 +409,11 @@ fn text_op_key(op : BlockTextOp) -> String {
 
 ///|
 fn raw_version_key(version : @core.RawVersion) -> String {
-  version.to_string()
+  version.agent.length().to_string() +
+  ":" +
+  version.agent +
+  ":" +
+  version.seq.to_string()
 }
 
 ///|
@@ -340,6 +446,7 @@ pub struct Document {
   priv txn_buffer : Array[UndoItem]
   priv mut tracking_enabled : Bool
   priv mut undo_execution_mode : Bool
+  priv sync_limits : @sync.Limits
 }
 
 ///|
@@ -351,6 +458,15 @@ pub struct Document {
 /// Reusing the same id on two replicas causes node-id collisions and silent op
 /// loss during synchronization.
 pub fn Document::new(replica_id : String) -> Document raise DocumentError {
+  Document::new_with_sync_limits(replica_id, @sync.Limits::default())
+}
+
+///|
+/// Create a document with explicit synchronization resource limits.
+pub fn Document::new_with_sync_limits(
+  replica_id : String,
+  limits : @sync.Limits,
+) -> Document raise DocumentError {
   if replica_id == "" {
     raise EmptyReplicaId
   }
@@ -377,7 +493,35 @@ pub fn Document::new(replica_id : String) -> Document raise DocumentError {
     txn_buffer: [],
     tracking_enabled: true,
     undo_execution_mode: false,
+    sync_limits: limits,
   }
+}
+
+///|
+/// Return a live, read-only view of this document's causal operation graph.
+///
+/// The snapshot reflects later tree and block-text mutations. Values returned
+/// from the snapshot own their arrays and may be retained safely.
+pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
+  let graph = self.graph
+  @history.CausalSnapshot::CausalSnapshot(
+    fn() { graph.op_count() },
+    fn(lv) {
+      match graph.get_entry(lv) {
+        Some(entry) =>
+          Some(
+            @history.SnapshotEntry::SnapshotEntry(
+              entry.parents,
+              entry.agent,
+              entry.seq,
+            ),
+          )
+        None => None
+      }
+    },
+    fn() { graph.get_frontier().0.copy() },
+    fn(lv) { graph.children_count(lv) },
+  )
 }
 
 ///|
@@ -449,14 +593,22 @@ fn Document::record_op(self : Document, op : @mt.TreeOp) -> Bool {
     Some(true) => false
     _ => {
       self.seen_ops.set(key, true)
-      let mut insert_idx = self.ops.length()
-      for i = 0; i < self.ops.length(); i = i + 1 {
-        if compare_ops(op, self.ops[i]) < 0 {
-          insert_idx = i
-          break
+      if self.ops.is_empty() ||
+        compare_ops(self.ops[self.ops.length() - 1], op) <= 0 {
+        self.ops.push(op)
+      } else {
+        let mut low = 0
+        let mut high = self.ops.length()
+        while low < high {
+          let middle = low + (high - low) / 2
+          if compare_ops(self.ops[middle], op) <= 0 {
+            low = middle + 1
+          } else {
+            high = middle
+          }
         }
+        self.ops.insert(low, op)
       }
-      self.ops.insert(insert_idx, op)
       true
     }
   }
@@ -469,14 +621,22 @@ fn Document::record_text_op(self : Document, op : BlockTextOp) -> Bool {
     Some(true) => false
     _ => {
       self.seen_text_ops.set(key, true)
-      let mut insert_idx = self.text_ops.length()
-      for i = 0; i < self.text_ops.length(); i = i + 1 {
-        if compare_text_ops(op, self.text_ops[i]) < 0 {
-          insert_idx = i
-          break
+      if self.text_ops.is_empty() ||
+        compare_text_ops(self.text_ops[self.text_ops.length() - 1], op) <= 0 {
+        self.text_ops.push(op)
+      } else {
+        let mut low = 0
+        let mut high = self.text_ops.length()
+        while low < high {
+          let middle = low + (high - low) / 2
+          if compare_text_ops(self.text_ops[middle], op) <= 0 {
+            low = middle + 1
+          } else {
+            high = middle
+          }
         }
+        self.text_ops.insert(low, op)
       }
-      self.text_ops.insert(insert_idx, op)
       true
     }
   }
@@ -509,11 +669,6 @@ fn Document::record_sync_text_op(
       true
     }
   }
-}
-
-///|
-fn Document::defer_pending_sync_op(self : Document, op : PendingSyncOp) -> Unit {
-  self.pending_sync_ops.push(op)
 }
 
 ///|
@@ -615,43 +770,6 @@ fn Document::try_apply_versioned_text_op(
 }
 
 ///|
-fn Document::try_apply_pending_sync_op(
-  self : Document,
-  op : PendingSyncOp,
-) -> Bool {
-  match op {
-    Tree(tree_op) => self.try_apply_versioned_tree_op(tree_op)
-    Text(text_op) => self.try_apply_versioned_text_op(text_op)
-  }
-}
-
-///|
-/// Drain pending sync ops that have become applicable and report how many
-/// tree/text ops were applied during the drain.
-fn Document::flush_pending_sync_ops(self : Document) -> (Int, Int) {
-  let mut applied_tree = 0
-  let mut applied_text = 0
-  let mut progressed = true
-  while progressed {
-    progressed = false
-    let pending = self.pending_sync_ops.copy()
-    self.pending_sync_ops = []
-    for op in pending {
-      if self.try_apply_pending_sync_op(op) {
-        progressed = true
-        match op {
-          Tree(_) => applied_tree = applied_tree + 1
-          Text(_) => applied_text = applied_text + 1
-        }
-      } else {
-        self.defer_pending_sync_op(op)
-      }
-    }
-  }
-  (applied_tree, applied_text)
-}
-
-///|
 fn Document::versioned_sync_ops_between(
   self : Document,
   from : @core.Frontier,
@@ -673,12 +791,12 @@ fn Document::versioned_sync_ops_between(
         )
     }
   }
-  { tree_ops, text_ops }
+  SyncMessage::SyncMessage(tree_ops, text_ops, None)
 }
 
 ///|
 fn Document::pending_text_key(_self : Document, id : @mt.TreeNodeId) -> String {
-  tree_node_id_key(id)
+  internal_node_key(id)
 }
 
 ///|
@@ -763,21 +881,6 @@ fn Document::apply_property_op(
 fn Document::apply_move_op(self : Document, op : @mt.TreeMoveOp) -> Unit {
   self.log.apply(self.tree, op)
   self.reapply_properties()
-}
-
-///|
-/// Register a remote operation in the local Lamport clock and causal graph.
-fn Document::observe_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
-  let (timestamp, agent) = match op {
-    @mt.Move(move_op) => (move_op.timestamp, move_op.agent)
-    @mt.SetProperty(prop_op) => (prop_op.timestamp, prop_op.agent)
-  }
-  if timestamp > self.lamport_clock {
-    self.lamport_clock = timestamp
-  }
-  let frontier = self.graph.get_frontier()
-  let parents = frontier.0
-  let _ = self.graph.add_version(parents, agent) catch { _ => 0 }
 }
 
 ///|
@@ -916,8 +1019,9 @@ fn Document::position_before_sibling(
 /// Returns the id of the newly created node.
 pub fn Document::create_node(
   self : Document,
-  parent~ : @mt.TreeNodeId,
-) -> @mt.TreeNodeId raise DocumentError {
+  parent~ : TreeNodeId,
+) -> TreeNodeId raise DocumentError {
+  let parent = parent.to_inner()
   self.with_implicit_transaction(() => {
     if !self.is_local_parent_valid(parent) {
       raise ParentNotFound
@@ -937,7 +1041,7 @@ pub fn Document::create_node(
     let _ = self.record_op(@mt.Move(move_op))
     let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
     self.record_undo_item(TreeCreate(target=id, parent~, pos=position))
-    id
+    TreeNodeId::from_inner(id)
   })
 }
 
@@ -948,9 +1052,11 @@ pub fn Document::create_node(
 /// Returns the id of the newly created node.
 pub fn Document::create_node_after(
   self : Document,
-  parent~ : @mt.TreeNodeId,
-  after~ : @mt.TreeNodeId,
-) -> @mt.TreeNodeId raise DocumentError {
+  parent~ : TreeNodeId,
+  after~ : TreeNodeId,
+) -> TreeNodeId raise DocumentError {
+  let parent = parent.to_inner()
+  let after = after.to_inner()
   self.with_implicit_transaction(() => {
     if !self.is_local_parent_valid(parent) {
       raise ParentNotFound
@@ -970,7 +1076,7 @@ pub fn Document::create_node_after(
     let _ = self.record_op(@mt.Move(move_op))
     let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
     self.record_undo_item(TreeCreate(target=id, parent~, pos=position))
-    id
+    TreeNodeId::from_inner(id)
   })
 }
 
@@ -1031,9 +1137,11 @@ fn Document::snapshot_move_state(
 /// Move a node to be the last child of a new parent.
 pub fn Document::move_node(
   self : Document,
-  target~ : @mt.TreeNodeId,
-  new_parent~ : @mt.TreeNodeId,
+  target~ : TreeNodeId,
+  new_parent~ : TreeNodeId,
 ) -> Unit raise DocumentError {
+  let target = target.to_inner()
+  let new_parent = new_parent.to_inner()
   self.with_implicit_transaction(() => {
     self.validate_move(target, new_parent)
     let snapshot = self.snapshot_move_state(target)
@@ -1059,10 +1167,13 @@ pub fn Document::move_node(
 /// Move a node to be immediately after a given sibling under the specified parent.
 pub fn Document::move_node_after(
   self : Document,
-  target~ : @mt.TreeNodeId,
-  parent~ : @mt.TreeNodeId,
-  after~ : @mt.TreeNodeId,
+  target~ : TreeNodeId,
+  parent~ : TreeNodeId,
+  after~ : TreeNodeId,
 ) -> Unit raise DocumentError {
+  let target = target.to_inner()
+  let parent = parent.to_inner()
+  let after = after.to_inner()
   self.with_implicit_transaction(() => {
     self.validate_move(target, parent)
     let snapshot = self.snapshot_move_state(target)
@@ -1088,10 +1199,13 @@ pub fn Document::move_node_after(
 /// Move a node to be immediately before a given sibling under the specified parent.
 pub fn Document::move_node_before(
   self : Document,
-  target~ : @mt.TreeNodeId,
-  parent~ : @mt.TreeNodeId,
-  before~ : @mt.TreeNodeId,
+  target~ : TreeNodeId,
+  parent~ : TreeNodeId,
+  before~ : TreeNodeId,
 ) -> Unit raise DocumentError {
+  let target = target.to_inner()
+  let parent = parent.to_inner()
+  let before = before.to_inner()
   self.with_implicit_transaction(() => {
     self.validate_move(target, parent)
     let snapshot = self.snapshot_move_state(target)
@@ -1117,8 +1231,9 @@ pub fn Document::move_node_before(
 /// Delete a node by moving it to the trash.
 pub fn Document::delete_node(
   self : Document,
-  target : @mt.TreeNodeId,
+  target : TreeNodeId,
 ) -> Unit raise DocumentError {
+  let target = target.to_inner()
   self.with_implicit_transaction(() => {
     if !self.tree.contains(target) {
       raise TargetNotFound
@@ -1149,24 +1264,25 @@ pub fn Document::delete_node(
 /// Get the children of a node, sorted by fractional index.
 pub fn Document::children(
   self : Document,
-  parent : @mt.TreeNodeId,
-) -> Array[@mt.TreeNodeId] {
-  self.tree.children(parent)
+  parent : TreeNodeId,
+) -> Array[TreeNodeId] {
+  self.tree
+  .children(parent.to_inner())
+  .map(fn(id) { TreeNodeId::from_inner(id) })
 }
 
 ///|
 /// Get the parent of a node, or None if the node doesn't exist.
-pub fn Document::parent(
-  self : Document,
-  id : @mt.TreeNodeId,
-) -> @mt.TreeNodeId? {
-  self.tree.parent(id)
+pub fn Document::parent(self : Document, id : TreeNodeId) -> TreeNodeId? {
+  self.tree
+  .parent(id.to_inner())
+  .map(fn(value) { TreeNodeId::from_inner(value) })
 }
 
 ///|
 /// Check whether a node is alive (exists and not in the trash).
-pub fn Document::is_alive(self : Document, id : @mt.TreeNodeId) -> Bool {
-  self.tree.is_alive(id)
+pub fn Document::is_alive(self : Document, id : TreeNodeId) -> Bool {
+  self.tree.is_alive(id.to_inner())
 }
 
 ///|
@@ -1176,14 +1292,15 @@ pub fn Document::is_alive(self : Document, id : @mt.TreeNodeId) -> Bool {
 /// an undo item so the stack reflects only mutations that actually landed.
 pub fn Document::set_property(
   self : Document,
-  id : @mt.TreeNodeId,
+  id : TreeNodeId,
   key : String,
   value : String,
 ) -> Unit {
+  let id = id.to_inner()
   if !self.tree.contains(id) {
     return
   }
-  let old_value = self.get_property(id, key)
+  let old_value = self.tree.get_property(id, key)
   let _result : Result[Unit, DocumentError] = try {
     self.with_implicit_transaction(() => {
       self.emit_property_op(id, key, value)
@@ -1201,16 +1318,10 @@ pub fn Document::set_property(
 /// Get a property from a node.
 pub fn Document::get_property(
   self : Document,
-  id : @mt.TreeNodeId,
+  id : TreeNodeId,
   key : String,
 ) -> String? {
-  self.tree.get_property(id, key)
-}
-
-///|
-/// Export all operations in timestamp order, suitable for sending to a remote peer.
-pub fn Document::export_ops(self : Document) -> Array[@mt.TreeOp] {
-  self.ops.copy()
+  self.tree.get_property(id.to_inner(), key)
 }
 
 ///|
@@ -1218,7 +1329,7 @@ pub fn Document::export_ops(self : Document) -> Array[@mt.TreeOp] {
 ///
 /// Tree ops are replayed before text ops on receipt so newly-created blocks
 /// exist before their text history is applied.
-pub fn Document::export_sync_message(
+fn Document::export_sync_message(
   self : Document,
 ) -> SyncMessage raise DocumentError {
   self.versioned_sync_ops_between(
@@ -1228,95 +1339,142 @@ pub fn Document::export_sync_message(
 }
 
 ///|
-pub fn Document::get_version_vector(self : Document) -> @cg.VersionVector {
+fn Document::get_version_vector(self : Document) -> @cg.VersionVector {
   @cg.VersionVector::from_frontier(self.graph, self.graph.get_frontier())
 }
 
 ///|
-pub fn Document::export_sync_message_since(
+fn Document::export_sync_message_since(
   self : Document,
   vv : @cg.VersionVector,
 ) -> SyncMessage raise DocumentError {
+  for agent in vv.agents() {
+    let sequence = vv.sequence_for(agent).unwrap()
+    if self.graph.raw_to_lv(@core.RawVersion::new(agent, sequence)) is None {
+      raise DocumentError::SyncFailed(
+        @sync.Failure::MissingDependency(replica_id=agent, sequence~),
+      )
+    }
+  }
   let from = vv.to_frontier(self.graph)
   self.versioned_sync_ops_between(from, self.graph.get_frontier())
 }
 
 ///|
-/// Apply an operation received from a remote peer.
-///
-/// The operation is recorded in the causal graph for local version tracking,
-/// then dispatched to the structural move log or the property replication layer.
-pub fn Document::apply_remote_op(self : Document, op : @mt.TreeOp) -> Unit {
-  if !self.record_op(op) {
-    return
-  }
-  self.observe_remote_op(op)
-  match op {
-    @mt.Move(move_op) => {
-      self.apply_move_op(move_op)
-      self.flush_pending_text_ops(move_op.target)
-      if move_op.target.agent == self.agent_id &&
-        move_op.target.counter >= self.next_counter {
-        self.next_counter = move_op.target.counter + 1
-      }
-    }
-    @mt.SetProperty(prop_op) => {
-      self.apply_property_op(prop_op)
-      if prop_op.target.agent == self.agent_id &&
-        prop_op.target.counter >= self.next_counter {
-        self.next_counter = prop_op.target.counter + 1
-      }
-    }
-  }
+/// Current stable version vector.
+pub fn Document::version(self : Document) -> Version {
+  Version(self.get_version_vector())
 }
 
 ///|
-/// Apply a remote sync payload in replay-safe order.
-///
-/// Returns a `SyncReport` summarising how many ops were applied, were
-/// duplicate no-ops, or remain pending because their ancestors have not yet
-/// arrived. Pending ops can be inspected via `Document::pending_sync_ops`.
-pub fn Document::apply_remote_sync_message(
-  self : Document,
+/// Obtain a synchronization session for this document.
+pub fn Document::sync(self : Document) -> SyncSession {
+  { document: self }
+}
+
+///|
+pub fn SyncSession::export_all(
+  self : SyncSession,
+) -> SyncMessage raise DocumentError {
+  let message = self.document.export_sync_message()
+  SyncMessage::SyncMessage(message.tree_ops, message.text_ops, None)
+}
+
+///|
+pub fn SyncSession::export_since(
+  self : SyncSession,
+  version : Version,
+) -> SyncMessage raise DocumentError {
+  let message = self.document.export_sync_message_since(version.inner)
+  SyncMessage::SyncMessage(message.tree_ops, message.text_ops, None)
+}
+
+///|
+pub fn SyncSession::apply(
+  self : SyncSession,
   message : SyncMessage,
-) -> SyncReport {
+) -> SyncReport raise DocumentError {
+  let limits = self.document.sync_limits
+  let pending_records : Array[SyncOpRecord] = []
+  for pending in self.document.pending_sync_ops {
+    let record = match pending {
+      Tree(op) => SyncOpRecord::Tree(op)
+      Text(op) => SyncOpRecord::Text(op)
+    }
+    pending_records.push(record)
+  }
+  let needs_tree_snapshot = message.has_text_operations() ||
+    pending_records.any(record => {
+      match record {
+        Text(_) => true
+        Tree(_) => false
+      }
+    })
+  let tree_snapshot = if needs_tree_snapshot {
+    self.document.tree.copy()
+  } else {
+    @mt.MovableTree::new()
+  }
+  let tree_log_snapshot = if needs_tree_snapshot {
+    self.document.log.copy()
+  } else {
+    @mt.TreeOpLog::new()
+  }
+  let prepared = prepare_container_sync(
+    message,
+    limits,
+    self.document.sync_ops_by_version,
+    pending_records,
+    tree_snapshot,
+    tree_log_snapshot,
+  ) catch {
+    failure => raise DocumentError::SyncFailed(failure)
+  }
+  // Imperative shell: only parsed ApplicableSyncOp values can reach mutation.
   let mut applied_tree = 0
   let mut applied_text = 0
-  let mut duplicates = 0
-  for op in message.tree_ops {
-    if !self.record_sync_tree_op(op) {
-      duplicates = duplicates + 1
-      continue
+  for applicable in prepared.applicable {
+    match applicable {
+      ApplyTree(op) => {
+        if !self.document.try_apply_versioned_tree_op(op) {
+          abort("prepared tree sync command was not total")
+        }
+        applied_tree = applied_tree + 1
+      }
+      ApplyText(op) => {
+        if !self.document.try_apply_versioned_text_op(op) {
+          abort("prepared text sync command was not total")
+        }
+        applied_text = applied_text + 1
+      }
     }
-    if self.try_apply_versioned_tree_op(op) {
-      applied_tree = applied_tree + 1
-    } else {
-      self.defer_pending_sync_op(Tree(op))
+    let record = applicable.raw()
+    let key = sync_record_key(record)
+    self.document.seen_sync_versions[key] = true
+    self.document.sync_ops_by_version[key] = record
+  }
+  let next_pending : Array[PendingSyncOp] = []
+  for record in prepared.pending {
+    match record {
+      Tree(op) => next_pending.push(PendingSyncOp::Tree(op))
+      Text(op) => next_pending.push(PendingSyncOp::Text(op))
     }
   }
-  for op in message.text_ops {
-    if !self.record_sync_text_op(op) {
-      duplicates = duplicates + 1
-      continue
-    }
-    if self.try_apply_versioned_text_op(op) {
-      applied_text = applied_text + 1
-    } else {
-      self.defer_pending_sync_op(Text(op))
-    }
-  }
-  let (flushed_tree, flushed_text) = self.flush_pending_sync_ops()
+  self.document.pending_sync_ops = next_pending
   {
-    applied_tree_ops: applied_tree + flushed_tree,
-    applied_text_ops: applied_text + flushed_text,
-    duplicate_ops: duplicates,
-    pending_ops: self.pending_sync_ops.length(),
+    applied_tree_ops: applied_tree,
+    applied_text_ops: applied_text,
+    duplicate_ops: prepared.duplicate_operations,
+    pending_ops: next_pending.length(),
   }
 }
 
 ///|
-/// Snapshot of sync ops still waiting for unresolved ancestors. The returned
-/// array is a copy — mutating it does not affect the document.
-pub fn Document::pending_sync_ops(self : Document) -> Array[PendingSyncOp] {
-  self.pending_sync_ops.copy()
+pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
+  self.document.pending_sync_ops.length()
+}
+
+///|
+pub fn SyncSession::clear_pending_sync(self : SyncSession) -> Unit {
+  self.document.pending_sync_ops = []
 }

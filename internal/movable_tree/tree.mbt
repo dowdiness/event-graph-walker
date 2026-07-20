@@ -48,6 +48,23 @@ pub fn MovableTree::new() -> MovableTree {
 }
 
 ///|
+/// Return an owning deep copy suitable for deterministic transition planning.
+///
+/// Tree nodes, property maps, and child arrays are copied so mutations against
+/// the snapshot cannot affect the live receiver tree.
+pub fn MovableTree::copy(self : MovableTree) -> MovableTree {
+  {
+    nodes: self.nodes.map((_, node) => {
+      id: node.id,
+      parent: node.parent,
+      position: node.position,
+      properties: node.properties.copy(),
+    }),
+    children_cache: self.children_cache.map((_, children) => children.copy()),
+  }
+}
+
+///|
 /// Add a new node to the tree under the given parent at the given position.
 ///
 /// If the node already exists, this is a no-op.

@@ -52,6 +52,7 @@ pub fn VersionVector::includes(Self, String, Int) -> Bool
 pub fn VersionVector::increment(Self, String) -> Self
 pub fn VersionVector::merge(Self, Self) -> Self
 pub fn VersionVector::new() -> Self
+pub fn VersionVector::sequence_for(Self, String) -> Int?
 pub fn VersionVector::set(Self, String, Int) -> Self
 pub fn VersionVector::to_frontier(Self, CausalGraph) -> @core.Frontier
 pub impl Compare for VersionVector

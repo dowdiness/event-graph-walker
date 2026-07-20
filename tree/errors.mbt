@@ -10,6 +10,8 @@ pub(all) suberror TreeError {
   ParentNotFound
   /// Move would create a cycle in the tree
   CycleDetected
+  /// Synchronization failure.
+  SyncFailed(@sync.Failure)
   /// Internal invariant violation
   Internal(detail~ : String)
 }

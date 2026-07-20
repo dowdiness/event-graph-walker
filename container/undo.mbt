@@ -104,17 +104,17 @@ fn[T, E : Error] Document::with_implicit_transaction(
 ///|
 /// Stamp, apply, and record a text op built from a fresh LV+timestamp.
 ///
-/// The builder receives the allocated (lv, timestamp) and returns the TextOp
+/// The builder receives the stable operation identity and timestamp.
 /// payload. Mirrors `emit_move_op` for text — all three public text methods
 /// (insert_text, delete_text) and the undo replay path share this tail.
 fn Document::emit_text_op(
   self : Document,
   block : @mt.TreeNodeId,
-  build : (Int, Int) -> TextOp raise DocumentError,
+  build : (@core.RawVersion, Int) -> TextOp raise DocumentError,
 ) -> Unit raise DocumentError {
   let (lv, timestamp, version) = self.next_version_with_raw()
   let parents = self.raw_parents_for_lv(lv)
-  let text_op = build(lv, timestamp)
+  let text_op = build(version, timestamp)
   let op : BlockTextOp = { block, op: text_op }
   self.apply_block_text_op(block, op)
   let _ = self.record_text_op(op)
@@ -150,15 +150,15 @@ fn Document::apply_undo(
   item : UndoItem,
 ) -> Unit raise DocumentError {
   match item {
-    TextInsert(block~, lv~) =>
+    TextInsert(block~, id~) =>
       // Undo an insert: tombstone the LV we created.
       self.emit_text_op(block, (_, ts) => {
-        Delete({ target: lv, timestamp: ts, agent: self.agent_id })
+        Delete({ target: id, timestamp: ts, agent: self.agent_id })
       })
-    TextDelete(block~, lv~) =>
+    TextDelete(block~, id~) =>
       // Undo a delete: revive the tombstone.
       self.emit_text_op(block, (_, ts) => {
-        Undelete({ target: lv, timestamp: ts, agent: self.agent_id })
+        Undelete({ target: id, timestamp: ts, agent: self.agent_id })
       })
     TreeMove(target~, old_parent~, old_pos~, new_parent=_, new_pos=_) =>
       // Move back to the pre-move parent/position.
@@ -183,16 +183,16 @@ fn Document::apply_redo(
   item : UndoItem,
 ) -> Unit raise DocumentError {
   match item {
-    TextInsert(block~, lv~) =>
+    TextInsert(block~, id~) =>
       // Redo of insert: revive tombstoned LV via Undelete. LWW-wins because
       // we allocate a higher timestamp.
       self.emit_text_op(block, (_, ts) => {
-        Undelete({ target: lv, timestamp: ts, agent: self.agent_id })
+        Undelete({ target: id, timestamp: ts, agent: self.agent_id })
       })
-    TextDelete(block~, lv~) =>
+    TextDelete(block~, id~) =>
       // Redo of delete: re-tombstone at a fresh higher timestamp.
       self.emit_text_op(block, (_, ts) => {
-        Delete({ target: lv, timestamp: ts, agent: self.agent_id })
+        Delete({ target: id, timestamp: ts, agent: self.agent_id })
       })
     TreeMove(target~, old_parent=_, old_pos=_, new_parent~, new_pos~) =>
       self.emit_move_op(target, new_parent, new_pos)
@@ -224,6 +224,107 @@ fn is_recoverable_apply_error(err : DocumentError) -> Bool {
 }
 
 ///|
+/// Produce replay commands without observing or mutating the document.
+fn plan_replay(
+  items : Array[UndoItem],
+  direction : ReplayDirection,
+) -> Array[ReplayCommand] {
+  let commands : Array[ReplayCommand] = []
+  match direction {
+    UndoPass => {
+      let mut index = items.length() - 1
+      while index >= 0 {
+        commands.push(ReplayCommand(index, items[index]))
+        index = index - 1
+      }
+    }
+    RedoPass =>
+      for index = 0; index < items.length(); index = index + 1 {
+        commands.push(ReplayCommand(index, items[index]))
+      }
+  }
+  commands
+}
+
+///|
+/// Compute the stack repair required after an unexpected executor failure.
+fn replay_failure_transition(
+  source : Array[UndoItem],
+  direction : ReplayDirection,
+  failing_index : Int,
+  completed_in_execution_order : Array[UndoItem],
+) -> ReplayFailureTransition {
+  match direction {
+    UndoPass =>
+      ReplayFailureTransition(
+        source[:failing_index + 1].to_owned(),
+        completed_in_execution_order.rev(),
+      )
+    RedoPass =>
+      ReplayFailureTransition(
+        source[failing_index:].to_owned(),
+        completed_in_execution_order,
+      )
+  }
+}
+
+///|
+/// Decide whether an expected stale item can still be replayed. This boundary
+/// is read-only: skipped commands allocate no causal version and mutate no
+/// undo state.
+fn Document::preflight_replay_item(
+  self : Document,
+  item : UndoItem,
+  direction : ReplayDirection,
+) -> Bool raise DocumentError {
+  match item {
+    TextInsert(block~, id~) | TextDelete(block~, id~) =>
+      match self.blocks.get(block) {
+        Some(text_block) =>
+          self.tree.contains(block) &&
+          text_block.stable_to_local.get(id) is Some(_)
+        None => false
+      }
+    TreeMove(target~, old_parent~, old_pos=_, new_parent~, new_pos=_) => {
+      let parent = match direction {
+        UndoPass => old_parent
+        RedoPass => new_parent
+      }
+      try {
+        self.validate_move(target, parent)
+        true
+      } catch {
+        e => if is_recoverable_apply_error(e) { false } else { raise e }
+      }
+    }
+    TreeCreate(target~, parent~, pos=_) =>
+      match direction {
+        UndoPass => self.tree.contains(target) && self.tree.is_alive(target)
+        RedoPass =>
+          try {
+            self.validate_move(target, parent)
+            true
+          } catch {
+            e => if is_recoverable_apply_error(e) { false } else { raise e }
+          }
+      }
+    TreeDelete(target~, old_parent~, old_pos=_) =>
+      match direction {
+        UndoPass =>
+          try {
+            self.validate_move(target, old_parent)
+            true
+          } catch {
+            e => if is_recoverable_apply_error(e) { false } else { raise e }
+          }
+        RedoPass => self.tree.contains(target) && self.tree.is_alive(target)
+      }
+    PropertySet(target~, key=_, old_value=_, new_value=_) =>
+      self.tree.contains(target)
+  }
+}
+
+///|
 /// Reverse the most-recent group of forward ops. Returns true if a group was
 /// popped, false if the undo stack was empty.
 ///
@@ -238,34 +339,44 @@ pub fn Document::undo(self : Document) -> Bool raise DocumentError {
     Some(group) => group
   }
   self.undo_execution_mode = true
-  // `items` holds forward-time order; iterate reverse to emit inverses in
-  // backward-time order. `reversed_redo` collects items in reverse order and
-  // is flipped at the end so the redo group is also forward-time.
-  let reversed_redo : Array[UndoItem] = []
   let items = group.items
-  let mut i = items.length() - 1
-  while i >= 0 {
-    let item = items[i]
+  let completed : Array[UndoItem] = []
+  for command in plan_replay(items, UndoPass) {
     let applied = try {
-      self.apply_undo(item)
-      true
+      if self.preflight_replay_item(command.item, UndoPass) {
+        self.apply_undo(command.item)
+        true
+      } else {
+        false
+      }
     } catch {
       e =>
         if is_recoverable_apply_error(e) {
           false
         } else {
           self.undo_execution_mode = false
+          let transition = replay_failure_transition(
+            items,
+            UndoPass,
+            command.source_index,
+            completed,
+          )
+          if !transition.remaining_source.is_empty() {
+            self.undo_stack.push({ items: transition.remaining_source })
+          }
+          if !transition.completed_opposite.is_empty() {
+            self.redo_stack.push({ items: transition.completed_opposite })
+          }
           raise e
         }
     }
     if applied {
-      reversed_redo.push(item)
+      completed.push(command.item)
     }
-    i = i - 1
   }
   self.undo_execution_mode = false
-  if reversed_redo.length() > 0 {
-    self.redo_stack.push({ items: reversed_redo.rev() })
+  if completed.length() > 0 {
+    self.redo_stack.push({ items: completed.rev() })
   }
   true
 }
@@ -280,29 +391,44 @@ pub fn Document::redo(self : Document) -> Bool raise DocumentError {
     Some(group) => group
   }
   self.undo_execution_mode = true
-  // Forward iteration matches forward-time order; successful items form the
-  // next undo group in the same order with no flip needed.
-  let next_undo : Array[UndoItem] = []
-  for item in group.items {
+  let items = group.items
+  let completed : Array[UndoItem] = []
+  for command in plan_replay(items, RedoPass) {
     let applied = try {
-      self.apply_redo(item)
-      true
+      if self.preflight_replay_item(command.item, RedoPass) {
+        self.apply_redo(command.item)
+        true
+      } else {
+        false
+      }
     } catch {
       e =>
         if is_recoverable_apply_error(e) {
           false
         } else {
           self.undo_execution_mode = false
+          let transition = replay_failure_transition(
+            items,
+            RedoPass,
+            command.source_index,
+            completed,
+          )
+          if !transition.remaining_source.is_empty() {
+            self.redo_stack.push({ items: transition.remaining_source })
+          }
+          if !transition.completed_opposite.is_empty() {
+            self.undo_stack.push({ items: transition.completed_opposite })
+          }
           raise e
         }
     }
     if applied {
-      next_undo.push(item)
+      completed.push(command.item)
     }
   }
   self.undo_execution_mode = false
-  if next_undo.length() > 0 {
-    self.undo_stack.push({ items: next_undo })
+  if completed.length() > 0 {
+    self.undo_stack.push({ items: completed })
   }
   true
 }

@@ -568,10 +568,9 @@ fn parse_sync_candidate(
   known_ops : Map[String, @core.Op],
 ) -> ParsedCandidate raise @sync.Failure {
   match candidate {
-    FromMessage(op) =>
-      parse_candidate(op, local_payloads, resolved, known_ops)
+    FromMessage(op) => parse_candidate(op, local_payloads, resolved, known_ops)
     FromPending(op) | FromPendingAndMessage(op) =>
-      try parse_candidate(op, local_payloads, resolved, known_ops) catch {
+      parse_candidate(op, local_payloads, resolved, known_ops) catch {
         _ => DiscardInvalidPending
       }
   }
@@ -933,12 +932,7 @@ fn decode_sync_json(
     for value in envelope.heads {
       heads.push(decode_identity(value))
     }
-    SyncMessage::SyncMessage(
-      operations,
-      heads,
-      Some(encoded_size),
-      limits=limits,
-    )
+    SyncMessage::SyncMessage(operations, heads, Some(encoded_size), limits~)
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
       raise TextError::SyncFailed(@sync.Failure::MalformedMessage(detail~))
@@ -1110,10 +1104,7 @@ fn prepare_sync(
   for op in ordered {
     let candidate = candidates.get(raw_key(op_identity(op))).unwrap()
     let parsed = parse_sync_candidate(
-      candidate,
-      local_payload_map,
-      resolved,
-      known_ops,
+      candidate, local_payload_map, resolved, known_ops,
     )
     match parsed {
       Apply(applicable_op) => {

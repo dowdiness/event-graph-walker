@@ -209,9 +209,7 @@ test "resent decidable malformed pending operation does not poison later sync" {
 ///|
 test "sync session decodes JSON with receiver-specific limits" {
   let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
-  let limits = try! @sync.Limits::Limits(
-    max_encoded_bytes=json.length() - 1,
-  )
+  let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
   let receiver = try! TextState::new_with_sync_limits("receiver", limits)
   try receiver.sync().decode_json(json) catch {
     TextError::SyncFailed(
@@ -253,9 +251,7 @@ test "receiver-specific decoder may raise the default encoded byte limit" {
 test "receiver-specific decoder honors raised parent limits in validation" {
   let parents : Array[String] = []
   for sequence in 0..<257 {
-    parents.push(
-      "{\"replica_id\":\"parent-\{sequence}\",\"sequence\":0}",
-    )
+    parents.push("{\"replica_id\":\"parent-\{sequence}\",\"sequence\":0}")
   }
   let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
     parents.join(",") +

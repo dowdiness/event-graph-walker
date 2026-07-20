@@ -1,0 +1,98 @@
+///|
+test "tree v1 codecs are façade-specific and deterministic" {
+  let alice = try! @tree.TreeState::new("alice")
+  let node = try! alice.create_node(parent=@tree.root_id)
+  alice.set_property(node, "title", "hello")
+  let message = try! alice.sync().export_all()
+  let json = message.to_json_string()
+  inspect(json.contains("event-graph-walker/tree-sync"), content="true")
+  let decoded = try! @tree.SyncMessage::from_json_string(json)
+  inspect(decoded.op_count(), content="2")
+  inspect(
+    decoded.to_canonical_bytes() == message.to_canonical_bytes(),
+    content="true",
+  )
+  let bob = try! @tree.TreeState::new("bob")
+  let report = try! bob.sync().apply(decoded)
+  inspect(report.applied_operations(), content="2")
+  inspect(bob.get_property(node, "title") == Some("hello"), content="true")
+  let version = try! @tree.Version::from_json_string(
+    alice.version().to_json_string(),
+  )
+  inspect((try! alice.sync().export_since(version)).is_empty(), content="true")
+}
+
+///|
+test "tree sync preserves empty property keys accepted by public API" {
+  let source = try! @tree.TreeState::new("source")
+  let node = try! source.create_node(parent=@tree.root_id)
+  source.set_property(node, "", "empty-key")
+  let json = (try! source.sync().export_all()).to_json_string()
+  let receiver = try! @tree.TreeState::new("receiver")
+  let message = try! receiver.sync().decode_json(json)
+  let report = try! receiver.sync().apply(message)
+  inspect(report.applied_operations(), content="2")
+  inspect(receiver.get_property(node, "") == Some("empty-key"), content="true")
+}
+
+///|
+test "tree decoder rejects container and legacy envelopes" {
+  let container = try! @container.Document::new("container")
+  let _ = try! container.create_node(parent=@container.root_id)
+  let container_json = (try! container.sync().export_all()).to_json_string()
+  try @tree.SyncMessage::from_json_string(container_json) catch {
+    _ => ()
+  } noraise {
+    _ => fail("container envelope must be rejected")
+  }
+  try @tree.SyncMessage::from_json_string("[]") catch {
+    _ => ()
+  } noraise {
+    _ => fail("legacy array must be rejected")
+  }
+}
+
+///|
+test "tree canonical empty-message golden vector" {
+  let tree = try! @tree.TreeState::new("golden")
+  let message = try! tree.sync().export_all()
+  @debug.assert_eq(
+    message.to_canonical_bytes(),
+    b"event-graph-walker:tree-sync:v1\x25event-graph-walker:container-sync:v1\x00",
+  )
+}
+
+///|
+test "tree receiver limits govern decode and later apply" {
+  let source = try! @tree.TreeState::new("source")
+  let _ = try! source.create_node(parent=@tree.root_id)
+  let json = (try! source.sync().export_all()).to_json_string()
+  let limits = try! @sync.Limits(max_encoded_bytes=json.length() - 1)
+  let receiver = try! @tree.TreeState::new_with_sync_limits("receiver", limits)
+  try receiver.sync().decode_json(json) catch {
+    @tree.TreeError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected receiver encoded-byte limit")
+  } noraise {
+    _ => fail("receiver decoder must reject oversized tree JSON")
+  }
+  let decoded = try! @tree.SyncMessage::from_json_string(json)
+  try receiver.sync().apply(decoded) catch {
+    @tree.TreeError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected encoded-byte limit during tree apply")
+  } noraise {
+    _ => fail("tree apply must preserve receiver byte enforcement")
+  }
+  inspect(receiver.version() == @tree.Version::empty(), content="true")
+}

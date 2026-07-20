@@ -6,8 +6,8 @@
 
 ///|
 priv enum UndoItem {
-  TextInsert(block~ : @mt.TreeNodeId, lv~ : Int)
-  TextDelete(block~ : @mt.TreeNodeId, lv~ : Int)
+  TextInsert(block~ : @mt.TreeNodeId, id~ : @core.RawVersion)
+  TextDelete(block~ : @mt.TreeNodeId, id~ : @core.RawVersion)
   TreeMove(
     target~ : @mt.TreeNodeId,
     old_parent~ : @mt.TreeNodeId,
@@ -36,4 +36,43 @@ priv enum UndoItem {
 ///|
 priv struct UndoGroup {
   items : Array[UndoItem]
+}
+
+///|
+priv enum ReplayDirection {
+  UndoPass
+  RedoPass
+}
+
+///|
+/// A pure replay command referring back to its source group position.
+priv struct ReplayCommand {
+  source_index : Int
+  item : UndoItem
+}
+
+///|
+fn ReplayCommand::ReplayCommand(
+  source_index : Int,
+  item : UndoItem,
+) -> ReplayCommand {
+  { source_index, item }
+}
+
+///|
+/// Deterministic stack transition after an unexpected command failure.
+priv struct ReplayFailureTransition {
+  remaining_source : Array[UndoItem]
+  completed_opposite : Array[UndoItem]
+}
+
+///|
+fn ReplayFailureTransition::ReplayFailureTransition(
+  remaining_source : Array[UndoItem],
+  completed_opposite : Array[UndoItem],
+) -> ReplayFailureTransition {
+  {
+    remaining_source: remaining_source.copy(),
+    completed_opposite: completed_opposite.copy(),
+  }
 }

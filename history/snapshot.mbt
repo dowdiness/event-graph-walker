@@ -1,9 +1,8 @@
 ///| CausalSnapshot - read-only view of a Document's causal DAG.
 ///
-/// Public, narrow surface over the internal `CausalGraph`. Designed so
+/// Public, narrow surface over a document's causal graph. Designed so
 /// downstream consumers (e.g. canopy's history visualization) can walk the
-/// DAG without depending on egw's internal storage representation, alga
-/// trait impls, or `GraphEntry` field shape.
+/// DAG without depending on its storage representation.
 ///
 /// Snapshots are aliases of the live graph: they are cheap to construct,
 /// but reflect future mutations of the underlying document. Callers that
@@ -11,51 +10,51 @@
 
 ///|
 pub struct CausalSnapshot {
-  priv graph : @causal_graph.CausalGraph
+  priv op_count_fn : () -> Int
+  priv entry_fn : (Int) -> SnapshotEntry?
+  priv frontier_fn : () -> Array[Int]
+  priv children_count_fn : (Int) -> Int
 }
 
 ///|
-/// Internal construction primitive — wraps a `CausalGraph` reference into a
-/// snapshot. Exposed publicly only because MoonBit visibility is
-/// package-strict and cross-package callers (`internal/document`, `text`)
-/// have no other way to build the wrapper. Not callable from outside this
-/// module: `@causal_graph.CausalGraph` lives in `internal/causal_graph`,
-/// which downstream consumers cannot import. The supported public entry
-/// points remain `Document::causal_snapshot` and `TextState::causal_snapshot`.
-pub fn CausalSnapshot::from_graph(
-  graph : @causal_graph.CausalGraph,
+/// Construct a live snapshot from façade-owned read capabilities.
+///
+/// The callbacks must return owning values. In particular, `entry_fn` and
+/// `frontier_fn` must not expose mutable graph storage.
+pub fn CausalSnapshot::CausalSnapshot(
+  op_count_fn : () -> Int,
+  entry_fn : (Int) -> SnapshotEntry?,
+  frontier_fn : () -> Array[Int],
+  children_count_fn : (Int) -> Int,
 ) -> CausalSnapshot {
-  { graph, }
+  { op_count_fn, entry_fn, frontier_fn, children_count_fn }
 }
 
 ///|
 /// Total number of operations recorded. LVs are valid in `0..<op_count()`.
 pub fn CausalSnapshot::op_count(self : CausalSnapshot) -> Int {
-  self.graph.op_count()
+  (self.op_count_fn)()
 }
 
 ///|
 /// Look up the entry at a given local version. Returns `None` for
 /// out-of-range LVs.
 pub fn CausalSnapshot::entry(self : CausalSnapshot, lv : Int) -> SnapshotEntry? {
-  match self.graph.get_entry(lv) {
-    Some(e) => Some({ inner: e })
-    None => None
-  }
+  (self.entry_fn)(lv)
 }
 
 ///|
 /// Current frontier (DAG tips) as an array of LVs. Returns a fresh array;
 /// callers may mutate it without affecting the snapshot or graph.
 pub fn CausalSnapshot::frontier(self : CausalSnapshot) -> Array[Int] {
-  self.graph.get_frontier().0.copy()
+  (self.frontier_fn)().copy()
 }
 
 ///|
 /// Outdegree (number of direct successors) of an LV. Returns 0 for
 /// out-of-range LVs.
 pub fn CausalSnapshot::children_count(self : CausalSnapshot, lv : Int) -> Int {
-  self.graph.children_count(lv)
+  (self.children_count_fn)(lv)
 }
 
 ///|
@@ -63,7 +62,19 @@ pub fn CausalSnapshot::children_count(self : CausalSnapshot, lv : Int) -> Int {
 /// reached through accessor methods so the backing representation may
 /// change without breaking downstream consumers.
 pub struct SnapshotEntry {
-  priv inner : @core.GraphEntry
+  priv parent_lvs : Array[Int]
+  priv replica_id : String
+  priv sequence : Int
+}
+
+///|
+/// Construct an owning snapshot entry.
+pub fn SnapshotEntry::SnapshotEntry(
+  parents : Array[Int],
+  replica_id : String,
+  sequence : Int,
+) -> SnapshotEntry {
+  { parent_lvs: parents.copy(), replica_id, sequence }
 }
 
 ///|
@@ -71,17 +82,17 @@ pub struct SnapshotEntry {
 /// Returned as a borrowed view to avoid copying; the underlying array is
 /// owned by the snapshot.
 pub fn SnapshotEntry::parents(self : SnapshotEntry) -> ArrayView[Int] {
-  self.inner.parents[:]
+  self.parent_lvs[:]
 }
 
 ///|
 /// Identifier of the agent that produced this operation.
 pub fn SnapshotEntry::agent(self : SnapshotEntry) -> String {
-  self.inner.agent
+  self.replica_id
 }
 
 ///|
 /// Per-agent sequence number for this operation.
 pub fn SnapshotEntry::seq(self : SnapshotEntry) -> Int {
-  self.inner.seq
+  self.sequence
 }

@@ -11,8 +11,8 @@
 
 ///|
 test "undo: multi-char insert_text undoes as one group" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "abc")
   inspect(doc.get_text(block), content="abc")
   inspect(doc.can_undo(), content="true")
@@ -25,8 +25,8 @@ test "undo: multi-char insert_text undoes as one group" {
 
 ///|
 test "undo: replace_text undoes as one group" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "old text")
   // The block creation + initial insert are separate groups; the replace is
   // the third group and one undo reverts it entirely.
@@ -39,9 +39,9 @@ test "undo: replace_text undoes as one group" {
 
 ///|
 test "undo: move_node reverts in one step" {
-  let doc = @container.Document::new("alice")
-  let a = doc.create_node(parent=@container.root_id)
-  let b = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let a = doc.create_node(parent=root_id)
+  let b = doc.create_node(parent=root_id)
   let x = doc.create_node(parent=a)
   inspect(doc.children(a).length(), content="1")
   inspect(doc.children(b).length(), content="0")
@@ -55,8 +55,8 @@ test "undo: move_node reverts in one step" {
 
 ///|
 test "undo: delete_node restores the node with its text" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "hello")
   doc.delete_node(block)
   inspect(doc.is_alive(block), content="false")
@@ -71,8 +71,8 @@ test "undo: delete_node restores the node with its text" {
 
 ///|
 test "undo: explicit transaction composes independent ops into one group" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   let n1 = doc.create_node(parent=block)
   doc.transaction(() => {
     doc.delete_node(n1)
@@ -87,8 +87,8 @@ test "undo: explicit transaction composes independent ops into one group" {
 
 ///|
 test "undo: nested transaction flattens into one group" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.transaction((
   // insert_text opens its own implicit transaction; depth counter flattens.
   ) => doc.insert_text(block, 0, "a"))
@@ -101,7 +101,7 @@ test "undo: nested transaction flattens into one group" {
 
 ///|
 test "undo: empty transaction pushes no group" {
-  let doc = @container.Document::new("alice")
+  let doc = Document::new("alice")
   doc.transaction(() => ())
   inspect(doc.can_undo(), content="false")
 }
@@ -111,8 +111,8 @@ test "undo: failed explicit transaction does not push an undo group" {
   // User-facing transactions are all-or-nothing from the undo perspective:
   // if `action` raises, partial mutations may have already landed (and synced)
   // but must not form an undoable group.
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   // Run a transaction that applies two ops then raises on the third.
   let result = try {
     doc.transaction(() => {
@@ -138,8 +138,8 @@ test "undo: failed explicit transaction does not push an undo group" {
 
 ///|
 test "undo: insert → undo → redo round-trip" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "h")
   inspect(doc.get_text(block), content="h")
   let _ = doc.undo()
@@ -152,8 +152,8 @@ test "undo: insert → undo → redo round-trip" {
 
 ///|
 test "undo: new edit after undo clears redo stack" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "h")
   let _ = doc.undo()
   inspect(doc.can_redo(), content="true")
@@ -168,15 +168,15 @@ test "undo: new edit after undo clears redo stack" {
 
 ///|
 test "undo: set_tracking(false) suppresses recording but not sync" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   inspect(doc.is_tracking(), content="true")
   doc.set_tracking(false)
   doc.insert_text(block, 0, "h")
   // The op still applied...
   inspect(doc.get_text(block), content="h")
   // ...and sync still picked it up (exported text op exists).
-  inspect(doc.export_text_ops().length(), content="1")
+  inspect(doc.text_ops.copy().length(), content="1")
   // ...but it's not on the undo stack — only the earlier create_node is.
   let _ = doc.undo()
   // Undoing the create leaves the block trashed; text content doesn't round
@@ -186,8 +186,8 @@ test "undo: set_tracking(false) suppresses recording but not sync" {
 
 ///|
 test "undo: toggling tracking affects only subsequent mutations" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.set_tracking(false)
   doc.insert_text(block, 0, "untracked")
   doc.set_tracking(true)
@@ -200,8 +200,8 @@ test "undo: toggling tracking affects only subsequent mutations" {
 
 ///|
 test "undo: clear_undo drops history but preserves state" {
-  let doc = @container.Document::new("alice")
-  let block = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "hi")
   inspect(doc.can_undo(), content="true")
   doc.clear_undo()
@@ -212,7 +212,7 @@ test "undo: clear_undo drops history but preserves state" {
 
 ///|
 test "undo: undo on empty stack returns false, state unchanged" {
-  let doc = @container.Document::new("alice")
+  let doc = Document::new("alice")
   inspect(doc.undo(), content="false")
   inspect(doc.redo(), content="false")
 }

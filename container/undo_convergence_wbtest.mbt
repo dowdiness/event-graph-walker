@@ -11,10 +11,10 @@
 
 ///|
 test "undo convergence: local undo preserves concurrent remote edits" {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "hello")
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let r1 = bob.apply_remote_sync_message(alice.export_sync_message())
   inspect(r1.pending_ops, content="0")
   inspect(bob.get_text(block), content="hello")
@@ -37,10 +37,10 @@ test "undo convergence: local undo preserves concurrent remote edits" {
 
 ///|
 test "undo convergence: delete_node/undo preserves concurrent peer text" {
-  let alice = @container.Document::new("alice")
-  let x = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let x = alice.create_node(parent=root_id)
   alice.insert_text(x, 0, "abc")
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   inspect(bob.get_text(x), content="abc")
   // Concurrent local work on both sides before sync.
@@ -76,14 +76,14 @@ test "undo convergence: delete_node/undo preserves concurrent peer text" {
 /// Helper: snapshot the tree shape as a stable string for equality comparison.
 /// Since children() returns ids sorted by fractional index, and we key by
 /// node-id, peers that converge will produce identical snapshots.
-fn tree_shape(doc : @container.Document) -> String {
-  let roots = doc.children(@container.root_id)
+fn tree_shape(doc : Document) -> String {
+  let roots = doc.children(root_id)
   let mut s = "root:["
   for i, id in roots {
     if i > 0 {
       s = s + ","
     }
-    s = s + @container.tree_node_id_key(id)
+    s = s + id.key()
     let kids = doc.children(id)
     if kids.length() > 0 {
       s = s + "{"
@@ -91,7 +91,7 @@ fn tree_shape(doc : @container.Document) -> String {
         if j > 0 {
           s = s + ","
         }
-        s = s + @container.tree_node_id_key(k)
+        s = s + k.key()
       }
       s = s + "}"
     }
@@ -101,11 +101,11 @@ fn tree_shape(doc : @container.Document) -> String {
 
 ///|
 test "undo convergence: concurrent moves + undo converge on both peers" {
-  let alice = @container.Document::new("alice")
-  let x = alice.create_node(parent=@container.root_id)
-  let p1 = alice.create_node(parent=@container.root_id)
-  let p2 = alice.create_node(parent=@container.root_id)
-  let bob = @container.Document::new("bob")
+  let alice = Document::new("alice")
+  let x = alice.create_node(parent=root_id)
+  let p1 = alice.create_node(parent=root_id)
+  let p2 = alice.create_node(parent=root_id)
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   // Concurrent moves of X to different parents.
   alice.move_node(target=x, new_parent=p1)
@@ -131,10 +131,10 @@ test "undo convergence: concurrent moves + undo converge on both peers" {
 
 ///|
 test "undo convergence: fresh remote Delete beats prior local Undelete" {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "x")
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   // Alice deletes then undoes. Undelete allocated at the current max ts.
   alice.delete_text(block, 0)
@@ -161,33 +161,33 @@ test "undo convergence: fresh remote Delete beats prior local Undelete" {
 
 ///|
 test "undo convergence: same-ts Undelete beats Delete (add-wins)" {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "x")
   // Recover the LV of "x" from the text-op log.
-  let x_lv = {
-    let mut lv = -1
-    for op in alice.export_text_ops() {
+  let x_id = {
+    let mut id = @core.RawVersion::new("", -1)
+    for op in alice.text_ops.copy() {
       match op.op {
-        @container.Insert(ins) => if ins.content == "x" { lv = ins.id }
+        Insert(ins) => if ins.content == "x" { id = ins.id }
         _ => ()
       }
     }
-    lv
+    id
   }
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   // Synthesize a Delete and an Undelete at the same timestamp from different
   // agents. Feeding via apply_remote_text_op exercises the same TextBlock
   // path natural emission would.
   let same_ts = 50
-  let del : @container.BlockTextOp = {
-    block,
-    op: @container.Delete({ target: x_lv, timestamp: same_ts, agent: "carol" }),
+  let del : BlockTextOp = {
+    block: block.to_inner(),
+    op: Delete({ target: x_id, timestamp: same_ts, agent: "carol" }),
   }
-  let undel : @container.BlockTextOp = {
-    block,
-    op: @container.Undelete({ target: x_lv, timestamp: same_ts, agent: "dave" }),
+  let undel : BlockTextOp = {
+    block: block.to_inner(),
+    op: Undelete({ target: x_id, timestamp: same_ts, agent: "dave" }),
   }
   alice.apply_remote_text_op(del)
   alice.apply_remote_text_op(undel)
@@ -204,15 +204,15 @@ test "undo convergence: same-ts Undelete beats Delete (add-wins)" {
 
 ///|
 test "undo convergence: pending sync queue drains around local undo" {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "hi")
   alice.delete_node(block)
   let undone = alice.undo()
   inspect(undone, content="true")
   // Alice's full history now has: create, insert×2, move-to-trash, inverse
   // move-back. Shipping it all at once should fully converge a fresh peer.
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let r = bob.apply_remote_sync_message(alice.export_sync_message())
   inspect(r.pending_ops, content="0")
   inspect(bob.is_alive(block), content="true")
@@ -225,8 +225,8 @@ test "undo convergence: pending sync queue drains around local undo" {
 
 ///|
 test "undo: set_property undo restores prior value" {
-  let doc = @container.Document::new("alice")
-  let n = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let n = doc.create_node(parent=root_id)
   doc.set_property(n, "type", "paragraph")
   doc.set_property(n, "type", "heading")
   @debug.debug_inspect(doc.get_property(n, "type"), content="Some(\"heading\")")
@@ -242,8 +242,8 @@ test "undo: set_property undo on absent key produces Some(\"\") (v1 limit)" {
   // Design §11: property None-vs-"" asymmetry. set_property on an absent key
   // followed by undo cannot restore None because there is no RemoveProperty
   // op in v1. We lock in the documented behavior here to catch regressions.
-  let doc = @container.Document::new("alice")
-  let n = doc.create_node(parent=@container.root_id)
+  let doc = Document::new("alice")
+  let n = doc.create_node(parent=root_id)
   inspect(doc.get_property(n, "foo") is None, content="true")
   doc.set_property(n, "foo", "bar")
   @debug.debug_inspect(doc.get_property(n, "foo"), content="Some(\"bar\")")
@@ -257,10 +257,10 @@ test "undo: set_property undo on absent key produces Some(\"\") (v1 limit)" {
 
 ///|
 test "undo convergence: redo converges after concurrent remote edits" {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "hello")
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   // Alice undoes — locally "", redo stack holds the insert inverse.
   let _ = alice.undo()
@@ -284,11 +284,11 @@ test "undo convergence: redo converges after concurrent remote edits" {
 
 ///|
 test "undo: remote ops never record to the receiver's undo stack" {
-  let alice = @container.Document::new("alice")
-  let block = alice.create_node(parent=@container.root_id)
+  let alice = Document::new("alice")
+  let block = alice.create_node(parent=root_id)
   alice.insert_text(block, 0, "hi")
   alice.set_property(block, "type", "paragraph")
-  let bob = @container.Document::new("bob")
+  let bob = Document::new("bob")
   let _ = bob.apply_remote_sync_message(alice.export_sync_message())
   inspect(bob.get_text(block), content="hi")
   @debug.debug_inspect(

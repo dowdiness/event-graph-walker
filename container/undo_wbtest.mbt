@@ -9,7 +9,7 @@
 /// the presence of a record in the buffer / stack.
 fn dummy_undo_item() -> UndoItem {
   let id : @mt.TreeNodeId = { agent: "test", counter: 0 }
-  TextInsert(block=id, lv=42)
+  TextInsert(block=id, id=@core.RawVersion::new("test", 42))
 }
 
 ///|
@@ -80,7 +80,7 @@ test "undo: undo_execution_mode is reset after a successful undo" {
   // Invariant: the flag is scoped to the replay pass only. If it leaked past
   // the pass, subsequent local mutations would silently skip undo recording.
   let doc = Document::new("alice")
-  let block = doc.create_node(parent=@mt.root_id)
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "x")
   let _ = doc.undo()
   inspect(doc.undo_execution_mode, content="false")
@@ -92,7 +92,7 @@ test "undo: undo_execution_mode is reset after a successful undo" {
 ///|
 test "undo: undo_execution_mode is reset after a successful redo" {
   let doc = Document::new("alice")
-  let block = doc.create_node(parent=@mt.root_id)
+  let block = doc.create_node(parent=root_id)
   doc.insert_text(block, 0, "x")
   let _ = doc.undo()
   let _ = doc.redo()

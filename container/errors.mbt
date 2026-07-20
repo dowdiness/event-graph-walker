@@ -10,6 +10,8 @@ pub(all) suberror DocumentError {
   ParentNotFound
   /// Move would create a cycle in the tree
   CycleDetected
+  /// Synchronization message was malformed, conflicting, or over budget.
+  SyncFailed(@sync.Failure)
   /// Internal invariant violation
   Internal(detail~ : String)
 }
