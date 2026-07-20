@@ -1,12 +1,15 @@
 #!/usr/bin/env nu
 
 def run-checked [description: string, command: closure] {
-  let result = (do $command | complete)
-  print --raw --no-newline $result.stdout
-  print --raw --no-newline --stderr $result.stderr
-  if $result.exit_code != 0 {
+  try {
+    do $command
+  } catch {|error|
+    let exit_code = ($error | get --optional exit_code)
+    if $exit_code == null {
+      error make $error
+    }
     error make {
-      msg: $"($description) failed with exit code ($result.exit_code)"
+      msg: $"($description) failed with exit code ($exit_code)"
     }
   }
 }
