@@ -27,6 +27,19 @@ test "container v1 message and version round trips preserve results" {
 }
 
 ///|
+test "container sync preserves empty property keys accepted by public API" {
+  let source = try! @container.Document::new("source")
+  let node = try! source.create_node(parent=@container.root_id)
+  source.set_property(node, "", "empty-key")
+  let json = (try! source.sync().export_all()).to_json_string()
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! receiver.sync().decode_json(json)
+  let report = try! receiver.sync().apply(message)
+  inspect(report.applied_tree_operations(), content="2")
+  inspect(receiver.get_property(node, "") == Some("empty-key"), content="true")
+}
+
+///|
 test "container canonical empty-message golden vector" {
   let document = try! @container.Document::new("golden")
   let message = try! document.sync().export_all()
@@ -165,6 +178,62 @@ test "resent malformed pending sequence is discarded after predecessors arrive" 
     content="true",
   )
   inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "container rejects tree operation identity used as text origin" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":1,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":1},\"content\":\"A\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::InvalidContent(detail=_)
+    ) => ()
+    _ => fail("expected invalid text origin")
+  } noraise {
+    _ => fail("tree identity must not be accepted as a text origin")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+}
+
+///|
+test "container rejects insert origin from a different block" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":1,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":1},\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":2,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":2},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":3},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":2}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":3,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":2},\"item\":{\"replica_id\":\"alice\",\"sequence\":3},\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":1},\"origin_right\":null}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::InvalidContent(detail=_)
+    ) => ()
+    _ => fail("expected cross-block origin failure")
+  } noraise {
+    _ => fail("insert origin from another block must be rejected")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+}
+
+///|
+test "container rejects delete and undelete targets from a different block" {
+  for kind in ["delete", "undelete"] {
+    let receiver = try! @container.Document::new("receiver-" + kind)
+    let message = try! @container.SyncMessage::from_json_string(
+      "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":1,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":1},\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":2,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":2},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":3},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":2}],\"domain\":\"text\",\"payload\":{\"kind\":\"\{kind}\",\"timestamp\":3,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":2},\"target\":{\"replica_id\":\"alice\",\"sequence\":1}}}]}",
+    )
+    try receiver.sync().apply(message) catch {
+      @container.DocumentError::SyncFailed(
+        @sync.Failure::InvalidContent(detail=_)
+      ) => ()
+      _ => fail("expected cross-block " + kind + " failure")
+    } noraise {
+      _ => fail(kind + " target from another block must be rejected")
+    }
+    inspect(receiver.version() == @container.Version::empty(), content="true")
+    inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  }
 }
 
 ///|

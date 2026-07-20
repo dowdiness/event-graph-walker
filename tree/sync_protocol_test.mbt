@@ -23,6 +23,19 @@ test "tree v1 codecs are façade-specific and deterministic" {
 }
 
 ///|
+test "tree sync preserves empty property keys accepted by public API" {
+  let source = try! @tree.TreeState::new("source")
+  let node = try! source.create_node(parent=@tree.root_id)
+  source.set_property(node, "", "empty-key")
+  let json = (try! source.sync().export_all()).to_json_string()
+  let receiver = try! @tree.TreeState::new("receiver")
+  let message = try! receiver.sync().decode_json(json)
+  let report = try! receiver.sync().apply(message)
+  inspect(report.applied_operations(), content="2")
+  inspect(receiver.get_property(node, "") == Some("empty-key"), content="true")
+}
+
+///|
 test "tree decoder rejects container and legacy envelopes" {
   let container = try! @container.Document::new("container")
   let _ = try! container.create_node(parent=@container.root_id)

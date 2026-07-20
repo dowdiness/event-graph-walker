@@ -194,6 +194,79 @@ fn validate_sync_sequence_descent(
 }
 
 ///|
+/// Require every text item reference to resolve to an Insert in the same block.
+///
+/// Global causal presence is insufficient because tree operations and inserts
+/// in other blocks also have raw identities. This preflight keeps malformed
+/// references out of the causal graph and per-block pending queues.
+fn validate_sync_text_references(
+  record : SyncOpRecord,
+  known_records : Map[String, SyncOpRecord],
+) -> Unit raise @sync.Failure {
+  match record {
+    Tree(_) => ()
+    Text(versioned) => {
+      fn require_same_block_insert(
+        reference : @core.RawVersion,
+        block : @mt.TreeNodeId,
+        known_records : Map[String, SyncOpRecord],
+      ) -> Unit raise @sync.Failure {
+        match known_records.get(sync_raw_key(reference)) {
+          Some(Text(target)) =>
+            match target.op {
+              Insert(insert) =>
+                if target.block == block && insert.id == reference {
+                  return
+                }
+              Delete(_) | Undelete(_) => ()
+            }
+          Some(Tree(_)) | None => ()
+        }
+        raise @sync.Failure::InvalidContent(
+          detail="text reference does not identify an insert in the target block",
+        )
+      }
+      match versioned.op {
+        Insert(insert) => {
+          match insert.origin_left {
+            Some(origin) =>
+              require_same_block_insert(origin, versioned.block, known_records)
+            None => ()
+          }
+          match insert.origin_right {
+            Some(origin) =>
+              require_same_block_insert(origin, versioned.block, known_records)
+            None => ()
+          }
+        }
+        Delete(delete) =>
+          require_same_block_insert(
+            delete.target,
+            versioned.block,
+            known_records,
+          )
+        Undelete(undelete) =>
+          require_same_block_insert(
+            undelete.target,
+            versioned.block,
+            known_records,
+          )
+      }
+    }
+  }
+}
+
+///|
+/// Validate the state-aware invariants required before a record can commit.
+fn validate_applicable_sync_record(
+  record : SyncOpRecord,
+  known_records : Map[String, SyncOpRecord],
+) -> Unit raise @sync.Failure {
+  validate_sync_sequence_descent(record, known_records)
+  validate_sync_text_references(record, known_records)
+}
+
+///|
 fn sync_record_compare(a : SyncOpRecord, b : SyncOpRecord) -> Int {
   compare_sync_raw(sync_record_version(a), sync_record_version(b))
 }
@@ -387,11 +460,6 @@ fn validate_sync_record(
             )
           }
           validate_sync_node(op.target, false)
-          if op.key == "" {
-            raise @sync.Failure::InvalidContent(
-              detail="property key must not be empty",
-            )
-          }
         }
       }
     Text(versioned) => {
@@ -940,13 +1008,13 @@ fn prepare_container_sync(
       let candidate = candidates.get(key).unwrap()
       match candidate {
         FromMessage(_) => {
-          validate_sync_sequence_descent(record, known_records)
+          validate_applicable_sync_record(record, known_records)
           resolvable[key] = true
           applicable.push(record)
         }
         FromPending(_) | FromPendingAndMessage(_) => {
           let valid = try {
-            validate_sync_sequence_descent(record, known_records)
+            validate_applicable_sync_record(record, known_records)
             true
           } catch {
             _ => false
