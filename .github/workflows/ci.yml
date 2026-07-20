@@ -26,9 +26,10 @@ jobs:
         with:
           version: 0.10.4+ade96c819
           core-version: 0.10.4+ade96c819
-      - name: Fetch MoonBit registry index
+      - name: Prepare frozen MoonBit dependencies
         run: |
           moon update
+          moon install
           git diff --exit-code -- moon.mod
       - name: Set up Nushell 0.112.2
         uses: hustcer/setup-nu@ccd5bb5426b05a32009c2ba967946231f3919c97 # v3
