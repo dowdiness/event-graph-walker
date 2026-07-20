@@ -142,7 +142,7 @@ fn doc_apply(
   doc : Document,
   nodes : Array[TreeNodeId],
   edit : BlockEdit,
-) -> Bool {
+) -> Unit {
   match edit {
     Insert(block, pos, chunk) => try! doc.insert_text(nodes[block], pos, chunk)
     Delete(block, pos) => try! doc.delete_text(nodes[block], pos)
@@ -150,7 +150,6 @@ fn doc_apply(
       try! doc.replace_text(nodes[block], replacement)
     DeleteNode(block) => try! doc.delete_node(nodes[block])
   }
-  true
 }
 
 ///|
@@ -163,9 +162,7 @@ fn prop_container_text_matches_model(scenario : BlockScenario) -> Bool {
   let alive = [true, true]
   for edit in scenario.edits {
     model_apply(texts, alive, edit)
-    if !doc_apply(doc, nodes, edit) {
-      return false
-    }
+    doc_apply(doc, nodes, edit)
   }
   for block = 0; block < 2; block = block + 1 {
     if doc.get_text(nodes[block]) != texts[block] {
@@ -197,9 +194,7 @@ fn prop_block_independence(scenario : BlockScenario) -> Bool {
       DeleteNode(block) => 1 - block
     }
     let before_other = doc.get_text(nodes[other])
-    if !doc_apply(doc, nodes, edit) {
-      return false
-    }
+    doc_apply(doc, nodes, edit)
     if doc.get_text(nodes[other]) != before_other {
       return false
     }
@@ -225,9 +220,7 @@ fn prop_delete_node_preserves_text_and_rejects_writes(
     match edit {
       DeleteNode(block) => {
         let before = doc.get_text(nodes[block])
-        if !doc_apply(doc, nodes, edit) {
-          return false
-        }
+        doc_apply(doc, nodes, edit)
         if doc.get_text(nodes[block]) != before {
           return false
         }
@@ -241,7 +234,7 @@ fn prop_delete_node_preserves_text_and_rejects_writes(
           return false
         }
       }
-      _ => if !doc_apply(doc, nodes, edit) { return false }
+      _ => doc_apply(doc, nodes, edit)
     }
   }
   true
@@ -263,9 +256,7 @@ fn prop_sync_message_replays_mixed_tree_and_text(
   let nodes = [n0, n1]
 
   for edit in scenario.edits {
-    if !doc_apply(doc_a, nodes, edit) {
-      return false
-    }
+    doc_apply(doc_a, nodes, edit)
   }
 
   ignore(doc_b.apply_remote_sync_message(try! doc_a.export_sync_message()))

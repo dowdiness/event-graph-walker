@@ -123,17 +123,10 @@ pub fn TreeState::new_with_sync_limits(
   limits : @sync.Limits,
 ) -> TreeState raise TreeError {
   {
-    document: @container.Document::new_with_sync_limits(replica_id, limits),
+    document: map_document_error(fn() raise @container.DocumentError {
+      @container.Document::new_with_sync_limits(replica_id, limits)
+    }),
     sync_limits: limits,
-  } catch {
-    @container.DocumentError::EmptyReplicaId => raise TreeError::EmptyReplicaId
-    @container.DocumentError::TargetNotFound => raise TreeError::TargetNotFound
-    @container.DocumentError::ParentNotFound => raise TreeError::ParentNotFound
-    @container.DocumentError::CycleDetected => raise TreeError::CycleDetected
-    @container.DocumentError::SyncFailed(failure) =>
-      raise TreeError::SyncFailed(failure)
-    @container.DocumentError::Internal(detail~) =>
-      raise TreeError::Internal(detail~)
   }
 }
 
@@ -289,16 +282,7 @@ pub fn SyncSession::apply(
     Some(size) => size
     None => @utf8.encode(message.to_json_string()).length()
   }
-  let limit = self.state.sync_limits.max_encoded_bytes()
-  if encoded_size > limit {
-    raise TreeError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit~,
-        actual=encoded_size,
-      ),
-    )
-  }
+  check_tree_encoded_size(encoded_size, self.state.sync_limits)
   {
     inner: map_document_error(fn() raise @container.DocumentError {
       self.state.document.sync().apply(message.inner)

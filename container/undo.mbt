@@ -276,7 +276,7 @@ fn Document::preflight_replay_item(
   self : Document,
   item : UndoItem,
   direction : ReplayDirection,
-) -> Bool {
+) -> Bool raise DocumentError {
   match item {
     TextInsert(block~, id~) | TextDelete(block~, id~) =>
       match self.blocks.get(block) {
@@ -294,7 +294,7 @@ fn Document::preflight_replay_item(
         self.validate_move(target, parent)
         true
       } catch {
-        _ => false
+        e => if is_recoverable_apply_error(e) { false } else { raise e }
       }
     }
     TreeCreate(target~, parent~, pos=_) =>
@@ -305,7 +305,7 @@ fn Document::preflight_replay_item(
             self.validate_move(target, parent)
             true
           } catch {
-            _ => false
+            e => if is_recoverable_apply_error(e) { false } else { raise e }
           }
       }
     TreeDelete(target~, old_parent~, old_pos=_) =>
@@ -315,7 +315,7 @@ fn Document::preflight_replay_item(
             self.validate_move(target, old_parent)
             true
           } catch {
-            _ => false
+            e => if is_recoverable_apply_error(e) { false } else { raise e }
           }
         RedoPass => self.tree.contains(target) && self.tree.is_alive(target)
       }
@@ -342,12 +342,13 @@ pub fn Document::undo(self : Document) -> Bool raise DocumentError {
   let items = group.items
   let completed : Array[UndoItem] = []
   for command in plan_replay(items, UndoPass) {
-    if !self.preflight_replay_item(command.item, UndoPass) {
-      continue
-    }
     let applied = try {
-      self.apply_undo(command.item)
-      true
+      if self.preflight_replay_item(command.item, UndoPass) {
+        self.apply_undo(command.item)
+        true
+      } else {
+        false
+      }
     } catch {
       e =>
         if is_recoverable_apply_error(e) {
@@ -393,12 +394,13 @@ pub fn Document::redo(self : Document) -> Bool raise DocumentError {
   let items = group.items
   let completed : Array[UndoItem] = []
   for command in plan_replay(items, RedoPass) {
-    if !self.preflight_replay_item(command.item, RedoPass) {
-      continue
-    }
     let applied = try {
-      self.apply_redo(command.item)
-      true
+      if self.preflight_replay_item(command.item, RedoPass) {
+        self.apply_redo(command.item)
+        true
+      } else {
+        false
+      }
     } catch {
       e =>
         if is_recoverable_apply_error(e) {

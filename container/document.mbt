@@ -197,29 +197,16 @@ priv struct PreparedSync {
 }
 
 ///|
-/// Summary of an `apply_remote_sync_message` call.
+/// Summary of a `SyncSession::apply` call.
 ///
-/// - `applied_tree_ops` / `applied_text_ops` count ops that landed in the
-///   document state, whether on the initial pass or a later `flush_pending_sync_ops`
-///   iteration.
+/// - `applied_tree_ops` / `applied_text_ops` count parsed operations committed
+///   to the document, including previously pending operations that became
+///   applicable during this call.
 /// - `duplicate_ops` counts ops whose version was already recorded (silent
 ///   idempotent skip — the frontier did not advance for them).
 /// - `pending_ops` is the number of ops that remain in the sync pending queue
-///   after the flush, waiting for ancestors that have not yet arrived. Inspect
-///   via `Document::pending_sync_ops` when `pending_ops > 0`.
-///
-/// Text ops that land in the causal graph but whose target block is not yet
-/// in the tree are routed to a separate per-block queue (`pending_text_ops`)
-/// and are still counted as `applied_text_ops` here — that queue is an
-/// internal handler-routing detail, not a sync-protocol pending state.
-///
-/// `applied_*_ops` reflects sync-layer version dedup, not payload-layer
-/// state change. If the same op was previously ingested via the direct
-/// `apply_remote_op` / `apply_remote_text_op` APIs and then arrives via a
-/// sync message under a fresh version record, it will be counted as applied
-/// even though the payload-level dedup makes the actual mutation a no-op.
-/// Mixing direct and sync ingestion of the same op stream is therefore not
-/// recommended if these counters need to mirror real state changes.
+/// after the call, waiting for causal dependencies that have not yet arrived.
+/// Inspect it via `SyncSession::pending_sync_count`.
 pub(all) struct SyncReport {
   priv applied_tree_ops : Int
   priv applied_text_ops : Int

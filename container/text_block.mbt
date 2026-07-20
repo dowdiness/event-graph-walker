@@ -1,10 +1,9 @@
 ///| Per-block text state machine.
 ///
 /// Each tree node that has text content gets a TextBlock. The FugueTree
-/// uses global LVs from the shared CausalGraph (Path A). Per-block arrays
-/// are sparse — a block with LVs [100, 105, 200] allocates a 201-slot
-/// items array. This is the accepted tradeoff for Path A simplicity.
-/// Internal dense-ItemId refactoring is a future optimization.
+/// uses dense per-block local IDs allocated by `next_local_id`. The
+/// `stable_to_local` and `local_to_stable` maps translate between those local
+/// IDs and stable wire identities from the shared causal graph.
 
 ///|
 priv struct TextInsertOp {

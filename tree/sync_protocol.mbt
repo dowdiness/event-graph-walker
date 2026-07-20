@@ -29,6 +29,23 @@ fn exact_tree_fields(
 }
 
 ///|
+fn check_tree_encoded_size(
+  size : Int,
+  limits : @sync.Limits,
+) -> Unit raise TreeError {
+  let limit = limits.max_encoded_bytes()
+  if size > limit {
+    raise TreeError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit~,
+        actual=size,
+      ),
+    )
+  }
+}
+
+///|
 fn tree_json_size(
   json_string : String,
   limits : @sync.Limits,
@@ -58,16 +75,7 @@ fn tree_json_size(
     }
   }
   let size = @utf8.encode(json_string).length()
-  let limit = limits.max_encoded_bytes()
-  if size > limit {
-    raise TreeError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit~,
-        actual=size,
-      ),
-    )
-  }
+  check_tree_encoded_size(size, limits)
   size
 }
 
@@ -84,7 +92,7 @@ pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
 ///|
 pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
   let payload = @json.parse(self.inner.to_json_string()) catch {
-    _ => Json::null()
+    _ => abort("container SyncMessage produced invalid JSON")
   }
   Json::object({
     "schema": (1).to_json(),
@@ -170,7 +178,7 @@ pub fn SyncSession::decode_json(
 ///|
 pub fn Version::to_json_string(self : Version) -> String {
   let payload = @json.parse(self.inner.to_json_string()) catch {
-    _ => Json::null()
+    _ => abort("container Version produced invalid JSON")
   }
   Json::object({
     "schema": (1).to_json(),

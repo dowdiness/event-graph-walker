@@ -3,7 +3,11 @@ test "encoded byte limit succeeds at boundary and fails one over" {
   let limits = try! @sync.Limits(max_encoded_bytes=4)
   inspect(try! container_encoded_size("1234", limits), content="4")
   try container_encoded_size("12345", limits) catch {
-    @sync.Failure::LimitExceeded(kind=_, limit=4, actual=5) => ()
+    @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::EncodedBytes,
+      limit=4,
+      actual=5
+    ) => ()
     _ => fail("expected encoded-byte limit classification")
   } noraise {
     _ => fail("one-over encoded input must fail")
