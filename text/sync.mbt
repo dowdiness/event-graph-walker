@@ -418,8 +418,8 @@ fn SyncMessage::SyncMessage(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
   encoded_size : Int?,
+  limits? : @sync.Limits = @sync.Limits::default(),
 ) -> SyncMessage raise @sync.Failure {
-  let limits : @sync.Limits = @sync.Limits::default()
   if operations.length() > limits.max_decoded_operations() {
     raise @sync.Failure::LimitExceeded(
       kind=@sync.LimitKind::DecodedOperations,
@@ -477,19 +477,33 @@ priv struct ApplicableOp {
 ///|
 /// Provenance of an operation considered during synchronization preparation.
 ///
-/// A malformed operation received in the current message rejects that message.
-/// A previously deferred operation is instead discarded once its dependencies
-/// make the malformation decidable, preventing one pending record from
-/// poisoning every later synchronization attempt.
+/// A malformed operation seen only in the current message rejects that
+/// message. A previously deferred operation retains that provenance even when
+/// resent, and is discarded once its dependencies make the malformation
+/// decidable, preventing one pending record from poisoning later attempts.
 priv enum SyncCandidate {
   FromPending(@core.Op)
   FromMessage(@core.Op)
+  FromPendingAndMessage(@core.Op)
 }
 
 ///|
 fn SyncCandidate::raw(self : SyncCandidate) -> @core.Op {
   match self {
-    FromPending(op) | FromMessage(op) => op
+    FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op
+  }
+}
+
+///|
+/// Record an identical observation from the current message without losing
+/// whether the operation was already present in the pending queue.
+fn SyncCandidate::observe_message(
+  self : SyncCandidate,
+  op : @core.Op,
+) -> SyncCandidate {
+  match self {
+    FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(op)
+    FromMessage(_) => FromMessage(op)
   }
 }
 
@@ -543,10 +557,10 @@ fn parse_candidate(
 ///|
 /// Parse a candidate according to its provenance.
 ///
-/// Current-message failures remain atomic message failures. A pending record
-/// that only becomes provably malformed after its dependencies arrive is
-/// discarded from the next prepared queue while valid current-message
-/// operations remain applicable.
+/// New current-message failures remain atomic message failures. A pending
+/// record that only becomes provably malformed after its dependencies arrive
+/// is discarded from the next prepared queue, including when the peer resends
+/// it, while valid current-message operations remain applicable.
 fn parse_sync_candidate(
   candidate : SyncCandidate,
   local_payloads : Map[String, String],
@@ -556,7 +570,7 @@ fn parse_sync_candidate(
   match candidate {
     FromMessage(op) =>
       parse_candidate(op, local_payloads, resolved, known_ops)
-    FromPending(op) =>
+    FromPending(op) | FromPendingAndMessage(op) =>
       try parse_candidate(op, local_payloads, resolved, known_ops) catch {
         _ => DiscardInvalidPending
       }
@@ -919,7 +933,12 @@ fn decode_sync_json(
     for value in envelope.heads {
       heads.push(decode_identity(value))
     }
-    SyncMessage::SyncMessage(operations, heads, Some(encoded_size))
+    SyncMessage::SyncMessage(
+      operations,
+      heads,
+      Some(encoded_size),
+      limits=limits,
+    )
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
       raise TextError::SyncFailed(@sync.Failure::MalformedMessage(detail~))
@@ -1062,7 +1081,7 @@ fn prepare_sync(
           Some(existing) =>
             if op_payload_key(existing.raw()) == payload {
               duplicates = duplicates + 1
-              candidates[key] = FromMessage(op)
+              candidates[key] = existing.observe_message(op)
             } else {
               raise @sync.Failure::ConflictingIdentity(
                 replica_id=id.agent,

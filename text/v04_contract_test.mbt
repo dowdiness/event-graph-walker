@@ -189,7 +189,7 @@ test "non-insert origin is rejected before any receiver mutation" {
 }
 
 ///|
-test "decidable malformed pending operation does not poison later sync" {
+test "resent decidable malformed pending operation does not poison later sync" {
   let receiver = try! TextState::new("receiver")
   let malformed_future = try! SyncMessage::from_json_string(
     "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
@@ -198,7 +198,7 @@ test "decidable malformed pending operation does not poison later sync" {
   inspect(deferred.applied_operations(), content="0")
   inspect(receiver.sync().pending_sync_count(), content="1")
   let valid_predecessors = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
   let applied = try! receiver.sync().apply(valid_predecessors)
   inspect(applied.applied_operations(), content="2")
@@ -247,4 +247,36 @@ test "receiver-specific decoder may raise the default encoded byte limit" {
   let receiver = try! TextState::new_with_sync_limits("receiver", limits)
   let message = try! receiver.sync().decode_json(json)
   inspect(message.is_empty(), content="true")
+}
+
+///|
+test "receiver-specific decoder honors raised parent limits in validation" {
+  let parents : Array[String] = []
+  for sequence in 0..<257 {
+    parents.push(
+      "{\"replica_id\":\"parent-\{sequence}\",\"sequence\":0}",
+    )
+  }
+  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
+    parents.join(",") +
+    "],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
+  try SyncMessage::from_json_string(json) catch {
+    TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::ParentsPerOperation,
+        limit=256,
+        actual=257
+      )
+    ) => ()
+    _ => fail("expected default parent limit")
+  } noraise {
+    _ => fail("default decoder must reject 257 parents")
+  }
+  let limits = try! @sync.Limits::Limits(
+    max_encoded_bytes=json.length(),
+    max_parents_per_operation=257,
+  )
+  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  let message = try! receiver.sync().decode_json(json)
+  inspect(message.op_count(), content="1")
 }
