@@ -19,7 +19,11 @@ jobs:
         with:
           version: 0.10.4+ade96c819
           core-version: 0.10.4+ade96c819
+      - name: Resolve dependencies
+        run: |
+          moon update
+          moon check --target all --fmt --deny-warn
       - name: Verify
         run: ./scripts/verify.sh
       - name: Validate publish package
-        run: moon publish --dry-run --frozen
+        run: ./scripts/verify-publish-package.sh
