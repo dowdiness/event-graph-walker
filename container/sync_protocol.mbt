@@ -257,13 +257,21 @@ fn validate_sync_text_references(
 }
 
 ///|
-/// Validate the state-aware invariants required before a record can commit.
-fn validate_applicable_sync_record(
+/// Parse a raw record into the only representation accepted by the apply shell.
+///
+/// The returned type preserves the knowledge gained by the state-aware checks;
+/// callers cannot accidentally discard a check and still append the raw record
+/// to a `PreparedSync` commit plan.
+fn parse_applicable_sync_record(
   record : SyncOpRecord,
   known_records : Map[String, SyncOpRecord],
-) -> Unit raise @sync.Failure {
+) -> ApplicableSyncOp raise @sync.Failure {
   validate_sync_sequence_descent(record, known_records)
   validate_sync_text_references(record, known_records)
+  match record {
+    Tree(op) => ApplyTree(op)
+    Text(op) => ApplyText(op)
+  }
 }
 
 ///|
@@ -993,7 +1001,7 @@ fn prepare_container_sync(
   }
   let ordered = canonical_sync_order(all_candidates)
   let resolvable : Map[String, Bool] = Map([])
-  let applicable : Array[SyncOpRecord] = []
+  let applicable : Array[ApplicableSyncOp] = []
   let pending : Array[SyncOpRecord] = []
   for record in ordered {
     let mut ready = true
@@ -1008,20 +1016,20 @@ fn prepare_container_sync(
       let candidate = candidates.get(key).unwrap()
       match candidate {
         FromMessage(_) => {
-          validate_applicable_sync_record(record, known_records)
+          let parsed = parse_applicable_sync_record(record, known_records)
           resolvable[key] = true
-          applicable.push(record)
+          applicable.push(parsed)
         }
         FromPending(_) | FromPendingAndMessage(_) => {
-          let valid = try {
-            validate_applicable_sync_record(record, known_records)
-            true
-          } catch {
-            _ => false
+          let parsed = Some(parse_applicable_sync_record(record, known_records)) catch {
+            _ => None
           }
-          if valid {
-            resolvable[key] = true
-            applicable.push(record)
+          match parsed {
+            Some(applicable_record) => {
+              resolvable[key] = true
+              applicable.push(applicable_record)
+            }
+            None => ()
           }
         }
       }

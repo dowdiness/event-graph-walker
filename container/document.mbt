@@ -151,6 +151,25 @@ priv enum SyncCandidate {
 }
 
 ///|
+/// A synchronization operation whose receiver-specific causal and text
+/// reference invariants have been parsed successfully.
+///
+/// Keeping this distinct from `SyncOpRecord` makes it impossible for the
+/// imperative apply shell to consume an unparsed wire record.
+priv enum ApplicableSyncOp {
+  ApplyTree(VersionedTreeOp)
+  ApplyText(VersionedBlockTextOp)
+}
+
+///|
+fn ApplicableSyncOp::raw(self : ApplicableSyncOp) -> SyncOpRecord {
+  match self {
+    ApplyTree(op) => Tree(op)
+    ApplyText(op) => Text(op)
+  }
+}
+
+///|
 fn SyncCandidate::raw(self : SyncCandidate) -> SyncOpRecord {
   match self {
     FromPending(record) | FromMessage(record) | FromPendingAndMessage(record) =>
@@ -172,7 +191,7 @@ fn SyncCandidate::observe_message(
 ///|
 /// A fully validated, receiver-specific synchronization transition.
 priv struct PreparedSync {
-  applicable : Array[SyncOpRecord]
+  applicable : Array[ApplicableSyncOp]
   pending : Array[SyncOpRecord]
   duplicate_operations : Int
 }
@@ -1405,25 +1424,25 @@ pub fn SyncSession::apply(
   ) catch {
     failure => raise DocumentError::SyncFailed(failure)
   }
-  // Imperative shell: PreparedSync is only constructible after validation,
-  // conflict checks, cycle detection, dependency resolution, and limits.
+  // Imperative shell: only parsed ApplicableSyncOp values can reach mutation.
   let mut applied_tree = 0
   let mut applied_text = 0
-  for record in prepared.applicable {
-    match record {
-      Tree(op) => {
+  for applicable in prepared.applicable {
+    match applicable {
+      ApplyTree(op) => {
         if !self.document.try_apply_versioned_tree_op(op) {
           abort("prepared tree sync command was not total")
         }
         applied_tree = applied_tree + 1
       }
-      Text(op) => {
+      ApplyText(op) => {
         if !self.document.try_apply_versioned_text_op(op) {
           abort("prepared text sync command was not total")
         }
         applied_text = applied_text + 1
       }
     }
+    let record = applicable.raw()
     let key = sync_record_key(record)
     self.document.seen_sync_versions[key] = true
     self.document.sync_ops_by_version[key] = record
