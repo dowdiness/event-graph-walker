@@ -11,6 +11,24 @@ def run-checked [description: string, command: closure] {
   }
 }
 
+def find-internal-imports [files: list<string>] {
+  $files
+  | each {|file|
+      open --raw $file
+      | lines
+      | enumerate
+      | where item =~ "event-graph-walker/internal"
+      | each {|match|
+          {
+            file: $file
+            line: ($match.index + 1)
+            text: $match.item
+          }
+        }
+    }
+  | flatten
+}
+
 let repo_root = ($env.FILE_PWD | path dirname | path expand)
 cd $repo_root
 
@@ -30,22 +48,13 @@ let generated_interfaces = [
   "container/pkg.generated.mbti"
   "history/pkg.generated.mbti"
 ]
-let leak_check = (
-  ^rg -n "event-graph-walker/internal" ...$generated_interfaces | complete
-)
-print --raw --no-newline $leak_check.stdout
-print --raw --no-newline --stderr $leak_check.stderr
-match $leak_check.exit_code {
-  0 => {
-    error make {
-      msg: "public generated interfaces import internal packages"
-    }
+let internal_imports = (find-internal-imports $generated_interfaces)
+if not ($internal_imports | is-empty) {
+  $internal_imports | each {|import|
+    print --stderr $"($import.file):($import.line):($import.text)"
   }
-  1 => {}
-  _ => {
-    error make {
-      msg: $"generated interface leak check failed with exit code ($leak_check.exit_code)"
-    }
+  error make {
+    msg: "public generated interfaces import internal packages"
   }
 }
 
