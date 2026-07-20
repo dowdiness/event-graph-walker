@@ -1,7 +1,7 @@
 ///|
 /// Tests for user-friendly text API
 test "TextState::new creates empty document" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   inspect(doc.text(), content="")
   inspect(doc.len(), content="0")
   inspect(doc.is_empty(), content="true")
@@ -9,7 +9,7 @@ test "TextState::new creates empty document" {
 
 ///|
 test "TextState::insert adds text" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   inspect(doc.text(), content="Hello")
   inspect(doc.len(), content="5")
@@ -17,7 +17,7 @@ test "TextState::insert adds text" {
 
 ///|
 test "TextState::insert at position" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "W")
   let _ = doc.insert(Pos::at(1), "o")
   let _ = doc.insert(Pos::at(2), "r")
@@ -28,7 +28,7 @@ test "TextState::insert at position" {
 
 ///|
 test "TextState::delete removes character" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete(Pos::at(4))
   inspect(doc.text(), content="Hell")
@@ -36,7 +36,7 @@ test "TextState::delete removes character" {
 
 ///|
 test "TextState::delete_range removes text at document start" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete_range(Range::from_ints(0, 2))
   inspect(doc.text(), content="llo")
@@ -44,7 +44,7 @@ test "TextState::delete_range removes text at document start" {
 
 ///|
 test "TextState::delete_range removes text in document middle" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete_range(Range::from_ints(1, 4))
   inspect(doc.text(), content="Ho")
@@ -52,7 +52,7 @@ test "TextState::delete_range removes text in document middle" {
 
 ///|
 test "TextState::delete_range removes text at document end" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let _ = doc.delete_range(Range::from_ints(3, 5))
   inspect(doc.text(), content="Hel")
@@ -60,7 +60,7 @@ test "TextState::delete_range removes text at document end" {
 
 ///|
 test "TextState::replace_range handles shorter replacement" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(Range::from_ints(1, 4), "Z")
   inspect(doc.text(), content="aZef")
@@ -68,7 +68,7 @@ test "TextState::replace_range handles shorter replacement" {
 
 ///|
 test "TextState::replace_range handles equal-length replacement" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(Range::from_ints(1, 3), "XY")
   inspect(doc.text(), content="aXYdef")
@@ -76,7 +76,7 @@ test "TextState::replace_range handles equal-length replacement" {
 
 ///|
 test "TextState::replace_range handles longer replacement" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(Range::from_ints(1, 2), "WXYZ")
   inspect(doc.text(), content="aWXYZcdef")
@@ -84,7 +84,7 @@ test "TextState::replace_range handles longer replacement" {
 
 ///|
 test "TextState::version changes after edit" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let v1 = doc.version()
   let _ = doc.insert(Pos::at(0), "Hello")
   let v2 = doc.version()
@@ -118,26 +118,25 @@ test "TextError::help provides guidance" {
 ///|
 test "TextError::is_retryable for sync errors" {
   let retryable : TextError = TextError::SyncFailed(
-    SyncFailure::MissingDependency(hint="test"),
+    @sync.Failure::MissingDependency(replica_id="peer", sequence=3),
   )
   let not_retryable : TextError = TextError::SyncFailed(
-    SyncFailure::MalformedMessage(detail="test"),
+    @sync.Failure::MalformedMessage(detail="test"),
   )
   inspect(retryable.is_retryable(), content="true")
   inspect(not_retryable.is_retryable(), content="false")
 }
 
 ///|
-/// MalformedContent (#31): Op content rejection surfaces as a typed
-/// SyncFailure variant — not Internal — so consumers can pattern-match
+/// Invalid content surfaces as a shared typed failure, not `Internal`.
 /// without parsing diagnostic strings.
-test "TextError::SyncFailed(MalformedContent) — message and help" {
+test "TextError::SyncFailed(InvalidContent) — message and help" {
   let err : TextError = TextError::SyncFailed(
-    SyncFailure::MalformedContent(reason=MalformedContentReason::MalformedUtf16),
+    @sync.Failure::InvalidContent(detail="insert contains malformed UTF-16"),
   )
   inspect(
     err.message(),
-    content="Sync failed: malformed Op content - MalformedUtf16",
+    content="Sync failed: invalid content - insert contains malformed UTF-16",
   )
   inspect(
     err.help(),
@@ -147,50 +146,50 @@ test "TextError::SyncFailed(MalformedContent) — message and help" {
 }
 
 ///|
-test "TextError::SyncFailed(MalformedContent) — multi-codepoint reason" {
+test "TextError::SyncFailed(InvalidContent) — multi-codepoint detail" {
   let multi : TextError = TextError::SyncFailed(
-    SyncFailure::MalformedContent(
-      reason=MalformedContentReason::MultipleCodepoints,
+    @sync.Failure::InvalidContent(
+      detail="insert must contain exactly one Unicode scalar value",
     ),
   )
   inspect(
     multi.message(),
-    content="Sync failed: malformed Op content - MultipleCodepoints",
+    content="Sync failed: invalid content - insert must contain exactly one Unicode scalar value",
   )
 }
 
 ///|
 test "SyncSession::export_all and apply" {
-  let doc1 = TextState::new("alice")
-  let doc2 = TextState::new("bob")
+  let doc1 = try! TextState::new("alice")
+  let doc2 = try! TextState::new("bob")
   let _ = doc1.insert(Pos::at(0), "H")
   let _ = doc1.insert(Pos::at(1), "i")
   let msg = doc1.sync().export_all()
   inspect(msg.is_empty(), content="false")
   inspect(msg.op_count(), content="2")
-  doc2.sync().apply(msg)
+  let _ = doc2.sync().apply(msg)
   inspect(doc2.text(), content="Hi")
 }
 
 ///|
 test "SyncSession::export_since sends delta" {
-  let doc1 = TextState::new("alice")
-  let doc2 = TextState::new("bob")
+  let doc1 = try! TextState::new("alice")
+  let doc2 = try! TextState::new("bob")
   let _ = doc1.insert(Pos::at(0), "H")
   let _ = doc1.insert(Pos::at(1), "i")
   let msg1 = doc1.sync().export_all()
-  doc2.sync().apply(msg1)
+  let _ = doc2.sync().apply(msg1)
   let v2 = doc2.version()
   let _ = doc1.insert(Pos::at(2), "!")
   let msg2 = doc1.sync().export_since(v2)
   inspect(msg2.op_count(), content="1")
-  doc2.sync().apply(msg2)
+  let _ = doc2.sync().apply(msg2)
   inspect(doc2.text(), content="Hi!")
 }
 
 ///|
 test "TextState::checkout creates historical view" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let v1 = doc.version()
   let _ = doc.insert(Pos::at(5), " World")
@@ -200,37 +199,41 @@ test "TextState::checkout creates historical view" {
 }
 
 ///|
-test "SyncFailure::Timeout is retryable" {
+test "Failure::LimitExceeded is not retryable" {
   let err : TextError = TextError::SyncFailed(
-    SyncFailure::Timeout(detail="operation timed out after 30s"),
+    @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::DecodedOperations,
+      limit=10,
+      actual=11,
+    ),
   )
-  inspect(err.is_retryable(), content="true")
+  inspect(err.is_retryable(), content="false")
   inspect(
     err.message(),
-    content="Sync timed out: operation timed out after 30s",
+    content="Sync failed: DecodedOperations limit 10 exceeded by 11",
   )
 }
 
 ///|
-test "SyncFailure::Cancelled is not retryable" {
+test "Failure::ConflictingIdentity is not retryable" {
   let err : TextError = TextError::SyncFailed(
-    SyncFailure::Cancelled(detail="user cancelled"),
+    @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0),
   )
   inspect(err.is_retryable(), content="false")
-  inspect(err.message(), content="Sync cancelled: user cancelled")
+  inspect(err.message(), content="Sync failed: conflicting identity - alice:0")
 }
 
 ///|
 test "Version::empty creates empty version" {
   let v = Version::empty()
   // An empty version equals the initial state of a new document
-  let doc = TextState::new("test")
+  let doc = try! TextState::new("test")
   inspect(doc.version() == v, content="true")
 }
 
 ///|
 test "TextState insert at invalid position raises error" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
     e => Err(e)
   }
@@ -245,7 +248,7 @@ test "TextState insert at invalid position raises error" {
 
 ///|
 test "TextState delete at invalid position raises error" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hi")
   let result : Result[Unit, TextError] = Ok(doc.delete(Pos::at(5))) catch {
     e => Err(e)
@@ -261,7 +264,7 @@ test "TextState delete at invalid position raises error" {
 
 ///|
 test "TextState::replace_range_and_record undo and redo restore range edit" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
   let _ = doc.replace_range_and_record(
@@ -279,7 +282,7 @@ test "TextState::replace_range_and_record undo and redo restore range edit" {
 
 ///|
 test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   let _ = doc.insert_and_record(Pos::at(0), "a😀b", mgr, timestamp_ms=1000)
   inspect(doc.text(), content="a😀b")
@@ -292,7 +295,7 @@ test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
 
 ///|
 test "TextState::replace_range_and_record inserts non-BMP text atomically" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   let _ = doc.insert_and_record(Pos::at(0), "ab", mgr, timestamp_ms=1000)
   let _ = doc.replace_range_and_record(
@@ -311,7 +314,7 @@ test "TextState::replace_range_and_record inserts non-BMP text atomically" {
 
 ///|
 test "TextView::runs iterates over runs" {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
   let view = doc.checkout(doc.version())
   let runs = view.runs().collect()
@@ -326,13 +329,13 @@ test "TextView::runs iterates over runs" {
 ///|
 /// Test: Peer reconnects after divergence - both edited while disconnected
 test "sync recovery - peer reconnects after divergence" {
-  let doc1 = TextState::new("alice")
-  let doc2 = TextState::new("bob")
+  let doc1 = try! TextState::new("alice")
+  let doc2 = try! TextState::new("bob")
 
   // Initial sync - both start with "Hello"
   let _ = doc1.insert(Pos::at(0), "Hello")
   let msg_init = doc1.sync().export_all()
-  doc2.sync().apply(msg_init)
+  let _ = doc2.sync().apply(msg_init)
   inspect(doc1.text(), content="Hello")
   inspect(doc2.text(), content="Hello")
 
@@ -358,8 +361,8 @@ test "sync recovery - peer reconnects after divergence" {
   inspect(msg_bob.op_count() > 0, content="true")
 
   // Apply changes to each other
-  doc2.sync().apply(msg_alice)
-  doc1.sync().apply(msg_bob)
+  let _ = doc2.sync().apply(msg_alice)
+  let _ = doc1.sync().apply(msg_bob)
 
   // Both should converge to the same text
   inspect(doc1.text() == doc2.text(), content="true")
@@ -371,15 +374,15 @@ test "sync recovery - peer reconnects after divergence" {
 ///|
 /// Test: Peer only received partial sync, reconnects with stale version
 test "sync recovery - partial operation log" {
-  let doc1 = TextState::new("alice")
-  let doc2 = TextState::new("bob")
+  let doc1 = try! TextState::new("alice")
+  let doc2 = try! TextState::new("bob")
 
   // Alice inserts "A" alone so Bob can sync to that specific version
   let _ = doc1.insert(Pos::at(0), "A")
 
   // Sync only "A" to Bob
   let msg_a = doc1.sync().export_since(Version::empty())
-  doc2.sync().apply(msg_a)
+  let _ = doc2.sync().apply(msg_a)
   inspect(doc2.text(), content="A")
 
   // Alice continues writing, Bob misses it
@@ -391,15 +394,15 @@ test "sync recovery - partial operation log" {
   let delta_msg = doc1.sync().export_since(bob_version)
   // Should contain "B" and "C" ops
   inspect(delta_msg.op_count(), content="2")
-  doc2.sync().apply(delta_msg)
+  let _ = doc2.sync().apply(delta_msg)
   inspect(doc2.text(), content="ABC")
 }
 
 ///|
 /// Test: Use saved old version for export_since, verify correct delta
 test "sync recovery - stale version vector" {
-  let doc1 = TextState::new("alice")
-  let doc2 = TextState::new("bob")
+  let doc1 = try! TextState::new("alice")
+  let doc2 = try! TextState::new("bob")
 
   // Build up some history
   let _ = doc1.insert(Pos::at(0), "Hello")
@@ -410,7 +413,7 @@ test "sync recovery - stale version vector" {
 
   // Sync everything to doc2
   let full_msg = doc1.sync().export_all()
-  doc2.sync().apply(full_msg)
+  let _ = doc2.sync().apply(full_msg)
   inspect(doc2.text(), content="Hello World!")
 
   // Now test export_since with the old version
@@ -425,15 +428,15 @@ test "sync recovery - stale version vector" {
 ///|
 /// Test: Two partitions evolve separately, reunify, all three converge
 test "sync recovery - network partition reunion (3 peers)" {
-  let doc_a = TextState::new("alice")
-  let doc_b = TextState::new("bob")
-  let doc_c = TextState::new("carol")
+  let doc_a = try! TextState::new("alice")
+  let doc_b = try! TextState::new("bob")
+  let doc_c = try! TextState::new("carol")
 
   // Initial state: all three have "X"
   let _ = doc_a.insert(Pos::at(0), "X")
   let msg_init = doc_a.sync().export_all()
-  doc_b.sync().apply(msg_init)
-  doc_c.sync().apply(msg_init)
+  let _ = doc_b.sync().apply(msg_init)
+  let _ = doc_c.sync().apply(msg_init)
   let shared_version = doc_a.version()
 
   // === Partition 1: Alice and Bob ===
@@ -441,11 +444,11 @@ test "sync recovery - network partition reunion (3 peers)" {
   let _ = doc_a.insert(Pos::at(1), "A")
   // Sync within partition
   let msg_a = doc_a.sync().export_since(shared_version)
-  doc_b.sync().apply(msg_a)
+  let _ = doc_b.sync().apply(msg_a)
   // Bob inserts "B"
   let _ = doc_b.insert(Pos::at(2), "B")
   let msg_b = doc_b.sync().export_since(doc_a.version())
-  doc_a.sync().apply(msg_b)
+  let _ = doc_a.sync().apply(msg_b)
 
   // Partition 1 now has "XAB"
   inspect(doc_a.text() == doc_b.text(), content="true")
@@ -459,12 +462,12 @@ test "sync recovery - network partition reunion (3 peers)" {
   // Exchange all ops
   // Carol sends to Alice
   let carol_ops = doc_c.sync().export_since(shared_version)
-  doc_a.sync().apply(carol_ops)
-  doc_b.sync().apply(carol_ops)
+  let _ = doc_a.sync().apply(carol_ops)
+  let _ = doc_b.sync().apply(carol_ops)
 
   // Alice sends to Carol
   let alice_ops = doc_a.sync().export_since(shared_version)
-  doc_c.sync().apply(alice_ops)
+  let _ = doc_c.sync().apply(alice_ops)
 
   // All three should converge
   inspect(doc_a.text() == doc_b.text(), content="true")
@@ -481,13 +484,13 @@ test "sync recovery - network partition reunion (3 peers)" {
 ///|
 /// Test: Both peers have local-only ops, sync both directions simultaneously
 test "sync recovery - bidirectional delta after disconnect" {
-  let doc1 = TextState::new("alice")
-  let doc2 = TextState::new("bob")
+  let doc1 = try! TextState::new("alice")
+  let doc2 = try! TextState::new("bob")
 
   // Shared initial state
   let _ = doc1.insert(Pos::at(0), "START")
   let msg_init = doc1.sync().export_all()
-  doc2.sync().apply(msg_init)
+  let _ = doc2.sync().apply(msg_init)
   let shared = doc1.version()
 
   // Both make local changes while disconnected
@@ -501,8 +504,8 @@ test "sync recovery - bidirectional delta after disconnect" {
   let delta2 = doc2.sync().export_since(shared)
 
   // Apply deltas (simulate simultaneous network delivery)
-  doc1.sync().apply(delta2)
-  doc2.sync().apply(delta1)
+  let _ = doc1.sync().apply(delta2)
+  let _ = doc2.sync().apply(delta1)
 
   // Both should converge
   inspect(doc1.text() == doc2.text(), content="true")

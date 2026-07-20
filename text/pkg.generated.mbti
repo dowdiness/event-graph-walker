@@ -3,6 +3,7 @@ package "dowdiness/event-graph-walker/text"
 
 import {
   "dowdiness/event-graph-walker/history",
+  "dowdiness/event-graph-walker/sync",
   "dowdiness/event-graph-walker/undo",
   "moonbitlang/core/debug",
 }
@@ -11,8 +12,9 @@ import {
 
 // Errors
 pub(all) suberror TextError {
+  EmptyReplicaId
   InvalidPosition(pos~ : Int, len~ : Int)
-  SyncFailed(SyncFailure)
+  SyncFailed(@sync.Failure)
   VersionNotFound
   Internal(detail~ : String)
 }
@@ -22,12 +24,6 @@ pub fn TextError::is_retryable(Self) -> Bool
 pub fn TextError::message(Self) -> String
 
 // Types and methods
-pub(all) enum MalformedContentReason {
-  MalformedUtf16
-  MultipleCodepoints
-} derive(Eq, @debug.Debug)
-pub impl Show for MalformedContentReason
-
 pub(all) struct Pos {
   // private fields
 } derive(Eq, @debug.Debug)
@@ -41,31 +37,31 @@ pub(all) struct Range {
 pub fn Range::from_ints(Int, Int) -> Self
 pub fn Range::new(Pos, Pos) -> Self
 
-pub(all) enum SyncFailure {
-  MissingDependency(hint~ : String)
-  MalformedMessage(detail~ : String)
-  MalformedContent(reason~ : MalformedContentReason)
-  Timeout(detail~ : String)
-  Cancelled(detail~ : String)
-} derive(@debug.Debug)
-pub impl Show for SyncFailure
-
 pub(all) struct SyncMessage {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn SyncMessage::from_json_string(String) -> Self raise TextError
 pub fn SyncMessage::is_empty(Self) -> Bool
 pub fn SyncMessage::op_count(Self) -> Int
 pub fn SyncMessage::to_canonical_bytes(Self) -> Bytes
 pub fn SyncMessage::to_json_string(Self) -> String
 
+pub(all) struct SyncReport {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn SyncReport::applied_operations(Self) -> Int
+pub fn SyncReport::duplicate_operations(Self) -> Int
+pub fn SyncReport::pending_operations(Self) -> Int
+
 pub(all) struct SyncSession {
   // private fields
 }
-pub fn SyncSession::apply(Self, SyncMessage) -> Unit raise TextError
+pub fn SyncSession::apply(Self, SyncMessage) -> SyncReport raise TextError
+pub fn SyncSession::clear_pending_sync(Self) -> Unit
 pub fn SyncSession::current_version(Self) -> Version
 pub fn SyncSession::export_all(Self) -> SyncMessage raise TextError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TextError
+pub fn SyncSession::pending_sync_count(Self) -> Int
 
 pub(all) struct TextState {
   // private fields
@@ -80,7 +76,8 @@ pub fn TextState::insert(Self, Pos, String) -> Unit raise TextError
 pub fn TextState::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::is_empty(Self) -> Bool
 pub fn TextState::len(Self) -> Int
-pub fn TextState::new(String) -> Self
+pub fn TextState::new(String) -> Self raise TextError
+pub fn TextState::new_with_sync_limits(String, @sync.Limits) -> Self raise TextError
 pub fn TextState::replace_range(Self, Range, String) -> Unit raise TextError
 pub fn TextState::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::sync(Self) -> SyncSession

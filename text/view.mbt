@@ -4,11 +4,15 @@
 /// A read-only view of the document at a specific version
 pub(all) struct TextView {
   priv branch : @branch.Branch
+  priv view_version : Version
 }
 
 ///|
-fn TextView::from_branch(branch : @branch.Branch) -> TextView {
-  TextView::{ branch, }
+fn TextView::from_branch(
+  branch : @branch.Branch,
+  version : Version,
+) -> TextView {
+  TextView::{ branch, view_version: version }
 }
 
 ///|
@@ -20,7 +24,7 @@ pub fn TextView::text(self : TextView) -> String {
 ///|
 /// Get the version of this view
 pub fn TextView::version(self : TextView) -> Version {
-  Version::from_frontier(self.branch.get_frontier())
+  self.view_version
 }
 
 ///|
@@ -47,6 +51,6 @@ pub impl Show for TextView with fn output(self, logger) {
   logger.write_string("TextView { text: \"")
   logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")
-  self.version().to_frontier().output(logger)
+  self.version().output(logger)
   logger.write_string(" }")
 }

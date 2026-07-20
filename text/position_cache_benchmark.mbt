@@ -16,7 +16,7 @@ fn bench_insert(doc : TextState, pos : Int, text : String) -> Unit {
 /// Sequential append at 1000 chars — cache stays warm, no rebuild.
 test "cache - sequential append (1000 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextState::new("alice")
+    let doc = try! TextState::new("alice")
     for i = 0; i < 1000; i = i + 1 {
       bench_insert(doc, i, "x")
     }
@@ -33,7 +33,7 @@ test "cache - sequential append (1000 chars)" (b : @bench.T) {
 /// forcing cache rebuild each time.
 test "cache - alternating pos (1000 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextState::new("alice")
+    let doc = try! TextState::new("alice")
     for i = 0; i < 1000; i = i + 1 {
       let pos = if i % 2 == 0 { i / 2 } else { 0 }
       bench_insert(doc, pos, "x")
@@ -51,7 +51,7 @@ test "cache - alternating pos (1000 chars)" (b : @bench.T) {
 /// invalidation since origin_left=root on non-empty doc). ~100 rebuilds.
 test "cache - jump to pos 0 every 10 chars (1000 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextState::new("alice")
+    let doc = try! TextState::new("alice")
     let mut pos = 0
     for i = 0; i < 1000; i = i + 1 {
       bench_insert(doc, pos, "x")
@@ -70,7 +70,7 @@ test "cache - jump to pos 0 every 10 chars (1000 chars)" (b : @bench.T) {
 /// no FugueMax edge case). Incremental cache maintained. ~100 jumps.
 test "cache - jump to middle every 10 chars (1000 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let doc = TextState::new("alice")
+    let doc = try! TextState::new("alice")
     let mut pos = 0
     for i = 0; i < 1000; i = i + 1 {
       bench_insert(doc, pos, "x")
@@ -92,7 +92,7 @@ test "cache - jump to middle every 10 chars (1000 chars)" (b : @bench.T) {
 /// Build a 1000-char doc, warm the cache, then measure a single
 /// non-sequential insert (which forces rebuild).
 test "cache - single non-seq insert on 1000-char doc" (b : @bench.T) {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   for i = 0; i < 1000; i = i + 1 {
     bench_insert(doc, i, "x")
   }
@@ -106,7 +106,7 @@ test "cache - single non-seq insert on 1000-char doc" (b : @bench.T) {
 ///|
 /// Same but with 5000 chars — check if cost scales linearly.
 test "cache - single non-seq insert on 5000-char doc" (b : @bench.T) {
-  let doc = TextState::new("alice")
+  let doc = try! TextState::new("alice")
   for i = 0; i < 5000; i = i + 1 {
     bench_insert(doc, i, "x")
   }

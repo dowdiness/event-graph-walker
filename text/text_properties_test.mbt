@@ -30,7 +30,7 @@ impl @quickcheck.Arbitrary for RealOps with fn arbitrary(size, random_state) {
     'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
   ]
   // Use a scratch doc to track position validity during generation
-  let scratch = @text.TextState::new("scratch")
+  let scratch = try! @text.TextState::new("scratch")
   let edits : Array[TextEdit] = []
   for i = 0; i < size; i = i + 1 {
     let len = scratch.len()
@@ -44,15 +44,11 @@ impl @quickcheck.Arbitrary for RealOps with fn arbitrary(size, random_state) {
       let char_idx = random_state.split().next_uint64().to_int().abs() %
         chars.length()
       let ch = chars[char_idx].to_string()
-      scratch.insert(@text.Pos::at(pos), ch) catch {
-        _ => continue
-      }
+      try! scratch.insert(@text.Pos::at(pos), ch)
       edits.push(Insert(pos, ch))
     } else {
       let pos = random_state.split().next_uint64().to_int().abs() % len
-      scratch.delete(@text.Pos::at(pos)) catch {
-        _ => continue
-      }
+      try! scratch.delete(@text.Pos::at(pos))
       edits.push(Delete(pos))
     }
   }
@@ -90,15 +86,11 @@ impl @qc.Shrink for RealOpsPair
 ///|
 /// Apply a single TextEdit to a document, returning success.
 fn apply_edit(doc : @text.TextState, edit : TextEdit) -> Bool {
-  try {
-    match edit {
-      Insert(pos, ch) => doc.insert(@text.Pos::at(pos), ch)
-      Delete(pos) => doc.delete(@text.Pos::at(pos))
-    }
-    true
-  } catch {
-    _ => false
+  match edit {
+    Insert(pos, ch) => try! doc.insert(@text.Pos::at(pos), ch)
+    Delete(pos) => try! doc.delete(@text.Pos::at(pos))
   }
+  true
 }
 
 ///|
@@ -115,21 +107,15 @@ fn apply_edits(doc : @text.TextState, edits : Array[TextEdit]) -> Bool {
 ///|
 /// Property: Sync convergence - two documents with same edits converge
 fn prop_sync_convergence(ops : RealOps) -> Bool {
-  let doc1 = @text.TextState::new("alice")
-  let doc2 = @text.TextState::new("bob")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
 
   // Apply edits to doc1
-  if !apply_edits(doc1, ops.edits) {
-    return true
-  }
+  let _ = apply_edits(doc1, ops.edits)
 
   // Sync doc1 -> doc2
-  let msg = doc1.sync().export_all() catch {
-      _ => return true // If export fails, skip this test case
-    }
-  doc2.sync().apply(msg) catch {
-    _ => return true
-  }
+  let msg = try! doc1.sync().export_all()
+  let _ = try! doc2.sync().apply(msg)
 
   // Both documents should have same text
   doc1.text() == doc2.text()
@@ -143,24 +129,18 @@ test "property: sync convergence" {
 ///|
 /// Property: Sync is idempotent - applying same message twice has no effect
 fn prop_sync_idempotent(ops : RealOps) -> Bool {
-  let doc1 = @text.TextState::new("alice")
-  let doc2 = @text.TextState::new("bob")
-  if !apply_edits(doc1, ops.edits) {
-    return true
-  }
-  let msg = doc1.sync().export_all() catch { _ => return true }
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
+  let _ = apply_edits(doc1, ops.edits)
+  let msg = try! doc1.sync().export_all()
 
   // Apply once
-  doc2.sync().apply(msg) catch {
-    _ => return true
-  }
+  let _ = try! doc2.sync().apply(msg)
   let text_after_first = doc2.text()
 
   // Apply again (should be no-op)
-  let msg2 = doc1.sync().export_all() catch { _ => return true }
-  doc2.sync().apply(msg2) catch {
-    _ => return true
-  }
+  let msg2 = try! doc1.sync().export_all()
+  let _ = try! doc2.sync().apply(msg2)
   let text_after_second = doc2.text()
   text_after_first == text_after_second
 }
@@ -173,13 +153,9 @@ test "property: sync is idempotent" {
 ///|
 /// Property: Version changes after edit
 fn prop_version_changes_after_edit(char : Char) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let v1 = doc.version()
-  try {
-    let _ = doc.insert(@text.Pos::at(0), char.to_string())
-  } catch {
-    _ => return true
-  }
+  try! doc.insert(@text.Pos::at(0), char.to_string())
   let v2 = doc.version()
   v1 != v2
 }
@@ -192,13 +168,9 @@ test "property: version changes after edit" {
 ///|
 /// Property: Insert increases length by 1
 fn prop_insert_increases_length(pos : Int) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   // Pre-populate with some content
-  try {
-    let _ = doc.insert(@text.Pos::at(0), "hello")
-  } catch {
-    _ => return true
-  }
+  try! doc.insert(@text.Pos::at(0), "hello")
   let len_before = doc.len()
   let clamped_pos = if pos < 0 {
     0
@@ -207,11 +179,7 @@ fn prop_insert_increases_length(pos : Int) -> Bool {
   } else {
     pos
   }
-  try {
-    let _ = doc.insert(@text.Pos::at(clamped_pos), "x")
-  } catch {
-    _ => return true
-  }
+  try! doc.insert(@text.Pos::at(clamped_pos), "x")
   doc.len() == len_before + 1
 }
 
@@ -223,13 +191,9 @@ test "property: insert increases length" {
 ///|
 /// Property: Delete decreases length by 1 (when doc not empty)
 fn prop_delete_decreases_length(pos : Int) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   // Pre-populate
-  try {
-    let _ = doc.insert(@text.Pos::at(0), "hello")
-  } catch {
-    _ => return true
-  }
+  try! doc.insert(@text.Pos::at(0), "hello")
   let len_before = doc.len()
   if len_before == 0 {
     return true
@@ -241,11 +205,7 @@ fn prop_delete_decreases_length(pos : Int) -> Bool {
   } else {
     pos
   }
-  try {
-    let _ = doc.delete(@text.Pos::at(clamped_pos))
-  } catch {
-    _ => return true
-  }
+  try! doc.delete(@text.Pos::at(clamped_pos))
   doc.len() == len_before - 1
 }
 
@@ -257,25 +217,21 @@ test "property: delete decreases length" {
 ///|
 /// Property: Checkout preserves text at that version
 fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
 
   // Apply first half of edits
   let mid = ops.edits.length() / 2
-  if !apply_edits(doc, ops.edits[:mid].to_owned()) {
-    return true
-  }
+  let _ = apply_edits(doc, ops.edits[:mid].to_owned())
 
   // Save version and text
   let saved_version = doc.version()
   let saved_text = doc.text()
 
   // Apply remaining edits
-  if !apply_edits(doc, ops.edits[mid:].to_owned()) {
-    return true
-  }
+  let _ = apply_edits(doc, ops.edits[mid:].to_owned())
 
   // Checkout saved version
-  let view = doc.checkout(saved_version) catch { _ => return true }
+  let view = try! doc.checkout(saved_version)
 
   // Text should match
   view.text() == saved_text
@@ -290,7 +246,7 @@ test "property: checkout preserves text" {
 /// Property: Empty document has length 0
 fn prop_empty_doc_length_zero(agent : String) -> Bool {
   let agent_name = if agent.length() == 0 { "default" } else { agent }
-  let doc = @text.TextState::new(agent_name)
+  let doc = try! @text.TextState::new(agent_name)
   doc.len() == 0 && doc.is_empty()
 }
 
@@ -314,10 +270,8 @@ test "property: Pos clamps negative values" {
 ///|
 /// Property: Version equality is reflexive
 fn prop_version_reflexive(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
-  if !apply_edits(doc, ops.edits) {
-    return true
-  }
+  let doc = try! @text.TextState::new("alice")
+  let _ = apply_edits(doc, ops.edits)
   let v = doc.version()
   v == v
 }
@@ -330,11 +284,9 @@ test "property: version equality is reflexive" {
 ///|
 /// Property: SyncMessage::is_empty consistent with op_count
 fn prop_sync_message_empty_consistent(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
-  if !apply_edits(doc, ops.edits) {
-    return true
-  }
-  let msg = doc.sync().export_all() catch { _ => return true }
+  let doc = try! @text.TextState::new("alice")
+  let _ = apply_edits(doc, ops.edits)
+  let msg = try! doc.sync().export_all()
   (msg.is_empty() && msg.op_count() == 0) ||
   (!msg.is_empty() && msg.op_count() > 0)
 }
@@ -349,26 +301,18 @@ test "property: SyncMessage is_empty consistent with op_count" {
 fn prop_bidirectional_sync_converges(pair : RealOpsPair) -> Bool {
   let ops1 = pair.left
   let ops2 = pair.right
-  let doc1 = @text.TextState::new("alice")
-  let doc2 = @text.TextState::new("bob")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
 
   // Apply different edits to each doc
-  if !apply_edits(doc1, ops1.edits) {
-    return true
-  }
-  if !apply_edits(doc2, ops2.edits) {
-    return true
-  }
+  let _ = apply_edits(doc1, ops1.edits)
+  let _ = apply_edits(doc2, ops2.edits)
 
   // Sync both ways
-  let msg1 = doc1.sync().export_all() catch { _ => return true }
-  let msg2 = doc2.sync().export_all() catch { _ => return true }
-  doc1.sync().apply(msg2) catch {
-    _ => return true
-  }
-  doc2.sync().apply(msg1) catch {
-    _ => return true
-  }
+  let msg1 = try! doc1.sync().export_all()
+  let msg2 = try! doc2.sync().export_all()
+  let _ = try! doc1.sync().apply(msg2)
+  let _ = try! doc2.sync().apply(msg1)
 
   // Should converge
   doc1.text() == doc2.text()
@@ -382,12 +326,10 @@ test "property: bidirectional sync converges" {
 ///|
 /// Property: export_since with current version exports empty
 fn prop_export_since_current_is_empty(ops : RealOps) -> Bool {
-  let doc = @text.TextState::new("alice")
-  if !apply_edits(doc, ops.edits) {
-    return true
-  }
+  let doc = try! @text.TextState::new("alice")
+  let _ = apply_edits(doc, ops.edits)
   let current_version = doc.version()
-  let msg = doc.sync().export_since(current_version) catch { _ => return true }
+  let msg = try! doc.sync().export_since(current_version)
   msg.is_empty()
 }
 
@@ -401,24 +343,18 @@ test "property: export_since current version is empty" {
 /// For any sequence of inserts, undo then redo should restore the original text.
 fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   let clamped = if size < 0 { 0 } else if size > 20 { 20 } else { size }
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   // Insert characters one by one
   for i = 0; i < clamped; i = i + 1 {
     let ch = Int::unsafe_to_char('a'.to_int() + i % 26).to_string()
-    doc.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000) catch {
-      _ => return true
-    }
+    try! doc.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000)
   }
   let text_before = doc.text()
   // Undo all groups
   let mut undo_count = 0
   while mgr.can_undo() {
-    try {
-      let _ = mgr.undo(doc)
-    } catch {
-      _ => return true
-    }
+    let _ = try! mgr.undo(doc)
     undo_count = undo_count + 1
   }
   // After full undo, document should be empty
@@ -428,11 +364,7 @@ fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
   // Redo all groups
   let mut redo_count = 0
   while mgr.can_redo() {
-    try {
-      let _ = mgr.redo(doc)
-    } catch {
-      _ => return true
-    }
+    let _ = try! mgr.redo(doc)
     redo_count = redo_count + 1
   }
   // After full redo, text should match original
@@ -449,38 +381,30 @@ test "property: undo-redo roundtrip preserves text (insert)" {
 /// After undo followed by redo, the document state should be restored.
 fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
   let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   // Insert some text first
-  doc.insert_and_record(@text.Pos::at(0), "hello", mgr, timestamp_ms=0) catch {
-    _ => return true
-  }
+  try! doc.insert_and_record(@text.Pos::at(0), "hello", mgr, timestamp_ms=0)
   // Delete some characters (each in its own time group)
   for i = 0; i < clamped && doc.len() > 0; i = i + 1 {
     let pos = i % doc.len()
-    doc.delete_and_record(@text.Pos::at(pos), mgr, timestamp_ms=(i + 1) * 1000) catch {
-      _ => return true
-    }
+    try! doc.delete_and_record(
+      @text.Pos::at(pos),
+      mgr,
+      timestamp_ms=(i + 1) * 1000,
+    )
   }
   let text_after_edits = doc.text()
   // Undo the deletes
   let mut undo_count = 0
   while mgr.can_undo() && undo_count < clamped {
-    try {
-      let _ = mgr.undo(doc)
-    } catch {
-      _ => return true
-    }
+    let _ = try! mgr.undo(doc)
     undo_count = undo_count + 1
   }
   // Redo to restore
   let mut redo_count = 0
   while mgr.can_redo() && redo_count < undo_count {
-    try {
-      let _ = mgr.redo(doc)
-    } catch {
-      _ => return true
-    }
+    let _ = try! mgr.redo(doc)
     redo_count = redo_count + 1
   }
   // Text should match what we had after the edits
@@ -497,32 +421,31 @@ test "property: undo-redo roundtrip preserves text (mixed)" {
 /// This verifies that undo-generated ops (Delete/Undelete) are valid sync ops.
 fn prop_undo_ops_sync_to_peer(size : Int) -> Bool {
   let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr = @undo.UndoManager::new("alice")
   // Alice inserts text with recording
   for i = 0; i < clamped; i = i + 1 {
     let ch = Int::unsafe_to_char('a'.to_int() + i % 26).to_string()
-    doc_a.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000) catch {
-      _ => return true
-    }
+    try! doc_a.insert_and_record(
+      @text.Pos::at(i),
+      ch,
+      mgr,
+      timestamp_ms=i * 1000,
+    )
   }
   // Sync initial state to Bob
-  let msg1 = doc_a.sync().export_all() catch { _ => return true }
-  doc_b.sync().apply(msg1) catch {
-    _ => return true
-  }
+  let msg1 = try! doc_a.sync().export_all()
+  let _ = try! doc_b.sync().apply(msg1)
   if doc_a.text() != doc_b.text() {
     return false
   }
   // Alice undoes
   if mgr.can_undo() {
-    let _ = mgr.undo(doc_a) catch { _ => return true }
+    let _ = try! mgr.undo(doc_a)
     // Sync undo to Bob
-    let msg2 = doc_a.sync().export_all() catch { _ => return true }
-    doc_b.sync().apply(msg2) catch {
-      _ => return true
-    }
+    let msg2 = try! doc_a.sync().export_all()
+    let _ = try! doc_b.sync().apply(msg2)
     // Both should converge
     return doc_a.text() == doc_b.text()
   }

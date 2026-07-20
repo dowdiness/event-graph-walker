@@ -2,7 +2,7 @@
 
 ///|
 test "fresh document produces empty snapshot" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let snap = doc.causal_snapshot()
   inspect(snap.op_count(), content="0")
   @debug.debug_inspect(snap.frontier(), content="[]")
@@ -10,7 +10,7 @@ test "fresh document produces empty snapshot" {
 
 ///|
 test "single insert produces single-entry snapshot" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   doc.insert(@text.Pos::at(0), "a")
   let snap = doc.causal_snapshot()
   inspect(snap.op_count(), content="1")
@@ -24,7 +24,7 @@ test "single insert produces single-entry snapshot" {
 
 ///|
 test "two-op chain: parents and outdegree" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   doc.insert(@text.Pos::at(0), "a")
   doc.insert(@text.Pos::at(1), "b")
   let snap = doc.causal_snapshot()
@@ -40,17 +40,17 @@ test "two-op chain: parents and outdegree" {
 ///|
 /// Fork: two ops both depend on the same root → root has outdegree 2.
 test "fork: shared parent has children_count == 2" {
-  let alice = @text.TextState::new("alice")
-  let bob = @text.TextState::new("bob")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
   // Establish a shared root op via initial sync from alice.
   alice.insert(@text.Pos::at(0), "X")
-  bob.sync().apply(alice.sync().export_all())
+  let _ = bob.sync().apply(alice.sync().export_all())
   // Diverge: alice and bob each insert independently after the shared root.
   alice.insert(@text.Pos::at(1), "a")
   bob.insert(@text.Pos::at(1), "b")
   // Bring alice up to date by importing bob's divergent op. Now alice's
   // graph has the shared root (LV 0) plus alice's and bob's children.
-  alice.sync().apply(bob.sync().export_all())
+  let _ = alice.sync().apply(bob.sync().export_all())
   let snap = alice.causal_snapshot()
   // Root op has two children — alice's and bob's divergent inserts.
   inspect(snap.children_count(0), content="2")
@@ -61,16 +61,16 @@ test "fork: shared parent has children_count == 2" {
 ///|
 /// Merge: an op produced after fan-in carries multiple parents.
 test "merge: post-merge op has parents.length() == 2" {
-  let alice = @text.TextState::new("alice")
-  let bob = @text.TextState::new("bob")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
   // Shared root.
   alice.insert(@text.Pos::at(0), "X")
-  bob.sync().apply(alice.sync().export_all())
+  let _ = bob.sync().apply(alice.sync().export_all())
   // Diverge.
   alice.insert(@text.Pos::at(1), "a")
   bob.insert(@text.Pos::at(1), "b")
   // Alice ingests bob's op — frontier now has two tips on alice's side.
-  alice.sync().apply(bob.sync().export_all())
+  let _ = alice.sync().apply(bob.sync().export_all())
   let pre_merge_op_count = alice.causal_snapshot().op_count()
   // Alice's next insert merges the two tips: it carries both as parents.
   alice.insert(@text.Pos::at(0), "M")
@@ -84,7 +84,7 @@ test "merge: post-merge op has parents.length() == 2" {
 
 ///|
 test "out-of-range entry returns None" {
-  let doc = @text.TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let snap = doc.causal_snapshot()
   inspect(snap.entry(0) is None, content="true")
   inspect(snap.entry(-1) is None, content="true")

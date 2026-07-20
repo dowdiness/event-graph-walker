@@ -2,19 +2,17 @@
 
 ///|
 test "canonical bytes: empty message produces non-empty output" {
-  let doc = @text.TextState::new("alice")
-  let msg = doc.sync().export_all() catch { _ => return }
+  let doc = try! @text.TextState::new("alice")
+  let msg = try! doc.sync().export_all()
   let bytes = msg.to_canonical_bytes()
-  inspect(bytes.length() > 0, content="true")
+  @debug.assert_eq(bytes, b"event-graph-walker:text-sync:v1\x00\x00")
 }
 
 ///|
 test "canonical bytes: deterministic — same message, same bytes" {
-  let doc = @text.TextState::new("alice")
-  doc.insert(@text.Pos::at(0), "hello") catch {
-    _ => return
-  }
-  let msg = doc.sync().export_all() catch { _ => return }
+  let doc = try! @text.TextState::new("alice")
+  try! doc.insert(@text.Pos::at(0), "hello")
+  let msg = try! doc.sync().export_all()
   let b1 = msg.to_canonical_bytes()
   let b2 = msg.to_canonical_bytes()
   @debug.assert_eq(b1, b2)
@@ -22,17 +20,13 @@ test "canonical bytes: deterministic — same message, same bytes" {
 
 ///|
 test "canonical bytes: different messages produce different bytes" {
-  let a = @text.TextState::new("alice")
-  a.insert(@text.Pos::at(0), "hello") catch {
-    _ => return
-  }
-  let msg_a = a.sync().export_all() catch { _ => return }
+  let a = try! @text.TextState::new("alice")
+  try! a.insert(@text.Pos::at(0), "hello")
+  let msg_a = try! a.sync().export_all()
 
-  let b = @text.TextState::new("alice")
-  b.insert(@text.Pos::at(0), "world") catch {
-    _ => return
-  }
-  let msg_b = b.sync().export_all() catch { _ => return }
+  let b = try! @text.TextState::new("alice")
+  try! b.insert(@text.Pos::at(0), "world")
+  let msg_b = try! b.sync().export_all()
 
   @debug.assert_eq(
     msg_a.to_canonical_bytes() != msg_b.to_canonical_bytes(),
@@ -42,25 +36,19 @@ test "canonical bytes: different messages produce different bytes" {
 
 ///|
 test "canonical bytes: multiple inserts produce more ops" {
-  let doc = @text.TextState::new("alice")
-  doc.insert(@text.Pos::at(0), "a") catch {
-    _ => return
-  }
-  let msg1 = doc.sync().export_all() catch { _ => return }
-  doc.insert(@text.Pos::at(1), "b") catch {
-    _ => return
-  }
-  let msg2 = doc.sync().export_all() catch { _ => return }
+  let doc = try! @text.TextState::new("alice")
+  try! doc.insert(@text.Pos::at(0), "a")
+  let msg1 = try! doc.sync().export_all()
+  try! doc.insert(@text.Pos::at(1), "b")
+  let msg2 = try! doc.sync().export_all()
   inspect(msg2.op_count() > msg1.op_count(), content="true")
 }
 
 ///|
 test "canonical bytes: non-empty message is not all zeros" {
-  let doc = @text.TextState::new("alice")
-  doc.insert(@text.Pos::at(0), "x") catch {
-    _ => return
-  }
-  let msg = doc.sync().export_all() catch { _ => return }
+  let doc = try! @text.TextState::new("alice")
+  try! doc.insert(@text.Pos::at(0), "x")
+  let msg = try! doc.sync().export_all()
   let bytes = msg.to_canonical_bytes()
   let mut all_zero = true
   for b in bytes {
@@ -74,14 +62,10 @@ test "canonical bytes: non-empty message is not all zeros" {
 
 ///|
 test "canonical bytes: message with delete produces valid output" {
-  let doc = @text.TextState::new("alice")
-  doc.insert(@text.Pos::at(0), "ab") catch {
-    _ => return
-  }
-  doc.delete(@text.Pos::at(0)) catch {
-    _ => return
-  }
-  let msg = doc.sync().export_all() catch { _ => return }
+  let doc = try! @text.TextState::new("alice")
+  try! doc.insert(@text.Pos::at(0), "ab")
+  try! doc.delete(@text.Pos::at(0))
+  let msg = try! doc.sync().export_all()
   // Should have at least insert + delete ops
   inspect(msg.op_count() >= 3, content="true")
   let bytes = msg.to_canonical_bytes()
@@ -90,9 +74,9 @@ test "canonical bytes: message with delete produces valid output" {
 
 ///|
 test "canonical bytes: empty message always same bytes" {
-  let a = @text.TextState::new("alice")
-  let b = @text.TextState::new("bob")
-  let msg_a = a.sync().export_all() catch { _ => return }
-  let msg_b = b.sync().export_all() catch { _ => return }
+  let a = try! @text.TextState::new("alice")
+  let b = try! @text.TextState::new("bob")
+  let msg_a = try! a.sync().export_all()
+  let msg_b = try! b.sync().export_all()
   @debug.assert_eq(msg_a.to_canonical_bytes(), msg_b.to_canonical_bytes())
 }

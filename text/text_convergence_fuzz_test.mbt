@@ -31,9 +31,19 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
   // Use scratch docs to track valid positions during generation
   let scratches : Array[@text.TextState] = []
   for i = 0; i < num_agents; i = i + 1 {
-    scratches.push(@text.TextState::new("agent_" + i.to_string()))
+    scratches.push(try! @text.TextState::new("agent_" + i.to_string()))
   }
-  let actions : Array[AgentAction] = []
+  let actions : Array[AgentAction] = [
+    FuzzInsert(0, 0, "a"),
+    FuzzDelete(0, 0),
+    FuzzUndo(0),
+    FuzzRedo(0),
+    FuzzSync(0, 1),
+  ]
+  try! scratches[0].insert(@text.Pos::at(0), "a")
+  try! scratches[0].delete(@text.Pos::at(0))
+  let initial_message = try! scratches[0].sync().export_all()
+  let _ = try! scratches[1].sync().apply(initial_message)
   let action_count = if size < 5 { 5 } else { size }
   for step = 0; step < action_count; step = step + 1 {
     let agent = rs.split().next_uint64().to_int().abs() % num_agents
@@ -44,9 +54,7 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
       let len = doc.len()
       let pos = rs.split().next_uint64().to_int().abs() % (len + 1)
       let ch = chars[rs.split().next_uint64().to_int().abs() % chars.length()]
-      doc.insert(@text.Pos::at(pos), ch) catch {
-        _ => continue
-      }
+      try! doc.insert(@text.Pos::at(pos), ch)
       actions.push(FuzzInsert(agent, pos, ch))
     } else if action_type < 7 {
       // 30% delete
@@ -55,9 +63,7 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
         continue
       }
       let pos = rs.split().next_uint64().to_int().abs() % len
-      doc.delete(@text.Pos::at(pos)) catch {
-        _ => continue
-      }
+      try! doc.delete(@text.Pos::at(pos))
       actions.push(FuzzDelete(agent, pos))
     } else if action_type < 8 {
       // 10% undo
@@ -70,10 +76,8 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
       let raw_to = rs.split().next_uint64().to_int().abs() % num_agents
       let to = if raw_to == agent { (raw_to + 1) % num_agents } else { raw_to }
       // Sync scratch docs too so positions stay valid
-      let msg = doc.sync().export_all() catch { _ => continue }
-      scratches[to].sync().apply(msg) catch {
-        _ => continue
-      }
+      let msg = try! doc.sync().export_all()
+      let _ = try! scratches[to].sync().apply(msg)
       actions.push(FuzzSync(agent, to))
     }
   }
@@ -105,13 +109,39 @@ impl @qc.Shrink for MultiAgentTrace with fn shrink(self) {
 }
 
 ///|
+fn trace_covers_every_action_class(trace : MultiAgentTrace) -> Bool {
+  let mut inserts = 0
+  let mut deletes = 0
+  let mut undos = 0
+  let mut redos = 0
+  let mut syncs = 0
+  for action in trace.actions {
+    match action {
+      FuzzInsert(_, _, _) => inserts = inserts + 1
+      FuzzDelete(_, _) => deletes = deletes + 1
+      FuzzUndo(_) => undos = undos + 1
+      FuzzRedo(_) => redos = redos + 1
+      FuzzSync(_, _) => syncs = syncs + 1
+    }
+  }
+  inserts > 0 && deletes > 0 && undos > 0 && redos > 0 && syncs > 0
+}
+
+///|
+test "property: generated traces cover every action class" {
+  @qc.quick_check_fn(fn(trace : MultiAgentTrace) -> Bool {
+    trace_covers_every_action_class(trace)
+  })
+}
+
+///|
 /// Execute a multi-agent trace and verify convergence after full sync.
 fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
   let docs : Array[@text.TextState] = []
   let mgrs : Array[@undo.UndoManager] = []
   for i = 0; i < trace.num_agents; i = i + 1 {
     let id = "agent_" + i.to_string()
-    docs.push(@text.TextState::new(id))
+    docs.push(try! @text.TextState::new(id))
     mgrs.push(@undo.UndoManager::new(id))
   }
 
@@ -122,9 +152,12 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
         let doc = docs[agent]
         let mgr = mgrs[agent]
         let clamped = if pos > doc.len() { doc.len() } else { pos }
-        doc.insert_and_record(@text.Pos::at(clamped), ch, mgr, timestamp_ms=0) catch {
-          _ => continue
-        }
+        try! doc.insert_and_record(
+          @text.Pos::at(clamped),
+          ch,
+          mgr,
+          timestamp_ms=0,
+        )
       }
       FuzzDelete(agent, pos) => {
         let doc = docs[agent]
@@ -133,23 +166,19 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
           continue
         }
         let clamped = if pos >= doc.len() { doc.len() - 1 } else { pos }
-        doc.delete_and_record(@text.Pos::at(clamped), mgr, timestamp_ms=0) catch {
-          _ => continue
-        }
+        try! doc.delete_and_record(@text.Pos::at(clamped), mgr, timestamp_ms=0)
       }
       FuzzUndo(agent) =>
         if mgrs[agent].can_undo() {
-          let _ = mgrs[agent].undo(docs[agent]) catch { _ => false }
+          let _ = try! mgrs[agent].undo(docs[agent])
         }
       FuzzRedo(agent) =>
         if mgrs[agent].can_redo() {
-          let _ = mgrs[agent].redo(docs[agent]) catch { _ => false }
+          let _ = try! mgrs[agent].redo(docs[agent])
         }
       FuzzSync(from, to) => {
-        let msg = docs[from].sync().export_all() catch { _ => continue }
-        docs[to].sync().apply(msg) catch {
-          _ => continue
-        }
+        let msg = try! docs[from].sync().export_all()
+        let _ = try! docs[to].sync().apply(msg)
       }
     }
   }
@@ -158,15 +187,13 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
   for _round = 0; _round < 3; _round = _round + 1 {
     let messages : Array[@text.SyncMessage] = []
     for doc in docs {
-      let msg = doc.sync().export_all() catch { _ => return true }
+      let msg = try! doc.sync().export_all()
       messages.push(msg)
     }
     for i = 0; i < docs.length(); i = i + 1 {
       for j = 0; j < messages.length(); j = j + 1 {
         if i != j {
-          docs[i].sync().apply(messages[j]) catch {
-            _ => return true
-          }
+          let _ = try! docs[i].sync().apply(messages[j])
         }
       }
     }
@@ -174,8 +201,14 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
 
   // Verify all agents converged to the same text
   let expected = docs[0].text()
+  let expected_version = docs[0].version()
   for i = 1; i < docs.length(); i = i + 1 {
-    if docs[i].text() != expected {
+    if docs[i].text() != expected || docs[i].version() != expected_version {
+      return false
+    }
+  }
+  for doc in docs {
+    if doc.sync().pending_sync_count() != 0 {
       return false
     }
   }
@@ -261,40 +294,24 @@ fn prop_sync_order_independence(pair : RealOpsPair) -> Bool {
   let ops1 = pair.left
   let ops2 = pair.right
   // Path 1: A->B then B->A
-  let a1 = @text.TextState::new("alice")
-  let b1 = @text.TextState::new("bob")
-  if !apply_edits(a1, ops1.edits) {
-    return true
-  }
-  if !apply_edits(b1, ops2.edits) {
-    return true
-  }
-  let msg_a1 = a1.sync().export_all() catch { _ => return true }
-  let msg_b1 = b1.sync().export_all() catch { _ => return true }
-  b1.sync().apply(msg_a1) catch {
-    _ => return true
-  }
-  a1.sync().apply(msg_b1) catch {
-    _ => return true
-  }
+  let a1 = try! @text.TextState::new("alice")
+  let b1 = try! @text.TextState::new("bob")
+  let _ = apply_edits(a1, ops1.edits)
+  let _ = apply_edits(b1, ops2.edits)
+  let msg_a1 = try! a1.sync().export_all()
+  let msg_b1 = try! b1.sync().export_all()
+  let _ = try! b1.sync().apply(msg_a1)
+  let _ = try! a1.sync().apply(msg_b1)
 
   // Path 2: B->A then A->B (fresh docs)
-  let a2 = @text.TextState::new("alice")
-  let b2 = @text.TextState::new("bob")
-  if !apply_edits(a2, ops1.edits) {
-    return true
-  }
-  if !apply_edits(b2, ops2.edits) {
-    return true
-  }
-  let msg_a2 = a2.sync().export_all() catch { _ => return true }
-  let msg_b2 = b2.sync().export_all() catch { _ => return true }
-  a2.sync().apply(msg_b2) catch {
-    _ => return true
-  }
-  b2.sync().apply(msg_a2) catch {
-    _ => return true
-  }
+  let a2 = try! @text.TextState::new("alice")
+  let b2 = try! @text.TextState::new("bob")
+  let _ = apply_edits(a2, ops1.edits)
+  let _ = apply_edits(b2, ops2.edits)
+  let msg_a2 = try! a2.sync().export_all()
+  let msg_b2 = try! b2.sync().export_all()
+  let _ = try! a2.sync().apply(msg_b2)
+  let _ = try! b2.sync().apply(msg_a2)
 
   // Both paths must produce same result
   a1.text() == a2.text() && b1.text() == b2.text() && a1.text() == b1.text()
@@ -311,43 +328,38 @@ test "property: sync order independence" {
 fn prop_undo_concurrent_convergence(pair : RealOpsPair) -> Bool {
   let ops1 = pair.left
   let ops2 = pair.right
-  let doc_a = @text.TextState::new("alice")
-  let doc_b = @text.TextState::new("bob")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
   let mgr_a = @undo.UndoManager::new("alice")
 
   // A types with undo recording
   for edit in ops1.edits {
     match edit {
       Insert(pos, ch) =>
-        doc_a.insert_and_record(@text.Pos::at(pos), ch, mgr_a, timestamp_ms=0) catch {
-          _ => continue
-        }
+        try! doc_a.insert_and_record(
+          @text.Pos::at(pos),
+          ch,
+          mgr_a,
+          timestamp_ms=0,
+        )
       Delete(pos) =>
-        doc_a.delete_and_record(@text.Pos::at(pos), mgr_a, timestamp_ms=0) catch {
-          _ => continue
-        }
+        try! doc_a.delete_and_record(@text.Pos::at(pos), mgr_a, timestamp_ms=0)
     }
   }
 
   // B types concurrently (no undo tracking needed)
-  if !apply_edits(doc_b, ops2.edits) {
-    return true
-  }
+  let _ = apply_edits(doc_b, ops2.edits)
 
   // A undoes once (if possible)
   if mgr_a.can_undo() {
-    let _ = mgr_a.undo(doc_a) catch { _ => false }
+    let _ = try! mgr_a.undo(doc_a)
   }
 
   // Full sync
-  let msg_a = doc_a.sync().export_all() catch { _ => return true }
-  let msg_b = doc_b.sync().export_all() catch { _ => return true }
-  doc_a.sync().apply(msg_b) catch {
-    _ => return true
-  }
-  doc_b.sync().apply(msg_a) catch {
-    _ => return true
-  }
+  let msg_a = try! doc_a.sync().export_all()
+  let msg_b = try! doc_b.sync().export_all()
+  let _ = try! doc_a.sync().apply(msg_b)
+  let _ = try! doc_b.sync().apply(msg_a)
 
   // Must converge
   doc_a.text() == doc_b.text()
