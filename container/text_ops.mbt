@@ -44,9 +44,7 @@ pub fn Document::insert_text(
     let block = self.get_or_create_text(id)
     for i, ch in text {
       let ch_content = ch.to_string()
-      let mut inserted_id = @core.RawVersion::new("", 0)
-      self.emit_text_op(id, (version, ts) => {
-        inserted_id = version
+      let inserted_id = self.emit_text_op(id, (version, ts) => {
         block.make_insert_op_at(pos + i, version, ch_content, ts, self.agent_id)
       })
       self.record_undo_item(TextInsert(block=id, id=inserted_id))
@@ -77,7 +75,7 @@ pub fn Document::delete_text(
     }
     let (target_lv, _) = items[pos]
     let target_id = block.stable_for_local(target_lv.0)
-    self.emit_text_op(id, (_, ts) => {
+    let _ = self.emit_text_op(id, (_, ts) => {
       block.make_delete_op_at(pos, ts, self.agent_id)
     })
     self.record_undo_item(TextDelete(block=id, id=target_id))

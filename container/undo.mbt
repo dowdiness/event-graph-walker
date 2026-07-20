@@ -105,13 +105,14 @@ fn[T, E : Error] Document::with_implicit_transaction(
 /// Stamp, apply, and record a text op built from a fresh LV+timestamp.
 ///
 /// The builder receives the stable operation identity and timestamp.
-/// payload. Mirrors `emit_move_op` for text — all three public text methods
-/// (insert_text, delete_text) and the undo replay path share this tail.
+/// Returns that identity after the operation has been applied and recorded.
+/// Mirrors `emit_move_op` for text — the public text methods and the undo
+/// replay path share this tail.
 fn Document::emit_text_op(
   self : Document,
   block : @mt.TreeNodeId,
   build : (@core.RawVersion, Int) -> TextOp raise DocumentError,
-) -> Unit raise DocumentError {
+) -> @core.RawVersion raise DocumentError {
   let (lv, timestamp, version) = self.next_version_with_raw()
   let parents = self.raw_parents_for_lv(lv)
   let text_op = build(version, timestamp)
@@ -119,6 +120,7 @@ fn Document::emit_text_op(
   self.apply_block_text_op(block, op)
   let _ = self.record_text_op(op)
   let _ = self.record_sync_text_op({ version, parents, block, op: text_op })
+  version
 }
 
 ///|
@@ -150,16 +152,18 @@ fn Document::apply_undo(
   item : UndoItem,
 ) -> Unit raise DocumentError {
   match item {
-    TextInsert(block~, id~) =>
+    TextInsert(block~, id~) => {
       // Undo an insert: tombstone the LV we created.
-      self.emit_text_op(block, (_, ts) => {
+      let _ = self.emit_text_op(block, (_, ts) => {
         Delete({ target: id, timestamp: ts, agent: self.agent_id })
       })
-    TextDelete(block~, id~) =>
+    }
+    TextDelete(block~, id~) => {
       // Undo a delete: revive the tombstone.
-      self.emit_text_op(block, (_, ts) => {
+      let _ = self.emit_text_op(block, (_, ts) => {
         Undelete({ target: id, timestamp: ts, agent: self.agent_id })
       })
+    }
     TreeMove(target~, old_parent~, old_pos~, new_parent=_, new_pos=_) =>
       // Move back to the pre-move parent/position.
       self.emit_move_op(target, old_parent, old_pos)
@@ -183,17 +187,19 @@ fn Document::apply_redo(
   item : UndoItem,
 ) -> Unit raise DocumentError {
   match item {
-    TextInsert(block~, id~) =>
+    TextInsert(block~, id~) => {
       // Redo of insert: revive tombstoned LV via Undelete. LWW-wins because
       // we allocate a higher timestamp.
-      self.emit_text_op(block, (_, ts) => {
+      let _ = self.emit_text_op(block, (_, ts) => {
         Undelete({ target: id, timestamp: ts, agent: self.agent_id })
       })
-    TextDelete(block~, id~) =>
+    }
+    TextDelete(block~, id~) => {
       // Redo of delete: re-tombstone at a fresh higher timestamp.
-      self.emit_text_op(block, (_, ts) => {
+      let _ = self.emit_text_op(block, (_, ts) => {
         Delete({ target: id, timestamp: ts, agent: self.agent_id })
       })
+    }
     TreeMove(target~, old_parent=_, old_pos=_, new_parent~, new_pos~) =>
       self.emit_move_op(target, new_parent, new_pos)
     TreeCreate(target~, parent~, pos~) =>
