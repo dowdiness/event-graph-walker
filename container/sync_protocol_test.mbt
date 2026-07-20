@@ -257,6 +257,37 @@ test "resent malformed pending sequence is discarded after predecessors arrive" 
 }
 
 ///|
+test "pending text operation remains queued until its block exists" {
+  let receiver = try! @container.Document::new("receiver")
+  let future_text = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":1,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"ghost\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":1},\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}}]}",
+  )
+  let deferred = try! receiver.sync().apply(future_text)
+  inspect(deferred.pending_operations(), content="1")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let predecessor = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}}]}",
+  )
+  let still_deferred = try! receiver.sync().apply(predecessor)
+  inspect(still_deferred.applied_tree_operations(), content="1")
+  inspect(still_deferred.applied_text_operations(), content="0")
+  inspect(still_deferred.pending_operations(), content="1")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let block_create = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"ghost\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"ghost\",\"target\":{\"kind\":\"node\",\"replica_id\":\"ghost\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
+  )
+  let applied = try! receiver.sync().apply(block_create)
+  inspect(applied.applied_tree_operations(), content="1")
+  inspect(applied.applied_text_operations(), content="1")
+  inspect(applied.pending_operations(), content="0")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+  inspect(
+    receiver.get_text(try! @container.TreeNodeId::TreeNodeId("ghost", 0)),
+    content="A",
+  )
+}
+
+///|
 test "container rejects tree operation identity used as text origin" {
   let receiver = try! @container.Document::new("receiver")
   let message = try! @container.SyncMessage::from_json_string(

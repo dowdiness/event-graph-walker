@@ -153,6 +153,33 @@ fn sync_record_dependencies(record : SyncOpRecord) -> Array[@core.RawVersion] {
 }
 
 ///|
+/// Include the target block's create identity when ordering text operations.
+///
+/// This edge orders a block create before text that can become applicable in
+/// the same preparation pass. It is deliberately not a readiness dependency:
+/// a newly received text operation whose causal dependencies are otherwise
+/// ready must still reject an unestablished block instead of becoming pending.
+fn sync_record_order_dependencies(
+  record : SyncOpRecord,
+) -> Array[@core.RawVersion] {
+  let dependencies = sync_record_dependencies(record)
+  match record {
+    Tree(_) => ()
+    Text(versioned) =>
+      dependencies.push(
+        @core.RawVersion::new(versioned.block.agent, versioned.block.counter),
+      )
+  }
+  let unique : Map[String, @core.RawVersion] = Map([])
+  for dependency in dependencies {
+    unique[sync_raw_key(dependency)] = dependency
+  }
+  let result = unique.values().to_array()
+  result.sort_by(compare_sync_raw)
+  result
+}
+
+///|
 /// Return whether `target` is reachable through the declared causal parents.
 ///
 /// The implicit replica predecessor is deliberately excluded: it constrains
@@ -420,7 +447,7 @@ fn canonical_sync_order_counted(
   let dependency_waiters : Map[String, Array[String]] = Map([])
   candidates.each(fn(key, record) {
     let mut count = 0
-    for dependency in sync_record_dependencies(record) {
+    for dependency in sync_record_order_dependencies(record) {
       let dependency_key = sync_raw_key(dependency)
       if candidates.get(dependency_key) is Some(_) {
         count = count + 1
@@ -1136,20 +1163,29 @@ fn prepare_container_sync(
           advance_sync_tree_snapshot(parsed, tree_snapshot, tree_log_snapshot)
         }
         FromPending(_) | FromPendingAndMessage(_) => {
-          let parsed = Some(
-            parse_applicable_sync_record(record, known_records, tree_snapshot),
-          ) catch {
-            _ => None
+          let target_block_exists = match record {
+            Tree(_) => true
+            Text(versioned) => tree_snapshot.contains(versioned.block)
           }
-          match parsed {
-            Some(applicable_record) => {
-              resolvable[key] = true
-              applicable.push(applicable_record)
-              advance_sync_tree_snapshot(
-                applicable_record, tree_snapshot, tree_log_snapshot,
-              )
+          if !target_block_exists {
+            resolvable[key] = false
+            pending.push(record)
+          } else {
+            let parsed = Some(
+              parse_applicable_sync_record(record, known_records, tree_snapshot),
+            ) catch {
+              _ => None
             }
-            None => ()
+            match parsed {
+              Some(applicable_record) => {
+                resolvable[key] = true
+                applicable.push(applicable_record)
+                advance_sync_tree_snapshot(
+                  applicable_record, tree_snapshot, tree_log_snapshot,
+                )
+              }
+              None => ()
+            }
           }
         }
       }
