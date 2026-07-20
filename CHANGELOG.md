@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Performance
+
+- Monotonic tree-operation histories now append with constant ordering-
+  comparison work, while genuinely out-of-order insertions use binary search
+  to locate their replay point. A local release-mode wasm-gc comparison reduced
+  the 10,000-operation reverse causal batch from 824.35 ms to 419.74 ms.
+- Added release-mode container baselines and deterministic comparison-count
+  coverage for ordering-complexity regressions.
+
 ## [0.4.0] - 2026-07-20
 
 ### Breaking changes
