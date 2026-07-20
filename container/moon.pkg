@@ -7,6 +7,7 @@ import {
   "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/rle",
+  "moonbitlang/core/bench",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",

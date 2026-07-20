@@ -4,7 +4,7 @@ set shell := ["nu", "-c"]
 default:
     @just --list
 
-# Resolve dependencies before running frozen verification.
+# Resolve dependencies for local preparation.
 resolve:
     moon update
     moon check --target all --fmt --deny-warn
@@ -18,4 +18,4 @@ verify-publish:
     nu ./scripts/verify-publish-package.nu
 
 # Run the same complete verification pipeline as CI.
-ci: resolve verify verify-publish
+ci: verify verify-publish

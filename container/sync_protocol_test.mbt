@@ -419,6 +419,29 @@ test "container receiver limits govern decode and later apply" {
 }
 
 ///|
+test "empty container message still enforces receiver encoded-byte limit" {
+  let source = try! @container.Document::new("source")
+  let json = (try! source.sync().export_all()).to_json_string() + " "
+  let decoded = try! @container.SyncMessage::from_json_string(json)
+  let limits = try! @sync.Limits(max_encoded_bytes=json.length() - 1)
+  let receiver = try! @container.Document::new_with_sync_limits(
+    "receiver", limits,
+  )
+  try receiver.sync().apply(decoded) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected receiver encoded-byte limit for empty message")
+  } noraise {
+    _ => fail("empty message must preserve receiver byte enforcement")
+  }
+}
+
+///|
 test "container receiver decoder honors raised parent limit" {
   let parents : Array[String] = []
   for sequence in 0..<257 {
