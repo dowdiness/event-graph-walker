@@ -71,11 +71,15 @@ pub fn Version::empty() -> Version {
 /// Opaque tree sync message.
 pub(all) struct SyncMessage {
   priv inner : @container.SyncMessage
+  priv encoded_size : Int?
 }
 
 ///|
-fn SyncMessage::SyncMessage(inner : @container.SyncMessage) -> SyncMessage {
-  { inner, }
+fn SyncMessage::SyncMessage(
+  inner : @container.SyncMessage,
+  encoded_size : Int?,
+) -> SyncMessage {
+  { inner, encoded_size }
 }
 
 ///|
@@ -103,6 +107,7 @@ pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
 /// A collaborative movable-tree replica.
 pub struct TreeState {
   priv document : @container.Document
+  priv sync_limits : @sync.Limits
 }
 
 ///|
@@ -117,7 +122,10 @@ pub fn TreeState::new_with_sync_limits(
   replica_id : String,
   limits : @sync.Limits,
 ) -> TreeState raise TreeError {
-  { document: @container.Document::new_with_sync_limits(replica_id, limits) } catch {
+  {
+    document: @container.Document::new_with_sync_limits(replica_id, limits),
+    sync_limits: limits,
+  } catch {
     @container.DocumentError::EmptyReplicaId => raise TreeError::EmptyReplicaId
     @container.DocumentError::TargetNotFound => raise TreeError::TargetNotFound
     @container.DocumentError::ParentNotFound => raise TreeError::ParentNotFound
@@ -255,6 +263,7 @@ pub fn SyncSession::export_all(
     map_document_error(fn() raise @container.DocumentError {
       self.state.document.sync().export_all()
     }),
+    None,
   )
 }
 
@@ -267,6 +276,7 @@ pub fn SyncSession::export_since(
     map_document_error(fn() raise @container.DocumentError {
       self.state.document.sync().export_since(version.inner)
     }),
+    None,
   )
 }
 
@@ -275,6 +285,20 @@ pub fn SyncSession::apply(
   self : SyncSession,
   message : SyncMessage,
 ) -> SyncReport raise TreeError {
+  let encoded_size = match message.encoded_size {
+    Some(size) => size
+    None => @utf8.encode(message.to_json_string()).length()
+  }
+  let limit = self.state.sync_limits.max_encoded_bytes()
+  if encoded_size > limit {
+    raise TreeError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit~,
+        actual=encoded_size,
+      ),
+    )
+  }
   {
     inner: map_document_error(fn() raise @container.DocumentError {
       self.state.document.sync().apply(message.inner)

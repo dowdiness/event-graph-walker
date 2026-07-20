@@ -79,6 +79,7 @@ pub(all) struct SyncSession {
 }
 pub fn SyncSession::apply(Self, SyncMessage) -> SyncReport raise DocumentError
 pub fn SyncSession::clear_pending_sync(Self) -> Unit
+pub fn SyncSession::decode_json(Self, String) -> SyncMessage raise DocumentError
 pub fn SyncSession::export_all(Self) -> SyncMessage raise DocumentError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise DocumentError
 pub fn SyncSession::pending_sync_count(Self) -> Int

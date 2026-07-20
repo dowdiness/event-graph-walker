@@ -48,3 +48,38 @@ test "tree canonical empty-message golden vector" {
     b"event-graph-walker:tree-sync:v1\x25event-graph-walker:container-sync:v1\x00",
   )
 }
+
+///|
+test "tree receiver limits govern decode and later apply" {
+  let source = try! @tree.TreeState::new("source")
+  let _ = try! source.create_node(parent=@tree.root_id)
+  let json = (try! source.sync().export_all()).to_json_string()
+  let limits = try! @sync.Limits(max_encoded_bytes=json.length() - 1)
+  let receiver = try! @tree.TreeState::new_with_sync_limits("receiver", limits)
+  try receiver.sync().decode_json(json) catch {
+    @tree.TreeError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected receiver encoded-byte limit")
+  } noraise {
+    _ => fail("receiver decoder must reject oversized tree JSON")
+  }
+  let decoded = try! @tree.SyncMessage::from_json_string(json)
+  try receiver.sync().apply(decoded) catch {
+    @tree.TreeError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected encoded-byte limit during tree apply")
+  } noraise {
+    _ => fail("tree apply must preserve receiver byte enforcement")
+  }
+  inspect(receiver.version() == @tree.Version::empty(), content="true")
+}

@@ -29,7 +29,10 @@ fn exact_tree_fields(
 }
 
 ///|
-fn tree_json_size(json_string : String) -> Int raise TreeError {
+fn tree_json_size(
+  json_string : String,
+  limits : @sync.Limits,
+) -> Int raise TreeError {
   let mut index = 0
   while index < json_string.length() {
     let value = json_string[index].to_int()
@@ -55,7 +58,7 @@ fn tree_json_size(json_string : String) -> Int raise TreeError {
     }
   }
   let size = @utf8.encode(json_string).length()
-  let limit = @sync.Limits::default().max_encoded_bytes()
+  let limit = limits.max_encoded_bytes()
   if size > limit {
     raise TreeError::SyncFailed(
       @sync.Failure::LimitExceeded(
@@ -91,10 +94,12 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
 }
 
 ///|
-pub fn SyncMessage::from_json_string(
+fn decode_tree_sync_json(
   json_string : String,
+  limits : @sync.Limits,
+  decode_payload : (String) -> @container.SyncMessage raise @container.DocumentError,
 ) -> SyncMessage raise TreeError {
-  let _ = tree_json_size(json_string)
+  let encoded_size = tree_json_size(json_string, limits)
   try {
     let root = @json.parse(json_string)
     let object = match root {
@@ -114,9 +119,7 @@ pub fn SyncMessage::from_json_string(
       fail("unsupported tree sync envelope")
     }
     let inner = map_document_error(fn() raise @container.DocumentError {
-      @container.SyncMessage::from_json_string(
-        object.get("payload").unwrap_or(Json::null()).stringify(),
-      )
+      decode_payload(object.get("payload").unwrap_or(Json::null()).stringify())
     })
     guard !inner.has_text_operations() else {
       raise TreeError::SyncFailed(
@@ -125,7 +128,7 @@ pub fn SyncMessage::from_json_string(
         ),
       )
     }
-    SyncMessage(inner)
+    SyncMessage(inner, Some(encoded_size))
   } catch {
     TreeError::EmptyReplicaId => raise TreeError::EmptyReplicaId
     TreeError::TargetNotFound => raise TreeError::TargetNotFound
@@ -138,6 +141,30 @@ pub fn SyncMessage::from_json_string(
         @sync.Failure::MalformedMessage(detail="invalid tree sync JSON"),
       )
   }
+}
+
+///|
+/// Decode a tree synchronization message using the default protocol limits.
+///
+/// Use `TreeState::sync().decode_json(...)` when decoding for a receiver with
+/// explicitly configured synchronization limits.
+pub fn SyncMessage::from_json_string(
+  json_string : String,
+) -> SyncMessage raise TreeError {
+  decode_tree_sync_json(json_string, @sync.Limits::default(), payload => {
+    @container.SyncMessage::from_json_string(payload)
+  })
+}
+
+///|
+/// Decode tree synchronization JSON using this receiver's configured limits.
+pub fn SyncSession::decode_json(
+  self : SyncSession,
+  json_string : String,
+) -> SyncMessage raise TreeError {
+  decode_tree_sync_json(json_string, self.state.sync_limits, payload => {
+    self.state.document.sync().decode_json(payload)
+  })
 }
 
 ///|
@@ -156,7 +183,7 @@ pub fn Version::to_json_string(self : Version) -> String {
 pub fn Version::from_json_string(
   json_string : String,
 ) -> Version raise TreeError {
-  let _ = tree_json_size(json_string)
+  let _ = tree_json_size(json_string, @sync.Limits::default())
   try {
     let root = @json.parse(json_string)
     let object = match root {

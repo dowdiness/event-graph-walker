@@ -136,6 +136,64 @@ fn sync_record_dependencies(record : SyncOpRecord) -> Array[@core.RawVersion] {
 }
 
 ///|
+/// Return whether `target` is reachable through the declared causal parents.
+///
+/// The implicit replica predecessor is deliberately excluded: it constrains
+/// applicability, but only `parents` define graph ancestry.
+fn sync_parents_reach_identity(
+  parents : Array[@core.RawVersion],
+  target : @core.RawVersion,
+  known_records : Map[String, SyncOpRecord],
+) -> Bool {
+  let queue = parents.copy()
+  let visited : Map[String, Bool] = Map([])
+  let target_key = sync_raw_key(target)
+  let mut index = 0
+  while index < queue.length() {
+    let current = queue[index]
+    index = index + 1
+    let current_key = sync_raw_key(current)
+    if current_key == target_key {
+      return true
+    }
+    if visited.get(current_key) is None {
+      visited[current_key] = true
+      match known_records.get(current_key) {
+        Some(parent_record) =>
+          for ancestor in sync_record_parents(parent_record) {
+            queue.push(ancestor)
+          }
+        None => ()
+      }
+    }
+  }
+  false
+}
+
+///|
+/// Require every non-initial replica operation to causally descend from its
+/// predecessor, not merely wait for that predecessor to exist.
+fn validate_sync_sequence_descent(
+  record : SyncOpRecord,
+  known_records : Map[String, SyncOpRecord],
+) -> Unit raise @sync.Failure {
+  let id = sync_record_version(record)
+  if id.seq == 0 {
+    return
+  }
+  let predecessor = @core.RawVersion::new(id.agent, id.seq - 1)
+  if !sync_parents_reach_identity(
+      sync_record_parents(record),
+      predecessor,
+      known_records,
+    ) {
+    raise @sync.Failure::MalformedMessage(
+      detail="operation does not causally descend from its replica predecessor",
+    )
+  }
+}
+
+///|
 fn sync_record_compare(a : SyncOpRecord, b : SyncOpRecord) -> Int {
   compare_sync_raw(sync_record_version(a), sync_record_version(b))
 }
@@ -775,7 +833,10 @@ fn container_message_records(message : SyncMessage) -> Array[SyncOpRecord] {
 }
 
 ///|
-fn container_message_from_records(records : Array[SyncOpRecord]) -> SyncMessage {
+fn container_message_from_records(
+  records : Array[SyncOpRecord],
+  encoded_size : Int?,
+) -> SyncMessage {
   let tree_ops : Array[VersionedTreeOp] = []
   let text_ops : Array[VersionedBlockTextOp] = []
   for record in records {
@@ -784,7 +845,131 @@ fn container_message_from_records(records : Array[SyncOpRecord]) -> SyncMessage 
       Text(op) => text_ops.push(op)
     }
   }
-  SyncMessage::SyncMessage(tree_ops, text_ops)
+  SyncMessage::SyncMessage(tree_ops, text_ops, encoded_size)
+}
+
+///|
+/// Parse a message and receiver snapshot into a total commit plan.
+///
+/// This is the functional core. It does not mutate the document, causal graph,
+/// or pending queue, and a failure therefore leaves receiver state untouched.
+fn prepare_container_sync(
+  message : SyncMessage,
+  limits : @sync.Limits,
+  local_records : Map[String, SyncOpRecord],
+  pending_records : Array[SyncOpRecord],
+) -> PreparedSync raise @sync.Failure {
+  let encoded_size = match message.encoded_size {
+    Some(size) => size
+    None => @utf8.encode(message.to_json_string()).length()
+  }
+  if encoded_size > limits.max_encoded_bytes() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::EncodedBytes,
+      limit=limits.max_encoded_bytes(),
+      actual=encoded_size,
+    )
+  }
+  let incoming = container_message_records(message)
+  if incoming.length() > limits.max_decoded_operations() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::DecodedOperations,
+      limit=limits.max_decoded_operations(),
+      actual=incoming.length(),
+    )
+  }
+  let candidates : Map[String, SyncCandidate] = Map([])
+  for record in pending_records {
+    candidates[sync_record_key(record)] = FromPending(record)
+  }
+  let mut duplicates = 0
+  for record in incoming {
+    validate_sync_record(record, limits)
+    let id = sync_record_version(record)
+    let key = sync_raw_key(id)
+    let payload = sync_record_payload_key(record)
+    match local_records.get(key) {
+      Some(existing) => {
+        if sync_record_payload_key(existing) != payload {
+          raise @sync.Failure::ConflictingIdentity(
+            replica_id=id.agent,
+            sequence=id.seq,
+          )
+        }
+        duplicates = duplicates + 1
+      }
+      None =>
+        match candidates.get(key) {
+          Some(existing) => {
+            if sync_record_payload_key(existing.raw()) != payload {
+              raise @sync.Failure::ConflictingIdentity(
+                replica_id=id.agent,
+                sequence=id.seq,
+              )
+            }
+            duplicates = duplicates + 1
+            candidates[key] = existing.observe_message(record)
+          }
+          None => candidates[key] = FromMessage(record)
+        }
+    }
+  }
+  let all_candidates : Array[SyncOpRecord] = []
+  for candidate in candidates.values() {
+    all_candidates.push(candidate.raw())
+  }
+  let known_records : Map[String, SyncOpRecord] = Map([])
+  local_records.each(fn(key, record) { known_records[key] = record })
+  for record in all_candidates {
+    known_records[sync_record_key(record)] = record
+  }
+  let ordered = canonical_sync_order(all_candidates)
+  let resolvable : Map[String, Bool] = Map([])
+  let applicable : Array[SyncOpRecord] = []
+  let pending : Array[SyncOpRecord] = []
+  for record in ordered {
+    let mut ready = true
+    for dependency in sync_record_dependencies(record) {
+      let key = sync_raw_key(dependency)
+      if local_records.get(key) is None && resolvable.get(key) != Some(true) {
+        ready = false
+      }
+    }
+    let key = sync_record_key(record)
+    if ready {
+      let candidate = candidates.get(key).unwrap()
+      match candidate {
+        FromMessage(_) => {
+          validate_sync_sequence_descent(record, known_records)
+          resolvable[key] = true
+          applicable.push(record)
+        }
+        FromPending(_) | FromPendingAndMessage(_) => {
+          let valid = try {
+            validate_sync_sequence_descent(record, known_records)
+            true
+          } catch {
+            _ => false
+          }
+          if valid {
+            resolvable[key] = true
+            applicable.push(record)
+          }
+        }
+      }
+    } else {
+      resolvable[key] = false
+      pending.push(record)
+    }
+  }
+  if pending.length() > limits.max_pending_operations() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::PendingOperations,
+      limit=limits.max_pending_operations(),
+      actual=pending.length(),
+    )
+  }
+  { applicable, pending, duplicate_operations: duplicates }
 }
 
 ///|
@@ -861,11 +1046,11 @@ fn is_container_well_formed_utf16(text : String) -> Bool {
 }
 
 ///|
-pub fn SyncMessage::from_json_string(
+fn decode_container_sync_json(
   json_string : String,
+  limits : @sync.Limits,
 ) -> SyncMessage raise DocumentError {
-  let limits : @sync.Limits = @sync.Limits::default()
-  let _ = container_encoded_size(json_string, limits) catch {
+  let encoded_size = container_encoded_size(json_string, limits) catch {
     failure => raise DocumentError::SyncFailed(failure)
   }
   try {
@@ -902,7 +1087,10 @@ pub fn SyncMessage::from_json_string(
       validate_sync_record(record, limits)
       records.push(record)
     }
-    container_message_from_records(canonical_sync_order(records))
+    container_message_from_records(
+      canonical_sync_order(records),
+      Some(encoded_size),
+    )
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
       raise DocumentError::SyncFailed(@sync.Failure::MalformedMessage(detail~))
@@ -925,6 +1113,26 @@ pub fn SyncMessage::from_json_string(
         @sync.Failure::MalformedMessage(detail="invalid container sync JSON"),
       )
   }
+}
+
+///|
+/// Decode a synchronization message using the default protocol limits.
+///
+/// Use `Document::sync().decode_json(...)` when decoding for a receiver with
+/// explicitly configured synchronization limits.
+pub fn SyncMessage::from_json_string(
+  json_string : String,
+) -> SyncMessage raise DocumentError {
+  decode_container_sync_json(json_string, @sync.Limits::default())
+}
+
+///|
+/// Decode synchronization JSON using this receiver's configured limits.
+pub fn SyncSession::decode_json(
+  self : SyncSession,
+  json_string : String,
+) -> SyncMessage raise DocumentError {
+  decode_container_sync_json(json_string, self.document.sync_limits)
 }
 
 ///|

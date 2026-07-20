@@ -94,15 +94,17 @@ priv struct VersionedBlockTextOp {
 pub(all) struct SyncMessage {
   priv tree_ops : Array[VersionedTreeOp]
   priv text_ops : Array[VersionedBlockTextOp]
+  priv encoded_size : Int?
 }
 
 ///|
-/// Validating custom constructor for an immutable sync message.
+/// Custom constructor for an immutable sync message.
 fn SyncMessage::SyncMessage(
   tree_ops : Array[VersionedTreeOp],
   text_ops : Array[VersionedBlockTextOp],
+  encoded_size : Int?,
 ) -> SyncMessage {
-  { tree_ops: tree_ops.copy(), text_ops: text_ops.copy() }
+  { tree_ops: tree_ops.copy(), text_ops: text_ops.copy(), encoded_size }
 }
 
 ///|
@@ -138,6 +140,41 @@ priv enum SyncOpRecord {
 priv enum PendingSyncOp {
   Tree(VersionedTreeOp)
   Text(VersionedBlockTextOp)
+}
+
+///|
+/// Provenance of a synchronization candidate during pure preparation.
+priv enum SyncCandidate {
+  FromPending(SyncOpRecord)
+  FromMessage(SyncOpRecord)
+  FromPendingAndMessage(SyncOpRecord)
+}
+
+///|
+fn SyncCandidate::raw(self : SyncCandidate) -> SyncOpRecord {
+  match self {
+    FromPending(record) | FromMessage(record) | FromPendingAndMessage(record) =>
+      record
+  }
+}
+
+///|
+fn SyncCandidate::observe_message(
+  self : SyncCandidate,
+  record : SyncOpRecord,
+) -> SyncCandidate {
+  match self {
+    FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(record)
+    FromMessage(_) => FromMessage(record)
+  }
+}
+
+///|
+/// A fully validated, receiver-specific synchronization transition.
+priv struct PreparedSync {
+  applicable : Array[SyncOpRecord]
+  pending : Array[SyncOpRecord]
+  duplicate_operations : Int
 }
 
 ///|
@@ -748,7 +785,7 @@ fn Document::versioned_sync_ops_between(
         )
     }
   }
-  { tree_ops, text_ops }
+  SyncMessage::SyncMessage(tree_ops, text_ops, None)
 }
 
 ///|
@@ -1334,7 +1371,7 @@ pub fn SyncSession::export_all(
   self : SyncSession,
 ) -> SyncMessage raise DocumentError {
   let message = self.document.export_sync_message()
-  SyncMessage::SyncMessage(message.tree_ops, message.text_ops)
+  SyncMessage::SyncMessage(message.tree_ops, message.text_ops, None)
 }
 
 ///|
@@ -1343,7 +1380,7 @@ pub fn SyncSession::export_since(
   version : Version,
 ) -> SyncMessage raise DocumentError {
   let message = self.document.export_sync_message_since(version.inner)
-  SyncMessage::SyncMessage(message.tree_ops, message.text_ops)
+  SyncMessage::SyncMessage(message.tree_ops, message.text_ops, None)
 }
 
 ///|
@@ -1352,108 +1389,27 @@ pub fn SyncSession::apply(
   message : SyncMessage,
 ) -> SyncReport raise DocumentError {
   let limits = self.document.sync_limits
-  let incoming = container_message_records(message)
-  let operation_count = incoming.length()
-  if operation_count > self.document.sync_limits.max_decoded_operations() {
-    raise DocumentError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::DecodedOperations,
-        limit=limits.max_decoded_operations(),
-        actual=operation_count,
-      ),
-    )
-  }
-  let candidates : Map[String, SyncOpRecord] = Map([])
+  let pending_records : Array[SyncOpRecord] = []
   for pending in self.document.pending_sync_ops {
     let record = match pending {
       Tree(op) => SyncOpRecord::Tree(op)
       Text(op) => SyncOpRecord::Text(op)
     }
-    candidates[sync_record_key(record)] = record
+    pending_records.push(record)
   }
-  let new_records : Array[SyncOpRecord] = []
-  let mut duplicates = 0
-  for record in incoming {
-    validate_sync_record(record, limits) catch {
-      failure => raise DocumentError::SyncFailed(failure)
-    }
-    let id = sync_record_version(record)
-    let key = sync_raw_key(id)
-    let payload = sync_record_payload_key(record)
-    match self.document.sync_ops_by_version.get(key) {
-      Some(existing) => {
-        if sync_record_payload_key(existing) != payload {
-          raise DocumentError::SyncFailed(
-            @sync.Failure::ConflictingIdentity(
-              replica_id=id.agent,
-              sequence=id.seq,
-            ),
-          )
-        }
-        duplicates = duplicates + 1
-      }
-      None =>
-        match candidates.get(key) {
-          Some(existing) => {
-            if sync_record_payload_key(existing) != payload {
-              raise DocumentError::SyncFailed(
-                @sync.Failure::ConflictingIdentity(
-                  replica_id=id.agent,
-                  sequence=id.seq,
-                ),
-              )
-            }
-            duplicates = duplicates + 1
-          }
-          None => {
-            candidates[key] = record
-            new_records.push(record)
-          }
-        }
-    }
-  }
-  let ordered = canonical_sync_order(candidates.values().to_array()) catch {
+  let prepared = prepare_container_sync(
+    message,
+    limits,
+    self.document.sync_ops_by_version,
+    pending_records,
+  ) catch {
     failure => raise DocumentError::SyncFailed(failure)
   }
-  let resolvable : Map[String, Bool] = Map([])
-  let applicable : Array[SyncOpRecord] = []
-  let pending : Array[SyncOpRecord] = []
-  for record in ordered {
-    let mut ready = true
-    for dependency in sync_record_dependencies(record) {
-      let key = sync_raw_key(dependency)
-      if self.document.graph.raw_to_lv(dependency) is None &&
-        resolvable.get(key) != Some(true) {
-        ready = false
-      }
-    }
-    if ready {
-      resolvable[sync_record_key(record)] = true
-      applicable.push(record)
-    } else {
-      resolvable[sync_record_key(record)] = false
-      pending.push(record)
-    }
-  }
-  if pending.length() > limits.max_pending_operations() {
-    raise DocumentError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::PendingOperations,
-        limit=limits.max_pending_operations(),
-        actual=pending.length(),
-      ),
-    )
-  }
-  // Imperative shell: validation, conflict checks, cycle detection, dependency
-  // resolution, and every resource limit have completed before this point.
-  for record in new_records {
-    let key = sync_record_key(record)
-    self.document.seen_sync_versions[key] = true
-    self.document.sync_ops_by_version[key] = record
-  }
+  // Imperative shell: PreparedSync is only constructible after validation,
+  // conflict checks, cycle detection, dependency resolution, and limits.
   let mut applied_tree = 0
   let mut applied_text = 0
-  for record in applicable {
+  for record in prepared.applicable {
     match record {
       Tree(op) => {
         if !self.document.try_apply_versioned_tree_op(op) {
@@ -1468,9 +1424,12 @@ pub fn SyncSession::apply(
         applied_text = applied_text + 1
       }
     }
+    let key = sync_record_key(record)
+    self.document.seen_sync_versions[key] = true
+    self.document.sync_ops_by_version[key] = record
   }
   let next_pending : Array[PendingSyncOp] = []
-  for record in pending {
+  for record in prepared.pending {
     match record {
       Tree(op) => next_pending.push(PendingSyncOp::Tree(op))
       Text(op) => next_pending.push(PendingSyncOp::Text(op))
@@ -1480,7 +1439,7 @@ pub fn SyncSession::apply(
   {
     applied_tree_ops: applied_tree,
     applied_text_ops: applied_text,
-    duplicate_ops: duplicates,
+    duplicate_ops: prepared.duplicate_operations,
     pending_ops: next_pending.length(),
   }
 }

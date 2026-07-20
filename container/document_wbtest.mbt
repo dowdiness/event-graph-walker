@@ -573,7 +573,11 @@ test "Document: SyncReport defers move op until ancestor arrives" {
   let swap = full.tree_ops[full.tree_ops.length() - 1]
 
   // Deliver the swap first — its parents are not yet in the graph.
-  let early = doc_b.apply_remote_sync_message({ tree_ops: [swap], text_ops: [] })
+  let early = doc_b.apply_remote_sync_message({
+    tree_ops: [swap],
+    text_ops: [],
+    encoded_size: None,
+  })
   inspect(early.applied_tree_ops, content="0")
   inspect(early.pending_ops, content="1")
   inspect(doc_b.pending_sync_ops.copy().length(), content="1")
@@ -586,6 +590,7 @@ test "Document: SyncReport defers move op until ancestor arrives" {
   let rest = doc_b.apply_remote_sync_message({
     tree_ops: preceding,
     text_ops: [],
+    encoded_size: None,
   })
   inspect(rest.applied_tree_ops, content="3")
   inspect(rest.pending_ops, content="0")
