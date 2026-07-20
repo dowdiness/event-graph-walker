@@ -187,3 +187,64 @@ test "non-insert origin is rejected before any receiver mutation" {
   inspect(receiver.version() == before_version, content="true")
   inspect(receiver.sync().pending_sync_count(), content="0")
 }
+
+///|
+test "decidable malformed pending operation does not poison later sync" {
+  let receiver = try! TextState::new("receiver")
+  let malformed_future = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
+  )
+  let deferred = try! receiver.sync().apply(malformed_future)
+  inspect(deferred.applied_operations(), content="0")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let valid_predecessors = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  let applied = try! receiver.sync().apply(valid_predecessors)
+  inspect(applied.applied_operations(), content="2")
+  inspect(receiver.text(), content="AB")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "sync session decodes JSON with receiver-specific limits" {
+  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
+  let limits = try! @sync.Limits::Limits(
+    max_encoded_bytes=json.length() - 1,
+  )
+  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  try receiver.sync().decode_json(json) catch {
+    TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected receiver encoded byte limit")
+  } noraise {
+    _ => fail("receiver-specific decoder must reject oversized JSON")
+  }
+}
+
+///|
+test "receiver-specific decoder may raise the default encoded byte limit" {
+  let envelope = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
+  let json = envelope + " ".repeat(16 * 1024 * 1024)
+  try SyncMessage::from_json_string(json) catch {
+    TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected default encoded byte limit")
+  } noraise {
+    _ => fail("default decoder must reject oversized JSON")
+  }
+  let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length())
+  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  let message = try! receiver.sync().decode_json(json)
+  inspect(message.is_empty(), content="true")
+}
