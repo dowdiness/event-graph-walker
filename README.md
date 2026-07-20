@@ -156,6 +156,8 @@ Shared protocol policy types.
 
 ```text
 event-graph-walker/
+├── justfile              # Local and CI command entry points
+├── scripts/              # Nushell verification implementations
 ├── text/                 # Public text CRDT facade
 ├── tree/                 # Public movable-tree facade
 ├── undo/                 # Public undo/redo package
@@ -172,11 +174,23 @@ The generated `.mbti` files are the authoritative public API surface. Prefer the
 Run the checks from this package root:
 
 ```bash
-moon check
-moon test
+just verify
 ```
 
-The release gate is available as `./scripts/verify.sh`.
+Build and validate the publish archive:
+
+```bash
+just verify-publish
+```
+
+Run the complete pipeline used by CI:
+
+```bash
+just ci
+```
+
+`just` provides the command entry points; the verification logic is implemented
+in the Nushell scripts under `scripts/`.
 
 For performance work:
 

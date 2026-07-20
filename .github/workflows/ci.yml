@@ -23,11 +23,9 @@ jobs:
         uses: hustcer/setup-nu@v3
         with:
           version: "0.112.2"
-      - name: Resolve dependencies
-        run: |
-          moon update
-          moon check --target all --fmt --deny-warn
+      - name: Set up just 1.48.1
+        uses: extractions/setup-just@v3
+        with:
+          just-version: "1.48.1"
       - name: Verify
-        run: nu ./scripts/verify.nu
-      - name: Validate publish package
-        run: nu ./scripts/verify-publish-package.nu
+        run: just ci
