@@ -464,13 +464,70 @@ pub(all) struct SyncReport {
 } derive(Debug, Eq)
 
 ///|
+/// An operation parsed for the receiver's current causal context.
+///
+/// The raw operation stays behind this private wrapper so the commit shell
+/// cannot accidentally consume an operation that has only passed wire-level
+/// decoding. Construction also proves replica sequence ancestry and that every
+/// Fugue origin names an Insert operation.
+priv struct ApplicableOp {
+  op : @core.Op
+}
+
+///|
+/// Parse a dependency-resolved operation into the representation accepted by
+/// the commit shell.
+fn ApplicableOp::ApplicableOp(
+  op : @core.Op,
+  known_ops : Map[String, @core.Op],
+) -> ApplicableOp raise @sync.Failure {
+  validate_sequence_descent(op, known_ops)
+  validate_origin_targets(op, known_ops)
+  { op, }
+}
+
+///|
+fn ApplicableOp::raw(self : ApplicableOp) -> @core.Op {
+  self.op
+}
+
+///|
+/// The receiver-specific result of parsing one synchronization candidate.
+///
+/// This sum type preserves the dependency decision instead of collapsing it to
+/// a Boolean. Only `Apply` can carry an `ApplicableOp`; `Defer` retains the
+/// decoded operation for the bounded pending queue.
+priv enum ParsedCandidate {
+  Apply(ApplicableOp)
+  Defer(@core.Op)
+}
+
+///|
+/// Parse one canonically ordered candidate against the receiver snapshot and
+/// operations already proved applicable earlier in the same transition.
+fn parse_candidate(
+  op : @core.Op,
+  local_payloads : Map[String, String],
+  resolved : Map[String, Unit],
+  known_ops : Map[String, @core.Op],
+) -> ParsedCandidate raise @sync.Failure {
+  for dependency in op_dependencies(op) {
+    let key = raw_key(dependency)
+    if local_payloads.get(key) is None && resolved.get(key) is None {
+      return Defer(op)
+    }
+  }
+  Apply(ApplicableOp::ApplicableOp(op, known_ops))
+}
+
+///|
 /// A fully parsed, receiver-specific synchronization transition.
 ///
 /// This type is private so the imperative commit shell can only receive plans
 /// produced by `prepare_sync`. Its operations have passed identity, resource,
 /// dependency, causal-ancestry, and Fugue-origin checks.
 priv struct PreparedSync {
-  applicable : Array[@core.Op]
+  applicable : Array[ApplicableOp]
   pending : Array[@core.Op]
   duplicate_operations : Int
 }
@@ -957,28 +1014,19 @@ fn prepare_sync(
   let ordered = map_sync_failure(fn() raise @sync.Failure {
     canonical_order(all_candidates)
   })
-  let resolvable : Map[String, Bool] = Map([])
-  let applicable : Array[@core.Op] = []
+  let resolved : Map[String, Unit] = Map([])
+  let applicable : Array[ApplicableOp] = []
   let pending : Array[@core.Op] = []
   for op in ordered {
-    let mut ready = true
-    for dep in op_dependencies(op) {
-      let key = raw_key(dep)
-      if local_payload_map.get(key) is None && resolvable.get(key) != Some(true) {
-        ready = false
+    let parsed = map_sync_failure(fn() raise @sync.Failure {
+      parse_candidate(op, local_payload_map, resolved, known_ops)
+    })
+    match parsed {
+      Apply(applicable_op) => {
+        resolved[raw_key(op_identity(op))] = ()
+        applicable.push(applicable_op)
       }
-    }
-    if ready {
-      let parsed = map_sync_failure(fn() raise @sync.Failure {
-        validate_sequence_descent(op, known_ops)
-        validate_origin_targets(op, known_ops)
-        op
-      })
-      resolvable[raw_key(op_identity(op))] = true
-      applicable.push(parsed)
-    } else {
-      resolvable[raw_key(op_identity(op))] = false
-      pending.push(op)
+      Defer(pending_op) => pending.push(pending_op)
     }
   }
   if pending.length() > limits.max_pending_operations() {
@@ -1007,8 +1055,8 @@ pub fn SyncSession::apply(
   )
   // Imperative shell: PreparedSync is only constructible after complete
   // preflight, so protocol failures cannot occur after the first mutation.
-  for op in prepared.applicable {
-    self.doc.inner.apply_remote(op) catch {
+  for parsed_op in prepared.applicable {
+    self.doc.inner.apply_remote(parsed_op.raw()) catch {
       error => raise TextError::from_document_error(error, self.doc.len())
     }
   }
