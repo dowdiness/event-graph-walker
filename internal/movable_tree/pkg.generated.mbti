@@ -21,6 +21,7 @@ pub fn MovableTree::apply_create(Self, TreeNodeId, TreeNodeId, @fractional_index
 pub fn MovableTree::apply_move(Self, TreeNodeId, TreeNodeId, @fractional_index.FractionalIndex) -> Unit
 pub fn MovableTree::children(Self, TreeNodeId) -> Array[TreeNodeId]
 pub fn MovableTree::contains(Self, TreeNodeId) -> Bool
+pub fn MovableTree::copy(Self) -> Self
 pub fn MovableTree::get_position(Self, TreeNodeId) -> @fractional_index.FractionalIndex?
 pub fn MovableTree::get_property(Self, TreeNodeId, String) -> String?
 pub fn MovableTree::is_alive(Self, TreeNodeId) -> Bool
@@ -62,6 +63,7 @@ pub struct TreeOpLog {
 }
 pub fn TreeOpLog::all_ops(Self) -> Array[TreeMoveOp]
 pub fn TreeOpLog::apply(Self, MovableTree, TreeMoveOp) -> Unit
+pub fn TreeOpLog::copy(Self) -> Self
 pub fn TreeOpLog::new() -> Self
 
 pub(all) struct TreePropertyOp {

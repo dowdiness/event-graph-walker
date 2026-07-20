@@ -1416,11 +1416,30 @@ pub fn SyncSession::apply(
     }
     pending_records.push(record)
   }
+  let needs_tree_snapshot = message.has_text_operations() ||
+    pending_records.any(record => {
+      match record {
+        Text(_) => true
+        Tree(_) => false
+      }
+    })
+  let tree_snapshot = if needs_tree_snapshot {
+    self.document.tree.copy()
+  } else {
+    @mt.MovableTree::new()
+  }
+  let tree_log_snapshot = if needs_tree_snapshot {
+    self.document.log.copy()
+  } else {
+    @mt.TreeOpLog::new()
+  }
   let prepared = prepare_container_sync(
     message,
     limits,
     self.document.sync_ops_by_version,
     pending_records,
+    tree_snapshot,
+    tree_log_snapshot,
   ) catch {
     failure => raise DocumentError::SyncFailed(failure)
   }

@@ -237,6 +237,44 @@ test "container rejects delete and undelete targets from a different block" {
 }
 
 ///|
+test "container rejects text targeting a nonexistent block atomically" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":0,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"ghost\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":0},\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::InvalidContent(detail=_)
+    ) => ()
+    _ => fail("expected nonexistent text block failure")
+  } noraise {
+    _ => fail("text targeting a nonexistent block must be rejected")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+  inspect((try! receiver.sync().export_all()).is_empty(), content="true")
+}
+
+///|
+test "container tree preflight snapshot cannot mutate receiver on text failure" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":1,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"ghost\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":1},\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::InvalidContent(detail=_)
+    ) => ()
+    _ => fail("expected nonexistent text block failure")
+  } noraise {
+    _ => fail("message with a nonexistent text block must be failure atomic")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
 test "container receiver limits govern decode and later apply" {
   let source = try! @container.Document::new("source")
   let _ = try! source.create_node(parent=@container.root_id)

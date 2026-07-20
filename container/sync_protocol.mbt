@@ -265,12 +265,41 @@ fn validate_sync_text_references(
 fn parse_applicable_sync_record(
   record : SyncOpRecord,
   known_records : Map[String, SyncOpRecord],
+  tree_snapshot : @mt.MovableTree,
 ) -> ApplicableSyncOp raise @sync.Failure {
   validate_sync_sequence_descent(record, known_records)
   validate_sync_text_references(record, known_records)
   match record {
     Tree(op) => ApplyTree(op)
-    Text(op) => ApplyText(op)
+    Text(op) => {
+      if !tree_snapshot.contains(op.block) {
+        raise @sync.Failure::InvalidContent(
+          detail="text operation target block is not established",
+        )
+      }
+      ApplyText(op)
+    }
+  }
+}
+
+///|
+/// Replay a tree move into the private preparation snapshot.
+///
+/// `TreeOpLog::apply` is the source of truth for forward-create, total-order
+/// replay, and cycle skipping, so preparation predicts the same block
+/// existence that the imperative shell will observe.
+fn advance_sync_tree_snapshot(
+  applicable : ApplicableSyncOp,
+  tree_snapshot : @mt.MovableTree,
+  tree_log_snapshot : @mt.TreeOpLog,
+) -> Unit {
+  match applicable {
+    ApplyTree(versioned) =>
+      match versioned.op {
+        @mt.Move(op) => tree_log_snapshot.apply(tree_snapshot, op)
+        @mt.SetProperty(_) => ()
+      }
+    ApplyText(_) => ()
   }
 }
 
@@ -934,6 +963,8 @@ fn prepare_container_sync(
   limits : @sync.Limits,
   local_records : Map[String, SyncOpRecord],
   pending_records : Array[SyncOpRecord],
+  tree_snapshot : @mt.MovableTree,
+  tree_log_snapshot : @mt.TreeOpLog,
 ) -> PreparedSync raise @sync.Failure {
   let encoded_size = match message.encoded_size {
     Some(size) => size
@@ -1016,18 +1047,26 @@ fn prepare_container_sync(
       let candidate = candidates.get(key).unwrap()
       match candidate {
         FromMessage(_) => {
-          let parsed = parse_applicable_sync_record(record, known_records)
+          let parsed = parse_applicable_sync_record(
+            record, known_records, tree_snapshot,
+          )
           resolvable[key] = true
           applicable.push(parsed)
+          advance_sync_tree_snapshot(parsed, tree_snapshot, tree_log_snapshot)
         }
         FromPending(_) | FromPendingAndMessage(_) => {
-          let parsed = Some(parse_applicable_sync_record(record, known_records)) catch {
+          let parsed = Some(
+            parse_applicable_sync_record(record, known_records, tree_snapshot),
+          ) catch {
             _ => None
           }
           match parsed {
             Some(applicable_record) => {
               resolvable[key] = true
               applicable.push(applicable_record)
+              advance_sync_tree_snapshot(
+                applicable_record, tree_snapshot, tree_log_snapshot,
+              )
             }
             None => ()
           }

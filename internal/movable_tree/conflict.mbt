@@ -101,6 +101,21 @@ pub fn TreeOpLog::new() -> TreeOpLog {
 }
 
 ///|
+/// Return an owning copy suitable for deterministic transition planning.
+///
+/// Log entries are rebuilt because their undo metadata is mutable during
+/// total-order replay.
+pub fn TreeOpLog::copy(self : TreeOpLog) -> TreeOpLog {
+  {
+    entries: self.entries.map(entry => {
+      op: entry.op,
+      undo_info: entry.undo_info,
+    }),
+    seen: self.seen.copy(),
+  }
+}
+
+///|
 /// Return all operations in timestamp order.
 pub fn TreeOpLog::all_ops(self : TreeOpLog) -> Array[TreeMoveOp] {
   let result : Array[TreeMoveOp] = []
