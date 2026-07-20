@@ -148,6 +148,47 @@ fn validate_sequence_descent(
 }
 
 ///|
+/// Require every Fugue origin to identify an Insert operation.
+///
+/// Dependency resolution only proves that an origin exists in the causal
+/// graph. Delete and Undelete operations also have stable identities, but they
+/// do not create Fugue items and therefore cannot be valid insertion anchors or
+/// delete targets. Reject them during preflight so the commit shell cannot
+/// mutate the oplog and then fail while updating the Fugue tree.
+fn validate_origin_targets(
+  op : @core.Op,
+  known_ops : Map[String, @core.Op],
+) -> Unit raise @sync.Failure {
+  fn require_insert(
+    origin : @core.RawVersion?,
+    known_ops : Map[String, @core.Op],
+  ) -> Unit raise @sync.Failure {
+    match origin {
+      None => ()
+      Some(raw) =>
+        match known_ops.get(raw_key(raw)) {
+          Some(target) =>
+            match target.content() {
+              @core.Insert(_) => ()
+              @core.Delete | @core.Undelete =>
+                raise @sync.Failure::MalformedMessage(
+                  detail="operation origin must identify an insert operation",
+                )
+            }
+          None =>
+            raise @sync.Failure::MissingDependency(
+              replica_id=raw.agent,
+              sequence=raw.seq,
+            )
+        }
+    }
+  }
+
+  require_insert(op.origin_left(), known_ops)
+  require_insert(op.origin_right(), known_ops)
+}
+
+///|
 fn validate_insert_scalar(text : String) -> Unit raise @sync.Failure {
   let len = text.length()
   if len == 0 {
@@ -421,6 +462,18 @@ pub(all) struct SyncReport {
   priv duplicate_operations : Int
   priv pending_operations : Int
 } derive(Debug, Eq)
+
+///|
+/// A fully parsed, receiver-specific synchronization transition.
+///
+/// This type is private so the imperative commit shell can only receive plans
+/// produced by `prepare_sync`. Its operations have passed identity, resource,
+/// dependency, causal-ancestry, and Fugue-origin checks.
+priv struct PreparedSync {
+  applicable : Array[@core.Op]
+  pending : Array[@core.Op]
+  duplicate_operations : Int
+}
 
 ///|
 pub fn SyncReport::applied_operations(self : SyncReport) -> Int {
@@ -812,21 +865,25 @@ pub fn SyncSession::export_since(
 }
 
 ///|
-fn local_payloads(doc : TextState) -> Map[String, String] {
+fn local_payloads(local_ops : Array[@core.Op]) -> Map[String, String] {
   let result : Map[String, String] = Map([])
-  for op in doc.inner.get_all_ops() {
+  for op in local_ops {
     result[raw_key(op_identity(op))] = op_payload_key(op)
   }
   result
 }
 
 ///|
-/// Apply a message after complete validation and preparation.
-pub fn SyncSession::apply(
-  self : SyncSession,
+/// Parse a message and receiver snapshot into a total commit plan.
+///
+/// This is the functional core. It does not mutate the document or pending
+/// queue, and a failure therefore leaves all receiver state untouched.
+fn prepare_sync(
   message : SyncMessage,
-) -> SyncReport raise TextError {
-  let limits = self.doc.sync_limits
+  limits : @sync.Limits,
+  local_ops : Array[@core.Op],
+  pending_records : Array[@core.Op],
+) -> PreparedSync raise TextError {
   let encoded_size = match message.encoded_size {
     Some(size) => size
     None => @utf8.encode(message.to_json_string()).length()
@@ -849,9 +906,9 @@ pub fn SyncSession::apply(
       ),
     )
   }
-  let local_payload_map = local_payloads(self.doc)
+  let local_payload_map = local_payloads(local_ops)
   let candidates : Map[String, @core.Op] = Map([])
-  for pending in self.doc.pending_sync_records {
+  for pending in pending_records {
     candidates[raw_key(op_identity(pending))] = pending
   }
   let mut duplicates = 0
@@ -891,7 +948,7 @@ pub fn SyncSession::apply(
   }
   let all_candidates = candidates.values().to_array()
   let known_ops : Map[String, @core.Op] = Map([])
-  for local_op in self.doc.inner.get_all_ops() {
+  for local_op in local_ops {
     known_ops[raw_key(op_identity(local_op))] = local_op
   }
   for candidate in all_candidates {
@@ -912,11 +969,13 @@ pub fn SyncSession::apply(
       }
     }
     if ready {
-      map_sync_failure(fn() raise @sync.Failure {
+      let parsed = map_sync_failure(fn() raise @sync.Failure {
         validate_sequence_descent(op, known_ops)
+        validate_origin_targets(op, known_ops)
+        op
       })
       resolvable[raw_key(op_identity(op))] = true
-      applicable.push(op)
+      applicable.push(parsed)
     } else {
       resolvable[raw_key(op_identity(op))] = false
       pending.push(op)
@@ -931,17 +990,33 @@ pub fn SyncSession::apply(
       ),
     )
   }
-  // Imperative shell: every expected protocol failure has been handled above.
-  for op in applicable {
+  { applicable, pending, duplicate_operations: duplicates }
+}
+
+///|
+/// Apply a message after parsing it into a receiver-specific commit plan.
+pub fn SyncSession::apply(
+  self : SyncSession,
+  message : SyncMessage,
+) -> SyncReport raise TextError {
+  let prepared = prepare_sync(
+    message,
+    self.doc.sync_limits,
+    self.doc.inner.get_all_ops(),
+    self.doc.pending_sync_records.copy(),
+  )
+  // Imperative shell: PreparedSync is only constructible after complete
+  // preflight, so protocol failures cannot occur after the first mutation.
+  for op in prepared.applicable {
     self.doc.inner.apply_remote(op) catch {
       error => raise TextError::from_document_error(error, self.doc.len())
     }
   }
-  self.doc.pending_sync_records = pending
+  self.doc.pending_sync_records = prepared.pending
   let report : SyncReport = {
-    applied_operations: applicable.length(),
-    duplicate_operations: duplicates,
-    pending_operations: pending.length(),
+    applied_operations: prepared.applicable.length(),
+    duplicate_operations: prepared.duplicate_operations,
+    pending_operations: prepared.pending.length(),
   }
   report
 }

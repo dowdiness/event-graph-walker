@@ -166,3 +166,24 @@ test "receiver encoded-byte limit also covers direct exported messages" {
   inspect(receiver.text(), content="")
   inspect(receiver.version() == Version::empty(), content="true")
 }
+
+///|
+test "non-insert origin is rejected before any receiver mutation" {
+  let receiver = try! TextState::new("receiver")
+  try! receiver.insert(Pos::at(0), "X")
+  try! receiver.delete(Pos::at(0))
+  let before_text = receiver.text()
+  let before_version = receiver.version()
+  let message = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"remote\",\"sequence\":1},\"parents\":[{\"replica_id\":\"remote\",\"sequence\":0},{\"replica_id\":\"receiver\",\"sequence\":1}],\"kind\":\"delete\",\"content\":null,\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":1}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
+    _ => fail("expected malformed non-insert origin")
+  } noraise {
+    _ => fail("non-insert origin must be rejected")
+  }
+  inspect(receiver.text(), content=before_text)
+  inspect(receiver.version() == before_version, content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
