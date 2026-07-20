@@ -28,6 +28,6 @@ jobs:
           moon update
           moon check --target all --fmt --deny-warn
       - name: Verify
-        run: ./scripts/verify.sh
+        run: nu ./scripts/verify.nu
       - name: Validate publish package
         run: nu ./scripts/verify-publish-package.nu
