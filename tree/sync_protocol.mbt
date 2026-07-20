@@ -51,9 +51,16 @@ fn tree_json_size(
   limits : @sync.Limits,
 ) -> Int raise TreeError {
   let mut index = 0
+  let mut size = 0
   while index < json_string.length() {
     let value = json_string[index].to_int()
-    if value >= 0xD800 && value <= 0xDBFF {
+    if value <= 0x007F {
+      size = size + 1
+      index = index + 1
+    } else if value <= 0x07FF {
+      size = size + 2
+      index = index + 1
+    } else if value >= 0xD800 && value <= 0xDBFF {
       if index + 1 >= json_string.length() {
         raise TreeError::SyncFailed(
           @sync.Failure::MalformedMessage(detail="invalid tree JSON"),
@@ -65,16 +72,17 @@ fn tree_json_size(
           @sync.Failure::MalformedMessage(detail="invalid tree JSON"),
         )
       }
+      size = size + 4
       index = index + 2
     } else if value >= 0xDC00 && value <= 0xDFFF {
       raise TreeError::SyncFailed(
         @sync.Failure::MalformedMessage(detail="invalid tree JSON"),
       )
     } else {
+      size = size + 3
       index = index + 1
     }
   }
-  let size = @utf8.encode(json_string).length()
   check_tree_encoded_size(size, limits)
   size
 }

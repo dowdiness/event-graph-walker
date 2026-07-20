@@ -1395,6 +1395,17 @@ pub fn SyncSession::apply(
   message : SyncMessage,
 ) -> SyncReport raise DocumentError {
   let limits = self.document.sync_limits
+  if self.document.pending_sync_ops.is_empty() && message.is_empty() {
+    validate_container_sync_message_limits(message, limits) catch {
+      failure => raise DocumentError::SyncFailed(failure)
+    }
+    return {
+      applied_tree_ops: 0,
+      applied_text_ops: 0,
+      duplicate_ops: 0,
+      pending_ops: 0,
+    }
+  }
   let pending_records : Array[SyncOpRecord] = []
   for pending in self.document.pending_sync_ops {
     let record = match pending {
@@ -1403,19 +1414,23 @@ pub fn SyncSession::apply(
     }
     pending_records.push(record)
   }
-  let needs_tree_snapshot = message.has_text_operations() ||
-    pending_records.any(record => {
+  let mut needs_tree_replay = !message.tree_ops.is_empty()
+  if !needs_tree_replay {
+    for record in pending_records {
       match record {
-        Text(_) => true
-        Tree(_) => false
+        Tree(_) => needs_tree_replay = true
+        Text(_) => ()
       }
-    })
-  let tree_snapshot = if needs_tree_snapshot {
+    }
+  }
+  // Text-only preparation reads block presence but cannot mutate the tree.
+  // Tree candidates retain owning copies for failure-atomic replay planning.
+  let tree_snapshot = if needs_tree_replay {
     self.document.tree.copy()
   } else {
-    @mt.MovableTree::new()
+    self.document.tree
   }
-  let tree_log_snapshot = if needs_tree_snapshot {
+  let tree_log_snapshot = if needs_tree_replay {
     self.document.log.copy()
   } else {
     @mt.TreeOpLog::new()

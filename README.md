@@ -7,10 +7,11 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 - `dowdiness/event-graph-walker/undo` - undo/redo support for text documents
 - `dowdiness/event-graph-walker/container` - higher-level document API combining tree nodes, block text, sync, and undo
 - `dowdiness/event-graph-walker/history` - read-only `CausalSnapshot` view over a document's causal DAG (for visualization and history-aware tooling)
+- `dowdiness/event-graph-walker/sync` - shared synchronization limits and failure classifications
 
 Package metadata in `moon.mod`:
 
-- Version: `0.3.0`
+- Version: `0.4.0`
 - Repository: <https://github.com/dowdiness/event-graph-walker>
 - License: `Apache-2.0`
 - Description: `Implementation of the eg-walker CRDT algorithm with FugueMax sequence CRDT`
@@ -37,7 +38,7 @@ Use the public facade packages first:
 import "dowdiness/event-graph-walker/text"
 
 fn main() -> Unit raise {
-  let doc = @text.TextState::new("alice")
+  let doc = @text.TextState::new("alice-laptop-001")
 
   doc.insert(@text.Pos::at(0), "Hello")
   doc.insert(@text.Pos::at(5), " World")
@@ -52,10 +53,10 @@ Sync through `TextState::sync()`:
 
 ```moonbit
 fn main() -> Unit raise {
-  let alice = @text.TextState::new("alice")
+  let alice = @text.TextState::new("alice-laptop-001")
   alice.insert(@text.Pos::at(0), "Hello")
 
-  let bob = @text.TextState::new("bob")
+  let bob = @text.TextState::new("bob-laptop-001")
 
   let alice_sync = alice.sync()
   let initial = alice_sync.export_all()
@@ -88,9 +89,7 @@ fn main() -> Unit raise {
   doc.set_property(test, "name", "test")
 
   let peer = @tree.TreeState::new("bob-laptop-001")
-  for op in doc.export_ops() {
-    peer.apply_remote_op(op)
-  }
+  peer.sync().apply(doc.sync().export_all())
 
   println(peer.get_property(project, "name")) // Some("my-project")
   println(peer.children(project).length())    // 2
@@ -106,12 +105,13 @@ fn main() -> Unit raise {
 
 Primary text-editing API.
 
-- `TextState::new(agent_id)` creates a local replica.
+- `TextState::new(replica_id)` creates a local replica. The ID must be non-empty and globally unique per replica instance.
 - `insert(Pos::at(n), text)`, `delete(Pos::at(n))`, `delete_range(range)`, and `replace_range(range, text)` mutate text.
 - `text()`, `len()`, and `is_empty()` inspect current state.
 - `version()` returns a `Version` for later checkout or incremental sync.
 - `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange operations between replicas.
 - `checkout(version)` returns a read-only `TextView`.
+- `SyncMessage::to_json_string` / `from_json_string` provide the strict v1 transport codec; `to_canonical_bytes` provides deterministic bytes for hashing or signing.
 
 ### `tree`
 
@@ -121,7 +121,7 @@ Primary movable-tree API.
 - `create_node(parent~)` and `create_node_after(parent~, after~)` add nodes.
 - `move_node(target~, new_parent~)` and `delete_node(id)` update structure.
 - `children(id)`, `is_alive(id)`, `set_property(id, key, value)`, and `get_property(id, key)` inspect or annotate nodes.
-- `export_ops()` and `apply_remote_op(op)` exchange tree operations between replicas.
+- `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange tree operations between replicas.
 - `root_id` is the root sentinel; deleted nodes move under the trash sentinel.
 
 ### `undo`
@@ -141,13 +141,23 @@ Advanced document-level API that combines movable tree nodes, per-block text, sy
 - `Document::new(replica_id)` creates a document replica.
 - `create_node(parent~)`, `move_node(...)`, and `delete_node(id)` manage the document tree.
 - `insert_text(block, pos, text)`, `delete_text(block, pos)`, `replace_text(block, text)`, `get_text(block)`, and `text_len(block)` manage text inside a node.
-- `export_sync_message()`, `export_sync_message_since(version)`, and `apply_remote_sync_message(message)` exchange tree and text operations.
+- `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange tree and text operations.
 - `undo()`, `redo()`, `can_undo()`, and `can_redo()` provide document-level undo/redo.
+
+### `sync`
+
+Shared protocol policy types.
+
+- `Limits()` uses defaults of 16 MiB encoded input, 100,000 decoded operations, 10,000 pending operations, and 256 parents per operation.
+- `Limits(...)` is a validating custom constructor for overriding those budgets.
+- `Failure` classifies malformed content, missing dependencies, conflicting stable identities, and exceeded limits.
 
 ## Repository Layout
 
 ```text
 event-graph-walker/
+├── justfile              # Local and CI command entry points
+├── scripts/              # Nushell verification implementations
 ├── text/                 # Public text CRDT facade
 ├── tree/                 # Public movable-tree facade
 ├── undo/                 # Public undo/redo package
@@ -164,9 +174,23 @@ The generated `.mbti` files are the authoritative public API surface. Prefer the
 Run the checks from this package root:
 
 ```bash
-moon check
-moon test
+just verify
 ```
+
+Build and validate the publish archive:
+
+```bash
+just verify-publish
+```
+
+Run the complete pipeline used by CI:
+
+```bash
+just ci
+```
+
+`just` provides the command entry points; the verification logic is implemented
+in the Nushell scripts under `scripts/`.
 
 For performance work:
 
@@ -178,6 +202,7 @@ moon bench --release
 
 - [Documentation index](docs/README.md) - reading order and audience split
 - [Worked examples](docs/EXAMPLES.md) - sync, undo/redo, historical checkout
+- [v0.4 migration guide](docs/MIGRATING_TO_0.4.md) - breaking API and wire changes
 - [Walker usage](docs/WALKER_USAGE.md) - lower-level walker and oplog APIs
 - [Benchmarks](docs/BENCHMARKS.md) - benchmark commands and notes
 

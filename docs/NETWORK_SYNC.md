@@ -1,6 +1,10 @@
 # Network Synchronization for CRDT Collaboration
 
-> **📚 HISTORICAL RECORD — does not match the current integration.** This document describes a pre-restructure design with TypeScript classes (`LambdaEditor`, `NetworkSync`) that no longer exist in `examples/web/src/`. The current network integration uses the MoonBit `text/` and `container/` sync APIs (`SyncMessage::to_json_string` / `from_json_string`, `apply_remote_sync_message`) exposed through the generated WASM FFI; wiring lives in the canopy parent repo at `examples/web/`. The architecture diagram and protocol notes below remain conceptually relevant; the API reference section does not.
+Event Graph Walker v0.4 supplies strict JSON codecs and synchronization state
+machines, but no transport, signaling, authentication, persistence, or key
+management. The Canopy parent repository supplies the demo WebRTC integration.
+Every peer in one document must run v0.4; v0.3/v0.4 mixed synchronization is
+unsupported.
 
 This document describes how to use the network synchronization feature for real-time collaborative editing.
 
@@ -84,12 +88,17 @@ Result: Both peers converge to either "HelloWorld" or "WorldHello"
 
 ```typescript
 interface SyncMessage {
-  type: 'ops' | 'version_vector' | 'request_sync';
-  sender: string;              // Agent ID
-  ops?: string;                // JSON-encoded operations
-  version_vector?: string;     // JSON-encoded version vector
+  type: 'sync';
+  facade: 'text' | 'tree' | 'container';
+  sender: string;              // globally unique replica-instance ID
+  payload: string;             // exact façade SyncMessage JSON envelope
 }
 ```
+
+Do not parse or rewrite `payload` in the transport. Decode it with the matching
+MoonBit façade. Each envelope has `schema: 1`, a façade-specific `format`, and
+strictly validated logical records. Unknown fields and other schema versions
+are rejected.
 
 ## API Reference
 
@@ -100,10 +109,17 @@ API (exposed via WASM FFI):
 - **Serialize**: `SyncMessage::to_json_string`
 - **Deserialize**: `SyncMessage::from_json_string`
 - **Apply remote message** (text-only): `TextState::sync().apply(msg)`
-- **Apply remote message** (full document): `Document::apply_remote_sync_message(msg) -> SyncReport`
-- **Export since a known version**: `TextState::sync().export_since(ver)` / `Document::export_sync_message_since(ver)`
-- **Export full state**: `TextState::sync().export_all()` / `Document::export_sync_message()`
+- **Apply remote message**: `state.sync().apply(msg) -> SyncReport`
+- **Export since a known version**: `state.sync().export_since(ver)`
+- **Export full state**: `state.sync().export_all()`
 - **Version tracking**: `Version::to_json_string` / `Version::from_json_string`
+
+The same shape applies independently to `TextState`, `TreeState`, and
+container `Document`. Their opaque messages and versions are not
+interchangeable.
+
+`to_canonical_bytes()` produces deterministic domain-separated bytes for
+hashing or signing after validation. It is not a binary transport decoder.
 
 See `docs/EXAMPLES.md` for worked sync, undo, and checkout examples. Transport
 wiring (WebRTC + signaling) lives in the canopy parent repo at `examples/web/`.

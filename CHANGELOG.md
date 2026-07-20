@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-19
+
+### Breaking changes
+
+- Synchronization identities are stable `(replica_id, sequence)` pairs.
+  Replica-local logical versions are no longer part of public APIs or wire
+  payloads. v0.3 arrays and mixed v0.3/v0.4 synchronization are unsupported.
+- `text`, `tree`, and `container` now expose their own opaque `Version`,
+  `SyncMessage`, `SyncSession`, and `SyncReport` types through the common
+  `state.sync().export_all()`, `export_since(version)`, and `apply(message)`
+  shape. Raw operation export/apply APIs and public versioned-operation
+  records were removed.
+- `TreeNodeId` is owned by the `tree` and `container` façades. Generated
+  public interfaces no longer import any `internal/` package.
+- JSON uses strict schema-1, façade-specific envelopes. Unknown fields,
+  legacy arrays, negative identifiers, duplicate entries, dependency cycles,
+  identity forks, and invalid content are rejected.
+- Replica IDs must be non-empty and globally unique per replica instance.
+  Reuse is detected during synchronization as a conflicting identity.
+
+### Added
+
+- Public `sync` package with opaque, custom-constructed `Limits` and shared
+  `Failure` classifications. Defaults are 16 MiB encoded input, 100,000
+  decoded operations, 10,000 pending operations, and 256 parents per
+  operation.
+- Domain-separated deterministic canonical bytes for text, tree, and
+  container sync messages.
+- Live `Document::causal_snapshot()` support for container tree and block-text
+  histories.
+- Generated 2–5 replica container convergence coverage and strict protocol
+  regression tests.
+
+### Fixed
+
+- Remote ingestion now completes validation, conflict detection, dependency
+  ordering, and resource preflight before mutating graph, tree, text, caches,
+  or pending state. Exact duplicates are idempotent; conflicting identities
+  are failure-atomic.
+- Container block-text insert IDs, origins, delete targets, and undo targets
+  use stable operation identities and translate to receiver-local storage only
+  inside the façade shell.
+- Empty local text inserts are true no-ops and empty remote insert records are
+  rejected.
+- Undo/redo preflights stale commands and preserves both the failing source
+  suffix and already-applied inverse commands after unexpected failures.
+- `CausalSnapshot` no longer exposes `CausalGraph`, `GraphEntry`, or a public
+  `from_graph` constructor.
+
+See [Migrating to v0.4](docs/MIGRATING_TO_0.4.md).
+
 ## [0.3.0] - 2026-05-07
 
 ### Added
@@ -175,6 +226,8 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dowdiness/event-graph-walker/releases/tag/v0.1.0

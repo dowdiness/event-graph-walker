@@ -154,6 +154,82 @@ test "container rejects replica sequence that does not descend from predecessor"
 }
 
 ///|
+test "container rejects cross-replica forward-created tree targets atomically" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"bob\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"bob\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::InvalidContent(detail=_)
+    ) => ()
+    _ => fail("expected invalid cross-replica tree target")
+  } noraise {
+    _ => fail("cross-replica forward-create must be rejected")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "container rejects properties for unestablished tree targets atomically" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"property\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"key\":\"title\",\"value\":\"poison\"}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::InvalidContent(detail=_)
+    ) => ()
+    _ => fail("expected unestablished property target failure")
+  } noraise {
+    _ => fail("property for an unestablished target must be rejected")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "container rejects non-monotonic Lamport timestamp after predecessor" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::MalformedMessage(detail=_)
+    ) => ()
+    _ => fail("expected non-monotonic Lamport timestamp failure")
+  } noraise {
+    _ => fail("non-monotonic Lamport timestamp must be rejected")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "container rejects Lamport timestamp not above causal parent" {
+  let receiver = try! @container.Document::new("receiver")
+  let message = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"bob\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":5,\"agent\":\"bob\",\"target\":{\"kind\":\"node\",\"replica_id\":\"bob\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[{\"replica_id\":\"bob\",\"sequence\":0}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":5,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::MalformedMessage(detail=_)
+    ) => ()
+    _ => fail("expected non-monotonic causal-parent timestamp failure")
+  } noraise {
+    _ => fail("timestamp equal to a causal parent must be rejected")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
 test "resent malformed pending sequence is discarded after predecessors arrive" {
   let receiver = try! @container.Document::new("receiver")
   let malformed_future = try! @container.SyncMessage::from_json_string(
@@ -178,6 +254,37 @@ test "resent malformed pending sequence is discarded after predecessors arrive" 
     content="true",
   )
   inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "pending text operation remains queued until its block exists" {
+  let receiver = try! @container.Document::new("receiver")
+  let future_text = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"text\",\"payload\":{\"kind\":\"insert\",\"timestamp\":1,\"agent\":\"alice\",\"block\":{\"kind\":\"node\",\"replica_id\":\"ghost\",\"sequence\":0},\"item\":{\"replica_id\":\"alice\",\"sequence\":1},\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}}]}",
+  )
+  let deferred = try! receiver.sync().apply(future_text)
+  inspect(deferred.pending_operations(), content="1")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let predecessor = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}}]}",
+  )
+  let still_deferred = try! receiver.sync().apply(predecessor)
+  inspect(still_deferred.applied_tree_operations(), content="1")
+  inspect(still_deferred.applied_text_operations(), content="0")
+  inspect(still_deferred.pending_operations(), content="1")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let block_create = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"ghost\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"ghost\",\"target\":{\"kind\":\"node\",\"replica_id\":\"ghost\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
+  )
+  let applied = try! receiver.sync().apply(block_create)
+  inspect(applied.applied_tree_operations(), content="1")
+  inspect(applied.applied_text_operations(), content="1")
+  inspect(applied.pending_operations(), content="0")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+  inspect(
+    receiver.get_text(try! @container.TreeNodeId::TreeNodeId("ghost", 0)),
+    content="A",
+  )
 }
 
 ///|
@@ -309,6 +416,29 @@ test "container receiver limits govern decode and later apply" {
     _ => fail("apply must preserve receiver encoded-byte enforcement")
   }
   inspect(receiver.version() == @container.Version::empty(), content="true")
+}
+
+///|
+test "empty container message still enforces receiver encoded-byte limit" {
+  let source = try! @container.Document::new("source")
+  let json = (try! source.sync().export_all()).to_json_string() + " "
+  let decoded = try! @container.SyncMessage::from_json_string(json)
+  let limits = try! @sync.Limits(max_encoded_bytes=json.length() - 1)
+  let receiver = try! @container.Document::new_with_sync_limits(
+    "receiver", limits,
+  )
+  try receiver.sync().apply(decoded) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected receiver encoded-byte limit for empty message")
+  } noraise {
+    _ => fail("empty message must preserve receiver byte enforcement")
+  }
 }
 
 ///|

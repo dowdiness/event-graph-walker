@@ -43,6 +43,23 @@ fn sync_record_parents(record : SyncOpRecord) -> Array[@core.RawVersion] {
 }
 
 ///|
+fn sync_record_timestamp(record : SyncOpRecord) -> Int {
+  match record {
+    Tree(versioned) =>
+      match versioned.op {
+        @mt.Move(op) => op.timestamp
+        @mt.SetProperty(op) => op.timestamp
+      }
+    Text(versioned) =>
+      match versioned.op {
+        Insert(op) => op.timestamp
+        Delete(op) => op.timestamp
+        Undelete(op) => op.timestamp
+      }
+  }
+}
+
+///|
 fn sync_record_key(record : SyncOpRecord) -> String {
   sync_raw_key(sync_record_version(record))
 }
@@ -136,6 +153,70 @@ fn sync_record_dependencies(record : SyncOpRecord) -> Array[@core.RawVersion] {
 }
 
 ///|
+/// Include the target block's create identity when ordering text operations.
+///
+/// This edge orders a block create before text that can become applicable in
+/// the same preparation pass. It is deliberately not a readiness dependency:
+/// a newly received text operation whose causal dependencies are otherwise
+/// ready must still reject an unestablished block instead of becoming pending.
+fn sync_record_order_dependencies(
+  record : SyncOpRecord,
+  block_create_versions : Map[String, @core.RawVersion],
+) -> Array[@core.RawVersion] {
+  let dependencies = sync_record_dependencies(record)
+  match record {
+    Tree(_) => ()
+    Text(versioned) =>
+      match block_create_versions.get(internal_node_key(versioned.block)) {
+        Some(version) => dependencies.push(version)
+        None => ()
+      }
+  }
+  let unique : Map[String, @core.RawVersion] = Map([])
+  for dependency in dependencies {
+    unique[sync_raw_key(dependency)] = dependency
+  }
+  let result = unique.values().to_array()
+  result.sort_by(compare_sync_raw)
+  result
+}
+
+///|
+/// Index the earliest owner-issued move that can establish each target node.
+///
+/// Tree node counters and causal sequences are independent: property and text
+/// operations can advance an owner's causal sequence without allocating a node.
+/// The record's RawVersion is therefore the only valid ordering identity for
+/// the block create.
+fn sync_block_create_versions(
+  records : Map[String, SyncOpRecord],
+) -> Map[String, @core.RawVersion] {
+  let creates : Map[String, @core.RawVersion] = Map([])
+  for record in records.values() {
+    match record {
+      Tree(versioned) =>
+        match versioned.op {
+          @mt.Move(op) =>
+            if op.target.agent == versioned.version.agent &&
+              op.new_parent != @mt.trash_id {
+              let key = internal_node_key(op.target)
+              match creates.get(key) {
+                Some(existing) =>
+                  if compare_sync_raw(versioned.version, existing) < 0 {
+                    creates[key] = versioned.version
+                  }
+                None => creates[key] = versioned.version
+              }
+            }
+          @mt.SetProperty(_) => ()
+        }
+      Text(_) => ()
+    }
+  }
+  creates
+}
+
+///|
 /// Return whether `target` is reachable through the declared causal parents.
 ///
 /// The implicit replica predecessor is deliberately excluded: it constrains
@@ -190,6 +271,37 @@ fn validate_sync_sequence_descent(
     raise @sync.Failure::MalformedMessage(
       detail="operation does not causally descend from its replica predecessor",
     )
+  }
+}
+
+///|
+/// Require Lamport time to advance beyond the replica predecessor and every
+/// declared causal parent.
+fn validate_sync_lamport_descent(
+  record : SyncOpRecord,
+  known_records : Map[String, SyncOpRecord],
+) -> Unit raise @sync.Failure {
+  let id = sync_record_version(record)
+  let dependencies = sync_record_parents(record)
+  if id.seq > 0 {
+    dependencies.push(@core.RawVersion::new(id.agent, id.seq - 1))
+  }
+  let timestamp = sync_record_timestamp(record)
+  let checked : Map[String, Bool] = Map([])
+  for dependency in dependencies {
+    let key = sync_raw_key(dependency)
+    if checked.get(key) is None {
+      checked[key] = true
+      match known_records.get(key) {
+        Some(cause) =>
+          if timestamp <= sync_record_timestamp(cause) {
+            raise @sync.Failure::MalformedMessage(
+              detail="operation timestamp does not advance beyond its causal dependencies",
+            )
+          }
+        None => ()
+      }
+    }
   }
 }
 
@@ -257,6 +369,37 @@ fn validate_sync_text_references(
 }
 
 ///|
+/// Reject tree mutations that could manufacture or annotate an unestablished
+/// node. A missing move target is a create only when issued by its owner.
+fn validate_sync_tree_target(
+  record : SyncOpRecord,
+  tree_snapshot : @mt.MovableTree,
+) -> Unit raise @sync.Failure {
+  match record {
+    Tree(versioned) =>
+      match versioned.op {
+        @mt.Move(op) =>
+          if !tree_snapshot.contains(op.target) &&
+            (
+              op.target.agent != versioned.version.agent ||
+              op.new_parent == @mt.trash_id
+            ) {
+            raise @sync.Failure::InvalidContent(
+              detail="tree move target is not an owner-created node",
+            )
+          }
+        @mt.SetProperty(op) =>
+          if !tree_snapshot.contains(op.target) {
+            raise @sync.Failure::InvalidContent(
+              detail="tree property target is not established",
+            )
+          }
+      }
+    Text(_) => ()
+  }
+}
+
+///|
 /// Parse a raw record into the only representation accepted by the apply shell.
 ///
 /// The returned type preserves the knowledge gained by the state-aware checks;
@@ -268,7 +411,9 @@ fn parse_applicable_sync_record(
   tree_snapshot : @mt.MovableTree,
 ) -> ApplicableSyncOp raise @sync.Failure {
   validate_sync_sequence_descent(record, known_records)
+  validate_sync_lamport_descent(record, known_records)
   validate_sync_text_references(record, known_records)
+  validate_sync_tree_target(record, tree_snapshot)
   match record {
     Tree(op) => ApplyTree(op)
     Text(op) => {
@@ -312,13 +457,14 @@ fn sync_record_compare(a : SyncOpRecord, b : SyncOpRecord) -> Int {
 fn canonical_sync_order(
   records : Array[SyncOpRecord],
 ) -> Array[SyncOpRecord] raise @sync.Failure {
-  canonical_sync_order_counted(records).0
+  canonical_sync_order_with_block_creates(records, Map([])).0
 }
 
 ///|
-/// Dependency-indexed Kahn ordering with a deterministic comparison count.
-fn canonical_sync_order_counted(
+/// Order preparation candidates with receiver-known block-create identities.
+fn canonical_sync_order_with_block_creates(
   records : Array[SyncOpRecord],
+  block_create_versions : Map[String, @core.RawVersion],
 ) -> (Array[SyncOpRecord], Int) raise @sync.Failure {
   let candidates : Map[String, SyncOpRecord] = Map([])
   for record in records {
@@ -339,7 +485,10 @@ fn canonical_sync_order_counted(
   let dependency_waiters : Map[String, Array[String]] = Map([])
   candidates.each(fn(key, record) {
     let mut count = 0
-    for dependency in sync_record_dependencies(record) {
+    for
+      dependency in sync_record_order_dependencies(
+        record, block_create_versions,
+      ) {
       let dependency_key = sync_raw_key(dependency)
       if candidates.get(dependency_key) is Some(_) {
         count = count + 1
@@ -954,6 +1103,32 @@ fn container_message_from_records(
 }
 
 ///|
+fn validate_container_sync_message_limits(
+  message : SyncMessage,
+  limits : @sync.Limits,
+) -> Unit raise @sync.Failure {
+  let encoded_size = match message.encoded_size {
+    Some(size) => size
+    None => @utf8.encode(message.to_json_string()).length()
+  }
+  if encoded_size > limits.max_encoded_bytes() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::EncodedBytes,
+      limit=limits.max_encoded_bytes(),
+      actual=encoded_size,
+    )
+  }
+  let decoded_operations = message.tree_ops.length() + message.text_ops.length()
+  if decoded_operations > limits.max_decoded_operations() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::DecodedOperations,
+      limit=limits.max_decoded_operations(),
+      actual=decoded_operations,
+    )
+  }
+}
+
+///|
 /// Parse a message and receiver snapshot into a total commit plan.
 ///
 /// This is the functional core. It does not mutate the document, causal graph,
@@ -966,25 +1141,8 @@ fn prepare_container_sync(
   tree_snapshot : @mt.MovableTree,
   tree_log_snapshot : @mt.TreeOpLog,
 ) -> PreparedSync raise @sync.Failure {
-  let encoded_size = match message.encoded_size {
-    Some(size) => size
-    None => @utf8.encode(message.to_json_string()).length()
-  }
-  if encoded_size > limits.max_encoded_bytes() {
-    raise @sync.Failure::LimitExceeded(
-      kind=@sync.LimitKind::EncodedBytes,
-      limit=limits.max_encoded_bytes(),
-      actual=encoded_size,
-    )
-  }
+  validate_container_sync_message_limits(message, limits)
   let incoming = container_message_records(message)
-  if incoming.length() > limits.max_decoded_operations() {
-    raise @sync.Failure::LimitExceeded(
-      kind=@sync.LimitKind::DecodedOperations,
-      limit=limits.max_decoded_operations(),
-      actual=incoming.length(),
-    )
-  }
   let candidates : Map[String, SyncCandidate] = Map([])
   for record in pending_records {
     candidates[sync_record_key(record)] = FromPending(record)
@@ -1030,7 +1188,10 @@ fn prepare_container_sync(
   for record in all_candidates {
     known_records[sync_record_key(record)] = record
   }
-  let ordered = canonical_sync_order(all_candidates)
+  let ordered = canonical_sync_order_with_block_creates(
+      all_candidates,
+      sync_block_create_versions(known_records),
+    ).0
   let resolvable : Map[String, Bool] = Map([])
   let applicable : Array[ApplicableSyncOp] = []
   let pending : Array[SyncOpRecord] = []
@@ -1055,20 +1216,29 @@ fn prepare_container_sync(
           advance_sync_tree_snapshot(parsed, tree_snapshot, tree_log_snapshot)
         }
         FromPending(_) | FromPendingAndMessage(_) => {
-          let parsed = Some(
-            parse_applicable_sync_record(record, known_records, tree_snapshot),
-          ) catch {
-            _ => None
+          let target_block_exists = match record {
+            Tree(_) => true
+            Text(versioned) => tree_snapshot.contains(versioned.block)
           }
-          match parsed {
-            Some(applicable_record) => {
-              resolvable[key] = true
-              applicable.push(applicable_record)
-              advance_sync_tree_snapshot(
-                applicable_record, tree_snapshot, tree_log_snapshot,
-              )
+          if !target_block_exists {
+            resolvable[key] = false
+            pending.push(record)
+          } else {
+            let parsed = Some(
+              parse_applicable_sync_record(record, known_records, tree_snapshot),
+            ) catch {
+              _ => None
             }
-            None => ()
+            match parsed {
+              Some(applicable_record) => {
+                resolvable[key] = true
+                applicable.push(applicable_record)
+                advance_sync_tree_snapshot(
+                  applicable_record, tree_snapshot, tree_log_snapshot,
+                )
+              }
+              None => ()
+            }
           }
         }
       }
