@@ -33,6 +33,7 @@ These are useful when changing internals, reviewing algorithm choices, or planni
 - [Decisions needed](decisions-needed.md)
 - [Decision records](decisions/)
 - [Plans](plans/)
+  - [Parse, Don't Validate audit and improvement plan](plans/2026-07-21-parse-dont-validate-audit.md)
 - [Benchmark records](benchmarks/)
 
 ## Historical, Spec, Or Exploratory Material
