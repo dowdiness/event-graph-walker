@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Range::from_ints` raise `TextError::InvalidRange` when `start` > `end`.
   Endpoints are exposed via `start()` and `end()` methods, while `TextState`
   mutation methods continue to validate document-length bounds.
+- Removed the unused public `Op::FromJson` implementation. `Op::ToJson`,
+  trusted constructors, and existing JSON shapes remain available; generic
+  `Op` decoding is intentionally not replaced in this phase.
 
 ### Performance
 

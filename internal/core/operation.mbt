@@ -23,7 +23,7 @@ pub struct Op {
   priv content : OpContent // Operation content
   priv origin_left : RawVersion? // FugueMax: item to the left
   priv origin_right : RawVersion? // FugueMax: item to the right
-} derive(Debug, FromJson, ToJson)
+} derive(Debug, ToJson)
 
 ///|
 pub impl Show for Op with fn output(self, logger) {

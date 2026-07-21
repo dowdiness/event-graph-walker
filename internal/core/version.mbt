@@ -15,11 +15,44 @@ pub type LV = Int
 pub type AgentId = String
 
 ///|
-/// Raw Version - globally unique operation identifier
+/// Raw Version - operation identifier scoped to a replica.
+///
+/// The decoder requires a non-empty agent and non-negative sequence. Replica
+/// uniqueness remains a deployment and protocol responsibility.
 pub struct RawVersion {
   agent : String
   seq : Int
-} derive(Eq, Compare, Debug, ToJson, FromJson)
+} derive(Eq, Compare, Debug, ToJson)
+
+///|
+pub impl @json.FromJson for RawVersion with fn from_json(json, path) {
+  match json {
+    Json::Object(m) => {
+      let agent_path = path.add_key("agent")
+      let seq_path = path.add_key("seq")
+      let agent : String = @json.from_json(
+        m.get("agent").unwrap_or(Json::null()),
+        path=agent_path,
+      )
+      let seq : Int = @json.from_json(
+        m.get("seq").unwrap_or(Json::null()),
+        path=seq_path,
+      )
+      if agent.is_empty() {
+        raise @json.JsonDecodeError(
+          (agent_path, "RawVersion agent must not be empty"),
+        )
+      }
+      if seq < 0 {
+        raise @json.JsonDecodeError(
+          (seq_path, "RawVersion seq must be non-negative"),
+        )
+      }
+      { agent, seq }
+    }
+    _ => raise @json.JsonDecodeError((path, "expected RawVersion object"))
+  }
+}
 
 ///|
 pub impl Show for RawVersion with fn output(self, logger) {

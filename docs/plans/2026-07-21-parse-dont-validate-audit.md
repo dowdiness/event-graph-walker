@@ -107,7 +107,8 @@ Schedule this as the final phase. `RawVersion::new` is widely used by the causal
 3. **Completed 2026-07-21:** Make `Frontier` opaque and invariant-preserving, then benchmark affected graph paths.
 4. **Completed 2026-07-21:** Make `Range` opaque and strengthen its constructors in an API-breaking release.
 5. **Completed 2026-07-21:** Separate structural sync parsing from receiver policy checks while preserving `ApplicableOp` and `ApplicableSyncOp`.
-6. Reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove generic deserialization traits only when their consumers have moved.
+6. **Phase 6a decoder hardening:** replace the derived `RawVersion` decoder with a validating decoder for non-empty agents and non-negative sequences; harden `OpRun` decoding with field-specific paths, identity checks, and sequence-range overflow protection; remove the unused public `Op::FromJson` trait while preserving `Op::ToJson` and the existing wire shape. This phase adds focused valid/invalid JSON coverage, including nested `RawVersion` values.
+7. **Later phase:** reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove or reshape constructors only when their consumers have moved. Phase 6a intentionally does not make `RawVersion` opaque or change `RawVersion::new`; those API migrations remain deferred.
 
 Each phase should be independently reviewable and should preserve the wire formats unless explicitly documented otherwise.
 

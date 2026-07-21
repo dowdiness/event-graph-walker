@@ -47,7 +47,7 @@ pub impl @rle.Spanning for LvRange
 
 pub struct Op {
   // private fields
-} derive(ToJson, @debug.Debug, @json.FromJson)
+} derive(ToJson, @debug.Debug)
 pub fn Op::agent(Self) -> String
 pub fn Op::content(Self) -> OpContent
 pub fn Op::get_delete_target(Self) -> RawVersion?
@@ -104,11 +104,12 @@ pub impl @json.FromJson for OpRunContent
 pub struct RawVersion {
   agent : String
   seq : Int
-} derive(Compare, Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Compare, Eq, ToJson, @debug.Debug)
 pub fn RawVersion::new(String, Int) -> Self
 pub fn RawVersion::to_string(Self) -> String
 pub impl Hash for RawVersion
 pub impl Show for RawVersion
+pub impl @json.FromJson for RawVersion
 
 // Type aliases
 pub type AgentId = String
