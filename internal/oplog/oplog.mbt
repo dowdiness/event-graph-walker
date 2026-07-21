@@ -44,7 +44,7 @@ pub fn OpLog::insert(
   origin_left : Int,
   origin_right : Int,
 ) -> @core.Op raise OpLogError {
-  let parents = self.graph.get_frontier().0
+  let parents = self.graph.get_frontier().to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
     match self.graph.lv_to_raw(lv) {
@@ -82,7 +82,7 @@ pub fn OpLog::delete(
   self : OpLog,
   origin_left : Int,
 ) -> @core.Op raise OpLogError {
-  let parents = self.graph.get_frontier().0
+  let parents = self.graph.get_frontier().to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
     match self.graph.lv_to_raw(lv) {
@@ -117,7 +117,7 @@ pub fn OpLog::undelete(
   self : OpLog,
   origin_left : Int,
 ) -> @core.Op raise OpLogError {
-  let parents = self.graph.get_frontier().0
+  let parents = self.graph.get_frontier().to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
     match self.graph.lv_to_raw(lv) {
@@ -241,7 +241,7 @@ pub fn OpLog::get_frontier(self : OpLog) -> @core.Frontier {
 pub fn OpLog::get_frontier_raw(
   self : OpLog,
 ) -> Array[@core.RawVersion] raise OpLogError {
-  let frontier = self.graph.get_frontier().0
+  let frontier = self.graph.get_frontier().iter()
   let result : Array[@core.RawVersion] = []
   for lv in frontier {
     match self.graph.lv_to_raw(lv) {

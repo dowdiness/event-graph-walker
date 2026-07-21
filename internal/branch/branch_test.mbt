@@ -17,7 +17,7 @@ test "create empty branch" {
   let oplog = @oplog.OpLog::new("agent-1")
   let branch = Branch::new(oplog)
   inspect(branch.to_text(), content="")
-  inspect(branch.get_frontier().0.length(), content="0")
+  inspect(branch.get_frontier().length(), content="0")
 }
 
 ///|
@@ -115,12 +115,15 @@ test "at_frontier check" {
   let frontier1 = oplog.get_frontier()
   let branch = try! Branch::checkout(oplog, frontier1)
   inspect(branch.at_frontier(frontier1), content="true")
-  inspect(branch.at_frontier([999]), content="false")
-  inspect(branch.at_frontier([]), content="false")
+  inspect(
+    branch.at_frontier(@core.Frontier::from_array([999])),
+    content="false",
+  )
+  inspect(branch.at_frontier(@core.Frontier::from_array([])), content="false")
 }
 
 ///|
-test "at_frontier preserves multiplicity" {
+test "at_frontier rejects canonical duplicate input" {
   let remote_a = @oplog.OpLog::new("agent-a")
   let remote_b = @oplog.OpLog::new("agent-b")
   let op_a = try! remote_a.insert("A", -1, -1)
@@ -130,9 +133,13 @@ test "at_frontier preserves multiplicity" {
   ignore(try! oplog.apply_remote(op_b))
   let frontier = oplog.get_frontier()
   let branch = try! Branch::checkout(oplog, frontier)
-  inspect(frontier.0.length(), content="2")
+  inspect(frontier.length(), content="2")
   inspect(branch.at_frontier(frontier), content="true")
-  inspect(branch.at_frontier([frontier.0[0], frontier.0[0]]), content="false")
+  let values = frontier.to_array()
+  inspect(
+    branch.at_frontier(@core.Frontier::from_array([values[0], values[0]])),
+    content="false",
+  )
 }
 
 ///|

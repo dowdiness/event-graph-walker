@@ -20,7 +20,7 @@ fn apply_remote_op_for_test(doc : Document, op : @mt.TreeOp) -> Unit {
   if timestamp > doc.lamport_clock {
     doc.lamport_clock = timestamp
   }
-  let _ = doc.graph.add_version(doc.graph.get_frontier().0, agent) catch {
+  let _ = doc.graph.add_version(doc.graph.get_frontier().to_array(), agent) catch {
     _ => 0
   }
   match op {

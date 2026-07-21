@@ -519,7 +519,7 @@ pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
         None => None
       }
     },
-    fn() { graph.get_frontier().0.copy() },
+    fn() { graph.get_frontier().to_array() },
     fn(lv) { graph.children_count(lv) },
   )
 }
@@ -536,7 +536,7 @@ fn Document::alloc_id(self : Document) -> @mt.TreeNodeId {
 /// Allocate a new causal version. Returns (lv, timestamp).
 fn Document::next_version(self : Document) -> (Int, Int) raise DocumentError {
   let frontier = self.graph.get_frontier()
-  let parents = frontier.0
+  let parents = frontier.to_array()
   let lv = self.graph.add_version(parents, self.agent_id) catch {
     _ => raise DocumentError::Internal(detail="failed to allocate LV")
   }

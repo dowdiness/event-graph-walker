@@ -12,11 +12,19 @@ import {
 // Errors
 
 // Types and methods
-pub(all) struct Frontier(Array[Int]) derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub struct Frontier {
+  // private fields
+} derive(Eq)
 pub fn Frontier::from_array(Array[Int]) -> Self
 pub fn Frontier::from_array_dedup(Array[Int]) -> Self
 pub fn Frontier::has_duplicates(Self) -> Bool
+pub fn Frontier::iter(Self) -> Iter[Int]
+pub fn Frontier::length(Self) -> Int
+pub fn Frontier::to_array(Self) -> Array[Int]
 pub impl Show for Frontier
+pub impl ToJson for Frontier
+pub impl @debug.Debug for Frontier
+pub impl @json.FromJson for Frontier
 
 pub(all) struct GraphEntry {
   parents : Array[Int]
