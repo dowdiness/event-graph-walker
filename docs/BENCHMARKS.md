@@ -275,12 +275,14 @@ Tests frontier deduplication and normalization during canonicalization.
 
 **Production Strategy:**
 - **Fast paths**: Empty arrays and singletons return fresh owned storage without a deduplication scan or `HashSet` allocation.
-- **Linear deduplication**: Inputs with size `≤ 64` use a linear scan (`!deduped.contains(value)`) to avoid hashing and allocation overhead.
-- **Preallocated HashSet**: Inputs with size `> 64` use a preallocated `@hashset.HashSet` with capacity matching the input length to achieve amortized `O(1)` membership checks while preserving first-occurrence order.
+- **Canonical path**: All larger inputs use a preallocated `@hashset.HashSet` with capacity matching the input length. This avoids backend-sensitive crossover tuning, provides expected linear-time canonicalization, and preserves first-occurrence order.
+- **Graph advance**: Updating an existing canonical frontier filters consumed parents and checks the new version directly, preserving the invariant without canonicalizing the complete result again.
 
 **Benchmark Matrix:**
-- **Unique elements**: Evaluates sizes 5, 20, 50, 64, 65, 80, 96, 100, and 500 to evaluate the crossover threshold.
-- **Duplicate-heavy inputs**: Tested with size 100 with values cycling modulo 8 to evaluate performance under heavy overlap.
+- **Unique elements**: Evaluates sizes 5, 20, 50, 100, and 500.
+- **Duplicate-heavy inputs**: Tests 5 elements and 100 elements cycling modulo 8.
+- **Linear references**: Retains an intentionally quadratic reference implementation to expose the small-input allocation tradeoff and large-input scaling difference.
+- **Graph advance**: Compares invariant-preserving `advance` against rebuilding and recanonicalizing a five-tip frontier.
 
 **Reproducible Commands:**
 ```bash
@@ -290,9 +292,6 @@ moon bench internal/core/frontier_benchmark.mbt --release --target wasm-gc
 # Target JS
 moon bench internal/core/frontier_benchmark.mbt --release --target js
 ```
-
-**Key Crossover Conclusion:**
-The crossover varies by backend and duplicate distribution. The production threshold of 64 is a cross-target compromise: it avoids hashing on the common small-frontier path, while the preallocated `HashSet` bounds worst-case work for larger inputs and wins on both measured backends by roughly 96–100 unique elements.
 
 ## Expected Performance Characteristics
 
@@ -426,5 +425,5 @@ test "component - operation (size)" (b : @bench.T) {
 ---
 
 **Last Updated**: 2026-07-21
-**Total Benchmarks**: 141 across 14 project benchmark files (`container/{performance,sync_apply}_benchmark.mbt`, `internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/core/frontier_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/{jump_ancestors,tree_position}_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`, `tree/json_size_benchmark.mbt`)
+**Total Benchmarks**: 132 across 14 project benchmark files (`container/{performance,sync_apply}_benchmark.mbt`, `internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/core/frontier_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/{jump_ancestors,tree_position}_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`, `tree/json_size_benchmark.mbt`)
 **Status**: Ready for profiling and optimization

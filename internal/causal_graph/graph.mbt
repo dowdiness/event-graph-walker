@@ -177,10 +177,7 @@ fn CausalGraph::update_frontier(
   new_lv : Int,
   parents : Array[Int],
 ) -> Unit {
-  let mut frontier = self.frontier.to_array()
-  frontier = frontier.filter(v => !parents.contains(v))
-  frontier.push(new_lv)
-  self.frontier = @core.Frontier::from_array(frontier)
+  self.frontier = self.frontier.advance(new_lv, parents)
 }
 
 ///|

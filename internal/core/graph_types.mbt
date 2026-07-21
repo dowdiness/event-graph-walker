@@ -1,8 +1,4 @@
 ///|
-/// Use linear duplicate detection below this cross-target benchmark crossover.
-let frontier_linear_dedup_limit : Int = 64
-
-///|
 /// A frontier represents the "tips" of the causal graph - versions with no successors.
 ///
 /// **Invariant**: Elements are unique and stored in first-occurrence order.
@@ -36,48 +32,46 @@ pub impl @json.FromJson for Frontier with fn from_json(json, path) {
 /// nor any duplicate values.
 pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
   if values.length() == 0 {
-    { values: [] }
-  } else if values.length() == 1 {
-    { values: [values[0]] }
-  } else if values.length() <= frontier_linear_dedup_limit {
-    let deduped : Array[Int] = []
-    for value in values {
-      if !deduped.contains(value) {
-        deduped.push(value)
-      }
-    }
-    { values: deduped }
-  } else {
-    let seen : @hashset.HashSet[Int] = @hashset.HashSet(
-      [],
-      capacity=values.length(),
-    )
-    let deduped : Array[Int] = []
-    for value in values {
-      if seen.add_and_check(value) {
-        deduped.push(value)
-      }
-    }
-    { values: deduped }
+    return { values: [] }
   }
+  if values.length() == 1 {
+    return { values: [values[0]] }
+  }
+  let seen : @hashset.HashSet[Int] = @hashset.HashSet(
+    [],
+    capacity=values.length(),
+  )
+  let deduped : Array[Int] = []
+  for value in values {
+    if seen.add_and_check(value) {
+      deduped.push(value)
+    }
+  }
+  { values: deduped }
+}
+
+///|
+/// Replace consumed parents with a new graph version.
+///
+/// This derives the result from an existing canonical frontier and checks the
+/// new version before appending it, so the uniqueness invariant is preserved
+/// without canonicalizing the complete result again.
+pub fn Frontier::advance(
+  self : Frontier,
+  new_version : Int,
+  parents : Array[Int],
+) -> Frontier {
+  let next = self.values.filter(value => !parents.contains(value))
+  if !next.contains(new_version) {
+    next.push(new_version)
+  }
+  { values: next }
 }
 
 ///|
 /// Create a frontier from an array of LVs, removing duplicates.
 pub fn Frontier::from_array_dedup(values : Array[Int]) -> Frontier {
   Frontier::from_array(values)
-}
-
-///|
-/// Check if this frontier contains duplicate elements (violates invariant).
-pub fn Frontier::has_duplicates(self : Frontier) -> Bool {
-  let seen : @hashset.HashSet[Int] = @hashset.HashSet::default()
-  for v in self.values {
-    if !seen.add_and_check(v) {
-      return true
-    }
-  }
-  false
 }
 
 ///|

@@ -1,8 +1,8 @@
 ///|
 /// Tests for Frontier canonicalization and isolation
-test "frontier without duplicates passes validation" {
+test "frontier preserves unique values" {
   let frontier = Frontier::from_array([1, 2, 3])
-  inspect(frontier.has_duplicates(), content="false")
+  @debug.debug_inspect(frontier.to_array(), content="[1, 2, 3]")
 }
 
 ///|
@@ -15,28 +15,24 @@ test "frontier debug and show rendering" {
 ///|
 test "frontier with duplicates is canonicalized" {
   let frontier = Frontier::from_array([1, 2, 2, 3])
-  inspect(frontier.has_duplicates(), content="false")
   @debug.debug_inspect(frontier.to_array(), content="[1, 2, 3]")
 }
 
 ///|
 test "frontier with all duplicates is canonicalized" {
   let frontier = Frontier::from_array([5, 5, 5])
-  inspect(frontier.has_duplicates(), content="false")
   @debug.debug_inspect(frontier.to_array(), content="[5]")
 }
 
 ///|
-test "empty frontier has no duplicates" {
+test "empty frontier has length zero" {
   let frontier = Frontier::from_array([])
-  inspect(frontier.has_duplicates(), content="false")
   inspect(frontier.length(), content="0")
 }
 
 ///|
-test "single element frontier has no duplicates" {
+test "single element frontier is preserved" {
   let frontier = Frontier::from_array([42])
-  inspect(frontier.has_duplicates(), content="false")
   inspect(frontier.length(), content="1")
   @debug.debug_inspect(frontier.to_array(), content="[42]")
 }
@@ -44,7 +40,6 @@ test "single element frontier has no duplicates" {
 ///|
 test "from_array_dedup remains compatible" {
   let frontier = Frontier::from_array_dedup([1, 2, 2, 3, 1, 4])
-  inspect(frontier.has_duplicates(), content="false")
   @debug.debug_inspect(frontier.to_array(), content="[1, 2, 3, 4]")
 }
 
@@ -58,7 +53,6 @@ test "from_array preserves order of first occurrence" {
 test "from_array_dedup on empty array" {
   let frontier = Frontier::from_array_dedup([])
   inspect(frontier.length(), content="0")
-  inspect(frontier.has_duplicates(), content="false")
 }
 
 ///|
@@ -100,6 +94,21 @@ test "to_array is a defensive copy" {
   output[0] = 99
   output.push(4)
   @debug.debug_inspect(frontier.to_array(), content="[1, 2, 3]")
+}
+
+///|
+test "advance replaces parents and preserves order" {
+  let frontier = Frontier::from_array([1, 2, 3])
+  let advanced = frontier.advance(4, [1, 3])
+  @debug.debug_inspect(advanced.to_array(), content="[2, 4]")
+  @debug.debug_inspect(frontier.to_array(), content="[1, 2, 3]")
+}
+
+///|
+test "advance does not duplicate an existing version" {
+  let frontier = Frontier::from_array([1, 2, 3])
+  let advanced = frontier.advance(2, [1])
+  @debug.debug_inspect(advanced.to_array(), content="[2, 3]")
 }
 
 ///|

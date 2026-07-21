@@ -45,7 +45,9 @@ These types should be treated as the reference pattern for the opportunities bel
 **Benefit:** High  
 **Risk:** High because callers previously accessed the public backing array
 
-`Frontier` now has private storage, and both `from_array` and its custom `FromJson` implementation canonicalize duplicates in first-occurrence order into fresh owned storage (`internal/core/graph_types.mbt:1-72`). `ToJson` preserves the bare array shape. Callers use `iter`, `length`, or the defensive `to_array`; `from_array_dedup` and `has_duplicates` remain for API compatibility.
+`Frontier` now has private storage, and both `from_array` and its custom `FromJson` implementation canonicalize duplicates in first-occurrence order into fresh owned storage (`internal/core/graph_types.mbt`). `ToJson` preserves the bare array shape. Callers use `iter`, `length`, or the defensive `to_array`. The compatibility alias `from_array_dedup` remains, while `has_duplicates` was removed because the type can no longer represent that state.
+
+Canonicalization uses one preallocated `HashSet` strategy for every input larger than a singleton, avoiding a backend-sensitive size threshold. Graph updates use `Frontier::advance`, which derives a fresh canonical frontier from an existing one and checks the appended version without revalidating the complete result.
 
 Tests pin duplicate canonicalization, source-array and accessor isolation, the JSON shape, and the existing `Debug`/`Show` rendering (`internal/core/frontier_test.mbt`). The migration also updated causal graph, branch, oplog, document, container, and benchmark callers so none can access the backing array directly.
 
@@ -115,7 +117,7 @@ Project patterns to reuse:
 
 - `TreeNodeId` validating constructor (`container/document.mbt:8-21`)
 - immutable validating `Limits` constructor (`sync/types.mbt:45-101`)
-- existing `Frontier::from_array_dedup`, including its `@hashset.HashSet[Int]` uniqueness pass (`internal/core/graph_types.mbt:22-39`)
+- existing `Frontier::from_array` and its preallocated `@hashset.HashSet[Int]` uniqueness pass (`internal/core/graph_types.mbt`)
 - `ApplicableOp`, `ParsedCandidate`, `PreparedSync`, and their container counterparts
 - defensive copies and `ArrayView` at read-only boundaries, as used by `SnapshotEntry::parents` (`history/snapshot.mbt:72-90`)
 

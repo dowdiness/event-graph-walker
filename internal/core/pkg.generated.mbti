@@ -15,9 +15,9 @@ import {
 pub struct Frontier {
   // private fields
 } derive(Eq)
+pub fn Frontier::advance(Self, Int, Array[Int]) -> Self
 pub fn Frontier::from_array(Array[Int]) -> Self
 pub fn Frontier::from_array_dedup(Array[Int]) -> Self
-pub fn Frontier::has_duplicates(Self) -> Bool
 pub fn Frontier::iter(Self) -> Iter[Int]
 pub fn Frontier::length(Self) -> Int
 pub fn Frontier::to_array(Self) -> Array[Int]
