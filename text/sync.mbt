@@ -248,10 +248,26 @@ fn is_well_formed_utf16(text : String) -> Bool {
 }
 
 ///|
-fn validate_op(
+/// State-independent proof for a text operation.
+priv struct StructuralOp {
+  op : @core.Op
+}
+
+///|
+fn StructuralOp::StructuralOp(
   op : @core.Op,
-  limits : @sync.Limits,
-) -> Unit raise @sync.Failure {
+) -> StructuralOp raise @sync.Failure {
+  validate_op_structure(op)
+  { op, }
+}
+
+///|
+fn StructuralOp::raw(self : StructuralOp) -> @core.Op {
+  self.op
+}
+
+///|
+fn validate_op_structure(op : @core.Op) -> Unit raise @sync.Failure {
   if op.agent() == "" {
     raise @sync.Failure::MalformedMessage(
       detail="operation replica_id must not be empty",
@@ -262,28 +278,79 @@ fn validate_op(
       detail="operation sequence must not be negative",
     )
   }
-  if op.parents().length() > limits.max_parents_per_operation() {
-    raise @sync.Failure::LimitExceeded(
-      kind=@sync.LimitKind::ParentsPerOperation,
-      limit=limits.max_parents_per_operation(),
-      actual=op.parents().length(),
-    )
-  }
+  let seen_parents : Map[String, Bool] = Map([])
   for parent in op.parents() {
     if parent.agent == "" || parent.seq < 0 {
       raise @sync.Failure::MalformedMessage(
         detail="operation parent identity is invalid",
       )
     }
+    let key = raw_key(parent)
+    if key == raw_key(op_identity(op)) || seen_parents.get(key) is Some(_) {
+      raise @sync.Failure::MalformedMessage(
+        detail="operation contains a self or duplicate parent",
+      )
+    }
+    seen_parents[key] = true
   }
   match op.content() {
-    @core.Insert(text) => validate_insert_scalar(text)
-    @core.Delete | @core.Undelete =>
+    @core.Insert(text) => {
+      validate_insert_scalar(text)
+      match op.origin_left() {
+        Some(origin) =>
+          if origin.agent == "" || origin.seq < 0 {
+            raise @sync.Failure::MalformedMessage(
+              detail="operation origin identity is invalid",
+            )
+          }
+        None => ()
+      }
+      match op.origin_right() {
+        Some(origin) =>
+          if origin.agent == "" || origin.seq < 0 {
+            raise @sync.Failure::MalformedMessage(
+              detail="operation origin identity is invalid",
+            )
+          }
+        None => ()
+      }
+    }
+    @core.Delete | @core.Undelete => {
       if op.origin_left() is None {
         raise @sync.Failure::MalformedMessage(
           detail="delete and undelete operations require a target",
         )
       }
+      if op.origin_right() is Some(_) {
+        raise @sync.Failure::MalformedMessage(
+          detail="delete and undelete operations cannot have a right target",
+        )
+      }
+      match op.origin_left() {
+        Some(origin) =>
+          if origin.agent == "" || origin.seq < 0 {
+            raise @sync.Failure::MalformedMessage(
+              detail="operation origin identity is invalid",
+            )
+          }
+        None => ()
+      }
+    }
+  }
+}
+
+///|
+/// Receiver policy, deliberately checked only while preparing an apply.
+fn validate_op_limits(
+  op : @core.Op,
+  limits : @sync.Limits,
+) -> Unit raise @sync.Failure {
+  if op.parents().length() > limits.max_parents_per_operation() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::ParentsPerOperation,
+      limit=limits.max_parents_per_operation(),
+      actual=op.parents().length(),
+    )
   }
 }
 
@@ -407,9 +474,12 @@ fn canonical_order_counted(
 ///|
 /// A version-1 text synchronization message.
 pub(all) struct SyncMessage {
+  // Raw storage is private; the structural array carries the parse proof.
   priv operations : Array[@core.Op]
+  priv structural_operations : Array[StructuralOp]
   priv heads : Array[@core.RawVersion]
   priv encoded_size : Int?
+  priv decoded_operation_count : Int
 }
 
 ///|
@@ -418,19 +488,21 @@ fn SyncMessage::SyncMessage(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
   encoded_size : Int?,
-  limits? : @sync.Limits = @sync.Limits::default(),
 ) -> SyncMessage raise @sync.Failure {
-  if operations.length() > limits.max_decoded_operations() {
-    raise @sync.Failure::LimitExceeded(
-      kind=@sync.LimitKind::DecodedOperations,
-      limit=limits.max_decoded_operations(),
-      actual=operations.length(),
-    )
-  }
+  let structural_operations : Array[StructuralOp] = []
+  let structural_by_key : Map[String, StructuralOp] = Map([])
   for op in operations {
-    validate_op(op, limits)
+    let structural = StructuralOp::StructuralOp(op)
+    structural_operations.push(structural)
+    structural_by_key[raw_key(op_identity(op))] = structural
   }
   let ordered = canonical_order(operations)
+  let ordered_structural : Array[StructuralOp] = []
+  for op in ordered {
+    ordered_structural.push(
+      structural_by_key.get(raw_key(op_identity(op))).unwrap(),
+    )
+  }
   let seen_heads : Map[String, Bool] = Map([])
   for head in heads {
     if head.agent == "" ||
@@ -442,7 +514,13 @@ fn SyncMessage::SyncMessage(
     }
     seen_heads[raw_key(head)] = true
   }
-  { operations: ordered, heads: sorted_raw(heads), encoded_size }
+  {
+    operations: ordered,
+    structural_operations: ordered_structural,
+    heads: sorted_raw(heads),
+    encoded_size,
+    decoded_operation_count: operations.length(),
+  }
 }
 
 ///|
@@ -471,7 +549,7 @@ pub(all) struct SyncReport {
 /// decoding. Construction also proves replica sequence ancestry and that every
 /// Fugue origin names an Insert operation.
 priv struct ApplicableOp {
-  op : @core.Op
+  op : StructuralOp
 }
 
 ///|
@@ -482,15 +560,15 @@ priv struct ApplicableOp {
 /// resent, and is discarded once its dependencies make the malformation
 /// decidable, preventing one pending record from poisoning later attempts.
 priv enum SyncCandidate {
-  FromPending(@core.Op)
-  FromMessage(@core.Op)
-  FromPendingAndMessage(@core.Op)
+  FromPending(StructuralOp)
+  FromMessage(StructuralOp)
+  FromPendingAndMessage(StructuralOp)
 }
 
 ///|
 fn SyncCandidate::raw(self : SyncCandidate) -> @core.Op {
   match self {
-    FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op
+    FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op.raw()
   }
 }
 
@@ -499,7 +577,7 @@ fn SyncCandidate::raw(self : SyncCandidate) -> @core.Op {
 /// whether the operation was already present in the pending queue.
 fn SyncCandidate::observe_message(
   self : SyncCandidate,
-  op : @core.Op,
+  op : StructuralOp,
 ) -> SyncCandidate {
   match self {
     FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(op)
@@ -511,17 +589,18 @@ fn SyncCandidate::observe_message(
 /// Parse a dependency-resolved operation into the representation accepted by
 /// the commit shell.
 fn ApplicableOp::ApplicableOp(
-  op : @core.Op,
+  op : StructuralOp,
   known_ops : Map[String, @core.Op],
 ) -> ApplicableOp raise @sync.Failure {
-  validate_sequence_descent(op, known_ops)
-  validate_origin_targets(op, known_ops)
+  let raw = op.raw()
+  validate_sequence_descent(raw, known_ops)
+  validate_origin_targets(raw, known_ops)
   { op, }
 }
 
 ///|
 fn ApplicableOp::raw(self : ApplicableOp) -> @core.Op {
-  self.op
+  self.op.raw()
 }
 
 ///|
@@ -532,7 +611,7 @@ fn ApplicableOp::raw(self : ApplicableOp) -> @core.Op {
 /// decoded operation for the bounded pending queue.
 priv enum ParsedCandidate {
   Apply(ApplicableOp)
-  Defer(@core.Op)
+  Defer(StructuralOp)
   DiscardInvalidPending
 }
 
@@ -540,12 +619,13 @@ priv enum ParsedCandidate {
 /// Parse one canonically ordered candidate against the receiver snapshot and
 /// operations already proved applicable earlier in the same transition.
 fn parse_candidate(
-  op : @core.Op,
+  op : StructuralOp,
   local_payloads : Map[String, String],
   resolved : Map[String, Unit],
   known_ops : Map[String, @core.Op],
 ) -> ParsedCandidate raise @sync.Failure {
-  for dependency in op_dependencies(op) {
+  let raw = op.raw()
+  for dependency in op_dependencies(raw) {
     let key = raw_key(dependency)
     if local_payloads.get(key) is None && resolved.get(key) is None {
       return Defer(op)
@@ -584,7 +664,7 @@ fn parse_sync_candidate(
 /// dependency, causal-ancestry, and Fugue-origin checks.
 priv struct PreparedSync {
   applicable : Array[ApplicableOp]
-  pending : Array[@core.Op]
+  pending : Array[StructuralOp]
   duplicate_operations : Int
 }
 
@@ -805,8 +885,8 @@ fn op_json(op : @core.Op) -> Json {
 ///|
 pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
   let operations : Array[Json] = []
-  for op in self.operations {
-    operations.push(op_json(op))
+  for op in self.structural_operations {
+    operations.push(op_json(op.raw()))
   }
   let heads : Array[Json] = []
   for head in self.heads {
@@ -885,7 +965,7 @@ fn decode_op(json : Json) -> @core.Op raise {
 ///|
 fn decode_sync_json(
   json_str : String,
-  limits : @sync.Limits,
+  _limits : @sync.Limits,
 ) -> SyncMessage raise TextError {
   if !is_well_formed_utf16(json_str) {
     raise TextError::SyncFailed(
@@ -893,15 +973,6 @@ fn decode_sync_json(
     )
   }
   let encoded_size = @utf8.encode(json_str).length()
-  if encoded_size > limits.max_encoded_bytes() {
-    raise TextError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit=limits.max_encoded_bytes(),
-        actual=encoded_size,
-      ),
-    )
-  }
   try {
     let root = @json.parse(json_str)
     let object = match root {
@@ -917,13 +988,6 @@ fn decode_sync_json(
     guard envelope.schema == 1 && envelope.format == text_sync_format else {
       fail("unsupported sync envelope")
     }
-    guard envelope.operations.length() <= limits.max_decoded_operations() else {
-      raise @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::DecodedOperations,
-        limit=limits.max_decoded_operations(),
-        actual=envelope.operations.length(),
-      )
-    }
     let operations : Array[@core.Op] = []
     for value in envelope.operations {
       operations.push(decode_op(value))
@@ -932,7 +996,7 @@ fn decode_sync_json(
     for value in envelope.heads {
       heads.push(decode_identity(value))
     }
-    SyncMessage::SyncMessage(operations, heads, Some(encoded_size), limits~)
+    SyncMessage::SyncMessage(operations, heads, Some(encoded_size))
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
       raise TextError::SyncFailed(@sync.Failure::MalformedMessage(detail~))
@@ -958,10 +1022,10 @@ fn decode_sync_json(
 }
 
 ///|
-/// Decode a synchronization message using the default protocol limits.
+/// Decode a synchronization message and establish structural proofs.
 ///
-/// Use `TextState::sync().decode_json(...)` when decoding for a receiver with
-/// explicitly configured synchronization limits.
+/// Resource limits are receiver policy and are enforced by `apply`, not by
+/// this structural decoder.
 pub fn SyncMessage::from_json_string(
   json_str : String,
 ) -> SyncMessage raise TextError {
@@ -976,12 +1040,13 @@ fn current_heads(doc : TextState) -> Array[@core.RawVersion] raise TextError {
 }
 
 ///|
-/// Decode synchronization JSON using this receiver's configured limits.
+/// Decode synchronization JSON structurally. Receiver limits are enforced
+/// atomically by `apply`.
 pub fn SyncSession::decode_json(
-  self : SyncSession,
+  _self : SyncSession,
   json_str : String,
 ) -> SyncMessage raise TextError {
-  decode_sync_json(json_str, self.doc.sync_limits)
+  decode_sync_json(json_str, @sync.Limits::default())
 }
 
 ///|
@@ -1029,7 +1094,7 @@ fn prepare_sync(
   message : SyncMessage,
   limits : @sync.Limits,
   local_ops : Array[@core.Op],
-  pending_records : Array[@core.Op],
+  pending_records : Array[StructuralOp],
 ) -> PreparedSync raise @sync.Failure {
   let encoded_size = match message.encoded_size {
     Some(size) => size
@@ -1042,24 +1107,25 @@ fn prepare_sync(
       actual=encoded_size,
     )
   }
-  if message.operations.length() > limits.max_decoded_operations() {
+  if message.decoded_operation_count > limits.max_decoded_operations() {
     raise @sync.Failure::LimitExceeded(
       kind=@sync.LimitKind::DecodedOperations,
       limit=limits.max_decoded_operations(),
-      actual=message.operations.length(),
+      actual=message.decoded_operation_count,
     )
   }
   let local_payload_map = local_payloads(local_ops)
   let candidates : Map[String, SyncCandidate] = Map([])
   for pending in pending_records {
-    candidates[raw_key(op_identity(pending))] = FromPending(pending)
+    candidates[raw_key(op_identity(pending.raw()))] = FromPending(pending)
   }
   let mut duplicates = 0
-  for op in message.operations {
-    validate_op(op, limits)
-    let id = op_identity(op)
+  for op in message.structural_operations {
+    let raw = op.raw()
+    validate_op_limits(raw, limits)
+    let id = op_identity(raw)
     let key = raw_key(id)
-    let payload = op_payload_key(op)
+    let payload = op_payload_key(raw)
     match local_payload_map.get(key) {
       Some(existing) =>
         if existing == payload {
@@ -1086,29 +1152,46 @@ fn prepare_sync(
         }
     }
   }
-  let all_candidates : Array[@core.Op] = []
+  let all_candidates : Array[StructuralOp] = []
   for candidate in candidates.values() {
-    all_candidates.push(candidate.raw())
+    all_candidates.push(
+      match candidate {
+        FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op
+      },
+    )
   }
   let known_ops : Map[String, @core.Op] = Map([])
   for local_op in local_ops {
     known_ops[raw_key(op_identity(local_op))] = local_op
   }
   for candidate in all_candidates {
-    known_ops[raw_key(op_identity(candidate))] = candidate
+    known_ops[raw_key(op_identity(candidate.raw()))] = candidate.raw()
   }
-  let ordered = canonical_order(all_candidates)
+  let raw_candidates : Array[@core.Op] = []
+  let candidate_by_key : Map[String, StructuralOp] = Map([])
+  for candidate in all_candidates {
+    let raw = candidate.raw()
+    raw_candidates.push(raw)
+    candidate_by_key[raw_key(op_identity(raw))] = candidate
+  }
+  let ordered_raw = canonical_order(raw_candidates)
+  let ordered : Array[StructuralOp] = []
+  for raw in ordered_raw {
+    ordered.push(candidate_by_key.get(raw_key(op_identity(raw))).unwrap())
+  }
   let resolved : Map[String, Unit] = Map([])
   let applicable : Array[ApplicableOp] = []
-  let pending : Array[@core.Op] = []
+  let pending : Array[StructuralOp] = []
   for op in ordered {
-    let candidate = candidates.get(raw_key(op_identity(op))).unwrap()
+    let raw = op.raw()
+    let candidate = candidates.get(raw_key(op_identity(raw))).unwrap()
+    validate_op_limits(raw, limits)
     let parsed = parse_sync_candidate(
       candidate, local_payload_map, resolved, known_ops,
     )
     match parsed {
       Apply(applicable_op) => {
-        resolved[raw_key(op_identity(op))] = ()
+        resolved[raw_key(op_identity(raw))] = ()
         applicable.push(applicable_op)
       }
       Defer(pending_op) => pending.push(pending_op)
@@ -1206,7 +1289,8 @@ pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   let buffer = Buffer()
   buffer.write_bytes(b"event-graph-walker:text-sync:v1")
   write_uvarint(buffer, self.operations.length())
-  for op in self.operations {
+  for structural in self.structural_operations {
+    let op = structural.raw()
     write_raw(buffer, op_identity(op))
     let parents = sorted_raw(op.parents())
     write_uvarint(buffer, parents.length())

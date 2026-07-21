@@ -577,6 +577,8 @@ test "Document: SyncReport defers move op until ancestor arrives" {
     tree_ops: [swap],
     text_ops: [],
     encoded_size: None,
+    structural_records: None,
+    decoded_operation_count: 1,
   })
   inspect(early.applied_tree_ops, content="0")
   inspect(early.pending_ops, content="1")
@@ -591,6 +593,8 @@ test "Document: SyncReport defers move op until ancestor arrives" {
     tree_ops: preceding,
     text_ops: [],
     encoded_size: None,
+    structural_records: None,
+    decoded_operation_count: preceding.length(),
   })
   inspect(rest.applied_tree_ops, content="3")
   inspect(rest.pending_ops, content="0")

@@ -73,14 +73,15 @@ Tests cover reversed-endpoint rejection, while existing range edits cover valid 
 
 ### 4. Separate structural parsing from receiver policy
 
+**Status:** Implemented 2026-07-21
 **Benefit:** Medium  
 **Risk:** Medium
 
-Text operations are structurally checked when `SyncMessage` is constructed and checked again during preparation (`text/sync.mbt:251-285`, `text/sync.mbt:417-445`, `text/sync.mbt:1059`). Container records are similarly checked during decoding and preparation (`container/sync_protocol.mbt:595-695`, `container/sync_protocol.mbt:1152`, `container/sync_protocol.mbt:1372`).
+Text and container `SyncMessage` values now retain private structural proofs (`StructuralOp` and `StructuralSyncRecord`) from decode or construction through pending queues and commit preparation. These checks cover wire shape, identities, parent validity, and content; `ApplicableOp` and `ApplicableSyncOp` continue to prove receiver-context applicability.
 
-Some repeated checks are necessary: the receiver may enforce stricter encoded-size, operation-count, pending-count, or parent-count limits than the sender. State-independent facts should nevertheless be parsed once and retained. Split operation shape/content parsing from receiver policy and receiver-state applicability so each stage has a distinct output type or sealed constructor.
+Encoded-size, wire operation-count, parent-count, and pending-count limits are now receiver policy enforced atomically during preparation. Decoding accepts structurally valid payloads independently of the receiver, while `apply` rejects payloads exceeding that receiver's limits. The stored wire operation count is preserved before canonical deduplication, so duplicate-heavy payloads cannot bypass operation limits. `Apply`, `Defer`, pending provenance, and wire formats remain unchanged.
 
-The strict facade codecs use dedicated decoders rather than the generic derived `FromJson` implementations on `RawVersion`, `OpContent`, `Op`, and `Frontier` (`internal/core/version.mbt:19-22`, `internal/core/operation.mbt:5-26`, `internal/core/graph_types.mbt:6`). Those traits are not all unused, however: `OpRun::FromJson` decodes its parents and origins through `RawVersion::FromJson` (`internal/core/op_run_json.mbt:75-85`), and the trait remains visible in `internal/core/pkg.generated.mbti`. Inventory all serialization consumers before removal. Migrate `OpRun` to a validated identity decoder first, preserve or explicitly version its JSON compatibility, and treat trait removal as an interface change.
+Tests pin structural decode plus receiver-limit rejection for text and container, including duplicate-heavy operation counts. The strict facade codecs remain dedicated decoders; generic derived serialization traits and the `OpRun`/`RawVersion` migration remain phase-6 concerns.
 
 ### 5. Distinguish wire identity from valid operation identity
 
@@ -105,7 +106,7 @@ Schedule this as the final phase. `RawVersion::new` is widely used by the causal
 2. **Completed 2026-07-21:** Inventory generic JSON trait consumers and generated `.mbti` exposure, including the `OpRun` dependency on `RawVersion::FromJson`, and pin required round-trip compatibility.
 3. **Completed 2026-07-21:** Make `Frontier` opaque and invariant-preserving, then benchmark affected graph paths.
 4. **Completed 2026-07-21:** Make `Range` opaque and strengthen its constructors in an API-breaking release.
-5. Separate structural sync parsing from receiver policy checks while preserving `ApplicableOp` and `ApplicableSyncOp`.
+5. **Completed 2026-07-21:** Separate structural sync parsing from receiver policy checks while preserving `ApplicableOp` and `ApplicableSyncOp`.
 6. Reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove generic deserialization traits only when their consumers have moved.
 
 Each phase should be independently reviewable and should preserve the wire formats unless explicitly documented otherwise.

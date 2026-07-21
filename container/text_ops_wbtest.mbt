@@ -219,6 +219,8 @@ test "document: replace_text sync can expose intermediate states" {
       tree_ops: [],
       text_ops: [delta.text_ops[0]],
       encoded_size: None,
+      structural_records: None,
+      decoded_operation_count: 1,
     }),
   )
   inspect(doc_b.get_text(node) != "World", content="true")
@@ -227,6 +229,8 @@ test "document: replace_text sync can expose intermediate states" {
       tree_ops: [],
       text_ops: delta.text_ops[1:].iter().collect(),
       encoded_size: None,
+      structural_records: None,
+      decoded_operation_count: delta.text_ops.length() - 1,
     }),
   )
   inspect(doc_b.get_text(node), content="World")
@@ -323,6 +327,8 @@ test "document: remote tree ops buffer until causal parents arrive" {
       tree_ops: [message.tree_ops[1]],
       text_ops: [],
       encoded_size: None,
+      structural_records: None,
+      decoded_operation_count: 1,
     }),
   )
   inspect(doc_b.is_alive(node), content="false")
@@ -331,6 +337,8 @@ test "document: remote tree ops buffer until causal parents arrive" {
       tree_ops: [message.tree_ops[0]],
       text_ops: [],
       encoded_size: None,
+      structural_records: None,
+      decoded_operation_count: 1,
     }),
   )
   inspect(doc_b.is_alive(node), content="false")
@@ -358,6 +366,8 @@ test "document: remote text ops buffer until causal parents arrive" {
       tree_ops: [],
       text_ops: [message.text_ops[1]],
       encoded_size: None,
+      structural_records: None,
+      decoded_operation_count: 1,
     }),
   )
   inspect(doc_b.get_text(node), content="")
@@ -366,6 +376,8 @@ test "document: remote text ops buffer until causal parents arrive" {
       tree_ops: [],
       text_ops: [message.text_ops[0]],
       encoded_size: None,
+      structural_records: None,
+      decoded_operation_count: 1,
     }),
   )
   inspect(doc_b.get_text(node), content="AB")
@@ -400,6 +412,8 @@ test "document: SyncReport counts applied, duplicate, and pending ops" {
     tree_ops: [],
     text_ops: [message.text_ops[0]],
     encoded_size: None,
+    structural_records: None,
+    decoded_operation_count: 1,
   })
   inspect(report_pending.applied_text_ops, content="0")
   inspect(report_pending.pending_ops, content="1")

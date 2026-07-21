@@ -207,11 +207,12 @@ test "resent decidable malformed pending operation does not poison later sync" {
 }
 
 ///|
-test "sync session decodes JSON with receiver-specific limits" {
+test "decode accepts structurally valid JSON and apply enforces receiver limits" {
   let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
   let receiver = try! TextState::new_with_sync_limits("receiver", limits)
-  try receiver.sync().decode_json(json) catch {
+  let message = try! receiver.sync().decode_json(json)
+  try receiver.sync().apply(message) catch {
     TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
@@ -219,9 +220,9 @@ test "sync session decodes JSON with receiver-specific limits" {
         actual=_
       )
     ) => ()
-    _ => fail("expected receiver encoded byte limit")
+    _ => fail("expected receiver encoded byte limit during apply")
   } noraise {
-    _ => fail("receiver-specific decoder must reject oversized JSON")
+    _ => fail("apply must enforce receiver limits atomically")
   }
 }
 
@@ -229,7 +230,10 @@ test "sync session decodes JSON with receiver-specific limits" {
 test "receiver-specific decoder may raise the default encoded byte limit" {
   let envelope = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let json = envelope + " ".repeat(16 * 1024 * 1024)
-  try SyncMessage::from_json_string(json) catch {
+  let message = try! SyncMessage::from_json_string(json)
+  let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
+  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  try receiver.sync().apply(message) catch {
     TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
@@ -237,14 +241,10 @@ test "receiver-specific decoder may raise the default encoded byte limit" {
         actual=_
       )
     ) => ()
-    _ => fail("expected default encoded byte limit")
+    _ => fail("expected apply encoded byte limit")
   } noraise {
-    _ => fail("default decoder must reject oversized JSON")
+    _ => fail("apply must reject oversized decoded message")
   }
-  let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length())
-  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
-  let message = try! receiver.sync().decode_json(json)
-  inspect(message.is_empty(), content="true")
 }
 
 ///|
@@ -256,7 +256,13 @@ test "receiver-specific decoder honors raised parent limits in validation" {
   let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
     parents.join(",") +
     "],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
-  try SyncMessage::from_json_string(json) catch {
+  let message = try! SyncMessage::from_json_string(json)
+  inspect(message.op_count(), content="1")
+  let strict = try! TextState::new_with_sync_limits(
+    "strict",
+    @sync.Limits::default(),
+  )
+  try strict.sync().apply(message) catch {
     TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
@@ -264,15 +270,38 @@ test "receiver-specific decoder honors raised parent limits in validation" {
         actual=257
       )
     ) => ()
-    _ => fail("expected default parent limit")
+    _ => fail("expected receiver parent limit during apply")
   } noraise {
-    _ => fail("default decoder must reject 257 parents")
+    _ => fail("apply must enforce parent policy")
   }
-  let limits = try! @sync.Limits::Limits(
-    max_encoded_bytes=json.length(),
-    max_parents_per_operation=257,
-  )
-  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
-  let message = try! receiver.sync().decode_json(json)
+}
+
+///|
+test "duplicate-heavy decoded operation limit counts wire operations" {
+  let operation = "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}"
+  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
+    operation +
+    "," +
+    operation +
+    "],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
+  let message = try! SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
+  let receiver = try! TextState::new_with_sync_limits(
+    "duplicate-limit",
+    @sync.Limits(max_decoded_operations=1),
+  )
+  try receiver.sync().apply(message) catch {
+    TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::DecodedOperations,
+        limit=1,
+        actual=2
+      )
+    ) => ()
+    _ => fail("wire operation count must survive canonical deduplication")
+  } noraise {
+    _ => fail("duplicate-heavy payload must exceed the decoded limit")
+  }
+  inspect(receiver.text(), content="")
+  inspect(receiver.version() == Version::empty(), content="true")
 }

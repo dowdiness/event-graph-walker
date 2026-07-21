@@ -390,19 +390,7 @@ test "container receiver limits govern decode and later apply" {
   let receiver = try! @container.Document::new_with_sync_limits(
     "receiver", limits,
   )
-  try receiver.sync().decode_json(json) catch {
-    @container.DocumentError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit=_,
-        actual=_
-      )
-    ) => ()
-    _ => fail("expected receiver encoded-byte limit")
-  } noraise {
-    _ => fail("receiver decoder must reject oversized JSON")
-  }
-  let decoded = try! @container.SyncMessage::from_json_string(json)
+  let decoded = try! receiver.sync().decode_json(json)
   try receiver.sync().apply(decoded) catch {
     @container.DocumentError::SyncFailed(
       @sync.Failure::LimitExceeded(
@@ -450,7 +438,10 @@ test "container receiver decoder honors raised parent limit" {
   let json = "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
     parents.join(",") +
     "],\"domain\":\"tree\",\"payload\":{\"kind\":\"property\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"key\":\"title\",\"value\":\"ok\"}}]}"
-  try @container.SyncMessage::from_json_string(json) catch {
+  let message = try! @container.SyncMessage::from_json_string(json)
+  inspect(message.op_count(), content="1")
+  let receiver = try! @container.Document::new("receiver")
+  try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
@@ -458,17 +449,38 @@ test "container receiver decoder honors raised parent limit" {
         actual=257
       )
     ) => ()
-    _ => fail("expected default parent limit")
+    _ => fail("expected receiver parent limit during apply")
   } noraise {
-    _ => fail("default decoder must reject 257 parents")
+    _ => fail("apply must enforce parent policy")
   }
-  let limits = try! @sync.Limits(
-    max_encoded_bytes=json.length(),
-    max_parents_per_operation=257,
-  )
-  let receiver = try! @container.Document::new_with_sync_limits(
-    "receiver", limits,
-  )
-  let message = try! receiver.sync().decode_json(json)
+}
+
+///|
+test "container duplicate-heavy decoded operation limit counts wire operations" {
+  let operation = "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}}"
+  let json = "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[" +
+    operation +
+    "," +
+    operation +
+    "]}"
+  let message = try! @container.SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
+  let receiver = try! @container.Document::new_with_sync_limits(
+    "duplicate-limit",
+    @sync.Limits(max_decoded_operations=1),
+  )
+  try receiver.sync().apply(message) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::DecodedOperations,
+        limit=1,
+        actual=2
+      )
+    ) => ()
+    _ => fail("wire operation count must survive canonical deduplication")
+  } noraise {
+    _ => fail("duplicate-heavy payload must exceed the decoded limit")
+  }
+  inspect(receiver.version() == @container.Version::empty(), content="true")
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
 }

@@ -5,7 +5,7 @@
 pub(all) struct TextState {
   priv inner : @document.Document
   priv sync_limits : @sync.Limits
-  priv mut pending_sync_records : Array[@core.Op]
+  priv mut pending_sync_records : Array[StructuralOp]
 }
 
 ///|

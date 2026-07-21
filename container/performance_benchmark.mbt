@@ -50,7 +50,12 @@ fn reverse_ordered_tree_message(count : Int) -> SyncMessage {
     let _ = try! source.create_node(parent=root_id)
   }
   let message = try! source.sync().export_all()
-  SyncMessage::SyncMessage(message.tree_ops.rev(), [], None)
+  try! SyncMessage::SyncMessage(
+    message.tree_ops.rev(),
+    [],
+    None,
+    message.tree_ops.length(),
+  )
 }
 
 ///|

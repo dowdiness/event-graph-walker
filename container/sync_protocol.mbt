@@ -406,23 +406,24 @@ fn validate_sync_tree_target(
 /// callers cannot accidentally discard a check and still append the raw record
 /// to a `PreparedSync` commit plan.
 fn parse_applicable_sync_record(
-  record : SyncOpRecord,
+  structural : StructuralSyncRecord,
   known_records : Map[String, SyncOpRecord],
   tree_snapshot : @mt.MovableTree,
 ) -> ApplicableSyncOp raise @sync.Failure {
+  let record = structural.raw()
   validate_sync_sequence_descent(record, known_records)
   validate_sync_lamport_descent(record, known_records)
   validate_sync_text_references(record, known_records)
   validate_sync_tree_target(record, tree_snapshot)
   match record {
-    Tree(op) => ApplyTree(op)
+    Tree(_) => ApplyTree(structural)
     Text(op) => {
       if !tree_snapshot.contains(op.block) {
         raise @sync.Failure::InvalidContent(
           detail="text operation target block is not established",
         )
       }
-      ApplyText(op)
+      ApplyText(structural)
     }
   }
 }
@@ -439,10 +440,14 @@ fn advance_sync_tree_snapshot(
   tree_log_snapshot : @mt.TreeOpLog,
 ) -> Unit {
   match applicable {
-    ApplyTree(versioned) =>
-      match versioned.op {
-        @mt.Move(op) => tree_log_snapshot.apply(tree_snapshot, op)
-        @mt.SetProperty(_) => ()
+    ApplyTree(structural) =>
+      match structural.raw() {
+        Tree(versioned) =>
+          match versioned.op {
+            @mt.Move(op) => tree_log_snapshot.apply(tree_snapshot, op)
+            @mt.SetProperty(_) => ()
+          }
+        Text(_) => ()
       }
     ApplyText(_) => ()
   }
@@ -592,20 +597,12 @@ fn valid_container_scalar(text : String) -> Bool {
 }
 
 ///|
-fn validate_sync_record(
+fn validate_sync_record_structure(
   record : SyncOpRecord,
-  limits : @sync.Limits,
 ) -> Unit raise @sync.Failure {
   let id = sync_record_version(record)
   validate_sync_identity(id)
   let parents = sync_record_parents(record)
-  if parents.length() > limits.max_parents_per_operation() {
-    raise @sync.Failure::LimitExceeded(
-      kind=@sync.LimitKind::ParentsPerOperation,
-      limit=limits.max_parents_per_operation(),
-      actual=parents.length(),
-    )
-  }
   let seen_parents : Map[String, Bool] = Map([])
   for parent in parents {
     validate_sync_identity(parent)
@@ -693,6 +690,22 @@ fn validate_sync_record(
         }
       }
     }
+  }
+}
+
+///|
+/// Receiver policy checked only during preparation.
+fn validate_sync_record_limits(
+  record : SyncOpRecord,
+  limits : @sync.Limits,
+) -> Unit raise @sync.Failure {
+  let parent_count = sync_record_parents(record).length()
+  if parent_count > limits.max_parents_per_operation() {
+    raise @sync.Failure::LimitExceeded(
+      kind=@sync.LimitKind::ParentsPerOperation,
+      limit=limits.max_parents_per_operation(),
+      actual=parent_count,
+    )
   }
 }
 
@@ -1087,10 +1100,29 @@ fn container_message_records(message : SyncMessage) -> Array[SyncOpRecord] {
 }
 
 ///|
+/// Return the message's retained structural proofs, validating package-local
+/// test literals that predate the proof-carrying storage.
+fn structural_message_records(
+  message : SyncMessage,
+) -> Array[StructuralSyncRecord] raise @sync.Failure {
+  match message.structural_records {
+    Some(records) => records.copy()
+    None => {
+      let records : Array[StructuralSyncRecord] = []
+      for record in container_message_records(message) {
+        records.push(StructuralSyncRecord::StructuralSyncRecord(record))
+      }
+      records
+    }
+  }
+}
+
+///|
 fn container_message_from_records(
   records : Array[SyncOpRecord],
   encoded_size : Int?,
-) -> SyncMessage {
+  decoded_operation_count : Int,
+) -> SyncMessage raise @sync.Failure {
   let tree_ops : Array[VersionedTreeOp] = []
   let text_ops : Array[VersionedBlockTextOp] = []
   for record in records {
@@ -1099,7 +1131,9 @@ fn container_message_from_records(
       Text(op) => text_ops.push(op)
     }
   }
-  SyncMessage::SyncMessage(tree_ops, text_ops, encoded_size)
+  SyncMessage::SyncMessage(
+    tree_ops, text_ops, encoded_size, decoded_operation_count,
+  )
 }
 
 ///|
@@ -1118,12 +1152,11 @@ fn validate_container_sync_message_limits(
       actual=encoded_size,
     )
   }
-  let decoded_operations = message.tree_ops.length() + message.text_ops.length()
-  if decoded_operations > limits.max_decoded_operations() {
+  if message.decoded_operation_count > limits.max_decoded_operations() {
     raise @sync.Failure::LimitExceeded(
       kind=@sync.LimitKind::DecodedOperations,
       limit=limits.max_decoded_operations(),
-      actual=decoded_operations,
+      actual=message.decoded_operation_count,
     )
   }
 }
@@ -1137,19 +1170,20 @@ fn prepare_container_sync(
   message : SyncMessage,
   limits : @sync.Limits,
   local_records : Map[String, SyncOpRecord],
-  pending_records : Array[SyncOpRecord],
+  pending_records : Array[StructuralSyncRecord],
   tree_snapshot : @mt.MovableTree,
   tree_log_snapshot : @mt.TreeOpLog,
 ) -> PreparedSync raise @sync.Failure {
   validate_container_sync_message_limits(message, limits)
-  let incoming = container_message_records(message)
+  let incoming = structural_message_records(message)
   let candidates : Map[String, SyncCandidate] = Map([])
-  for record in pending_records {
-    candidates[sync_record_key(record)] = FromPending(record)
+  for structural in pending_records {
+    candidates[sync_record_key(structural.raw())] = FromPending(structural)
   }
   let mut duplicates = 0
-  for record in incoming {
-    validate_sync_record(record, limits)
+  for structural in incoming {
+    let record = structural.raw()
+    validate_sync_record_limits(record, limits)
     let id = sync_record_version(record)
     let key = sync_raw_key(id)
     let payload = sync_record_payload_key(record)
@@ -1173,29 +1207,48 @@ fn prepare_container_sync(
               )
             }
             duplicates = duplicates + 1
-            candidates[key] = existing.observe_message(record)
+            candidates[key] = existing.observe_message(structural)
           }
-          None => candidates[key] = FromMessage(record)
+          None => candidates[key] = FromMessage(structural)
         }
     }
   }
-  let all_candidates : Array[SyncOpRecord] = []
+  let all_candidates : Array[StructuralSyncRecord] = []
+  let candidate_by_key : Map[String, StructuralSyncRecord] = Map([])
   for candidate in candidates.values() {
-    all_candidates.push(candidate.raw())
+    match candidate {
+      FromPending(record)
+      | FromMessage(record)
+      | FromPendingAndMessage(record) => {
+        all_candidates.push(record)
+        candidate_by_key[sync_record_key(record.raw())] = record
+      }
+    }
   }
   let known_records : Map[String, SyncOpRecord] = Map([])
   local_records.each(fn(key, record) { known_records[key] = record })
-  for record in all_candidates {
+  for structural in all_candidates {
+    let record = structural.raw()
     known_records[sync_record_key(record)] = record
+    validate_sync_record_limits(record, limits)
   }
-  let ordered = canonical_sync_order_with_block_creates(
-      all_candidates,
+  let raw_candidates : Array[SyncOpRecord] = []
+  for structural in all_candidates {
+    raw_candidates.push(structural.raw())
+  }
+  let ordered_raw = canonical_sync_order_with_block_creates(
+      raw_candidates,
       sync_block_create_versions(known_records),
     ).0
+  let ordered : Array[StructuralSyncRecord] = []
+  for record in ordered_raw {
+    ordered.push(candidate_by_key.get(sync_record_key(record)).unwrap())
+  }
   let resolvable : Map[String, Bool] = Map([])
   let applicable : Array[ApplicableSyncOp] = []
-  let pending : Array[SyncOpRecord] = []
-  for record in ordered {
+  let pending : Array[StructuralSyncRecord] = []
+  for structural in ordered {
+    let record = structural.raw()
     let mut ready = true
     for dependency in sync_record_dependencies(record) {
       let key = sync_raw_key(dependency)
@@ -1209,7 +1262,7 @@ fn prepare_container_sync(
       match candidate {
         FromMessage(_) => {
           let parsed = parse_applicable_sync_record(
-            record, known_records, tree_snapshot,
+            structural, known_records, tree_snapshot,
           )
           resolvable[key] = true
           applicable.push(parsed)
@@ -1222,10 +1275,12 @@ fn prepare_container_sync(
           }
           if !target_block_exists {
             resolvable[key] = false
-            pending.push(record)
+            pending.push(structural)
           } else {
             let parsed = Some(
-              parse_applicable_sync_record(record, known_records, tree_snapshot),
+              parse_applicable_sync_record(
+                structural, known_records, tree_snapshot,
+              ),
             ) catch {
               _ => None
             }
@@ -1244,7 +1299,7 @@ fn prepare_container_sync(
       }
     } else {
       resolvable[key] = false
-      pending.push(record)
+      pending.push(structural)
     }
   }
   if pending.length() > limits.max_pending_operations() {
@@ -1308,6 +1363,14 @@ fn container_encoded_size(
 }
 
 ///|
+fn container_sync_encoded_size(json_string : String) -> Int raise @sync.Failure {
+  if !is_container_well_formed_utf16(json_string) {
+    raise @sync.Failure::MalformedMessage(detail="invalid sync JSON")
+  }
+  @utf8.encode(json_string).length()
+}
+
+///|
 fn is_container_well_formed_utf16(text : String) -> Bool {
   let mut index = 0
   while index < text.length() {
@@ -1333,9 +1396,9 @@ fn is_container_well_formed_utf16(text : String) -> Bool {
 ///|
 fn decode_container_sync_json(
   json_string : String,
-  limits : @sync.Limits,
+  _limits : @sync.Limits,
 ) -> SyncMessage raise DocumentError {
-  let encoded_size = container_encoded_size(json_string, limits) catch {
+  let encoded_size = container_sync_encoded_size(json_string) catch {
     failure => raise DocumentError::SyncFailed(failure)
   }
   try {
@@ -1359,22 +1422,15 @@ fn decode_container_sync_json(
     let values : Array[Json] = @json.from_json(
       object.get("operations").unwrap_or(Json::null()),
     )
-    guard values.length() <= limits.max_decoded_operations() else {
-      raise @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::DecodedOperations,
-        limit=limits.max_decoded_operations(),
-        actual=values.length(),
-      )
-    }
     let records : Array[SyncOpRecord] = []
     for value in values {
       let record = decode_container_record(value)
-      validate_sync_record(record, limits)
       records.push(record)
     }
     container_message_from_records(
       canonical_sync_order(records),
       Some(encoded_size),
+      values.length(),
     )
   } catch {
     @sync.Failure::MalformedMessage(detail~) =>
@@ -1401,10 +1457,10 @@ fn decode_container_sync_json(
 }
 
 ///|
-/// Decode a synchronization message using the default protocol limits.
+/// Decode a synchronization message and establish structural proofs.
 ///
-/// Use `Document::sync().decode_json(...)` when decoding for a receiver with
-/// explicitly configured synchronization limits.
+/// Resource limits are receiver policy and are enforced by `apply`, not by
+/// this structural decoder.
 pub fn SyncMessage::from_json_string(
   json_string : String,
 ) -> SyncMessage raise DocumentError {
@@ -1412,12 +1468,13 @@ pub fn SyncMessage::from_json_string(
 }
 
 ///|
-/// Decode synchronization JSON using this receiver's configured limits.
+/// Decode synchronization JSON structurally. Receiver limits are enforced
+/// atomically by `apply`.
 pub fn SyncSession::decode_json(
-  self : SyncSession,
+  _self : SyncSession,
   json_string : String,
 ) -> SyncMessage raise DocumentError {
-  decode_container_sync_json(json_string, self.document.sync_limits)
+  decode_container_sync_json(json_string, @sync.Limits::default())
 }
 
 ///|

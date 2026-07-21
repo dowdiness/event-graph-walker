@@ -92,9 +92,13 @@ priv struct VersionedBlockTextOp {
 
 ///|
 pub(all) struct SyncMessage {
+  // Raw fields preserve package-local compatibility; structural_records is the
+  // proof-carrying representation used by preparation and pending queues.
   priv tree_ops : Array[VersionedTreeOp]
   priv text_ops : Array[VersionedBlockTextOp]
   priv encoded_size : Int?
+  priv structural_records : Array[StructuralSyncRecord]?
+  priv decoded_operation_count : Int
 }
 
 ///|
@@ -103,8 +107,22 @@ fn SyncMessage::SyncMessage(
   tree_ops : Array[VersionedTreeOp],
   text_ops : Array[VersionedBlockTextOp],
   encoded_size : Int?,
-) -> SyncMessage {
-  { tree_ops: tree_ops.copy(), text_ops: text_ops.copy(), encoded_size }
+  decoded_operation_count : Int,
+) -> SyncMessage raise @sync.Failure {
+  let records : Array[StructuralSyncRecord] = []
+  for op in tree_ops {
+    records.push(StructuralSyncRecord::StructuralSyncRecord(Tree(op)))
+  }
+  for op in text_ops {
+    records.push(StructuralSyncRecord::StructuralSyncRecord(Text(op)))
+  }
+  {
+    tree_ops: tree_ops.copy(),
+    text_ops: text_ops.copy(),
+    encoded_size,
+    structural_records: Some(records),
+    decoded_operation_count,
+  }
 }
 
 ///|
@@ -137,17 +155,35 @@ priv enum SyncOpRecord {
 }
 
 ///|
+/// State-independent proof for a container synchronization record.
+priv struct StructuralSyncRecord {
+  record : SyncOpRecord
+}
+
+///|
+fn StructuralSyncRecord::StructuralSyncRecord(
+  record : SyncOpRecord,
+) -> StructuralSyncRecord raise @sync.Failure {
+  validate_sync_record_structure(record)
+  { record, }
+}
+
+///|
+fn StructuralSyncRecord::raw(self : StructuralSyncRecord) -> SyncOpRecord {
+  self.record
+}
+
+///|
 priv enum PendingSyncOp {
-  Tree(VersionedTreeOp)
-  Text(VersionedBlockTextOp)
+  Record(StructuralSyncRecord)
 }
 
 ///|
 /// Provenance of a synchronization candidate during pure preparation.
 priv enum SyncCandidate {
-  FromPending(SyncOpRecord)
-  FromMessage(SyncOpRecord)
-  FromPendingAndMessage(SyncOpRecord)
+  FromPending(StructuralSyncRecord)
+  FromMessage(StructuralSyncRecord)
+  FromPendingAndMessage(StructuralSyncRecord)
 }
 
 ///|
@@ -157,15 +193,14 @@ priv enum SyncCandidate {
 /// Keeping this distinct from `SyncOpRecord` makes it impossible for the
 /// imperative apply shell to consume an unparsed wire record.
 priv enum ApplicableSyncOp {
-  ApplyTree(VersionedTreeOp)
-  ApplyText(VersionedBlockTextOp)
+  ApplyTree(StructuralSyncRecord)
+  ApplyText(StructuralSyncRecord)
 }
 
 ///|
 fn ApplicableSyncOp::raw(self : ApplicableSyncOp) -> SyncOpRecord {
   match self {
-    ApplyTree(op) => Tree(op)
-    ApplyText(op) => Text(op)
+    ApplyTree(op) | ApplyText(op) => op.raw()
   }
 }
 
@@ -173,14 +208,14 @@ fn ApplicableSyncOp::raw(self : ApplicableSyncOp) -> SyncOpRecord {
 fn SyncCandidate::raw(self : SyncCandidate) -> SyncOpRecord {
   match self {
     FromPending(record) | FromMessage(record) | FromPendingAndMessage(record) =>
-      record
+      record.raw()
   }
 }
 
 ///|
 fn SyncCandidate::observe_message(
   self : SyncCandidate,
-  record : SyncOpRecord,
+  record : StructuralSyncRecord,
 ) -> SyncCandidate {
   match self {
     FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(record)
@@ -192,7 +227,7 @@ fn SyncCandidate::observe_message(
 /// A fully validated, receiver-specific synchronization transition.
 priv struct PreparedSync {
   applicable : Array[ApplicableSyncOp]
-  pending : Array[SyncOpRecord]
+  pending : Array[StructuralSyncRecord]
   duplicate_operations : Int
 }
 
@@ -791,7 +826,14 @@ fn Document::versioned_sync_ops_between(
         )
     }
   }
-  SyncMessage::SyncMessage(tree_ops, text_ops, None)
+  SyncMessage::SyncMessage(
+    tree_ops,
+    text_ops,
+    None,
+    tree_ops.length() + text_ops.length(),
+  ) catch {
+    failure => raise DocumentError::SyncFailed(failure)
+  }
 }
 
 ///|
@@ -1376,8 +1418,7 @@ pub fn Document::sync(self : Document) -> SyncSession {
 pub fn SyncSession::export_all(
   self : SyncSession,
 ) -> SyncMessage raise DocumentError {
-  let message = self.document.export_sync_message()
-  SyncMessage::SyncMessage(message.tree_ops, message.text_ops, None)
+  self.document.export_sync_message()
 }
 
 ///|
@@ -1385,8 +1426,7 @@ pub fn SyncSession::export_since(
   self : SyncSession,
   version : Version,
 ) -> SyncMessage raise DocumentError {
-  let message = self.document.export_sync_message_since(version.inner)
-  SyncMessage::SyncMessage(message.tree_ops, message.text_ops, None)
+  self.document.export_sync_message_since(version.inner)
 }
 
 ///|
@@ -1406,18 +1446,25 @@ pub fn SyncSession::apply(
       pending_ops: 0,
     }
   }
-  let pending_records : Array[SyncOpRecord] = []
+  let pending_records : Array[StructuralSyncRecord] = []
   for pending in self.document.pending_sync_ops {
-    let record = match pending {
-      Tree(op) => SyncOpRecord::Tree(op)
-      Text(op) => SyncOpRecord::Text(op)
+    match pending {
+      Record(record) => pending_records.push(record)
     }
-    pending_records.push(record)
   }
-  let mut needs_tree_replay = !message.tree_ops.is_empty()
+  let message_records = structural_message_records(message) catch {
+    failure => raise DocumentError::SyncFailed(failure)
+  }
+  let mut needs_tree_replay = false
+  for record in message_records {
+    match record.raw() {
+      Tree(_) => needs_tree_replay = true
+      Text(_) => ()
+    }
+  }
   if !needs_tree_replay {
-    for record in pending_records {
-      match record {
+    for structural in pending_records {
+      match structural.raw() {
         Tree(_) => needs_tree_replay = true
         Text(_) => ()
       }
@@ -1450,13 +1497,21 @@ pub fn SyncSession::apply(
   let mut applied_text = 0
   for applicable in prepared.applicable {
     match applicable {
-      ApplyTree(op) => {
+      ApplyTree(structural) => {
+        let op = match structural.raw() {
+          Tree(op) => op
+          Text(_) => abort("prepared tree sync command had text payload")
+        }
         if !self.document.try_apply_versioned_tree_op(op) {
           abort("prepared tree sync command was not total")
         }
         applied_tree = applied_tree + 1
       }
-      ApplyText(op) => {
+      ApplyText(structural) => {
+        let op = match structural.raw() {
+          Text(op) => op
+          Tree(_) => abort("prepared text sync command had tree payload")
+        }
         if !self.document.try_apply_versioned_text_op(op) {
           abort("prepared text sync command was not total")
         }
@@ -1470,10 +1525,7 @@ pub fn SyncSession::apply(
   }
   let next_pending : Array[PendingSyncOp] = []
   for record in prepared.pending {
-    match record {
-      Tree(op) => next_pending.push(PendingSyncOp::Tree(op))
-      Text(op) => next_pending.push(PendingSyncOp::Text(op))
-    }
+    next_pending.push(PendingSyncOp::Record(record))
   }
   self.document.pending_sync_ops = next_pending
   {
