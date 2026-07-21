@@ -144,11 +144,7 @@ fn snapshot_frontier(
   frontier : @core.Frontier,
 ) -> TraceSnapshot {
   let branch = try! Branch::checkout(oplog, frontier)
-  {
-    frontier: @core.Frontier::from_array(frontier.0.copy()),
-    text: branch.to_text(),
-    visible_count: branch.visible_count(),
-  }
+  { frontier, text: branch.to_text(), visible_count: branch.visible_count() }
 }
 
 ///|
@@ -395,7 +391,7 @@ test "property generator: samples are valid branch traces" {
   for trace in traces {
     let oplog = trace.replay()
     inspect(snapshots_match_trace(oplog, trace.snapshots), content="true")
-    if trace.full_snapshot().frontier.0.length() > 1 {
+    if trace.full_snapshot().frontier.length() > 1 {
       saw_multi_tip_frontier = true
     }
     for op in trace.ops {
@@ -481,18 +477,19 @@ test "property: checkout_version_vector equals checkout via to_frontier" {
 }
 
 ///|
-fn prop_get_frontier_returns_defensive_copy(trace : BranchTrace) -> Bool {
+fn prop_get_frontier_accessor_isolated(trace : BranchTrace) -> Bool {
   let oplog = trace.replay()
   let snapshot = trace.to_snapshot()
   let branch = try! Branch::checkout(oplog, snapshot.frontier)
   let frontier = branch.get_frontier()
-  frontier.0.push(-1)
-  !branch.at_frontier(frontier) && branch_matches_snapshot(branch, snapshot)
+  let array = frontier.to_array()
+  array.push(-1)
+  branch.at_frontier(frontier) && branch_matches_snapshot(branch, snapshot)
 }
 
 ///|
-test "property: get_frontier returns defensive copy" {
-  @qc.quick_check_fn(prop_get_frontier_returns_defensive_copy)
+test "property: get_frontier accessor is isolated" {
+  @qc.quick_check_fn(prop_get_frontier_accessor_isolated)
 }
 
 ///|

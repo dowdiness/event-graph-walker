@@ -41,16 +41,15 @@ These types should be treated as the reference pattern for the opportunities bel
 
 ### 1. Make `Frontier` uniqueness unconditional
 
+**Status:** Implemented 2026-07-21
 **Benefit:** High  
-**Risk:** High because callers also access the public backing array
+**Risk:** High because callers previously accessed the public backing array
 
-`Frontier` documents uniqueness as an invariant but derives `FromJson` and exposes `from_array`, which accepts duplicates (`internal/core/graph_types.mbt:1-20`). More importantly, its `pub(all)` tuple representation lets other packages bypass both functions with direct construction. The separate `from_array_dedup` constructor and `has_duplicates` query (`internal/core/graph_types.mbt:22-56`) therefore leave callers responsible for retaining or rechecking knowledge that belongs in the type.
+`Frontier` now has private storage, and both `from_array` and its custom `FromJson` implementation canonicalize duplicates in first-occurrence order into fresh owned storage (`internal/core/graph_types.mbt`). `ToJson` preserves the bare array shape. Callers use `iter`, `length`, or the defensive `to_array`. The compatibility alias `from_array_dedup` remains, while `has_duplicates` was removed because the type can no longer represent that state.
 
-Make the backing array private and expose only invariant-preserving constructors and accessors. The existing `from_array_dedup`, backed by `@hashset.HashSet[Int]`, is the first parser candidate. Replace derived deserialization with a custom parser that preserves the same invariant. If canonical construction affects a measured hot path, optimize that parser without reopening a public unchecked constructor.
+Canonicalization uses one preallocated `HashSet` strategy for every input larger than a singleton, avoiding a backend-sensitive size threshold. Graph updates use `Frontier::advance`, which derives a fresh canonical frontier from an existing one and checks the appended version without revalidating the complete result.
 
-`docs/STABILIZATION_ROADMAP.md:34` records duplicate handling as fixed because deduplication and detection APIs were added. Under the stronger parse-don't-validate criterion, duplicates remain representable, so this is a refinement of that completed work rather than a contradiction of it.
-
-Verification should include existing frontier tests, causal graph property tests, walker tests, and release benchmarks if canonicalization enters a hot path.
+Tests pin duplicate canonicalization, source-array and accessor isolation, the JSON shape, and the existing `Debug`/`Show` rendering (`internal/core/frontier_test.mbt`). The migration also updated causal graph, branch, oplog, document, container, and benchmark callers so none can access the backing array directly.
 
 ### 2. Remove the invalid `RawVersion("", 0)` placeholder
 
@@ -104,8 +103,8 @@ Schedule this as the final phase. `RawVersion::new` is widely used by the causal
 ## Phased implementation order
 
 1. **Completed 2026-07-21:** Remove the invalid text-operation identity placeholder.
-2. Inventory generic JSON trait consumers and generated `.mbti` exposure, including the `OpRun` dependency on `RawVersion::FromJson`, and pin required round-trip compatibility.
-3. Make `Frontier` opaque and invariant-preserving, then benchmark affected graph paths.
+2. **Completed 2026-07-21:** Inventory generic JSON trait consumers and generated `.mbti` exposure, including the `OpRun` dependency on `RawVersion::FromJson`, and pin required round-trip compatibility.
+3. **Completed 2026-07-21:** Make `Frontier` opaque and invariant-preserving, then benchmark affected graph paths.
 4. Make `Range` opaque and strengthen its constructors in an API-breaking release.
 5. Separate structural sync parsing from receiver policy checks while preserving `ApplicableOp` and `ApplicableSyncOp`.
 6. Reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove generic deserialization traits only when their consumers have moved.
@@ -118,7 +117,7 @@ Project patterns to reuse:
 
 - `TreeNodeId` validating constructor (`container/document.mbt:8-21`)
 - immutable validating `Limits` constructor (`sync/types.mbt:45-101`)
-- existing `Frontier::from_array_dedup`, including its `@hashset.HashSet[Int]` uniqueness pass (`internal/core/graph_types.mbt:22-39`)
+- existing `Frontier::from_array` and its preallocated `@hashset.HashSet[Int]` uniqueness pass (`internal/core/graph_types.mbt`)
 - `ApplicableOp`, `ParsedCandidate`, `PreparedSync`, and their container counterparts
 - defensive copies and `ArrayView` at read-only boundaries, as used by `SnapshotEntry::parents` (`history/snapshot.mbt:72-90`)
 

@@ -88,8 +88,9 @@ test "walker - concurrent branches (5 agents x 20)" (b : @bench.T) {
     }
     frontiers.push(prev)
   }
+  let frontier = @core.Frontier::from_array(frontiers)
   b.bench(fn() {
-    let result = graph.walk_from_frontier(@core.Frontier::from_array(frontiers))
+    let result = graph.walk_from_frontier(frontier)
     b.keep(result)
   })
 }

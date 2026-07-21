@@ -2,7 +2,7 @@
 /// Tests for CausalGraph
 test "create empty graph" {
   let graph = CausalGraph::new()
-  @debug.debug_inspect(graph.get_frontier().0, content="[]")
+  @debug.debug_inspect(graph.get_frontier().to_array(), content="[]")
 }
 
 ///|
@@ -10,7 +10,7 @@ test "add single version" {
   let graph = CausalGraph::new()
   let lv = try! graph.add_version([], "agent1")
   inspect(lv, content="0")
-  @debug.debug_inspect(graph.get_frontier().0, content="[0]")
+  @debug.debug_inspect(graph.get_frontier().to_array(), content="[0]")
 }
 
 ///|
@@ -19,7 +19,7 @@ test "add version with parent" {
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([lv0], "agent1")
   inspect(lv1, content="1")
-  @debug.debug_inspect(graph.get_frontier().0, content="[1]")
+  @debug.debug_inspect(graph.get_frontier().to_array(), content="[1]")
 }
 
 ///|
@@ -52,9 +52,9 @@ test "concurrent versions create two frontier heads" {
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([], "agent2") // Concurrent with lv0
   let frontier = graph.get_frontier()
-  inspect(frontier.0.length(), content="2")
-  inspect(frontier.0.contains(lv0), content="true")
-  inspect(frontier.0.contains(lv1), content="true")
+  inspect(frontier.length(), content="2")
+  inspect(frontier.to_array().contains(lv0), content="true")
+  inspect(frontier.to_array().contains(lv1), content="true")
 }
 
 ///|

@@ -31,7 +31,7 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| ~~Frontier allows duplicates~~ | `internal/core/graph_types.mbt:7` | ✅ Fixed: Added `from_array_dedup()` constructor and `has_duplicates()` validation. Documented uniqueness invariant. |
+| ~~Frontier allows duplicates~~ | `internal/core/graph_types.mbt` | ✅ Fixed: Made storage private and canonicalize every constructor input while preserving first-occurrence order. |
 | ~~Inconsistent doc formatting~~ | Multiple files | ✅ Fixed: Standardized on `///|` for module headers and public APIs. |
 
 ## Phase 2: Test Coverage Gaps ✅
@@ -44,7 +44,7 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 | ~~Network reconnection/sync recovery~~ | ✅ Added 5 tests: peer reconnects after divergence, partial operation log, stale version vector, network partition reunion (3 peers), bidirectional delta after disconnect |
 | ~~Cascading error propagation in mid-merge~~ | ✅ Added 4 tests: missing op during apply, apply operations succeeds for valid ops, state unchanged after failure, retreat with missing item |
 | ~~Empty version vector operations~~ | ✅ Added 12 tests covering comparison, merge, concurrent, includes, agents, increment, set, to_frontier, from_frontier, and JSON roundtrip on empty VersionVector |
-| ~~Frontier with duplicates~~ | ✅ Added `has_duplicates()` validation and `from_array_dedup()` constructor with tests |
+| ~~Frontier with duplicates~~ | ✅ Constructors canonicalize duplicates; tests pin ordering, ownership isolation, and JSON round-trips |
 | ~~Undelete idempotency~~ | ✅ Added 3 tests: undelete idempotent on visible items, undelete after delete changes state, undelete on missing item raises MissingItem |
 
 All Phase 2 test coverage gaps have been addressed. Property tests protect the core CRDT invariants (convergence, commutativity, idempotence) under undo/redo.

@@ -77,7 +77,7 @@ pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
         None => None
       }
     },
-    fn() { graph.get_frontier().0.copy() },
+    fn() { graph.get_frontier().to_array() },
     fn(lv) { graph.children_count(lv) },
   )
 }
@@ -85,7 +85,7 @@ pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
 ///|
 /// Get the current frontier as an array of LVs
 pub fn Document::get_frontier_array(self : Document) -> Array[Int] {
-  self.oplog.get_frontier().0.copy()
+  self.oplog.get_frontier().to_array()
 }
 
 ///|

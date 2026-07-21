@@ -174,7 +174,7 @@ test "version_vector - from_frontier (10 ops)" (b : @bench.T) {
     let parents = if prev == -1 { [] } else { [prev] }
     prev = try! graph.add_version(parents, "agent_a")
   }
-  let frontier = [prev]
+  let frontier = @core.Frontier::from_array([prev])
   b.bench(fn() {
     let result = VersionVector::from_frontier(graph, frontier)
     b.keep(result)
@@ -195,8 +195,9 @@ test "version_vector - from_frontier (100 ops, 5 agents)" (b : @bench.T) {
     }
     frontiers.push(prev)
   }
+  let frontier = @core.Frontier::from_array(frontiers)
   b.bench(fn() {
-    let result = VersionVector::from_frontier(graph, frontiers)
+    let result = VersionVector::from_frontier(graph, frontier)
     b.keep(result)
   })
 }
@@ -239,8 +240,9 @@ test "version_vector - roundtrip (5 agents)" (b : @bench.T) {
     }
     frontiers.push(prev)
   }
+  let frontier = @core.Frontier::from_array(frontiers)
   b.bench(fn() {
-    let vv = VersionVector::from_frontier(graph, frontiers)
+    let vv = VersionVector::from_frontier(graph, frontier)
     let result = vv.to_frontier(graph)
     b.keep(result)
   })

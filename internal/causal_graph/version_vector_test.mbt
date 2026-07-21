@@ -190,8 +190,8 @@ test "to_frontier - single agent" {
   let lv2 = try! graph.add_version([lv1], "alice")
   let vv = VersionVector::new().set("alice", 2)
   let frontier = vv.to_frontier(graph)
-  inspect(frontier.0.length(), content="1")
-  inspect(frontier.0.contains(lv2), content="true")
+  inspect(frontier.length(), content="1")
+  inspect(frontier.to_array().contains(lv2), content="true")
 }
 
 ///|
@@ -203,9 +203,9 @@ test "to_frontier - multiple agents" {
   let lv3 = try! graph.add_version([lv2], "bob")
   let vv = VersionVector::new().set("alice", 1).set("bob", 1)
   let frontier = vv.to_frontier(graph)
-  inspect(frontier.0.length(), content="2")
-  inspect(frontier.0.contains(lv1), content="true")
-  inspect(frontier.0.contains(lv3), content="true")
+  inspect(frontier.length(), content="2")
+  inspect(frontier.to_array().contains(lv1), content="true")
+  inspect(frontier.to_array().contains(lv3), content="true")
 }
 
 ///|
@@ -351,7 +351,7 @@ test "empty version vector - to_frontier on empty graph" {
   let graph = CausalGraph::new()
   let empty = VersionVector::new()
   let frontier = empty.to_frontier(graph)
-  inspect(frontier.0.length(), content="0")
+  inspect(frontier.length(), content="0")
 }
 
 ///|

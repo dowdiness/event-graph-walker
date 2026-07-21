@@ -177,15 +177,12 @@ fn CausalGraph::update_frontier(
   new_lv : Int,
   parents : Array[Int],
 ) -> Unit {
-  let mut frontier = self.frontier.0.copy()
-  frontier = frontier.filter(v => !parents.contains(v))
-  frontier.push(new_lv)
-  self.frontier = @core.Frontier::from_array(frontier)
+  self.frontier = self.frontier.advance(new_lv, parents)
 }
 
 ///|
 pub fn CausalGraph::get_frontier(self : CausalGraph) -> @core.Frontier {
-  @core.Frontier::from_array(self.frontier.0.copy())
+  self.frontier
 }
 
 ///|
@@ -254,7 +251,7 @@ fn CausalGraph::bfs_backward(
   let n = self.next_lv
   let reachable : Array[Int] = []
   let queue : Array[Int] = []
-  for lv in frontiers.0 {
+  for lv in frontiers.iter() {
     if lv >= 0 && lv < n {
       queue.push(lv)
     }

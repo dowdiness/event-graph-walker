@@ -1,9 +1,15 @@
 ///|
 /// A frontier represents the "tips" of the causal graph - versions with no successors.
 ///
-/// **Invariant**: Elements must be unique. Duplicate LVs violate the frontier semantics
-/// (a version cannot be a tip twice) and may cause incorrect diff calculations.
-pub(all) struct Frontier(Array[Int]) derive(Eq, Debug, ToJson, FromJson)
+/// **Invariant**: Elements are unique and stored in first-occurrence order.
+pub struct Frontier {
+  priv values : Array[Int]
+} derive(Eq)
+
+///|
+pub impl @debug.Debug for Frontier with fn to_repr(self) {
+  @debug.Repr::literal("Frontier(" + @debug.to_string(self.values) + ")")
+}
 
 ///|
 pub impl Show for Frontier with fn output(self, logger) {
@@ -11,46 +17,76 @@ pub impl Show for Frontier with fn output(self, logger) {
 }
 
 ///|
-/// Create a frontier from an array of LVs.
-///
-/// **Note**: This does not validate uniqueness for performance. Use `from_array_dedup`
-/// when the input may contain duplicates (e.g., from untrusted sources).
+pub impl ToJson for Frontier with fn to_json(self) {
+  self.values.to_json()
+}
+
+///|
+pub impl @json.FromJson for Frontier with fn from_json(json, path) {
+  let values : Array[Int] = @json.from_json(json, path~)
+  Frontier::from_array(values)
+}
+
+///|
+/// Create a frontier from an array of LVs, taking ownership of neither the input
+/// nor any duplicate values.
 pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
-  Frontier(values)
+  if values.length() == 0 {
+    return { values: [] }
+  }
+  if values.length() == 1 {
+    return { values: [values[0]] }
+  }
+  let seen : @hashset.HashSet[Int] = @hashset.HashSet(
+    [],
+    capacity=values.length(),
+  )
+  let deduped : Array[Int] = []
+  for value in values {
+    if seen.add_and_check(value) {
+      deduped.push(value)
+    }
+  }
+  { values: deduped }
+}
+
+///|
+/// Replace consumed parents with a new graph version.
+///
+/// This derives the result from an existing canonical frontier and checks the
+/// new version before appending it, so the uniqueness invariant is preserved
+/// without canonicalizing the complete result again.
+pub fn Frontier::advance(
+  self : Frontier,
+  new_version : Int,
+  parents : Array[Int],
+) -> Frontier {
+  let next = self.values.filter(value => !parents.contains(value))
+  if !next.contains(new_version) {
+    next.push(new_version)
+  }
+  { values: next }
 }
 
 ///|
 /// Create a frontier from an array of LVs, removing duplicates.
-///
-/// Use this when constructing a frontier from potentially untrusted input
-/// or when merging multiple frontiers.
 pub fn Frontier::from_array_dedup(values : Array[Int]) -> Frontier {
-  let seen : @hashset.HashSet[Int] = @hashset.HashSet::default()
-  let deduped : Array[Int] = []
-  for v in values {
-    if !seen.contains(v) {
-      seen.add(v)
-      deduped.push(v)
-    }
-  }
-  Frontier(deduped)
+  Frontier::from_array(values)
 }
 
 ///|
-/// Check if this frontier contains duplicate elements (violates invariant).
-pub fn Frontier::has_duplicates(self : Frontier) -> Bool {
-  // Short-circuit: 0 or 1 elements can never have duplicates
-  if self.0.length() <= 1 {
-    return false
-  }
-  let seen : @hashset.HashSet[Int] = @hashset.HashSet::default()
-  for v in self.0 {
-    if seen.contains(v) {
-      return true
-    }
-    seen.add(v)
-  }
-  false
+pub fn Frontier::length(self : Frontier) -> Int {
+  self.values.length()
+}
+
+///|
+pub fn Frontier::iter(self : Frontier) -> Iter[Int] {
+  self.values.iter()
+}
+
+///|
+pub fn Frontier::to_array(self : Frontier) -> Array[Int] {
+  self.values.copy()
 }
 
 ///|
