@@ -38,7 +38,7 @@ test "TextState::delete removes character" {
 test "TextState::delete_range removes text at document start" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete_range(Range::from_ints(0, 2))
+  let _ = doc.delete_range(try! Range::from_ints(0, 2))
   inspect(doc.text(), content="llo")
 }
 
@@ -46,7 +46,7 @@ test "TextState::delete_range removes text at document start" {
 test "TextState::delete_range removes text in document middle" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete_range(Range::from_ints(1, 4))
+  let _ = doc.delete_range(try! Range::from_ints(1, 4))
   inspect(doc.text(), content="Ho")
 }
 
@@ -54,7 +54,7 @@ test "TextState::delete_range removes text in document middle" {
 test "TextState::delete_range removes text at document end" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete_range(Range::from_ints(3, 5))
+  let _ = doc.delete_range(try! Range::from_ints(3, 5))
   inspect(doc.text(), content="Hel")
 }
 
@@ -62,7 +62,7 @@ test "TextState::delete_range removes text at document end" {
 test "TextState::replace_range handles shorter replacement" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
-  let _ = doc.replace_range(Range::from_ints(1, 4), "Z")
+  let _ = doc.replace_range(try! Range::from_ints(1, 4), "Z")
   inspect(doc.text(), content="aZef")
 }
 
@@ -70,7 +70,7 @@ test "TextState::replace_range handles shorter replacement" {
 test "TextState::replace_range handles equal-length replacement" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
-  let _ = doc.replace_range(Range::from_ints(1, 3), "XY")
+  let _ = doc.replace_range(try! Range::from_ints(1, 3), "XY")
   inspect(doc.text(), content="aXYdef")
 }
 
@@ -78,7 +78,7 @@ test "TextState::replace_range handles equal-length replacement" {
 test "TextState::replace_range handles longer replacement" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
-  let _ = doc.replace_range(Range::from_ints(1, 2), "WXYZ")
+  let _ = doc.replace_range(try! Range::from_ints(1, 2), "WXYZ")
   inspect(doc.text(), content="aWXYZcdef")
 }
 
@@ -95,6 +95,34 @@ test "TextState::version changes after edit" {
 test "Pos::at clamps negative values" {
   let pos = Pos::at(-5)
   inspect(pos.value(), content="0")
+}
+
+///|
+test "Range rejects reversed endpoints" {
+  let result : Result[Range, TextError] = Ok(Range::new(Pos::at(5), Pos::at(3))) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(InvalidRange(start~, end~)) => {
+      inspect(start, content="5")
+      inspect(end, content="3")
+    }
+    _ => fail("Expected InvalidRange error")
+  }
+}
+
+///|
+test "Range::from_ints rejects reversed inputs before clamping" {
+  let result : Result[Range, TextError] = Ok(Range::from_ints(-1, -2)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(InvalidRange(start~, end~)) => {
+      inspect(start, content="-1")
+      inspect(end, content="-2")
+    }
+    _ => fail("Expected InvalidRange error")
+  }
 }
 
 ///|
@@ -268,7 +296,7 @@ test "TextState::replace_range_and_record undo and redo restore range edit" {
   let mgr = @undo.UndoManager::new("alice")
   let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
   let _ = doc.replace_range_and_record(
-    Range::from_ints(1, 4),
+    try! Range::from_ints(1, 4),
     "XYZ",
     mgr,
     timestamp_ms=2000,
@@ -299,7 +327,7 @@ test "TextState::replace_range_and_record inserts non-BMP text atomically" {
   let mgr = @undo.UndoManager::new("alice")
   let _ = doc.insert_and_record(Pos::at(0), "ab", mgr, timestamp_ms=1000)
   let _ = doc.replace_range_and_record(
-    Range::from_ints(1, 1),
+    try! Range::from_ints(1, 1),
     "😀X",
     mgr,
     timestamp_ms=2000,

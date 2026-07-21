@@ -49,6 +49,25 @@ fn main() -> Unit raise {
 }
 ```
 
+Construct and delete a range with explicit error handling:
+
+```moonbit
+fn delete_span(doc : @text.TextState, start : Int, end : Int) -> Unit raise {
+  let range = @text.Range::from_ints(start, end) catch {
+    @text.TextError::InvalidRange(start~, end~) => {
+      println("Failed: start \{start} > end \{end}")
+      return
+    }
+    error => raise error
+  }
+  doc.delete_range(range) catch {
+    @text.TextError::InvalidPosition(pos~, len~) =>
+      println("Failed: endpoint \{pos} exceeds document length \{len}")
+    error => raise error
+  }
+}
+```
+
 Sync through `TextState::sync()`:
 
 ```moonbit

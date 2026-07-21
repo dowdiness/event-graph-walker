@@ -5,6 +5,7 @@
 pub(all) suberror TextError {
   EmptyReplicaId
   InvalidPosition(pos~ : Int, len~ : Int)
+  InvalidRange(start~ : Int, end~ : Int)
   SyncFailed(@sync.Failure)
   VersionNotFound
   Internal(detail~ : String)
@@ -17,6 +18,8 @@ pub fn TextError::message(self : TextError) -> String {
     EmptyReplicaId => "Replica ID must not be empty"
     InvalidPosition(pos~, len~) =>
       "Invalid position: \{pos} is out of bounds for text of length \{len}"
+    InvalidRange(start~, end~) =>
+      "Invalid range: start \{start} is after end \{end}"
     SyncFailed(@sync.Failure::MissingDependency(replica_id~, sequence~)) =>
       "Sync failed: missing dependency - \{replica_id}:\{sequence}"
     SyncFailed(@sync.Failure::MalformedMessage(detail~)) =>
@@ -39,6 +42,7 @@ pub fn TextError::help(self : TextError) -> String {
     EmptyReplicaId => "Supply a globally unique, non-empty replica ID"
     InvalidPosition(pos=_, len~) =>
       "Use a position between 0 and \{len} (inclusive for insert, exclusive for delete)"
+    InvalidRange(_) => "Construct ranges with start less than or equal to end"
     SyncFailed(@sync.Failure::MissingDependency(_)) =>
       "Sync more operations from the peer and retry"
     SyncFailed(@sync.Failure::MalformedMessage(_)) =>
@@ -61,6 +65,8 @@ pub fn TextError::debug(self : TextError) -> String {
     EmptyReplicaId => "TextError::EmptyReplicaId"
     InvalidPosition(pos~, len~) =>
       "TextError::InvalidPosition { pos: \{pos}, len: \{len} }"
+    InvalidRange(start~, end~) =>
+      "TextError::InvalidRange { start: \{start}, end: \{end} }"
     SyncFailed(failure) => "TextError::SyncFailed { reason: \{failure} }"
     VersionNotFound => "TextError::VersionNotFound"
     Internal(detail~) => "TextError::Internal { detail: \{detail} }"
@@ -73,6 +79,7 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
   match self {
     EmptyReplicaId => false
     InvalidPosition(_) => false
+    InvalidRange(_) => false
     SyncFailed(@sync.Failure::MissingDependency(_)) => true
     SyncFailed(@sync.Failure::MalformedMessage(_)) => false
     SyncFailed(@sync.Failure::InvalidContent(_)) => false

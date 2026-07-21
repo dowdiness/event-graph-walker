@@ -63,14 +63,13 @@ This removes the previous illegal intermediate state without introducing a new t
 
 ### 3. Parse stable `Range` invariants at construction
 
+**Status:** Implemented 2026-07-21
 **Benefit:** Medium  
 **Risk:** High because this changes the public facade representation and constructor contract
 
-`Range` uses non-negative `Pos` values but permits `start > end` (`text/types.mbt:29-45`). Its `pub(all)` fields also let callers bypass `Range::new` through direct struct construction. The ordering check is deferred until an edit through `checked_range_bounds` (`text/text_doc.mbt:179-189`).
+`Range` now has private fields and exposes `start()` and `end()` read-only accessors (`text/types.mbt`). Its public constructors reject reversed endpoints with `TextError::InvalidRange`, so every constructed range satisfies `start <= end`; no constructor silently normalizes its input. The document-dependent check `end <= current_length` remains in `checked_range_bounds` immediately before mutation (`text/text_doc.mbt`).
 
-Make the fields private, provide read-only accessors, and enforce the state-independent invariant `start <= end` in every public constructor. The document-dependent invariant `end <= current_length` must remain close to mutation because concurrent and local edits can make a previously bounded position stale. A private, short-lived resolved range may preserve that second proof between the functional decision and the immediate mutation, but it must not imply long-term validity.
-
-Do not silently reorder endpoints. Reject a reversed range, or introduce an explicitly named normalizing constructor if normalization is a desired API contract. Because `Pos::at` intentionally clamps negatives (`text/types.mbt:6-17`; `docs/FORMAL_SPECIFICATION.md:936-943`), changing its behavior is outside this proposal.
+Tests cover reversed-endpoint rejection, while existing range edits cover valid and empty ranges. Because `Pos::at` intentionally clamps negatives (`text/types.mbt:6-17`; `docs/FORMAL_SPECIFICATION.md:936-943`), changing its behavior remains outside this proposal.
 
 ### 4. Separate structural parsing from receiver policy
 
@@ -105,7 +104,7 @@ Schedule this as the final phase. `RawVersion::new` is widely used by the causal
 1. **Completed 2026-07-21:** Remove the invalid text-operation identity placeholder.
 2. **Completed 2026-07-21:** Inventory generic JSON trait consumers and generated `.mbti` exposure, including the `OpRun` dependency on `RawVersion::FromJson`, and pin required round-trip compatibility.
 3. **Completed 2026-07-21:** Make `Frontier` opaque and invariant-preserving, then benchmark affected graph paths.
-4. Make `Range` opaque and strengthen its constructors in an API-breaking release.
+4. **Completed 2026-07-21:** Make `Range` opaque and strengthen its constructors in an API-breaking release.
 5. Separate structural sync parsing from receiver policy checks while preserving `ApplicableOp` and `ApplicableSyncOp`.
 6. Reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove generic deserialization traits only when their consumers have moved.
 

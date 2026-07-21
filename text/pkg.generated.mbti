@@ -14,6 +14,7 @@ import {
 pub(all) suberror TextError {
   EmptyReplicaId
   InvalidPosition(pos~ : Int, len~ : Int)
+  InvalidRange(start~ : Int, end~ : Int)
   SyncFailed(@sync.Failure)
   VersionNotFound
   Internal(detail~ : String)
@@ -30,12 +31,13 @@ pub(all) struct Pos {
 pub fn Pos::at(Int) -> Self
 pub fn Pos::value(Self) -> Int
 
-pub(all) struct Range {
-  start : Pos
-  end : Pos
+pub struct Range {
+  // private fields
 } derive(Eq, @debug.Debug)
-pub fn Range::from_ints(Int, Int) -> Self
-pub fn Range::new(Pos, Pos) -> Self
+pub fn Range::end(Self) -> Pos
+pub fn Range::from_ints(Int, Int) -> Self raise TextError
+pub fn Range::new(Pos, Pos) -> Self raise TextError
+pub fn Range::start(Self) -> Pos
 
 pub(all) struct SyncMessage {
   // private fields

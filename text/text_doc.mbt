@@ -180,9 +180,9 @@ fn checked_range_bounds(
   range : Range,
   doc_len : Int,
 ) -> (Int, Int) raise TextError {
-  let start = range.start.value()
-  let end = range.end.value()
-  if end < start || end > doc_len {
+  let start = range.start().value()
+  let end = range.end().value()
+  if end > doc_len {
     raise TextError::InvalidPosition(pos=end, len=doc_len)
   }
   (start, end)

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `text.Range` is now opaque. Constructors `Range::new` and
+  `Range::from_ints` raise `TextError::InvalidRange` when `start` > `end`.
+  Endpoints are exposed via `start()` and `end()` methods, while `TextState`
+  mutation methods continue to validate document-length bounds.
+
 ### Performance
 
 - Monotonic tree-operation histories now append with constant ordering-

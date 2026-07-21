@@ -26,23 +26,39 @@ pub fn Pos::value(self : Pos) -> Int {
 /// Text range representing a contiguous span of text.
 ///
 /// `start` is inclusive, `end` is exclusive (half-open interval).
-pub(all) struct Range {
-  /// Starting position (inclusive)
-  start : Pos
-  /// Ending position (exclusive)
-  end : Pos
+pub struct Range {
+  priv start : Pos
+  priv end : Pos
 } derive(Debug, Eq)
 
 ///|
-/// Create a range from two positions.
-pub fn Range::new(start : Pos, end : Pos) -> Range {
+/// Create a range from two ordered positions.
+pub fn Range::new(start : Pos, end : Pos) -> Range raise TextError {
+  if start.value() > end.value() {
+    raise TextError::InvalidRange(start=start.value(), end=end.value())
+  }
   { start, end }
 }
 
 ///|
-/// Create a range from two integers.
-pub fn Range::from_ints(start : Int, end : Int) -> Range {
-  { start: Pos::at(start), end: Pos::at(end) }
+/// Create a range from two ordered integers.
+pub fn Range::from_ints(start : Int, end : Int) -> Range raise TextError {
+  if start > end {
+    raise TextError::InvalidRange(start~, end~)
+  }
+  Range::new(Pos::at(start), Pos::at(end))
+}
+
+///|
+/// Get the starting position (inclusive).
+pub fn Range::start(self : Range) -> Pos {
+  self.start
+}
+
+///|
+/// Get the ending position (exclusive).
+pub fn Range::end(self : Range) -> Pos {
+  self.end
 }
 
 ///|

@@ -96,5 +96,5 @@ pub fn TextState::replace_range_and_record(
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
   self.delete_range_and_record(range, mgr, timestamp_ms~)
-  self.insert_and_record(range.start, text, mgr, timestamp_ms~)
+  self.insert_and_record(range.start(), text, mgr, timestamp_ms~)
 }
