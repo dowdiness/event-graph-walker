@@ -269,6 +269,31 @@ Tests operation log storage and retrieval performance.
 - [ ] Operation pooling/reuse
 - [ ] Lazy operation materialization
 
+### 6. Frontier Canonicalization Performance (`internal/core/frontier_benchmark.mbt`)
+
+Tests frontier deduplication and normalization during canonicalization.
+
+**Production Strategy:**
+- **Fast paths**: Empty arrays and singletons return fresh owned storage without a deduplication scan or `HashSet` allocation.
+- **Linear deduplication**: Inputs with size `≤ 64` use a linear scan (`!deduped.contains(value)`) to avoid hashing and allocation overhead.
+- **Preallocated HashSet**: Inputs with size `> 64` use a preallocated `@hashset.HashSet` with capacity matching the input length to achieve amortized `O(1)` membership checks while preserving first-occurrence order.
+
+**Benchmark Matrix:**
+- **Unique elements**: Evaluates sizes 5, 20, 50, 64, 65, 80, 96, 100, and 500 to evaluate the crossover threshold.
+- **Duplicate-heavy inputs**: Tested with size 100 with values cycling modulo 8 to evaluate performance under heavy overlap.
+
+**Reproducible Commands:**
+```bash
+# Target wasm-gc
+moon bench internal/core/frontier_benchmark.mbt --release --target wasm-gc
+
+# Target JS
+moon bench internal/core/frontier_benchmark.mbt --release --target js
+```
+
+**Key Crossover Conclusion:**
+The crossover varies by backend and duplicate distribution. The production threshold of 64 is a cross-target compromise: it avoids hashing on the common small-frontier path, while the preallocated `HashSet` bounds worst-case work for larger inputs and wins on both measured backends by roughly 96–100 unique elements.
+
 ## Expected Performance Characteristics
 
 ### Scalability Targets
@@ -400,6 +425,6 @@ test "component - operation (size)" (b : @bench.T) {
 
 ---
 
-**Last Updated**: 2026-05-06
-**Total Benchmarks**: 104 across 9 files (`internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/jump_ancestors_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`)
+**Last Updated**: 2026-07-21
+**Total Benchmarks**: 141 across 14 project benchmark files (`container/{performance,sync_apply}_benchmark.mbt`, `internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/core/frontier_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/{jump_ancestors,tree_position}_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`, `tree/json_size_benchmark.mbt`)
 **Status**: Ready for profiling and optimization

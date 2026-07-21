@@ -1,4 +1,8 @@
 ///|
+/// Use linear duplicate detection below this cross-target benchmark crossover.
+let frontier_linear_dedup_limit : Int = 64
+
+///|
 /// A frontier represents the "tips" of the causal graph - versions with no successors.
 ///
 /// **Invariant**: Elements are unique and stored in first-occurrence order.
@@ -35,12 +39,23 @@ pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
     { values: [] }
   } else if values.length() == 1 {
     { values: [values[0]] }
-  } else {
-    let seen : @hashset.HashSet[Int] = @hashset.HashSet::default()
+  } else if values.length() <= frontier_linear_dedup_limit {
     let deduped : Array[Int] = []
-    for v in values {
-      if seen.add_and_check(v) {
-        deduped.push(v)
+    for value in values {
+      if !deduped.contains(value) {
+        deduped.push(value)
+      }
+    }
+    { values: deduped }
+  } else {
+    let seen : @hashset.HashSet[Int] = @hashset.HashSet(
+      [],
+      capacity=values.length(),
+    )
+    let deduped : Array[Int] = []
+    for value in values {
+      if seen.add_and_check(value) {
+        deduped.push(value)
       }
     }
     { values: deduped }
