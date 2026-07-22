@@ -1,0 +1,52 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/peer_sync"
+
+import {
+  "dowdiness/event-graph-walker/sync",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub enum ApplyDisposition {
+  CausallyComplete
+  PendingDependencies
+} derive(Eq, @debug.Debug)
+pub fn ApplyDisposition::ApplyDisposition(Int) -> Self
+
+pub enum Decision {
+  SendVersion
+  RequestFullSync
+  SendFullSync
+  SendIncrementalSync
+  ReportRecovered
+  ReportFailure
+  Escalate
+} derive(Eq, @debug.Debug)
+
+pub enum FailureDisposition {
+  Recoverable
+  Terminal
+} derive(Eq, @debug.Debug)
+pub fn FailureDisposition::FailureDisposition(@sync.Failure) -> Self
+pub fn FailureDisposition::recoverable() -> Self
+
+pub struct State {
+  // private fields
+}
+pub fn State::State() -> Self
+pub fn State::applied(Self, ApplyDisposition) -> (Self, Array[Decision])
+pub fn State::failed(Self, FailureDisposition) -> (Self, Array[Decision])
+pub fn State::full_recovery_required(Self) -> (Self, Array[Decision])
+pub fn State::full_sync_requested(Self) -> (Self, Array[Decision])
+pub fn State::handshake_started(Self) -> (Self, Array[Decision])
+pub fn State::local_version_advanced(Self) -> (Self, Array[Decision])
+pub fn State::version_compared(Self, Bool) -> (Self, Array[Decision])
+
+// Type aliases
+
+// Traits
+

@@ -1,0 +1,13 @@
+import {
+  "dowdiness/event-graph-walker/peer_sync",
+  "dowdiness/event-graph-walker/peer_sync/container" @peer_sync_container,
+  "dowdiness/event-graph-walker/peer_sync/text" @peer_sync_text,
+  "dowdiness/event-graph-walker/text" @egw_text,
+  "dowdiness/event-graph-walker/container" @egw_container,
+  "dowdiness/event-graph-walker/sync",
+  "moonbitlang/core/debug",
+} for "wbtest"
+
+options(
+  is_main: false,
+)

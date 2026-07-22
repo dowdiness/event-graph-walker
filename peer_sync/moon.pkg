@@ -1,0 +1,8 @@
+import {
+  "dowdiness/event-graph-walker/sync",
+  "moonbitlang/core/debug",
+}
+
+options(
+  is_main: false,
+)

@@ -1,0 +1,12 @@
+import {
+  "dowdiness/event-graph-walker/peer_sync",
+  "dowdiness/event-graph-walker/container" @egw_container,
+}
+
+import {
+  "dowdiness/event-graph-walker/sync",
+} for "wbtest"
+
+options(
+  is_main: false,
+)
