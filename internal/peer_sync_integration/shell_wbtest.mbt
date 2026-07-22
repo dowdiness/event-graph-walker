@@ -171,31 +171,8 @@ fn transition(state : State, event : Event) -> (State, Array[Decision]) {
     FullSyncRequested(peer) =>
       apply_to_peer(peers, peer, PolicyFullSyncRequested, decisions)
     LocalCommitted =>
-      peers.each(fn(peer, metadata) {
-        if metadata.connected &&
-          metadata.shell_exhausted is false &&
-          metadata.terminal is false {
-          let (policy, policy_decisions) = policy_transition(
-            metadata.policy,
-            PolicyLocalVersionAdvanced,
-          )
-          let (recovering, retry_count, terminal) = emit_policy_decisions(
-            peer,
-            policy_decisions,
-            decisions,
-            metadata.recovering,
-            metadata.retry_count,
-            metadata.terminal,
-          )
-          peers[peer] = {
-            policy,
-            connected: metadata.connected,
-            retry_count,
-            shell_exhausted: metadata.shell_exhausted,
-            recovering,
-            terminal,
-          }
-        }
+      peers.each((peer, _) => {
+        apply_to_peer(peers, peer, PolicyLocalVersionAdvanced, decisions)
       })
     Applied(peer, disposition) =>
       apply_to_peer(peers, peer, PolicyApplied(disposition), decisions)

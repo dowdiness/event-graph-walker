@@ -71,38 +71,7 @@ fn expect_routes(
 
 ///|
 fn decision_kind(decision : Decision) -> DecisionKind {
-  match decision {
-    SendVersion(peer) => {
-      let _ = peer.length()
-      DecisionKind::SendVersion
-    }
-    RequestFullSync(peer) => {
-      let _ = peer.length()
-      DecisionKind::RequestFullSync
-    }
-    SendFullSync(peer) => {
-      let _ = peer.length()
-      DecisionKind::SendFullSync
-    }
-    SendIncrementalSync(peer) => {
-      let _ = peer.length()
-      DecisionKind::SendIncrementalSync
-    }
-    ReportRecovered(peer) => {
-      let _ = peer.length()
-      DecisionKind::ReportRecovered
-    }
-    RetryFullSync(peer) => {
-      let _ = peer.length()
-      DecisionKind::RetryFullSync
-    }
-    ReportRecoveryExhausted(peer) => {
-      let _ = peer.length()
-      DecisionKind::ReportRecoveryExhausted
-    }
-    ReportFailure(_) => DecisionKind::ReportFailure
-    Escalate(_) => DecisionKind::Escalate
-  }
+  decision_route(decision).kind
 }
 
 ///|
