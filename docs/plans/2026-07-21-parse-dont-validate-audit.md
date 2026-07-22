@@ -85,12 +85,13 @@ Tests pin structural decode plus receiver-limit rejection for text and container
 
 ### 5. Distinguish wire identity from valid operation identity
 
+**Status:** Deferred after Phase 6a, pending concrete trusted-path evidence
 **Benefit:** High in the long term  
 **Risk:** High due to broad internal use
 
-`RawVersion` can contain an empty agent or negative sequence (`internal/core/version.mbt:19-33`), so identity checks recur at text and container ingress (`text/sync.mbt:251-275`, `container/sync_protocol.mbt:552-577`). A future design could parse a raw wire identity into an opaque operation identity containing a non-empty replica ID and non-negative sequence.
+Phase 6a now rejects invalid identities at generic JSON ingress. A full opaque identity migration would also have to replace `RawVersion::new`, direct field reads, and the raw `String`/`Int` operation constructors across causal graph, oplog, compression, text, and container packages. No trusted-path defect currently justifies that breaking migration.
 
-Schedule this as the final phase. `RawVersion::new` is widely used by the causal graph, oplog, compression, text, and container packages. The migration should first identify which call sites consume untrusted wire values and which derive identities from already valid graph state. Global uniqueness of a replica ID cannot be encoded by this local parser; only its structural properties can.
+Reconsider only when trusted internal construction causes a concrete invalid-identity failure, or when a planned breaking release can redesign `Op` constructors around a validated identity. Global replica uniqueness remains a deployment responsibility, not a local type invariant.
 
 ## Non-goals
 
