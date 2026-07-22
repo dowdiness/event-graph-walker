@@ -159,7 +159,7 @@ test "cursor fast-path to non-sequential insert invalidates cache" {
   let doc = @document.Document::new("test")
   let _ = doc.insert(0, "abc")
   // Prime the position cache so the next insert actually tests stale-cache invalidation.
-  // Without this, position_cache remains None and the invalidation path is never exercised.
+  // Without this, the indexed state is not ready and the invalidation path is never exercised.
   let _ = doc.lv_to_position(0)
   // Non-sequential insert (cursor miss) — must invalidate the warm cache
   let _ = doc.insert(1, "X")
