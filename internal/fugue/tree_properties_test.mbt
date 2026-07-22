@@ -990,3 +990,194 @@ fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
 test "property: binary lifting correct with concurrent inserts" {
   @qc.quick_check_fn(prop_jump_via_concurrent_insert)
 }
+
+///|
+/// Test-only ancestry characterization: compare every ordered pair against the
+/// existing parent-walk oracle, including the virtual root.
+fn ancestry_matches_naive(
+  tree : @fugue.FugueTree[String],
+  ids : Array[@fugue.Lv],
+) -> Bool {
+  let query_ids : Array[@fugue.Lv] = [@fugue.root_lv]
+  for id in ids {
+    query_ids.push(id)
+  }
+  for ancestor in query_ids {
+    for descendant in query_ids {
+      if tree.is_ancestor(ancestor, descendant) !=
+        is_ancestor_naive(tree, ancestor, descendant) {
+        return false
+      }
+    }
+  }
+  true
+}
+
+///|
+/// Reuse the existing sequential insertion shape to create a deep right chain.
+fn append_right_chain(
+  tree : @fugue.FugueTree[String],
+  length : Int,
+) -> Array[@fugue.Lv] {
+  let ids : Array[@fugue.Lv] = []
+  tree.insert(
+    qc_to_insert_op({ id: 0, content: "A", ts: 0, agent: "chain" }, -1, -1),
+  )
+  ids.push(@fugue.Lv(0))
+  for i = 1; i < length; i = i + 1 {
+    tree.insert(
+      qc_to_insert_op({ id: i, content: "A", ts: i, agent: "chain" }, i - 1, -1),
+    )
+    ids.push(@fugue.Lv(i))
+  }
+  ids
+}
+
+///|
+/// Property: an adversarial trace around an internal chain midpoint preserves
+/// the parent-walk ancestry relation for both left- and right-side children.
+/// The first two inserts split the same internal gap with timestamp/agent ties;
+/// the later inserts force both a right child of the midpoint and a right child
+/// of a concurrent left-side split.
+fn prop_ancestry_midpoint_concurrency(chain : ChainLen) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let ids = append_right_chain(tree, chain.len)
+  let midpoint = chain.len / 2
+  let split_id = 1000
+  let tied_split_id = 1001
+  let right_id = 1002
+  let nested_right_id = 1003
+  let split = { id: split_id, content: "L", ts: 77, agent: "same-agent" }
+  let tied_split = {
+    id: tied_split_id,
+    content: "T",
+    ts: 77,
+    agent: "same-agent",
+  }
+  tree.insert(qc_to_insert_op(split, midpoint - 1, midpoint))
+  ids.push(@fugue.Lv(split_id))
+  if !ancestry_matches_naive(tree, ids) {
+    return false
+  }
+  tree.insert(qc_to_insert_op(tied_split, midpoint - 1, midpoint))
+  ids.push(@fugue.Lv(tied_split_id))
+  if !ancestry_matches_naive(tree, ids) {
+    return false
+  }
+  tree.insert(
+    qc_to_insert_op(
+      { id: right_id, content: "R", ts: 77, agent: "right-agent" },
+      midpoint,
+      -1,
+    ),
+  )
+  ids.push(@fugue.Lv(right_id))
+  if !ancestry_matches_naive(tree, ids) {
+    return false
+  }
+  tree.insert(
+    qc_to_insert_op(
+      { id: nested_right_id, content: "N", ts: 77, agent: "nested-agent" },
+      split_id,
+      midpoint,
+    ),
+  )
+  ids.push(@fugue.Lv(nested_right_id))
+  ancestry_matches_naive(tree, ids)
+}
+
+///|
+test "property: ancestry matches naive on adversarial midpoint concurrency" {
+  @qc.quick_check_fn(prop_ancestry_midpoint_concurrency)
+}
+
+///|
+/// Property: all inserts reference already-present base origins, so reverse and
+/// shuffled application are valid out-of-order traces for ancestry checking.
+fn prop_ancestry_out_of_order_valid_inserts(set : QcInsertOpSet) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let ids = append_right_chain(tree, 2)
+  let shuffled = shuffle_ops(set.ops, set.shuffle_seed)
+  for op in shuffled {
+    tree.insert(qc_to_insert_op(op, 0, 1))
+    ids.push(@fugue.Lv(op.id))
+  }
+  ancestry_matches_naive(tree, ids)
+}
+
+///|
+test "property: ancestry matches naive for valid out-of-order inserts" {
+  @qc.quick_check_fn(prop_ancestry_out_of_order_valid_inserts)
+}
+
+///|
+/// Property: equal timestamps and agents still leave LV tie-breaking with a
+/// parent structure that agrees with the naive oracle.
+fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let ids = append_right_chain(tree, 2)
+  tree.insert(
+    qc_to_insert_op(
+      { id: case.id_a, content: "X", ts: 42, agent: case.agent_a },
+      0,
+      1,
+    ),
+  )
+  ids.push(@fugue.Lv(case.id_a))
+  tree.insert(
+    qc_to_insert_op(
+      { id: case.id_b, content: "Y", ts: 42, agent: case.agent_b },
+      0,
+      1,
+    ),
+  )
+  ids.push(@fugue.Lv(case.id_b))
+  ancestry_matches_naive(tree, ids)
+}
+
+///|
+test "property: ancestry matches naive for timestamp agent and LV ties" {
+  @qc.quick_check_fn(prop_ancestry_matches_naive_for_ties)
+}
+
+///|
+/// Deterministic deep-chain contract. The full pair matrix covers reflexivity,
+/// transitivity, reverse-direction negatives, and jump levels beyond one step.
+test "ancestry characterization: deep sequential right chain" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let ids = append_right_chain(tree, 129)
+  inspect(ancestry_matches_naive(tree, ids), content="true")
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(128)), content="true")
+  inspect(tree.is_ancestor(@fugue.Lv(128), @fugue.Lv(0)), content="false")
+  inspect(tree.is_ancestor(@fugue.Lv(64), @fugue.Lv(64)), content="true")
+  inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(64)), content="true")
+  inspect(tree.is_ancestor(@fugue.Lv(64), @fugue.Lv(128)), content="true")
+  inspect(
+    tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(64)) &&
+    tree.is_ancestor(@fugue.Lv(64), @fugue.Lv(128)) &&
+    tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(128)),
+    content="true",
+  )
+}
+
+///|
+/// Visibility is an orthogonal state transition: tombstoning, undeleting, and
+/// restoring a retreat winner must not rewrite any parent or ancestry relation.
+test "ancestry characterization: visibility transitions preserve ancestry" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  let ids = append_right_chain(tree, 9)
+  let midpoint = @fugue.Lv(4)
+  inspect(ancestry_matches_naive(tree, ids), content="true")
+  try! tree.delete(midpoint)
+  inspect(tree.visible_count(), content="8")
+  inspect(ancestry_matches_naive(tree, ids), content="true")
+  try! tree.undelete(midpoint)
+  inspect(tree.visible_count(), content="9")
+  inspect(ancestry_matches_naive(tree, ids), content="true")
+  try! tree.set_delete_winner(midpoint, true, 90, "retreat", false)
+  inspect(tree.visible_count(), content="8")
+  inspect(ancestry_matches_naive(tree, ids), content="true")
+  try! tree.set_delete_winner(midpoint, false, 91, "advance", true)
+  inspect(tree.visible_count(), content="9")
+  inspect(ancestry_matches_naive(tree, ids), content="true")
+}
