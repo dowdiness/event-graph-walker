@@ -8,6 +8,9 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 - `dowdiness/event-graph-walker/container` - higher-level document API combining tree nodes, block text, sync, and undo
 - `dowdiness/event-graph-walker/history` - read-only `CausalSnapshot` view over a document's causal DAG (for visualization and history-aware tooling)
 - `dowdiness/event-graph-walker/sync` - shared synchronization limits and failure classifications
+- `dowdiness/event-graph-walker/peer_sync` - peer-free one-peer synchronization policy
+- `dowdiness/event-graph-walker/peer_sync/text` - text façade report and error adapter
+- `dowdiness/event-graph-walker/peer_sync/container` - container façade report and error adapter
 
 Package metadata in `moon.mod`:
 
@@ -30,6 +33,9 @@ Use the public facade packages first:
    - [`undo/pkg.generated.mbti`](undo/pkg.generated.mbti)
    - [`container/pkg.generated.mbti`](container/pkg.generated.mbti)
    - [`history/pkg.generated.mbti`](history/pkg.generated.mbti)
+   - [`peer_sync/pkg.generated.mbti`](peer_sync/pkg.generated.mbti)
+   - [`peer_sync/text/pkg.generated.mbti`](peer_sync/text/pkg.generated.mbti)
+   - [`peer_sync/container/pkg.generated.mbti`](peer_sync/container/pkg.generated.mbti)
 4. Use the [docs index](docs/README.md) to find deeper implementation, benchmark, roadmap, and historical/spec material.
 
 ## Text Quick Start
@@ -171,6 +177,25 @@ Shared protocol policy types.
 - `Limits(...)` is a validating custom constructor for overriding those budgets.
 - `Failure` classifies malformed content, missing dependencies, conflicting stable identities, and exceeded limits.
 
+### Peer synchronization companion
+
+`peer_sync` provides a peer-free policy core. Start with `@peer_sync.State()`.
+Apply semantic methods including `State::handshake_started`,
+`State::version_compared`, `State::applied`, and `State::failed`.
+
+Each method returns the next policy value and a fresh `Array[Decision]` for the
+surrounding runtime to route. The runtime/provider owns retry budgets, peer IDs,
+connectivity, scheduling, and fan-out, while the application owns projection
+and product state.
+
+At the façade boundary, use `peer_sync/text` or `peer_sync/container`.
+`apply_disposition` maps `SyncReport` values, while `classify_error` maps sync
+errors. Local editing or document errors return `None`.
+
+Missing dependencies are recoverable. Malformed, invalid, conflicting, and
+limit failures are terminal. The adapters do not encode messages or own
+transport.
+
 ## Repository Layout
 
 ```text
@@ -181,6 +206,7 @@ event-graph-walker/
 ├── tree/                 # Public movable-tree facade
 ├── undo/                 # Public undo/redo package
 ├── container/            # Advanced document API: tree + block text + sync + undo
+├── peer_sync/            # Peer-free synchronization policy and façade adapters
 ├── internal/             # Implementation packages, not the first-time API path
 ├── docs/                 # User docs, design notes, benchmarks, and historical material
 └── moon.mod

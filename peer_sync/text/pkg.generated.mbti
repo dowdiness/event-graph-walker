@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/peer_sync/text"
+
+import {
+  "dowdiness/event-graph-walker/peer_sync",
+}
+
+// Values
+pub fn apply_disposition(@dowdiness/event-graph-walker/text.SyncReport) -> @peer_sync.ApplyDisposition
+
+pub fn classify_error(@dowdiness/event-graph-walker/text.TextError) -> @peer_sync.FailureDisposition?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

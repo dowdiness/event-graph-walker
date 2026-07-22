@@ -121,8 +121,25 @@ interchangeable.
 `to_canonical_bytes()` produces deterministic domain-separated bytes for
 hashing or signing after validation. It is not a binary transport decoder.
 
-See `docs/EXAMPLES.md` for worked sync, undo, and checkout examples. Transport
-wiring (WebRTC + signaling) lives in the canopy parent repo at `examples/web/`.
+### Peer-sync policy companion
+
+Use `peer_sync` when a runtime needs shared decisions for one remote peer's
+bootstrap, incremental exchange, dependency recovery, and terminal failure.
+Its opaque `State` accepts semantic events and returns fresh
+`Array[Decision]` values. It does not store peer identity, versions, payloads,
+retry counters, timers, or document state.
+
+The `peer_sync/text` and `peer_sync/container` adapters normalize façade
+`SyncReport` and error values into the shared policy dispositions.
+
+The caller retains the original report or error for diagnostics and owns peer
+routing, retry budgets, connectivity, scheduling, and transport envelopes.
+Causal pending operations remain inside the text or container façade.
+
+For package responsibilities and worked examples, see the
+[peer synchronization companion overview](../README.md#peer-synchronization-companion)
+and [sync examples](EXAMPLES.md). Transport wiring (WebRTC + signaling) lives
+in the canopy parent repo at `examples/web/`.
 
 ## Signaling Server API
 

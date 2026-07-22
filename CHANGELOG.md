@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   trusted constructors, and existing JSON shapes remain available; generic
   `Op` decoding is intentionally not replaced in this phase.
 
+### Added
+
+- Added `peer_sync`, `peer_sync/text`, and `peer_sync/container` as a shared,
+  peer-free synchronization policy companion. The opaque policy state emits
+  transport-neutral decisions for bootstrap, incremental exchange, recovery,
+  and terminal escalation. Peer identity, retry budgets, scheduling, payload
+  routing, and application projection remain caller-owned; EGW façades remain
+  the sole owners of causal pending operations.
+
 ### Performance
 
 - Monotonic tree-operation histories now append with constant ordering-

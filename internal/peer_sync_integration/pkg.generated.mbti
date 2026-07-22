@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "dowdiness/event-graph-walker/internal/peer_sync_contract"
+package "dowdiness/event-graph-walker/internal/peer_sync_integration"
 
 // Values
 

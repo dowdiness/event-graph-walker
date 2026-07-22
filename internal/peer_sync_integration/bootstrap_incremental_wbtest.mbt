@@ -1,10 +1,10 @@
 ///|
 fn text_bootstrap_trace() -> Array[DecisionKind] raise {
-  let source = try! @text.TextState::new("source")
-  let receiver = try! @text.TextState::new("receiver")
-  try! source.insert(@text.Pos::at(0), "A")
+  let source = try! @egw_text.TextState::new("source")
+  let receiver = try! @egw_text.TextState::new("receiver")
+  try! source.insert(@egw_text.Pos::at(0), "A")
   let full = try! source.sync().export_all()
-  let scheduler : Scheduler[@text.SyncMessage] = Scheduler::new()
+  let scheduler : Scheduler[@egw_text.SyncMessage] = Scheduler::new()
   scheduler.duplicate(full)
   let trace : Array[DecisionKind] = []
   let (state, decisions) = transition(State::empty(), PeerAvailable("source"))
@@ -21,7 +21,7 @@ fn text_bootstrap_trace() -> Array[DecisionKind] raise {
   expect_single(decisions, DecisionKind::SendFullSync)
   let report = try! receiver.sync().apply(scheduler.take_delivery())
   let observation = text_observation(report)
-  expect_observation(observation, 1, 0, 0)
+  assert_text_observation(report, 1, 0, 0)
   let (state, decisions) = transition(state, Applied("source", observation))
   add_kinds(trace, decisions)
   expect_single(decisions, DecisionKind::SendVersion)
@@ -32,7 +32,7 @@ fn text_bootstrap_trace() -> Array[DecisionKind] raise {
   add_kinds(trace, decisions)
   expect_recovered(decisions, "source")
   let duplicate = try! receiver.sync().apply(scheduler.take_delivery())
-  expect_observation(text_observation(duplicate), 0, 1, 0)
+  assert_text_observation(duplicate, 0, 1, 0)
   let (state, decisions) = transition(
     state,
     Applied("source", text_observation(duplicate)),
@@ -52,13 +52,13 @@ fn text_bootstrap_trace() -> Array[DecisionKind] raise {
 
 ///|
 fn container_bootstrap_trace() -> Array[DecisionKind] raise {
-  let source = try! @container.Document::new("source")
-  let receiver = try! @container.Document::new("receiver")
-  let node = try! source.create_node(parent=@container.root_id)
+  let source = try! @egw_container.Document::new("source")
+  let receiver = try! @egw_container.Document::new("receiver")
+  let node = try! source.create_node(parent=@egw_container.root_id)
   source.set_property(node, "kind", "shared")
   try! source.insert_text(node, 0, "A")
   let full = try! source.sync().export_all()
-  let scheduler : Scheduler[@container.SyncMessage] = Scheduler::new()
+  let scheduler : Scheduler[@egw_container.SyncMessage] = Scheduler::new()
   scheduler.duplicate(full)
   let trace : Array[DecisionKind] = []
   let (state, decisions) = transition(State::empty(), PeerAvailable("source"))
@@ -75,7 +75,7 @@ fn container_bootstrap_trace() -> Array[DecisionKind] raise {
   expect_single(decisions, DecisionKind::SendFullSync)
   let report = try! receiver.sync().apply(scheduler.take_delivery())
   let observation = container_observation(report)
-  expect_observation(observation, 3, 0, 0)
+  assert_container_observation(report, 3, 0, 0)
   let (state, decisions) = transition(state, Applied("source", observation))
   add_kinds(trace, decisions)
   expect_single(decisions, DecisionKind::SendVersion)
@@ -86,7 +86,7 @@ fn container_bootstrap_trace() -> Array[DecisionKind] raise {
   add_kinds(trace, decisions)
   expect_recovered(decisions, "source")
   let duplicate = try! receiver.sync().apply(scheduler.take_delivery())
-  expect_observation(container_observation(duplicate), 0, 3, 0)
+  assert_container_observation(duplicate, 0, 3, 0)
   let (state, decisions) = transition(
     state,
     Applied("source", container_observation(duplicate)),
@@ -122,11 +122,11 @@ test "shared bootstrap and duplicate traces use actual façade versions" {
 
 ///|
 fn text_incremental_trace() -> Array[DecisionKind] raise {
-  let source = try! @text.TextState::new("source")
-  let receiver = try! @text.TextState::new("receiver")
-  try! source.insert(@text.Pos::at(0), "A")
+  let source = try! @egw_text.TextState::new("source")
+  let receiver = try! @egw_text.TextState::new("receiver")
+  try! source.insert(@egw_text.Pos::at(0), "A")
   let full = try! source.sync().export_all()
-  let scheduler : Scheduler[@text.SyncMessage] = Scheduler::new()
+  let scheduler : Scheduler[@egw_text.SyncMessage] = Scheduler::new()
   scheduler.deliver(full)
   let trace : Array[DecisionKind] = []
   let (state, decisions) = transition(State::empty(), PeerAvailable("source"))
@@ -151,7 +151,7 @@ fn text_incremental_trace() -> Array[DecisionKind] raise {
   add_kinds(trace, decisions)
   expect_recovered(decisions, "source")
   let baseline = receiver.version()
-  try! source.insert(@text.Pos::at(source.len()), "B")
+  try! source.insert(@egw_text.Pos::at(source.len()), "B")
   let (state, decisions) = transition(state, LocalCommitted)
   add_kinds(trace, decisions)
   expect_single(decisions, DecisionKind::SendIncrementalSync)
@@ -176,11 +176,11 @@ fn text_incremental_trace() -> Array[DecisionKind] raise {
 
 ///|
 fn container_incremental_trace() -> Array[DecisionKind] raise {
-  let source = try! @container.Document::new("source")
-  let receiver = try! @container.Document::new("receiver")
-  let node = try! source.create_node(parent=@container.root_id)
+  let source = try! @egw_container.Document::new("source")
+  let receiver = try! @egw_container.Document::new("receiver")
+  let node = try! source.create_node(parent=@egw_container.root_id)
   try! source.insert_text(node, 0, "A")
-  let scheduler : Scheduler[@container.SyncMessage] = Scheduler::new()
+  let scheduler : Scheduler[@egw_container.SyncMessage] = Scheduler::new()
   scheduler.deliver(try! source.sync().export_all())
   let trace : Array[DecisionKind] = []
   let (state, decisions) = transition(State::empty(), PeerAvailable("source"))
