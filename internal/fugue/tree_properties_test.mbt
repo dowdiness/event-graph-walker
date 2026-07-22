@@ -1111,8 +1111,8 @@ test "property: ancestry matches naive for valid out-of-order inserts" {
 }
 
 ///|
-/// Property: equal timestamps and agents still leave LV tie-breaking with a
-/// parent structure that agrees with the naive oracle.
+/// Property: equal timestamps and agents leave LV tie-breaking with a parent
+/// structure that agrees with the naive oracle.
 fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   let ids = append_right_chain(tree, 2)
@@ -1126,7 +1126,7 @@ fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
   ids.push(@fugue.Lv(case.id_a))
   tree.insert(
     qc_to_insert_op(
-      { id: case.id_b, content: "Y", ts: 42, agent: case.agent_b },
+      { id: case.id_b, content: "Y", ts: 42, agent: case.agent_a },
       0,
       1,
     ),
@@ -1136,7 +1136,7 @@ fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
 }
 
 ///|
-test "property: ancestry matches naive for timestamp agent and LV ties" {
+test "property: ancestry matches naive for timestamp and LV ties" {
   @qc.quick_check_fn(prop_ancestry_matches_naive_for_ties)
 }
 

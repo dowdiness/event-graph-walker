@@ -109,12 +109,12 @@ Reproduce only these two benchmarks with:
 # Primary: JS
 moon bench --release --target js \
   -p dowdiness/event-graph-walker/container \
-  -f 'performance_benchmark.mbt' -i 8-10
+  -f 'performance_benchmark.mbt' -i 9-11
 
 # Comparison: wasm-gc
 moon bench --release --target wasm-gc \
   -p dowdiness/event-graph-walker/container \
-  -f 'performance_benchmark.mbt' -i 8-10
+  -f 'performance_benchmark.mbt' -i 9-11
 ```
 
 Raw output from one run:

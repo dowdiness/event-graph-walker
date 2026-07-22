@@ -628,9 +628,8 @@ pub fn Document::merge_remote(
 
 ///|
 /// Get the number of visible characters in the document.
-/// Delegates to the indexed visible projection.
 pub fn Document::visible_count(self : Document) -> Int {
-  self.indexed_state.visible_span(self.tree)
+  self.tree.visible_count()
 }
 
 ///|
