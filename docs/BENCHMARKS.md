@@ -2,6 +2,46 @@
 
 This document describes the performance benchmarks for the eg-walker CRDT implementation and provides guidance for performance profiling and optimization.
 
+## CRDT Core Performance Policy
+
+This section defines the core performance policy for the Canopy CRDT core, drawing from our sequential text/tree history and the Issue #73 benchmark contexts.
+
+### 1. Algorithmic Scalability as the Primary Metric
+Performance is judged first and foremost as core algorithmic scalability (computational and memory complexity as a function of operation count), rather than client UI frame timing or browser rendering loops. While immediate frame budget indicators are valuable for integration context, they do not prove core scalability. A fast but poorly scaling core remains a defect.
+
+### 2. Hot-Path Append Operations
+Representative operations—specifically sequential text append and sibling/node append—must avoid avoidable full materialization, full document scans, or global sorting on their hot paths. All operations on the critical path must scale locally and incrementally.
+
+### 3. Deployed and Comparison Targets
+- **JavaScript (JS)** is the primary deployed target.
+- **WebAssembly GC (wasm-gc)** is the comparison target.
+All profiling, scaling checks, and performance regression reviews must be measured and compared on both targets.
+
+### 4. Evidence-Based Optimization
+Optimization begins from reproducible release-mode evidence. Developers must
+remeasure 1k, 10k, and, where practical, 100k scales on JS and wasm-gc.
+
+Two decision paths apply:
+
+- **Pareto improvements** remove measured, local overhead without changing
+  semantics, public APIs, wire formats, memory ownership, or another measured
+  workload. Adopt them when both targets improve and correctness gates pass.
+- **Workload trade-offs** move cost among insert, merge, memory, or query
+  paths. They require an explicit workload assumption and a benchmark matrix
+  covering the affected paths before adoption.
+
+No cache, index, or complex data structure is selected without a confirmed
+bottleneck and a prototype result.
+
+### 5. Scalability Diagnostics
+The 1k-to-10k `<=15x` ratio is a machine/noise diagnostic for operations
+expected to scale near-linearly. It is not a universal SLO and must not reject
+an intentional workload trade-off solely because its asymptotic cost differs.
+Such trade-offs are evaluated against their declared workload matrix.
+
+### 6. Supplementary Nature of Public-Operation Latency
+Public-operation latency measurements (e.g., individual synchronous insert or create node operations on a pre-built document) are supplementary. While useful for verifying immediate responsiveness, they do not constitute proof of core scalability or linear growth characteristics across long histories.
+
 ## Post-v0.4 Performance Baselines
 
 `container/performance_benchmark.mbt` defines release-mode baselines for:
@@ -45,6 +85,198 @@ The remaining 1k-to-10k growth is about 167x for block text and 112x for tree
 creation. [Issue #73](https://github.com/dowdiness/event-graph-walker/issues/73)
 tracks isolated microbenchmarks for the suspected costs before selecting
 another optimization.
+
+### Issue #73 public-operation measurements
+
+These benchmarks measure the public synchronous edit operations rather than
+an isolated private lookup. Each timed closure performs one local append
+against a prebuilt 10,000-operation document:
+
+- `Document::insert_text` appends one character to a 10,000-character block;
+- `Document::create_node` appends one node under the root after 10,000 root
+  children (the feasible tree case).
+
+Because `Document` has no copy API, each benchmark prepares a bounded pool of
+four independently built 10,000-operation documents before `b.bench` and
+rotates through them. The documents intentionally drift during a run. The
+reported maximum is the largest number of added operations observed on any
+one document, including benchmark warm-up and timed batches.
+
+JS is the primary comparison; wasm-gc is included as a comparison backend.
+Reproduce only these two benchmarks with:
+
+```bash
+# Primary: JS
+moon bench --release --target js \
+  -p dowdiness/event-graph-walker/container \
+  -f 'performance_benchmark.mbt' -i 8-10
+
+# Comparison: wasm-gc
+moon bench --release --target wasm-gc \
+  -p dowdiness/event-graph-walker/container \
+  -f 'performance_benchmark.mbt' -i 8-10
+```
+
+Raw output from one run:
+
+| Backend | Operation | Raw mean ± σ | Pool / max added per document | 16.7 ms diagnostic one-frame criterion |
+| --- | --- | ---: | ---: | --- |
+| js | `Document::insert_text` append | 2.41 ms ± 44.21 µs | 4 / 140 | below |
+| js | `Document::create_node` root append | 2.43 ms ± 86.64 µs | 4 / 140 | below |
+| wasm-gc | `Document::insert_text` append | 3.55 ms ± 43.57 µs | 4 / 86 | below |
+| wasm-gc | `Document::create_node` root append | 2.70 ms ± 53.35 µs | 4 / 90 | below |
+
+The 16.7 ms value is a diagnostic one-frame criterion for interpreting these
+measurements, not a product SLO. These measurements make no attribution claim
+about internal costs or end-to-end browser latency, and do not change
+production behavior.
+
+## Stage 2C direct FugueTree sequential insertion evidence
+
+This section isolates the FugueTree Right-child insertion path at 1k, 10k, and
+100k. Prebuilt `InsertOp[String]` values use direct local LVs,
+`origin_left = previous LV`, and `origin_right = None`, making each item a
+sequential Right child without TextBlock identity maps, cache work, or
+interleaving.
+
+Input setup is outside each timed closure. Each closure constructs a new
+`FugueTree`, performs the sequential insertions, and calls `b.keep` on the
+resulting visible count. No production code or cache semantics are changed by
+these benchmarks.
+
+Commands (run from `event-graph-walker/`) were:
+
+```bash
+moon bench --release --target js -p container \
+  -f performance_benchmark.mbt -i 3-5 --no-parallelize
+moon bench --release --target wasm-gc -p container \
+  -f performance_benchmark.mbt -i 3-5 --no-parallelize
+```
+
+Raw release-mode output from one run:
+
+| Backend | Component | 1k mean ± σ | 10k mean ± σ | 100k mean ± σ |
+| --- | --- | ---: | ---: | ---: |
+| js | FugueTree Right-child insert | 212.74 µs ± 32.74 µs | 2.73 ms ± 116.13 µs | 64.15 ms ± 4.38 ms |
+| wasm-gc | FugueTree Right-child insert | 139.63 µs ± 2.89 µs | 2.58 ms ± 33.62 µs | 66.02 ms ± 4.33 ms |
+
+Ratios computed from the raw means:
+
+| Backend | Component | 1k→10k | 10k→100k | 1k→100k |
+| --- | --- | ---: | ---: | ---: |
+| js | FugueTree Right-child insert | 12.83x | 23.50x | 301.54x |
+| wasm-gc | FugueTree Right-child insert | 18.48x | 25.59x | 472.82x |
+
+These measurements are raw release-mode observations only and make no claim
+about attribution or end-to-end browser latency.
+
+## Ancestry representation decision matrix
+
+The current eager ancestry index is the decision baseline. The benchmark
+matrix lives in `internal/fugue/jump_ancestors_benchmark.mbt` and measures the
+same deep Right-child chain at 1k, 10k, and 100k where practical:
+
+| Workload | Timed work | Setup and query shape |
+| --- | --- | --- |
+| Sequential insert-only | Build a new chain and insert every item | Deep Right chain; this explicitly measures build/insertion |
+| Midpoint concurrent insert | Insert one remote item | Chain is prebuilt outside timing; origins straddle the midpoint |
+| Eager deep ancestry query | One ancestry check | Prebuilt-chain pool; varied pairs target the deepest descendant; jump rows are already built |
+| Warm ancestry query | One ancestry check | One prebuilt chain; repeated samples rotate through varied pairs |
+| Mixed insert + ancestry query | One midpoint insert plus six ancestry checks | Four prebuilt chains; each timed closure performs a small edit/query batch |
+
+The query pairs include deep positive, reflexive, and reverse-direction checks.
+The prebuilt pools keep setup outside the timed closures and bound mutable state
+drift across benchmark samples. The sequential workload is the explicit
+exception because chain construction is the operation being measured. Every
+result is retained with `b.keep`.
+
+JS is the primary deployed target; wasm-gc is the comparison target. Run the
+focused release matrix from `event-graph-walker/` with:
+
+```bash
+moon bench --release --target js -p internal/fugue \
+  -f jump_ancestors_benchmark.mbt --no-parallelize
+moon bench --release --target wasm-gc -p internal/fugue \
+  -f jump_ancestors_benchmark.mbt --no-parallelize
+```
+
+### Decision inputs before a prototype
+
+This matrix establishes evidence; it does not itself authorize an
+ancestry-representation change. Before a prototype is accepted, maintainers
+must record workload-specific limits for:
+
+1. required sequential-append improvement;
+2. maximum regression for midpoint concurrent insertion;
+3. maximum eager-query and, when a lazy design is proposed, true first-materialization query regression; and
+4. maximum mixed insert-and-query regression.
+
+Every candidate must also leave the Phase 1 parent-walk oracle and L5
+properties green, and preserve the wire format and public API. The existing
+1k-to-10k `<=15x` ratio remains a machine/noise diagnostic, not a substitute
+for those workload limits.
+
+### Raw baseline output and environment
+
+Captured on 2026-07-22 at `16:45:14+09:00` in
+`/home/antisatori/ghq/github.com/dowdiness/canopy/event-graph-walker` at
+`703e740`.
+
+Environment:
+
+```text
+Linux A6 6.6.114.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Dec 1 2025 x86_64
+moon 0.1.20260713 (75c7e1f 2026-07-13)
+moonc v0.10.4+2cc641edf (2026-07-15)
+moonrun 0.1.20260713 (75c7e1f 2026-07-13)
+targets: js, wasm-gc
+```
+
+Raw release output, JS primary:
+
+```text
+sequential Right chain 1k: 178.23 µs ± 15.01 µs
+sequential Right chain 10k: 2.36 ms ± 25.71 µs
+sequential Right chain 100k: 62.48 ms ± 6.05 ms
+midpoint concurrent insert 1k: 881.29 ns ± 363.89 ns
+midpoint concurrent insert 10k: 758.44 ns ± 227.39 ns
+midpoint concurrent insert 100k: 1.03 µs ± 531.87 ns
+eager deep query 1k: 51.44 ns ± 1.83 ns
+eager deep query 10k: 57.61 ns ± 3.57 ns
+eager deep query 100k: 71.34 ns ± 1.74 ns
+warm varied query 1k: 34.42 ns ± 2.00 ns
+warm varied query 10k: 50.59 ns ± 1.90 ns
+warm varied query 100k: 66.69 ns ± 4.04 ns
+mixed insert plus queries 1k: 984.59 ns ± 213.08 ns
+mixed insert plus queries 10k: 1.39 µs ± 307.55 ns
+mixed insert plus queries 100k: 1.32 µs ± 146.16 ns
+Total tests: 15, passed: 15, failed: 0.
+```
+
+Raw release output, wasm-gc comparison:
+
+```text
+sequential Right chain 1k: 137.50 µs ± 2.16 µs
+sequential Right chain 10k: 3.16 ms ± 288.01 µs
+sequential Right chain 100k: 73.72 ms ± 5.96 ms
+midpoint concurrent insert 1k: 699.12 ns ± 575.42 ns
+midpoint concurrent insert 10k: 552.36 ns ± 348.15 ns
+midpoint concurrent insert 100k: 788.53 ns ± 552.64 ns
+eager deep query 1k: 48.03 ns ± 2.73 ns
+eager deep query 10k: 60.43 ns ± 2.82 ns
+eager deep query 100k: 79.26 ns ± 2.80 ns
+warm varied query 1k: 41.18 ns ± 2.46 ns
+warm varied query 10k: 52.91 ns ± 2.17 ns
+warm varied query 100k: 59.42 ns ± 2.84 ns
+mixed insert plus queries 1k: 1.01 µs ± 551.19 ns
+mixed insert plus queries 10k: 1.09 µs ± 640.34 ns
+mixed insert plus queries 100k: 1.20 µs ± 374.06 ns
+Total tests: 15, passed: 15, failed: 0.
+```
+
+These are raw release observations, not cross-machine thresholds or an
+attribution claim. Re-run both targets under comparable conditions before
+using the matrix to select a representation.
 
 ## Running Benchmarks
 
@@ -424,6 +656,5 @@ test "component - operation (size)" (b : @bench.T) {
 
 ---
 
-**Last Updated**: 2026-07-21
-**Total Benchmarks**: 132 across 14 project benchmark files (`container/{performance,sync_apply}_benchmark.mbt`, `internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/core/frontier_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/{jump_ancestors,tree_position}_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`, `tree/json_size_benchmark.mbt`)
-**Status**: Ready for profiling and optimization
+**Last Updated**: 2026-07-22
+**Total Benchmarks**: 130 across 14 project benchmark files (`container/{performance,sync_apply}_benchmark.mbt`, `internal/branch/{branch,branch_merge}_benchmark.mbt`, `internal/causal_graph/{walker,version_vector}_benchmark.mbt`, `internal/core/frontier_benchmark.mbt`, `internal/document/document_benchmark.mbt`, `internal/fugue/{jump_ancestors,tree_position}_benchmark.mbt`, `internal/oplog/oplog_benchmark.mbt`, `text/{text,position_cache}_benchmark.mbt`, `tree/json_size_benchmark.mbt`)
