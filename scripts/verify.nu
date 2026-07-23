@@ -52,6 +52,9 @@ let generated_interfaces = [
   "history/pkg.generated.mbti"
   "undo/pkg.generated.mbti"
   "sync/pkg.generated.mbti"
+  "peer_sync/pkg.generated.mbti"
+  "peer_sync/text/pkg.generated.mbti"
+  "peer_sync/container/pkg.generated.mbti"
 ]
 let internal_imports = (find-internal-imports $generated_interfaces)
 if not ($internal_imports | is-empty) {

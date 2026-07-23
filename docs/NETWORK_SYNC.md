@@ -1,10 +1,10 @@
 # Network Synchronization for CRDT Collaboration
 
-Event Graph Walker v0.4 supplies strict JSON codecs and synchronization state
+Event Graph Walker v0.5 supplies strict JSON codecs and synchronization state
 machines, but no transport, signaling, authentication, persistence, or key
 management. The Canopy parent repository supplies the demo WebRTC integration.
-Every peer in one document must run v0.4; v0.3/v0.4 mixed synchronization is
-unsupported.
+v0.4 and v0.5 peers share the same schema-1 wire envelopes and can
+synchronize with each other. v0.3 is incompatible with both v0.4 and v0.5.
 
 This document describes how to use the network synchronization feature for real-time collaborative editing.
 

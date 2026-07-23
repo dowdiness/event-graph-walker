@@ -7,15 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-23
+
 ### Breaking changes
 
 - `text.Range` is now opaque. Constructors `Range::new` and
   `Range::from_ints` raise `TextError::InvalidRange` when `start` > `end`.
   Endpoints are exposed via `start()` and `end()` methods, while `TextState`
   mutation methods continue to validate document-length bounds.
-- Removed the unused public `Op::FromJson` implementation. `Op::ToJson`,
-  trusted constructors, and existing JSON shapes remain available; generic
-  `Op` decoding is intentionally not replaced in this phase.
 
 ### Added
 
@@ -26,6 +25,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   routing, and application projection remain caller-owned; EGW façades remain
   the sole owners of causal pending operations.
 
+### Changed
+
+- Structural sync decode now separates receiver-independent shape validation
+  from receiver limit and policy checks. Encoded-size, operation-count,
+  parent-count, and pending-count limits are enforced atomically during
+  preparation. Wire shape and `Apply`/`Defer` outcomes are unchanged.
+- `internal/core` `Frontier` is now invariant-preserving and opaque. Both
+  `from_array` and `FromJson` canonicalize duplicates in first-occurrence
+  order; callers use `iter`, `length`, or the defensive `to_array`.
+- `RawVersion` and `OpRun` JSON decoding now validates non-empty agent
+  identities and non-negative sequences, with sequence-range overflow
+  protection. `OpRun` decoding uses field-specific paths and identity checks.
+- Removed the unused `Op::FromJson` implementation from `internal/core`.
+  `Op::ToJson`, trusted constructors, and existing JSON wire shapes remain
+  available; generic `Op` decoding is intentionally not replaced.
+
+### Fixed
+
+- Container text emission no longer creates an invalid `RawVersion("", 0)`
+  placeholder identity. `Document::emit_text_op` returns the stable identity
+  after applying and recording the operation, and `Document::insert_text`
+  consumes that result directly when recording undo state.
+
 ### Performance
 
 - Monotonic tree-operation histories now append with constant ordering-
@@ -34,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the 10,000-operation reverse causal batch from 824.35 ms to 419.74 ms.
 - Added release-mode container baselines and deterministic comparison-count
   coverage for ordering-complexity regressions.
+- Added JS and wasm-gc decision benchmarks for sequential insertion, concurrent
+  midpoint insertion, ancestry queries, and mixed edit/query workloads, plus
+  property coverage for Fugue ancestry invariants.
+
+See [Migrating to v0.5](docs/MIGRATING_TO_0.5.md).
 
 ## [0.4.0] - 2026-07-20
 
@@ -254,7 +281,8 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.1.0...v0.2.0
