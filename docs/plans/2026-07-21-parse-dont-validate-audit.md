@@ -85,12 +85,13 @@ Tests pin structural decode plus receiver-limit rejection for text and container
 
 ### 5. Distinguish wire identity from valid operation identity
 
+**Status:** Deferred after Phase 6a, pending concrete trusted-path evidence
 **Benefit:** High in the long term  
 **Risk:** High due to broad internal use
 
-`RawVersion` can contain an empty agent or negative sequence (`internal/core/version.mbt:19-33`), so identity checks recur at text and container ingress (`text/sync.mbt:251-275`, `container/sync_protocol.mbt:552-577`). A future design could parse a raw wire identity into an opaque operation identity containing a non-empty replica ID and non-negative sequence.
+Phase 6a now rejects invalid identities at generic JSON ingress. A full opaque identity migration would also have to replace `RawVersion::new`, direct field reads, and the raw `String`/`Int` operation constructors across causal graph, oplog, compression, text, and container packages. No trusted-path defect currently justifies that breaking migration.
 
-Schedule this as the final phase. `RawVersion::new` is widely used by the causal graph, oplog, compression, text, and container packages. The migration should first identify which call sites consume untrusted wire values and which derive identities from already valid graph state. Global uniqueness of a replica ID cannot be encoded by this local parser; only its structural properties can.
+Reconsider only when trusted internal construction causes a concrete invalid-identity failure, or when a planned breaking release can redesign `Op` constructors around a validated identity. Global replica uniqueness remains a deployment responsibility, not a local type invariant.
 
 ## Non-goals
 
@@ -107,8 +108,8 @@ Schedule this as the final phase. `RawVersion::new` is widely used by the causal
 3. **Completed 2026-07-21:** Make `Frontier` opaque and invariant-preserving, then benchmark affected graph paths.
 4. **Completed 2026-07-21:** Make `Range` opaque and strengthen its constructors in an API-breaking release.
 5. **Completed 2026-07-21:** Separate structural sync parsing from receiver policy checks while preserving `ApplicableOp` and `ApplicableSyncOp`.
-6. **Phase 6a decoder hardening:** replace the derived `RawVersion` decoder with a validating decoder for non-empty agents and non-negative sequences; harden `OpRun` decoding with field-specific paths, identity checks, and sequence-range overflow protection; remove the unused public `Op::FromJson` trait while preserving `Op::ToJson` and the existing wire shape. This phase adds focused valid/invalid JSON coverage, including nested `RawVersion` values.
-7. **Later phase:** reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove or reshape constructors only when their consumers have moved. Phase 6a intentionally does not make `RawVersion` opaque or change `RawVersion::new`; those API migrations remain deferred.
+6. **Completed 2026-07-21 (Phase 6a decoder hardening):** replace the derived `RawVersion` decoder with a validating decoder for non-empty agents and non-negative sequences; harden `OpRun` decoding with field-specific paths, identity checks, and sequence-range overflow protection; remove the unused public `Op::FromJson` trait while preserving `Op::ToJson` and the existing wire shape. This phase adds focused valid/invalid JSON coverage, including nested `RawVersion` values.
+7. **Later phase:** reassess an opaque operation identity, migrate dependent codecs such as `OpRun`, and remove or reshape constructors only when their consumers have moved. Phase 6a intentionally did not make `RawVersion` opaque or change `RawVersion::new`; those API migrations remain deferred.
 
 Each phase should be independently reviewable and should preserve the wire formats unless explicitly documented otherwise.
 
