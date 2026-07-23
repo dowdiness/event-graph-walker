@@ -1,6 +1,6 @@
 # Examples
 
-These examples use only v0.4 façade APIs. Equivalent cases are compiled as
+These examples use only v0.5 façade APIs. Equivalent cases are compiled as
 tests in `examples/examples_test.mbt`.
 
 ## Text synchronization
