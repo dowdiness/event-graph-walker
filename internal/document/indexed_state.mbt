@@ -1,9 +1,11 @@
 ///| IndexedState — package-private visible projection index.
 ///
 /// The index stores the same one-item-per-position VisibleRun projection that
-/// Document previously kept directly. It is deliberately independent of the
-/// Fugue lifecycle: callers provide the Fugue tree when the lazy index needs a
-/// rebuild, while incremental edits update the existing OrderTree in place.
+/// Document previously kept directly. It is a Fugue-derived cache: callers
+/// provide the Fugue tree when the lazy index needs a rebuild, while
+/// incremental edits update the existing OrderTree in place. This extraction
+/// creates a seam for a future lifecycle separation; Fugue remains the source
+/// of truth in the current implementation.
 
 ///|
 struct IndexedState {

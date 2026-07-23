@@ -21,15 +21,23 @@ test "IndexedState agrees with Fugue after local insert and delete" {
   let doc = Document::new("local-index")
   ignore(try! doc.insert(0, "abc😀d"))
   assert_indexed_state_matches_tree(doc)
+  assert_true(doc.indexed_state.is_ready())
 
   ignore(try! doc.insert(2, "XY"))
+  assert_true(doc.indexed_state.is_ready())
   assert_indexed_state_matches_tree(doc)
 
   try! doc.delete_range(1, 4)
+  // Large local batches invalidate rather than maintaining many index edits.
+  assert_true(!doc.indexed_state.is_ready())
   assert_indexed_state_matches_tree(doc)
+  assert_true(doc.indexed_state.is_ready())
 
   let _ = try! doc.undelete(1)
+  // Local undelete remains a conservative invalidation path.
+  assert_true(!doc.indexed_state.is_ready())
   assert_indexed_state_matches_tree(doc)
+  assert_true(doc.indexed_state.is_ready())
 }
 
 ///|
@@ -41,13 +49,16 @@ test "IndexedState agrees with Fugue after remote apply" {
     try! bob.apply_remote(op)
   }
   assert_indexed_state_matches_tree(bob)
+  assert_true(bob.indexed_state.is_ready())
 
   let delete_op = try! alice.delete(1)
   try! bob.apply_remote(delete_op)
+  assert_true(bob.indexed_state.is_ready())
   assert_indexed_state_matches_tree(bob)
 
   let undelete_op = try! alice.undelete(1)
   try! bob.apply_remote(undelete_op)
+  assert_true(bob.indexed_state.is_ready())
   assert_indexed_state_matches_tree(bob)
 }
 
@@ -69,8 +80,11 @@ test "IndexedState agrees with Fugue after Document::merge_remote" {
   let remote_ops = remote.get_all_ops()
   let remote_frontier = try! remote.get_frontier_raw()
   try! destination.merge_remote(remote_ops, remote_frontier)
+  // Merge invalidates the derived cache; the next projection read rebuilds it.
+  assert_true(!destination.indexed_state.is_ready())
 
   // The indexed projection must match Fugue's visible order after the merge.
   assert_indexed_state_matches_tree(destination)
+  assert_true(destination.indexed_state.is_ready())
   assert_true(destination.to_text() == remote.to_text())
 }
