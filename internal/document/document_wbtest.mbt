@@ -197,11 +197,11 @@ test "incremental insert: sequential append preserves cache" {
     ),
   )
   // Now cache exists
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Sequential single-char insert at end — should use incremental path
   let _ = try! doc.insert(1, "b")
   // Cache should still exist (not invalidated) because incremental insert updated it
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Verify correctness through the preserved cache
   @debug.debug_inspect(
     doc.lv_at_position(0),
@@ -228,12 +228,12 @@ test "incremental insert: non-sequential preserves cache" {
       #|Some(0)
     ),
   )
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Insert at middle (not sequential append) — cache maintained incrementally
   // This is a cursor-miss: cursor was at position 2 (end), now inserting at 1
   let _ = try! doc.insert(1, "x")
   // Verify cache is preserved (incremental OrderTree.insert_at, not full rebuild)
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Verify positions are correct after incremental update
   @debug.debug_inspect(
     doc.lv_at_position(0),
@@ -263,7 +263,7 @@ test "incremental insert: non-sequential preserves cache" {
   // cursor is at position 1 with at_end=false, so current_pos (2) == c.position + 1
   // but c.at_end is false → partial hit → looks up origin_right from cache
   let _ = try! doc.insert(2, "y")
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // doc is now "a x y b c" → positions: a(0) x(3) y(4) b(1) c(2)
   @debug.debug_inspect(
     doc.lv_at_position(0),
@@ -308,11 +308,11 @@ test "incremental insert: multi-char non-sequential paste preserves cache" {
       #|Some(0)
     ),
   )
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Paste "abc" at position 2 (non-sequential: cursor was at 4)
   let _ = try! doc.insert(2, "abc")
   // Cache should be preserved through all 3 chars of the paste
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Verify text: "he" + "abc" + "llo" = "heabcllo"
   inspect(doc.to_text(), content="heabcllo")
   // Verify position→LV mapping:
@@ -379,14 +379,14 @@ test "incremental insert: delete_range then non-sequential insert" {
       #|Some(0)
     ),
   )
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // delete_range invalidates cache
   try! doc.delete_range(1, 3) // delete "bc"
-  assert_true(doc.position_cache is None)
+  assert_true(!doc.indexed_state.is_ready())
   // Non-sequential insert after delete — should lazy-build and maintain cache
   let _ = try! doc.insert(1, "xy")
   // Cache should be valid after the insert
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Verify text: "a" + "xy" + "de" = "axyde"
   inspect(doc.to_text(), content="axyde")
 }
@@ -404,14 +404,14 @@ test "incremental insert: remote op between local inserts resets cache" {
       #|Some(0)
     ),
   )
-  assert_true(doc_a.position_cache is Some(_))
+  assert_true(doc_a.indexed_state.is_ready())
   // Bob inserts "x" at position 0
   let _ = try! doc_b.insert(0, "x")
   // Export Bob's op and apply to Alice
   let bob_op = doc_b.oplog.get_all_ops()[0]
   try! doc_a.apply_remote(bob_op)
   // Small remote batch with warm cache: cache updated incrementally (not invalidated)
-  assert_true(doc_a.position_cache is Some(_))
+  assert_true(doc_a.indexed_state.is_ready())
   assert_true(doc_a.cursor is None)
   // Verify cache content is correct: position queries return right LVs
   // Bob's "x" goes to the front (FugueMax ordering), so doc is "xabc"
@@ -425,7 +425,7 @@ test "incremental insert: remote op between local inserts resets cache" {
   assert_true(doc_a.lv_at_position(4) is None)
   // Alice does another non-sequential insert
   let _ = try! doc_a.insert(1, "y")
-  assert_true(doc_a.position_cache is Some(_))
+  assert_true(doc_a.indexed_state.is_ready())
   // Verify total text length is correct (xabc + y = 5 chars)
   inspect(doc_a.to_text().length(), content="5")
 }
@@ -441,10 +441,10 @@ test "lv_to_position after incremental append" {
       #|Some(0)
     ),
   )
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // Sequential append — incremental path preserves cache
   let _ = try! doc.insert(1, "b")
-  assert_true(doc.position_cache is Some(_))
+  assert_true(doc.indexed_state.is_ready())
   // lv_to_position should work on the preserved cache
   @debug.debug_inspect(
     doc.lv_to_position(0),

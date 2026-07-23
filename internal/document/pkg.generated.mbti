@@ -59,6 +59,8 @@ pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::visible_count(Self) -> Int
 pub impl @core.RawToLv for Document
 
+type IndexedState
+
 type InsertCursor derive(@debug.Debug)
 
 pub struct MergeCache {

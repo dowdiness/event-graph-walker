@@ -20,9 +20,9 @@ pub struct Document {
   priv tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
   agent_id : String
-  // Position cache: maps position -> VisibleRun via O(log n) OrderTree lookup.
-  // Invalidated on any modification (set to None). Rebuilt lazily on demand.
-  priv mut position_cache : @order_tree.OrderTree[VisibleRun]?
+  // Lazy visible projection index. IndexedState owns the position cache and
+  // its incremental updates; Fugue remains the lifecycle authority.
+  priv indexed_state : IndexedState
   // Insert cursor: caches last insert position/LV for sequential append fast-path.
   priv mut cursor : InsertCursor?
 }
@@ -32,13 +32,13 @@ pub struct Document {
 pub fn Document::new(agent_id : String) -> Document {
   let oplog = @oplog.OpLog::new(agent_id)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  { tree, oplog, agent_id, position_cache: None, cursor: None }
+  { tree, oplog, agent_id, indexed_state: IndexedState::new(), cursor: None }
 }
 
 ///|
 /// Get the current text content
 pub fn Document::to_text(self : Document) -> String {
-  self.tree.to_text()
+  self.indexed_state.text(self.tree)
 }
 
 ///|
@@ -99,49 +99,16 @@ pub fn Document::get_frontier_raw(
 }
 
 ///|
-/// Build the position cache from visible tree items using OrderTree.
-fn Document::build_position_cache(
-  self : Document,
-) -> @order_tree.OrderTree[VisibleRun] {
-  let items = self.tree.get_visible_items()
-  let runs : Array[VisibleRun] = Array::new(capacity=items.length())
-  for i = 0; i < items.length(); i = i + 1 {
-    let (lv, item) = items[i]
-    runs.push({ start_lv: lv.0, text: item.content, count: 1 })
-  }
-  @order_tree.OrderTree::from_array(runs)
-}
-
-///|
-/// Get or build the position cache (lazy initialization).
-fn Document::get_position_cache(
-  self : Document,
-) -> @order_tree.OrderTree[VisibleRun] {
-  match self.position_cache {
-    Some(cache) => cache
-    None => {
-      let cache = self.build_position_cache()
-      self.position_cache = Some(cache)
-      cache
-    }
-  }
-}
-
-///|
 /// Get the LV at a specific 0-based visible position.
-/// Uses O(log n) lookup via OrderTree::find on the position cache.
+/// Uses O(log n) lookup via IndexedState's OrderTree projection.
 fn Document::lv_at_position(self : Document, position : Int) -> Int? {
-  let cache = self.get_position_cache()
-  match cache.find(position) {
-    Some(fr) => Some(fr.elem.start_lv + fr.offset)
-    None => None
-  }
+  self.indexed_state.lv_at_position(self.tree, position)
 }
 
 ///|
 /// Invalidate the position cache (call after any modification)
 fn Document::invalidate_cache(self : Document) -> Unit {
-  self.position_cache = None
+  self.indexed_state.invalidate()
 }
 
 ///|
@@ -150,19 +117,7 @@ fn Document::invalidate_cache(self : Document) -> Unit {
 /// Returns the LV of the item before the cursor position,
 /// or -1 if at the start of the document.
 fn Document::position_to_lv(self : Document, position : Int) -> Int {
-  if position == 0 {
-    return -1
-  }
-  let cache = self.get_position_cache()
-  let total = @rle.Spanning::span(cache)
-  let target = if position > total { total - 1 } else { position - 1 }
-  if target < 0 {
-    return -1
-  }
-  match self.lv_at_position(target) {
-    Some(lv) => lv
-    None => -1
-  }
+  self.indexed_state.position_to_lv(self.tree, position)
 }
 
 ///|
@@ -185,7 +140,7 @@ pub fn Document::insert(
 ) -> @core.Op raise DocumentError {
   let mut current_pos = position
   let mut last_op : @core.Op? = None
-  let mut cache_valid = self.position_cache is Some(_)
+  let mut cache_valid = self.indexed_state.is_ready()
   for ch in text {
     let ch_str = ch.to_string()
 
@@ -250,15 +205,11 @@ pub fn Document::insert(
       agent: @fugue.ReplicaId(agent),
     })
     if cache_valid {
-      match self.position_cache {
-        Some(cache) =>
-          cache.insert_at(current_pos, {
-            start_lv: op.lv(),
-            text: ch_str,
-            count: 1,
-          })
-        None => cache_valid = false
-      }
+      cache_valid = self.indexed_state.insert_at(current_pos, {
+        start_lv: op.lv(),
+        text: ch_str,
+        count: 1,
+      })
     }
     last_op = Some(op)
     current_pos = current_pos + 1
@@ -343,8 +294,7 @@ pub fn Document::delete(
     raise DocumentError::InvalidPosition(pos=position)
   }
 
-  let cache = self.get_position_cache()
-  let total = @rle.Spanning::span(cache)
+  let total = self.indexed_state.visible_span(self.tree)
   if position >= total {
     raise DocumentError::InvalidPosition(pos=position)
   }
@@ -369,14 +319,9 @@ pub fn Document::delete(
     e => raise DocumentError::Fugue(e)
   }
 
-  // Incremental cache update: delete at known position
-  match self.position_cache {
-    Some(cache) =>
-      match cache.delete_at(position) {
-        Some(_) => ()
-        None => self.invalidate_cache()
-      }
-    None => ()
+  // Incremental index update: delete at known position
+  if self.indexed_state.is_ready() && !self.indexed_state.delete_at(position) {
+    self.invalidate_cache()
   }
   op
 }
@@ -396,8 +341,7 @@ pub fn Document::delete_range(
     raise DocumentError::InvalidPosition(pos=end)
   }
 
-  let cache = self.get_position_cache()
-  let total = @rle.Spanning::span(cache)
+  let total = self.indexed_state.visible_span(self.tree)
   if end > total {
     raise DocumentError::InvalidPosition(pos=end)
   }
@@ -522,7 +466,7 @@ pub fn Document::apply_remote(
   // For small batches with a warm cache, update incrementally to avoid
   // the O(n) full rebuild. For large batches, invalidate and rebuild lazily.
   let mut incremental = applied_ops.length() <= 3 &&
-    self.position_cache is Some(_)
+    self.indexed_state.is_ready()
   if !incremental {
     self.invalidate_cache()
   }
@@ -561,18 +505,17 @@ pub fn Document::apply_remote(
           timestamp: @fugue.Timestamp(timestamp),
           agent: @fugue.ReplicaId(agent),
         })
-        // Incremental cache update: find position of newly visible item
+        // Incremental index update: find position of newly visible item
         if incremental {
           match self.tree.lv_to_position(@fugue.Lv(applied.lv())) {
             Some(pos) =>
-              match self.position_cache {
-                Some(cache) =>
-                  cache.insert_at(pos, {
-                    start_lv: applied.lv(),
-                    text,
-                    count: 1,
-                  })
-                None => incremental = false
+              if !self.indexed_state.insert_at(pos, {
+                  start_lv: applied.lv(),
+                  text,
+                  count: 1,
+                }) {
+                self.invalidate_cache()
+                incremental = false
               }
             None => {
               self.invalidate_cache()
@@ -601,18 +544,15 @@ pub fn Document::apply_remote(
             self.tree.delete_with_ts(lv, del_ts, del_agent) catch {
               e => raise DocumentError::Fugue(e)
             }
-            // Only update cache if item actually became invisible
+            // Only update the index if item actually became invisible
             if incremental && self.tree.visible_count() < visible_before {
-              match (pos_before, self.position_cache) {
-                (Some(pos), Some(cache)) =>
-                  match cache.delete_at(pos) {
-                    Some(_) => ()
-                    None => {
-                      self.invalidate_cache()
-                      incremental = false
-                    }
+              match pos_before {
+                Some(pos) =>
+                  if !self.indexed_state.delete_at(pos) {
+                    self.invalidate_cache()
+                    incremental = false
                   }
-                _ => {
+                None => {
                   self.invalidate_cache()
                   incremental = false
                 }
@@ -635,23 +575,19 @@ pub fn Document::apply_remote(
             self.tree.undelete_with_ts(lv, undel_ts, undel_agent) catch {
               e => raise DocumentError::Fugue(e)
             }
-            // If item became visible, insert into cache
+            // If item became visible, insert into the index
             if incremental && self.tree.visible_count() > visible_before {
-              match self.tree.lv_to_position(lv) {
-                Some(pos) =>
-                  match (self.tree[lv], self.position_cache) {
-                    (Some(item), Some(cache)) =>
-                      cache.insert_at(pos, {
-                        start_lv: lv.0,
-                        text: item.content,
-                        count: 1,
-                      })
-                    _ => {
-                      self.invalidate_cache()
-                      incremental = false
-                    }
+              match (self.tree.lv_to_position(lv), self.tree[lv]) {
+                (Some(pos), Some(item)) =>
+                  if !self.indexed_state.insert_at(pos, {
+                      start_lv: lv.0,
+                      text: item.content,
+                      count: 1,
+                    }) {
+                    self.invalidate_cache()
+                    incremental = false
                   }
-                None => {
+                _ => {
                   self.invalidate_cache()
                   incremental = false
                 }
@@ -692,7 +628,6 @@ pub fn Document::merge_remote(
 
 ///|
 /// Get the number of visible characters in the document.
-/// Delegates to the internal FugueTree.
 pub fn Document::visible_count(self : Document) -> Int {
   self.tree.visible_count()
 }
@@ -744,13 +679,5 @@ pub fn Document::get_visible_items(
 ///|
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
-  let cache = self.get_position_cache()
-  let mut pos = 0
-  for run in cache.iter() {
-    if lv >= run.start_lv && lv < run.start_lv + run.count {
-      return Some(pos + (lv - run.start_lv))
-    }
-    pos = pos + run.count
-  }
-  None
+  self.indexed_state.lv_to_position(self.tree, lv)
 }
