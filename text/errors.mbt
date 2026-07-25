@@ -149,6 +149,14 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="duplicate operation in batch: \{raw}",
         ),
       )
+    StaleRemoteAdmissionPlan =>
+      TextError::Internal(detail="stale remote admission plan")
+    ConsumedRemoteAdmissionPlan =>
+      TextError::Internal(detail="consumed remote admission plan")
+    InvalidRemoteAdmissionPlan =>
+      TextError::Internal(detail="invalid remote admission plan")
+    PartialRemoteAdmission(committed=_, error~) =>
+      TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~))
     CausalGraphError(error~) =>
       match error {
         @causal_graph.CausalGraphError::MissingParent(lv~) =>

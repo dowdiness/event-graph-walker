@@ -53,16 +53,17 @@ priv struct RemoteAdmissionReady {
 
 ///|
 /// Non-mutating preparation result. Its fields are private to this package.
-priv struct RemoteAdmissionPlan {
-  planned : Array[@core.Op]
-  planned_raws : @hashset.HashSet[@core.RawVersion]
-  staged : Map[@core.RawVersion, RemoteAdmissionNode]
-  staged_order : Array[@core.RawVersion]
-  initial_unresolved : Map[@core.RawVersion, Int]
-  initial_waiting : Map[@core.RawVersion, Array[@core.RawVersion]]
-  next_arrival : Int
-  generation : Int
-  mut consumed : Bool
+pub struct RemoteAdmissionPlan {
+  priv planned : Array[@core.Op]
+  priv planned_raws : @hashset.HashSet[@core.RawVersion]
+  priv staged : Map[@core.RawVersion, @core.Op]
+  priv staged_arrivals : Map[@core.RawVersion, Int]
+  priv staged_order : Array[@core.RawVersion]
+  priv initial_unresolved : Map[@core.RawVersion, Int]
+  priv initial_waiting : Map[@core.RawVersion, Array[@core.RawVersion]]
+  priv next_arrival : Int
+  priv generation : Int
+  priv mut consumed : Bool
 }
 
 ///|
@@ -145,6 +146,9 @@ fn remote_admission_validate(op : @core.Op) -> Unit raise OpLogError {
   ignore(RemoteAdmissionPlanner::reject_pending_dependents)
   ignore(RemoteAdmissionPlanner::prepare)
   ignore(RemoteAdmissionPlan::planned_operations)
+  ignore(RemoteAdmissionPlan::operations)
+  ignore(RemoteAdmissionPlanner::pending_operations)
+  ignore(RemoteAdmissionPlanner::has_pending)
   ignore(RemoteAdmissionPlan::remaining_raws)
   ignore(RemoteAdmissionPlanner::pending_raws)
   ignore(RemoteAdmissionPlanner::generation)
@@ -597,7 +601,8 @@ fn RemoteAdmissionPlanner::prepare(
   {
     planned: overlay.planned_operations,
     planned_raws: overlay.planned,
-    staged: overlay.staged,
+    staged: overlay.staged.map((_, node) => node.op),
+    staged_arrivals: overlay.staged.map((_, node) => node.arrival),
     staged_order: overlay.staged_order,
     initial_unresolved,
     initial_waiting,
@@ -632,29 +637,61 @@ fn RemoteAdmissionPlanner::begin(
   if plan.next_arrival < self.next_arrival ||
     plan.next_arrival != self.next_arrival + plan.staged_order.length() ||
     plan.staged.length() != plan.staged_order.length() ||
+    plan.staged_arrivals.length() != plan.staged_order.length() ||
     plan.initial_unresolved.length() != plan.staged_order.length() ||
-    plan.initial_waiting.length() != plan.staged_order.length() {
+    plan.initial_waiting.length() != plan.staged_order.length() ||
+    plan.planned_raws.length() != plan.planned.length() {
     return RemoteAdmissionBeginResult::Conflict
+  }
+  let seen_planned : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for op in plan.planned {
+    let raw = remote_admission_raw(op)
+    if !seen_planned.add_and_check(raw) ||
+      !plan.planned_raws.contains(raw) ||
+      (!self.pending.contains(raw) && !plan.staged.contains(raw)) {
+      return RemoteAdmissionBeginResult::Conflict
+    }
   }
   for index, raw in plan.staged_order {
     if self.pending.contains(raw) {
       return RemoteAdmissionBeginResult::Conflict
     }
     match plan.staged.get(raw) {
-      Some(node) =>
-        if remote_admission_raw(node.op) != raw ||
-          node.arrival != self.next_arrival + index ||
-          !seen_arrivals.add_and_check(node.arrival) ||
-          plan.initial_unresolved.get(raw) is None ||
-          plan.initial_waiting.get(raw) is None {
-          return RemoteAdmissionBeginResult::Conflict
+      Some(op) =>
+        match plan.staged_arrivals.get(raw) {
+          Some(arrival) =>
+            if remote_admission_raw(op) != raw ||
+              arrival != self.next_arrival + index ||
+              !seen_arrivals.add_and_check(arrival) ||
+              plan.initial_unresolved.get(raw) is None ||
+              plan.initial_waiting.get(raw) is None {
+              return RemoteAdmissionBeginResult::Conflict
+            }
+          None => return RemoteAdmissionBeginResult::Conflict
         }
       None => return RemoteAdmissionBeginResult::Conflict
     }
   }
   for raw in plan.staged_order {
     match plan.staged.get(raw) {
-      Some(node) => self.register_canonical(raw, node)
+      Some(op) =>
+        match plan.staged_arrivals.get(raw) {
+          Some(arrival) =>
+            match
+              (plan.initial_unresolved.get(raw), plan.initial_waiting.get(raw)) {
+              (Some(unresolved_count), Some(waiting_dependencies)) =>
+                self.register_canonical(raw, {
+                  op,
+                  arrival,
+                  dependencies: remote_admission_dependencies(op),
+                  waiting_dependencies: waiting_dependencies.copy(),
+                  unresolved_count,
+                  ready_refs: 0,
+                })
+              (_, _) => ()
+            }
+          None => ()
+        }
       None => ()
     }
   }
@@ -764,11 +801,19 @@ fn RemoteAdmissionPlanner::maybe_compact(
 }
 
 ///|
+/// Read-only compatibility-ordered operations in this admission plan.
+pub fn RemoteAdmissionPlan::operations(
+  self : RemoteAdmissionPlan,
+) -> ArrayView[@core.Op] {
+  self.planned[:]
+}
+
+///|
 /// Planned operations, copied for white-box tests and future package users.
 fn RemoteAdmissionPlan::planned_operations(
   self : RemoteAdmissionPlan,
 ) -> Array[@core.Op] {
-  self.planned.copy()
+  self.operations().to_owned()
 }
 
 ///|
@@ -799,6 +844,12 @@ fn RemoteAdmissionPlan::remaining_raws(
 }
 
 ///|
+/// Report whether canonical pending membership is non-empty.
+fn RemoteAdmissionPlanner::has_pending(self : RemoteAdmissionPlanner) -> Bool {
+  !self.pending.is_empty()
+}
+
+///|
 /// Canonical pending identities, excluding stale queue entries.
 fn RemoteAdmissionPlanner::pending_raws(
   self : RemoteAdmissionPlanner,
@@ -809,6 +860,25 @@ fn RemoteAdmissionPlanner::pending_raws(
       entry,
     ) => entry.raw
   ]
+}
+
+///|
+/// Snapshot canonical pending operations in arrival order for the white-box
+/// oracle. The planner remains the sole owner of pending membership.
+fn RemoteAdmissionPlanner::pending_operations(
+  self : RemoteAdmissionPlanner,
+) -> Array[@core.Op] {
+  let result : Array[@core.Op] = []
+  for entry in self.pending_order {
+    if !remote_admission_order_entry_is_live(self.pending, entry) {
+      continue
+    }
+    match self.pending.get(entry.raw) {
+      Some(node) => result.push(node.op)
+      None => ()
+    }
+  }
+  result
 }
 
 ///|

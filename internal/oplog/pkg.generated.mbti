@@ -16,6 +16,10 @@ pub(all) suberror OpLogError {
   MissingRemoteParent(raw~ : @core.RawVersion)
   MissingRemoteFrontier(raw~ : @core.RawVersion)
   DuplicateOperation(raw~ : @core.RawVersion)
+  StaleRemoteAdmissionPlan
+  ConsumedRemoteAdmissionPlan
+  InvalidRemoteAdmissionPlan
+  PartialRemoteAdmission(committed~ : Array[@core.Op], error~ : @causal_graph.CausalGraphError)
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
 }
 
@@ -25,6 +29,7 @@ pub struct OpLog {
 }
 pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
+pub fn OpLog::commit_remote(Self, RemoteAdmissionPlan) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::delete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
 pub fn OpLog::discard_pending_dependents(Self, Array[@core.RawVersion]) -> Unit
@@ -40,10 +45,16 @@ pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::new(String) -> Self
 pub fn OpLog::op_count(Self) -> Int
 pub fn OpLog::plan_remote(Self, Array[@core.Op]) -> Array[@core.Op] raise OpLogError
+pub fn OpLog::prepare_remote(Self, Array[@core.Op]) -> RemoteAdmissionPlan raise OpLogError
 pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
 pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]
 pub fn OpLog::walk_filtered(Self, @core.Frontier, (@core.Op) -> Bool) -> Array[@core.Op]
+
+pub struct RemoteAdmissionPlan {
+  // private fields
+}
+pub fn RemoteAdmissionPlan::operations(Self) -> ArrayView[@core.Op]
 
 // Type aliases
 

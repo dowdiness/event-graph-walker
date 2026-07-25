@@ -1,9 +1,9 @@
 ///| Test-only fixed-point oracle and characterization tests for remote admission.
 
 ///|
-/// This is intentionally a copy of `OpLog::plan_remote_candidates` rather
-/// than a production helper. `known` is the test's explicit view of the
-/// causal-graph identities already admitted by the OpLog.
+/// This is intentionally the historical fixed-point algorithm rather than a
+/// production helper. `known` is the test's explicit view of the causal-graph
+/// identities already admitted by the OpLog.
 fn oracle_plan_remote_candidates(
   candidates : Array[@core.Op],
   known : Array[@core.RawVersion],
@@ -111,10 +111,10 @@ fn oracle_compare_plan(
   incoming : Array[@core.Op],
   known : Array[@core.RawVersion],
 ) -> Unit raise {
-  let pending_before = oracle_raws(oplog.pending)
+  let pending_before = oracle_raws(oplog.planner.pending_operations())
   let op_count_before = oplog.op_count()
   let frontier_before = oplog.get_frontier_raw()
-  let candidates = oplog.pending.copy()
+  let candidates = oplog.planner.pending_operations()
   for op in incoming {
     candidates.push(op)
   }
@@ -122,19 +122,19 @@ fn oracle_compare_plan(
     candidates.copy(),
     known,
   )
-  let (current_planned, current_remaining) = oplog.plan_remote_candidates(
-    candidates,
-  )
+  let prepared = oplog.prepare_remote(incoming)
+  let current_planned = prepared.operations().to_owned()
+  let current_remaining = prepared.remaining_raws(oplog.planner)
   oracle_assert_op_sequence(current_planned, oracle_planned)
-  oracle_assert_raw_sequence(
-    oracle_raws(current_remaining),
-    oracle_raws(oracle_remaining),
-  )
+  oracle_assert_raw_sequence(current_remaining, oracle_raws(oracle_remaining))
 
   // Private planning must not mutate the causal graph, oplog, or pending queue.
   assert_eq(oplog.op_count(), op_count_before)
   oracle_assert_raw_sequence(oplog.get_frontier_raw(), frontier_before)
-  oracle_assert_raw_sequence(oracle_raws(oplog.pending), pending_before)
+  oracle_assert_raw_sequence(
+    oracle_raws(oplog.planner.pending_operations()),
+    pending_before,
+  )
 
   // The public wrapper must expose the same compatibility order.
   let public_planned = oplog.plan_remote(incoming)
@@ -145,7 +145,10 @@ fn oracle_compare_plan(
   // hypothetical remainder.
   assert_eq(oplog.op_count(), op_count_before)
   oracle_assert_raw_sequence(oplog.get_frontier_raw(), frontier_before)
-  oracle_assert_raw_sequence(oracle_raws(oplog.pending), pending_before)
+  oracle_assert_raw_sequence(
+    oracle_raws(oplog.planner.pending_operations()),
+    pending_before,
+  )
   assert_eq(oplog.has_pending(), !pending_before.is_empty())
 }
 
@@ -375,7 +378,7 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
   try! oracle_compare_plan(oplog, [independent], [])
   let planned = try! oplog.plan_remote([independent])
   oracle_assert_agents(planned, ["independent-pending-test"])
-  oracle_assert_raw_sequence(oracle_raws(oplog.pending), [
+  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
     oracle_raw(pending_op),
   ])
 
@@ -509,7 +512,7 @@ test "oracle matches apply order while preserving unrelated pending" {
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
   assert_eq((try! oplog.apply_remote(unrelated)).length(), 0)
 
-  let candidates = oplog.pending.copy()
+  let candidates = oplog.planner.pending_operations()
   candidates.push(parent)
   let (oracle_planned, oracle_remaining) = try! oracle_plan_remote_candidates(
     candidates.copy(),
@@ -521,7 +524,10 @@ test "oracle matches apply order while preserving unrelated pending" {
 
   let applied = try! oplog.apply_remote(parent)
   oracle_assert_op_sequence(applied, public_planned)
-  oracle_assert_op_sequence(oplog.pending, oracle_remaining)
+  oracle_assert_op_sequence(
+    oplog.planner.pending_operations(),
+    oracle_remaining,
+  )
   assert_eq(oplog.has_pending(), true)
 }
 
@@ -575,7 +581,7 @@ test "oracle matches transitive discard and retry behavior" {
   ignore(try! oplog.apply_remote(root))
   ignore(try! oplog.apply_remote(unrelated))
   try! oracle_compare_plan(oplog, [], [])
-  oracle_assert_raw_sequence(oracle_raws(oplog.pending), [
+  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
     oracle_raw(grandchild),
     child_raw,
     root_raw,
@@ -583,7 +589,9 @@ test "oracle matches transitive discard and retry behavior" {
   ])
 
   oplog.discard_pending_dependents([root_raw])
-  oracle_assert_raw_sequence(oracle_raws(oplog.pending), [oracle_raw(unrelated)])
+  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
+    oracle_raw(unrelated),
+  ])
   assert_eq(oplog.has_pending(), true)
 
   // Re-admit the rejected identity, then retry its dependent identities.
@@ -605,5 +613,7 @@ test "oracle matches transitive discard and retry behavior" {
   try! oracle_compare_plan(oplog, [grandchild], [root_raw, child_raw])
   ignore(try! oplog.apply_remote(grandchild))
   assert_eq(oplog.has_pending(), true)
-  oracle_assert_raw_sequence(oracle_raws(oplog.pending), [oracle_raw(unrelated)])
+  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
+    oracle_raw(unrelated),
+  ])
 }

@@ -729,8 +729,8 @@ test "remote admission planner assigns post-staging arrivals on begin" {
   let old_next_arrival = planner.next_arrival
   let plan = planner.prepare(staged, _ => false)
   for i, raw in plan.staged_order {
-    let node = plan.staged[raw]
-    assert_eq(node.arrival, old_next_arrival + i)
+    let arrival = plan.staged_arrivals[raw]
+    assert_eq(arrival, old_next_arrival + i)
   }
   match planner.begin(plan) {
     RemoteAdmissionBeginResult::Applied => ()
@@ -859,11 +859,8 @@ test "remote admission planner rejects gapped staged arrivals atomically" {
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
   let second_raw = remote_admission_raw(second)
-  let second_node = plan.staged[second_raw]
-  plan.staged.set(second_raw, {
-    ..second_node,
-    arrival: second_node.arrival + 1,
-  })
+  let second_arrival = plan.staged_arrivals[second_raw]
+  plan.staged_arrivals.set(second_raw, second_arrival + 1)
   let pending_before = planner.pending_raws()
   let order_before = planner.pending_order.copy()
   let generation_before = planner.generation()
@@ -896,8 +893,7 @@ test "remote admission planner rejects staged raw/op mismatch atomically" {
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
   let second_raw = remote_admission_raw(second)
-  let second_node = plan.staged[second_raw]
-  plan.staged.set(second_raw, { ..second_node, op: mismatch })
+  plan.staged.set(second_raw, mismatch)
   let pending_before = planner.pending_raws()
   let order_before = planner.pending_order.copy()
   let generation_before = planner.generation()

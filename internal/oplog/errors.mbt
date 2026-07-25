@@ -15,6 +15,17 @@ pub(all) suberror OpLogError {
   MissingRemoteFrontier(raw~ : @core.RawVersion)
   /// Remote batch contains duplicate operations (same agent:seq appears twice).
   DuplicateOperation(raw~ : @core.RawVersion)
+  /// A prepared remote admission plan was invalidated by another admission.
+  StaleRemoteAdmissionPlan
+  /// A prepared remote admission plan was committed or rejected already.
+  ConsumedRemoteAdmissionPlan
+  /// A prepared remote admission plan failed its internal consistency checks.
+  InvalidRemoteAdmissionPlan
+  /// A remote admission committed a prefix before a causal graph failure.
+  PartialRemoteAdmission(
+    committed~ : Array[@core.Op],
+    error~ : @causal_graph.CausalGraphError
+  )
   /// A causal graph error occurred during operation creation or application
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
 }
