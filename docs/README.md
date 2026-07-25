@@ -7,6 +7,7 @@ This index separates current user guidance from contributor notes, design work, 
 - [Package README](../README.md) - package overview, quick starts, public packages, and commands.
 - [Worked examples](EXAMPLES.md) - sync error handling, undo/redo, historical checkout, and incremental catch-up.
 - [Migrating to v0.5](MIGRATING_TO_0.5.md) - source migration from v0.4; wire-compatible.
+- [Migrating the Undoable API](MIGRATING_UNDO_API.md) - source migration to Applied/Stale compensating-edit results; wire-compatible.
 - [Migrating to v0.4](MIGRATING_TO_0.4.md) - required source and wire changes from v0.3.
 
 ## Learning Path

@@ -248,6 +248,7 @@ moon bench --release
 - [Documentation index](docs/README.md) - reading order and audience split
 - [Worked examples](docs/EXAMPLES.md) - sync, undo/redo, historical checkout
 - [v0.5 migration guide](docs/MIGRATING_TO_0.5.md) - source migration from v0.4; unchanged v0.4 wire envelopes
+- [Undoable API migration guide](docs/MIGRATING_UNDO_API.md) - migrate custom Undoable adapters to Applied/Stale results
 - [Walker usage](docs/WALKER_USAGE.md) - lower-level walker and oplog APIs
 - [Benchmarks](docs/BENCHMARKS.md) - benchmark commands and notes
 

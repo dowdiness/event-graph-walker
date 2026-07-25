@@ -1,6 +1,99 @@
 ///| Blackbox tests for OpLog error paths
 
 ///|
+test "local delete and undelete reject the root sentinel before allocation" {
+  let delete_log = OpLog::new("local")
+  let delete_result : Result[Unit, OpLogError] = try {
+    let _ = delete_log.delete(-1)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(delete_result is Err(_), content="true")
+  inspect(delete_log.op_count(), content="0")
+
+  let undelete_log = OpLog::new("local")
+  let undelete_result : Result[Unit, OpLogError] = try {
+    let _ = undelete_log.undelete(-1)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(undelete_result is Err(_), content="true")
+  inspect(undelete_log.op_count(), content="0")
+}
+
+///|
+test "local insert origin preflight leaves causal state unchanged" {
+  let oplog = OpLog::new("local")
+  let result : Result[Unit, OpLogError] = try {
+    ignore(oplog.insert("ghost", 99, -1))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(result is Err(_), content="true")
+  inspect(oplog.causal_graph().op_count(), content="0")
+  inspect(
+    oplog.causal_graph().get_frontier().to_array().is_empty(),
+    content="true",
+  )
+
+  let op = try! oplog.insert("ok", -1, -1)
+  inspect(op.lv(), content="0")
+  inspect(oplog.op_count(), content="1")
+
+  let right_oplog = OpLog::new("right")
+  let right_result : Result[Unit, OpLogError] = try {
+    ignore(right_oplog.insert("ghost", -1, 99))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(right_result is Err(_), content="true")
+  inspect(right_oplog.causal_graph().op_count(), content="0")
+  let right_op = try! right_oplog.insert("ok", -1, -1)
+  inspect(right_op.lv(), content="0")
+}
+
+///|
+test "local insert origin preflight preserves existing causal state" {
+  let oplog = OpLog::new("local")
+  let seed = try! oplog.insert("seed", -1, -1)
+  let before_frontier = oplog.causal_graph().get_frontier().to_array()
+
+  let bad_left : Result[Unit, OpLogError] = try {
+    ignore(oplog.insert("ghost", 99, -1))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(bad_left is Err(_), content="true")
+  inspect(oplog.causal_graph().op_count(), content="1")
+  inspect(
+    oplog.causal_graph().get_frontier().to_array() == before_frontier,
+    content="true",
+  )
+
+  let bad_right : Result[Unit, OpLogError] = try {
+    ignore(oplog.insert("ghost", seed.lv(), 99))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(bad_right is Err(_), content="true")
+  inspect(oplog.causal_graph().op_count(), content="1")
+  inspect(
+    oplog.causal_graph().get_frontier().to_array() == before_frontier,
+    content="true",
+  )
+
+  let next = try! oplog.insert("next", seed.lv(), -1)
+  inspect(next.lv(), content="1")
+  inspect(oplog.op_count(), content="2")
+}
+
+///|
 test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
   let oplog = OpLog::new("local")
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)

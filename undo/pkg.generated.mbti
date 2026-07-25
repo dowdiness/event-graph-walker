@@ -9,13 +9,19 @@ import {
 
 // Errors
 pub(all) suberror UndoError {
-  ItemNotFound
   Internal(detail~ : String)
 }
 pub fn UndoError::is_retryable(Self) -> Bool
 pub fn UndoError::message(Self) -> String
 
 // Types and methods
+pub enum CompensatingEditResult {
+  Applied
+  Stale
+} derive(Eq, @debug.Debug)
+pub fn CompensatingEditResult::applied() -> Self
+pub fn CompensatingEditResult::stale() -> Self
+
 type UndoGroup derive(@debug.Debug)
 
 type UndoItem derive(@debug.Debug)
@@ -43,8 +49,7 @@ pub enum UndoOpType {
 
 // Traits
 pub(open) trait Undoable {
-  fn lv_to_position(Self, Int) -> Int?
-  fn delete_lv(Self, Int) -> Unit raise UndoError
-  fn undelete_lv(Self, Int) -> Unit raise UndoError
+  fn delete_lv(Self, Int) -> CompensatingEditResult raise UndoError
+  fn undelete_lv(Self, Int) -> CompensatingEditResult raise UndoError
 }
 

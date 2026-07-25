@@ -393,9 +393,28 @@ pub fn Document::replace_range(
 }
 
 ///|
-/// Create and apply an undelete operation for a specific LV
-/// Used by undo to revive a deleted item and create a syncable op
-pub fn Document::undelete(
+/// Validate that a local CRDT target exists before allocating a new op.
+fn Document::validate_target_lv(
+  self : Document,
+  target_lv : Int,
+) -> Unit raise DocumentError {
+  match self.tree.get(@fugue.Lv(target_lv)) {
+    Some(_) => ()
+    None =>
+      raise DocumentError::Fugue(@fugue.MissingItem(id=@fugue.Lv(target_lv)))
+  }
+}
+
+///|
+/// Result of a target-aware delete or undelete request.
+pub enum TargetEditResult {
+  Applied
+  Stale
+}
+
+///|
+/// Commit an undelete operation after target preflight.
+fn Document::commit_undelete_by_lv(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
@@ -419,9 +438,8 @@ pub fn Document::undelete(
 }
 
 ///|
-/// Create and apply a delete operation for a specific LV
-/// Used by undo to delete a specific item and create a syncable op
-pub fn Document::delete_by_lv(
+/// Commit a delete operation after target preflight.
+fn Document::commit_delete_by_lv(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
@@ -442,6 +460,58 @@ pub fn Document::delete_by_lv(
   }
   self.invalidate_cache()
   op
+}
+
+///|
+/// Create and apply an undelete operation for a specific LV.
+pub fn Document::undelete(
+  self : Document,
+  target_lv : Int,
+) -> @core.Op raise DocumentError {
+  self.validate_target_lv(target_lv)
+  self.commit_undelete_by_lv(target_lv)
+}
+
+///|
+/// Create and apply a delete operation for a specific LV.
+pub fn Document::delete_by_lv(
+  self : Document,
+  target_lv : Int,
+) -> @core.Op raise DocumentError {
+  self.validate_target_lv(target_lv)
+  self.commit_delete_by_lv(target_lv)
+}
+
+///|
+/// Delete a visible target, or return Stale when it is already deleted.
+pub fn Document::delete_if_visible(
+  self : Document,
+  target_lv : Int,
+) -> TargetEditResult raise DocumentError {
+  self.validate_target_lv(target_lv)
+  match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
+    Some(_) => {
+      ignore(self.commit_delete_by_lv(target_lv))
+      Applied
+    }
+    None => Stale
+  }
+}
+
+///|
+/// Undelete a deleted target, or return Stale when it is already visible.
+pub fn Document::undelete_if_deleted(
+  self : Document,
+  target_lv : Int,
+) -> TargetEditResult raise DocumentError {
+  self.validate_target_lv(target_lv)
+  match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
+    Some(_) => Stale
+    None => {
+      ignore(self.commit_undelete_by_lv(target_lv))
+      Applied
+    }
+  }
 }
 
 ///|

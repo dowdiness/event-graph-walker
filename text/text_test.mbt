@@ -1,5 +1,67 @@
 ///|
 /// Tests for user-friendly text API
+
+///|
+/// Test-only Adapter for validating post-commit Internal failure behavior.
+struct PartialFailureDoc {
+  inner : TextState
+  mut delete_calls : Int
+  fail_after : Int
+}
+
+///|
+fn PartialFailureDoc::PartialFailureDoc(
+  inner : TextState,
+  fail_after : Int,
+) -> PartialFailureDoc {
+  { inner, delete_calls: 0, fail_after }
+}
+
+///|
+pub impl @undo.Undoable for PartialFailureDoc with fn delete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
+  if self.delete_calls >= self.fail_after {
+    raise @undo.UndoError::Internal(detail="injected post-commit failure")
+  }
+  self.delete_calls = self.delete_calls + 1
+  @undo.Undoable::delete_lv(self.inner, lv)
+}
+
+///|
+pub impl @undo.Undoable for PartialFailureDoc with fn undelete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
+  @undo.Undoable::undelete_lv(self.inner, lv)
+}
+
+///|
+test "TextState Undoable internal errors preserve target detail" {
+  let doc = try! TextState::new("alice")
+  let result : Result[@undo.CompensatingEditResult, @undo.UndoError] = Ok(
+    @undo.Undoable::delete_lv(doc, 99),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(detail~)) => {
+      inspect(detail.contains("target_lv=99"), content="true")
+      inspect(detail.contains("missing item id=Lv(99)"), content="true")
+    }
+    _ => fail("expected detailed internal undo error")
+  }
+
+  let undelete_result : Result[@undo.CompensatingEditResult, @undo.UndoError] = Ok(
+    @undo.Undoable::undelete_lv(doc, 99),
+  ) catch {
+    error => Err(error)
+  }
+  match undelete_result {
+    Err(@undo.UndoError::Internal(detail~)) => {
+      inspect(detail.contains("target_lv=99"), content="true")
+      inspect(detail.contains("missing item id=Lv(99)"), content="true")
+    }
+    _ => fail("expected detailed internal undo error")
+  }
+}
+
+///|
 test "TextState::new creates empty document" {
   let doc = try! TextState::new("alice")
   inspect(doc.text(), content="")
@@ -64,6 +126,26 @@ test "TextState::replace_range handles shorter replacement" {
   let _ = doc.insert(Pos::at(0), "abcdef")
   let _ = doc.replace_range(try! Range::from_ints(1, 4), "Z")
   inspect(doc.text(), content="aZef")
+}
+
+///|
+test "TextState::replace_range rejects malformed text atomically" {
+  let doc = try! TextState::new("alice")
+  let _ = doc.insert(Pos::at(0), "abcdef")
+  let before_text = doc.text()
+  let before_version = doc.version()
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(
+    doc.replace_range(try! Range::from_ints(1, 4), malformed),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text() == before_text, content="true")
+  inspect(doc.version() == before_version, content="true")
 }
 
 ///|
@@ -141,6 +223,21 @@ test "TextError::help provides guidance" {
     err.help(),
     content="Use a position between 0 and 5 (inclusive for insert, exclusive for delete)",
   )
+}
+
+///|
+test "TextError::InvalidText provides local diagnostics" {
+  let err : TextError = TextError::InvalidText(detail="malformed UTF-16")
+  inspect(err.message(), content="Invalid text: malformed UTF-16")
+  inspect(
+    err.help(),
+    content="Provide valid Unicode text without lone surrogates",
+  )
+  inspect(
+    err.debug(),
+    content="TextError::InvalidText { detail: malformed UTF-16 }",
+  )
+  inspect(err.is_retryable(), content="false")
 }
 
 ///|
@@ -275,6 +372,40 @@ test "TextState insert at invalid position raises error" {
 }
 
 ///|
+test "TextState insert rejects malformed local text atomically" {
+  let doc = try! TextState::new("alice")
+  let _ = doc.insert(Pos::at(0), "seed")
+  let before_text = doc.text()
+  let before_version = doc.version()
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(2), malformed)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text() == before_text, content="true")
+  inspect(doc.version() == before_version, content="true")
+}
+
+///|
+test "TextState insert validates position before local text" {
+  let doc = try! TextState::new("alice")
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(1), malformed)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidPosition(pos~, len~)) => {
+      inspect(pos, content="1")
+      inspect(len, content="0")
+    }
+    _ => fail("Expected InvalidPosition error")
+  }
+}
+
+///|
 test "TextState delete at invalid position raises error" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hi")
@@ -322,6 +453,82 @@ test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
 }
 
 ///|
+test "TextState::insert_and_record rejects malformed text atomically" {
+  let doc = try! TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let before_version = doc.version()
+  let result : Result[Unit, TextError] = Ok(
+    doc.insert_and_record(Pos::at(0), malformed, mgr, timestamp_ms=1000),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text(), content="")
+  inspect(doc.version() == before_version, content="true")
+  inspect(mgr.can_undo(), content="false")
+}
+
+///|
+test "TextState::replace_range_and_record rejects malformed text atomically" {
+  let doc = try! TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
+  let before_text = doc.text()
+  let before_version = doc.version()
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(
+    doc.replace_range_and_record(
+      try! Range::from_ints(1, 4),
+      malformed,
+      mgr,
+      timestamp_ms=2000,
+    ),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text() == before_text, content="true")
+  inspect(doc.version() == before_version, content="true")
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+}
+
+///|
+test "TextState unknown undo target preserves causal state" {
+  let doc = try! TextState::new("alice")
+  let peer = try! TextState::new("bob")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert(Pos::at(0), "A")
+  let _ = doc.delete(Pos::at(0))
+  // LV 1 is the local delete operation: it exists in the causal graph but
+  // is not a Fugue item and therefore cannot be an undelete target.
+  mgr.record_delete(1, "alice", 1000)
+  let before_version = doc.version()
+  let result : Result[Bool, @undo.UndoError] = Ok(mgr.undo(doc)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(_)) => ()
+    _ => fail("Expected internal undo error")
+  }
+  inspect(doc.version() == before_version, content="true")
+  inspect(mgr.can_undo(), content="false")
+  inspect(mgr.can_redo(), content="false")
+
+  let _ = doc.insert(@text.Pos::at(0), "A")
+  let _ = peer.sync().apply(doc.sync().export_all())
+  inspect(peer.text(), content="A")
+  inspect(doc.version() == peer.version(), content="true")
+}
+
+///|
 test "TextState::replace_range_and_record inserts non-BMP text atomically" {
   let doc = try! TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
@@ -338,6 +545,114 @@ test "TextState::replace_range_and_record inserts non-BMP text atomically" {
   inspect(doc.text(), content="ab")
   let _ = mgr.redo(doc)
   inspect(doc.text(), content="a😀Xb")
+}
+
+///|
+test "Undo Delete stale visible target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let bob_mgr = @undo.UndoManager::new("bob")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let _ = alice.delete_and_record(Pos::at(0), alice_mgr, timestamp_ms=2000)
+  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=2000)
+  inspect(bob_mgr.undo(bob), content="true")
+  let _ = alice.sync().apply(bob.sync().export_all())
+  inspect(alice.text(), content="A")
+  let before = alice.version()
+
+  inspect(alice_mgr.undo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_undo(), content="true")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "Redo Insert stale visible target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let bob_mgr = @undo.UndoManager::new("bob")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  inspect(alice_mgr.undo(alice), content="true")
+  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=2000)
+  inspect(bob_mgr.undo(bob), content="true")
+  let _ = alice.sync().apply(bob.sync().export_all())
+  inspect(alice.text(), content="A")
+  let before = alice.version()
+
+  inspect(alice_mgr.redo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "Redo Delete stale absent target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let bob_mgr = @undo.UndoManager::new("bob")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let _ = alice.delete_and_record(Pos::at(0), alice_mgr, timestamp_ms=2000)
+  inspect(alice_mgr.undo(alice), content="true")
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let bob_before_delete = bob.version()
+  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=3000)
+  let _ = alice.sync().apply(bob.sync().export_since(bob_before_delete))
+  inspect(alice.text(), content="")
+  let before = alice.version()
+
+  inspect(alice_mgr.redo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "Undo Insert stale absent target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let _ = bob.delete(Pos::at(0))
+  let _ = alice.sync().apply(bob.sync().export_all())
+  let before = alice.version()
+
+  inspect(alice_mgr.undo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_undo(), content="false")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "post-commit internal failure preserves CRDT prefix and clears history" {
+  let source = try! TextState::new("alice")
+  let peer = try! TextState::new("bob")
+  let manager = @undo.UndoManager::new("alice")
+  let _ = source.insert_and_record(Pos::at(0), "AB", manager, timestamp_ms=1000)
+  let _ = source.insert_and_record(Pos::at(2), "C", manager, timestamp_ms=2000)
+  inspect(manager.undo(source), content="true")
+  inspect(source.text(), content="AB")
+  let failing = PartialFailureDoc::PartialFailureDoc(source, 1)
+  let result : Result[Bool, @undo.UndoError] = Ok(manager.undo(failing)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(detail~)) =>
+      inspect(detail, content="injected post-commit failure")
+    _ => fail("Expected post-commit internal failure")
+  }
+  inspect(failing.inner.text(), content="A")
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="false")
+  inspect(manager.is_tracking(), content="true")
+
+  let _ = peer.sync().apply(failing.inner.sync().export_all())
+  inspect(peer.text(), content="A")
+  inspect(peer.version() == failing.inner.version(), content="true")
 }
 
 ///|

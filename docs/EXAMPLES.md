@@ -56,7 +56,8 @@ with text and container envelopes.
 ## Text undo and redo
 
 `UndoManager::undo` and `redo` return `Bool`: `false` means the corresponding
-stack was empty.
+stack was empty or the popped group was entirely stale. A stale result consumes
+the group, emits no CRDT operation, and creates no opposite history.
 
 ```moonbit
 let document = @text.TextState::new("alice-undo")

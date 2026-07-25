@@ -2,30 +2,38 @@
 ///  Lives in text/ package where TextState's private fields are accessible.
 
 ///|
-pub impl @undo.Undoable for TextState with fn lv_to_position(self, lv) {
-  self.inner.lv_to_position(lv)
+fn map_target_edit_result(
+  result : @document.TargetEditResult,
+) -> @undo.CompensatingEditResult {
+  match result {
+    @document.TargetEditResult::Applied =>
+      @undo.CompensatingEditResult::applied()
+    @document.TargetEditResult::Stale => @undo.CompensatingEditResult::stale()
+  }
 }
 
 ///|
 pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
-  let _ = self.inner.delete_by_lv(lv) catch {
-    // Fugue MissingItem: item already deleted by a concurrent op — skip silently
-    @document.DocumentError::Fugue(_) => raise @undo.UndoError::ItemNotFound
-    // Any other DocumentError is an internal error — propagate
-    _ =>
-      raise @undo.UndoError::Internal(detail="document error during delete_lv")
+  let result = self.inner.delete_if_visible(lv) catch {
+    error => {
+      let detail = TextError::from_document_error(error, self.len()).debug()
+      raise @undo.UndoError::Internal(
+        detail="delete_lv target_lv=\{lv}: \{detail}",
+      )
+    }
   }
+  map_target_edit_result(result)
 }
 
 ///|
 pub impl @undo.Undoable for TextState with fn undelete_lv(self, lv) {
-  let _ = self.inner.undelete(lv) catch {
-    // Fugue MissingItem: item not in tree — skip silently
-    @document.DocumentError::Fugue(_) => raise @undo.UndoError::ItemNotFound
-    // Any other DocumentError is an internal error — propagate
-    _ =>
+  let result = self.inner.undelete_if_deleted(lv) catch {
+    error => {
+      let detail = TextError::from_document_error(error, self.len()).debug()
       raise @undo.UndoError::Internal(
-        detail="document error during undelete_lv",
+        detail="undelete_lv target_lv=\{lv}: \{detail}",
       )
+    }
   }
+  map_target_edit_result(result)
 }

@@ -33,6 +33,11 @@ test "text adapter maps shared and local errors" {
     None => ()
     _ => fail("invalid position is local")
   }
+  match
+    classify_error(@egw_text.TextError::InvalidText(detail="malformed UTF-16")) {
+    None => ()
+    _ => fail("invalid local text is local")
+  }
   match classify_error(@egw_text.TextError::InvalidRange(start=2, end=1)) {
     None => ()
     _ => fail("invalid range is local")

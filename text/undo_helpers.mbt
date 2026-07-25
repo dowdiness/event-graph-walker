@@ -1,6 +1,25 @@
 ///| Integration helpers for TextState + UndoManager
 
 ///|
+/// Commit a validated insert plan and record each character's LV for undo.
+fn TextState::commit_insert_plan_and_record(
+  self : TextState,
+  plan : InsertPlan,
+  mgr : @undo.UndoManager,
+  timestamp_ms~ : Int,
+) -> Unit raise TextError {
+  let mut offset = 0
+  for ch in plan.text {
+    let ch_text = ch.to_string()
+    let op = self.inner.insert(plan.position + offset, ch_text) catch {
+      err => raise TextError::from_document_error(err, self.len())
+    }
+    mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch_text))
+    offset = offset + 1
+  }
+}
+
+///|
 /// Insert text and record each character's LV for undo tracking.
 pub fn TextState::insert_and_record(
   self : TextState,
@@ -9,20 +28,8 @@ pub fn TextState::insert_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
-  let doc_len = self.len()
-  let pos_val = pos.value()
-  if pos_val > doc_len {
-    raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
-  }
-  let mut offset = 0
-  for ch in text {
-    let ch_text = ch.to_string()
-    let op = self.inner.insert(pos_val + offset, ch_text) catch {
-      err => raise TextError::from_document_error(err, doc_len)
-    }
-    mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch_text))
-    offset = offset + 1
-  }
+  let plan = plan_insert(pos.value(), text, self.len())
+  self.commit_insert_plan_and_record(plan, mgr, timestamp_ms~)
 }
 
 ///|
@@ -95,6 +102,9 @@ pub fn TextState::replace_range_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
+  let doc_len = self.len()
+  let (start, _end) = checked_range_bounds(range, doc_len)
+  let plan = plan_insert(start, text, doc_len)
   self.delete_range_and_record(range, mgr, timestamp_ms~)
-  self.insert_and_record(range.start(), text, mgr, timestamp_ms~)
+  self.commit_insert_plan_and_record(plan, mgr, timestamp_ms~)
 }

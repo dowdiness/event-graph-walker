@@ -18,6 +18,7 @@ pub fn classify_error(
     @egw_text.TextError::VersionNotFound =>
       Some(@peer_sync.FailureDisposition::recoverable())
     @egw_text.TextError::EmptyReplicaId
+    | @egw_text.TextError::InvalidText(_)
     | @egw_text.TextError::InvalidPosition(_)
     | @egw_text.TextError::InvalidRange(_)
     | @egw_text.TextError::Internal(_) => None
