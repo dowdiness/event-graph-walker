@@ -302,9 +302,7 @@ fn OpLog::raw_target_from_lv(
   self : OpLog,
   lv : Int,
 ) -> @core.RawVersion raise OpLogError {
-  if lv == -1 {
-    raise OpLogError::MissingLocalVersion(lv~)
-  }
+  guard lv != -1 else { raise OpLogError::MissingLocalVersion(lv~) }
   match self.graph.lv_to_raw(lv) {
     Some(raw) => raw
     None => raise OpLogError::MissingLocalVersion(lv~)

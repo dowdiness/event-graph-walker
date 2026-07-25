@@ -8,22 +8,27 @@ priv struct InsertPlan {
 }
 
 ///|
+fn InsertPlan::InsertPlan(position : Int, text : String) -> InsertPlan {
+  { position, text }
+}
+
+///|
 /// Validate a local insert without touching document state.
 fn plan_insert(
   position : Int,
   text : String,
   doc_len : Int,
 ) -> InsertPlan raise TextError {
-  if position > doc_len {
+  guard position <= doc_len else {
     raise TextError::InvalidPosition(pos=position, len=doc_len)
   }
-  if text.length() == 0 {
-    return { position, text }
+  guard text.length() != 0 else {
+    return InsertPlan::InsertPlan(position, text)
   }
-  if !is_well_formed_utf16(text) {
+  guard is_well_formed_utf16(text) else {
     raise TextError::InvalidText(detail="malformed UTF-16")
   }
-  { position, text }
+  InsertPlan::InsertPlan(position, text)
 }
 
 ///|

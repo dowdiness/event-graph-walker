@@ -10,6 +10,14 @@ struct PartialFailureDoc {
 }
 
 ///|
+fn PartialFailureDoc::PartialFailureDoc(
+  inner : TextState,
+  fail_after : Int,
+) -> PartialFailureDoc {
+  { inner, delete_calls: 0, fail_after }
+}
+
+///|
 pub impl @undo.Undoable for PartialFailureDoc with fn delete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
   if self.delete_calls >= self.fail_after {
     raise @undo.UndoError::Internal(detail="injected post-commit failure")
@@ -598,11 +606,7 @@ test "post-commit internal failure preserves CRDT prefix and clears history" {
   let _ = source.insert_and_record(Pos::at(2), "C", manager, timestamp_ms=2000)
   inspect(manager.undo(source), content="true")
   inspect(source.text(), content="AB")
-  let failing : PartialFailureDoc = {
-    inner: source,
-    delete_calls: 0,
-    fail_after: 1,
-  }
+  let failing = PartialFailureDoc::PartialFailureDoc(source, 1)
   let result : Result[Bool, @undo.UndoError] = Ok(manager.undo(failing)) catch {
     error => Err(error)
   }

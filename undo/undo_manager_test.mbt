@@ -9,6 +9,14 @@ struct FailureProbeDoc {
 }
 
 ///|
+fn FailureProbeDoc::FailureProbeDoc(
+  fail_target : Int,
+  stale_target : Int?,
+) -> FailureProbeDoc {
+  { applied: [], fail_target, stale_target }
+}
+
+///|
 pub impl @undo.Undoable for FailureProbeDoc with fn delete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
   if lv == self.fail_target {
     raise @undo.UndoError::Internal(detail="injected delete failure")
@@ -39,11 +47,7 @@ test "internal undo failure clears history and restores tracking" {
   let manager = @undo.UndoManager::new("alice")
   manager.record_insert(1, "alice", 1000)
   manager.record_insert(2, "alice", 1000)
-  let doc : FailureProbeDoc = {
-    applied: [],
-    fail_target: 1,
-    stale_target: None,
-  }
+  let doc = FailureProbeDoc::FailureProbeDoc(1, None)
   let result : Result[Bool, @undo.UndoError] = Ok(manager.undo(doc)) catch {
     error => Err(error)
   }
@@ -65,11 +69,7 @@ test "internal redo failure clears history and restores tracking" {
   let manager = @undo.UndoManager::new("alice")
   manager.record_insert(1, "alice", 1000)
   manager.record_insert(2, "alice", 1000)
-  let doc : FailureProbeDoc = {
-    applied: [],
-    fail_target: 99,
-    stale_target: None,
-  }
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
   inspect(manager.undo(doc), content="true")
   doc.applied = []
   doc.fail_target = 1
@@ -91,11 +91,7 @@ test "internal redo failure clears history and restores tracking" {
 test "stale result consumes group without opposite history" {
   let manager = @undo.UndoManager::new("alice")
   manager.record_insert(1, "alice", 1000)
-  let doc : FailureProbeDoc = {
-    applied: [],
-    fail_target: 99,
-    stale_target: Some(1),
-  }
+  let doc = FailureProbeDoc::FailureProbeDoc(99, Some(1))
   inspect(manager.undo(doc), content="false")
   inspect(doc.applied.join(","), content="")
   inspect(manager.can_undo(), content="false")

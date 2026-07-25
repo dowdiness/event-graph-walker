@@ -66,7 +66,7 @@ The Document Module must validate the target and all causal references before al
 - UndoManager will preserve the existing Local History Best-Effort contract: stale groups are consumed without creating opposite history; any Internal failure restores tracking, clears all local undo and redo history, and propagates the error.
 - The Document will not be copied and CRDT history will not be rolled back for Internal failures. Any already-applied valid CRDT operations remain exportable for synchronization.
 - Delivery was phased: Ticket 01 hardened Document preflight/commit ordering; Ticket 02 migrated the Undoable Interface and symmetric stale handling; Tickets 03 and 04 covered failure-prefix convergence and retired obsolete compatibility plumbing.
-- The local edit planning core remains separate from the CRDT commit shell. This change does not replace the existing `InsertPlan` approach or introduce materialized input arrays in the normal path.
+- The local edit planning core remains separate from the CRDT commit shell. The accepted two-pass `InsertPlan` strategy validates local text before commit without materializing input arrays in the normal path.
 - The shared document state is the convergence target. Per-agent local edit history is not replicated and is not required to converge between peers.
 - No `NotReady` outcome will be introduced unless a concrete Adapter can demonstrate a state where a target is causally unavailable but expected to become available later. Such a state must not be represented by `Stale`.
 
