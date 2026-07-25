@@ -62,6 +62,10 @@ _Avoid_: transaction, committed batch
 The local acceptance of a dependency-ready remote CRDT operation into shared causal history after preflight. Once admitted, it is not rolled back by a later internal projection failure.
 _Avoid_: remote apply, merge commit
 
+**Partial remote admission failure**:
+An internal failure after a prepared plan has already admitted a valid prefix. The admitted prefix remains committed and must be projected before the failure propagates; the failed operation and later operations remain pending.
+_Avoid_: batch rollback, partial success
+
 **Document Convergence**:
 The guarantee that peers receiving the same valid CRDT operations eventually reach the same shared document state.
 _Avoid_: undo-history convergence

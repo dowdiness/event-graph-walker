@@ -14,7 +14,9 @@ A standalone authoritative `pending : Array[Op]` with genuinely disposable index
 
 ## Prepared admission
 
-Preparing incoming operations is non-mutating. OpLog returns an opaque, single-use `RemoteAdmissionPlan` containing pending additions, the complete compatibility-ordered ready plan, and a planner generation token. Document can inspect a read-only view of its planned operations for complete preflight, but cannot construct or mutate the plan. On success, Document gives that same capability back to OpLog for commit; OpLog does not replan from raw incoming operations. A failed preflight registers none of the incoming operations; it may still issue an explicit rejection transition that removes invalid roots and their transitive dependents from existing pending membership. Commit rejects reuse or a generation mismatch rather than applying a stale plan.
+Preparing incoming operations is non-mutating and uses a temporary preparation overlay rather than cloning or reversibly mutating canonical planner state. The overlay contains staged incoming nodes, hypothetical unresolved-count deltas, planned identities, ordering metadata, and the additional waiter relationships needed by the prospective batch. It reads existing pending membership and indexes but writes nothing back. Its cost scales with incoming operations and dependency edges actually examined or woken, not with an unconditional copy of all pending state.
+
+OpLog returns an opaque, single-use `RemoteAdmissionPlan` containing pending additions, the complete compatibility-ordered ready plan, and a planner generation token. Document can inspect a read-only view of its planned operations for complete preflight, but cannot construct or mutate the plan. On success, Document gives that same capability back to OpLog for commit; OpLog does not replan from raw incoming operations. A failed preflight registers none of the incoming operations; it may still issue an explicit rejection transition that removes invalid roots and their transitive dependents from existing pending membership. Commit rejects reuse or a generation mismatch rather than applying a stale plan.
 
 ## Compatibility order
 
@@ -22,7 +24,11 @@ The production planner must reproduce the existing pending-first repeated fixed-
 
 ## Admission failure
 
-Admission is committed one operation at a time in compatibility order. If an internal CausalGraph or operation-log failure occurs after earlier operations were admitted, those admissions remain committed. The failed operation and all later operations remain pending, the prepared batch becomes stale, and the failure propagates. The next attempt prepares again from current state; there is no batch rollback.
+Admission is committed one operation at a time in compatibility order. `OpLog::commit_remote` keeps the existing concrete checked `OpLogError` boundary: normal success returns the committed operations, while `PartialRemoteAdmission` carries the successfully committed prefix and typed causal-graph cause. `StaleRemoteAdmissionPlan` and `ConsumedRemoteAdmissionPlan` fail before mutation. These variants belong in `OpLogError` because existing Document and Branch catch sites already handle OpLog admission failures together.
+
+Document and Branch catch only `PartialRemoteAdmission`, project or advance the committed prefix exactly once, and then re-raise the same typed OpLog failure through their existing error wrappers; unknown errors are not swallowed. The failed operation and all later operations remain pending, the prepared batch becomes stale, and the next attempt prepares again from current state. There is no batch rollback.
+
+This recovery is valid only while failure of the current operation occurs before that operation mutates shared state. The current causal-graph path validates parents before mutation. If a future commit step can fail after partially mutating one operation, it must provide rollback or be treated as unrecoverable corruption rather than using `PartialRemoteAdmission`.
 
 ## Rejection and retry
 
@@ -42,4 +48,4 @@ The existing fixed-point planner remains only as a test oracle during migration.
 
 ## Acceptance conditions
 
-Differential tests must cover compatibility order, complete-plan preflight, admission failure, rejection and retry, stale queue entries, and compaction with live pending operations. Release-mode benchmarks on wasm-gc and JS must compare both implementations in the same process and scenario. The new planner must be at least 50 times faster for a reverse chain of 10,000 operations and 10 times faster for four reverse chains of 250, while small and in-order workloads show no median regression greater than 20%. The integrated Document reverse-chain workload at 10,000 operations must improve by at least 5 times. Compaction must not restore fixed-point scanning to the hot path.
+Differential tests must cover compatibility order, complete-plan preflight, admission failure, rejection and retry, stale queue entries, and compaction with live pending operations. Release-mode planner benchmarks on wasm-gc and JS must compare the test-only fixed-point oracle and new planner in the same process and scenario. The new planner must be at least 50 times faster for a reverse chain of 10,000 operations and 10 times faster for four reverse chains of 250, while small and in-order workloads show no median regression greater than 20%. The integrated Document reverse-chain workload at 10,000 operations must improve by at least 5 times against a baseline recorded immediately before cutover on the same machine with the same command; no benchmark-only legacy admission adapter is added across the Document/OpLog boundary. Compaction must not restore fixed-point scanning to the hot path.
