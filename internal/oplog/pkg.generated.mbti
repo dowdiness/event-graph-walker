@@ -27,6 +27,7 @@ pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
 pub fn OpLog::delete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
+pub fn OpLog::discard_pending_dependents(Self, Array[@core.RawVersion]) -> Unit
 pub fn OpLog::get_all_ops(Self) -> Array[@core.Op]
 pub fn OpLog::get_all_runs(Self) -> Array[@core.OpRun]
 pub fn OpLog::get_frontier(Self) -> @core.Frontier
@@ -34,9 +35,11 @@ pub fn OpLog::get_frontier_raw(Self) -> Array[@core.RawVersion] raise OpLogError
 pub fn OpLog::get_op(Self, Int) -> @core.Op?
 pub fn OpLog::get_ops(Self, Array[Int]) -> Array[@core.Op]
 pub fn OpLog::get_ops_rle(Self, @rle.Rle[@core.LvRange]) -> Array[@core.Op]
+pub fn OpLog::has_pending(Self) -> Bool
 pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::new(String) -> Self
 pub fn OpLog::op_count(Self) -> Int
+pub fn OpLog::plan_remote(Self, Array[@core.Op]) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
 pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]

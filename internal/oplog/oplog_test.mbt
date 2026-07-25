@@ -24,6 +24,33 @@ test "local delete and undelete reject the root sentinel before allocation" {
 }
 
 ///|
+test "remote plan is non-mutating and preserves drain order" {
+  let oplog = OpLog::new("local")
+  let parent_raw = @core.RawVersion::new("remote", 0)
+  let child = @core.Op::new_insert(
+    -1,
+    [parent_raw],
+    "remote",
+    1,
+    "B",
+    Some(parent_raw),
+    None,
+  )
+  let parent = @core.Op::new_insert(-1, [], "remote", 0, "A", None, None)
+  let planned = oplog.plan_remote([child, parent])
+  inspect(planned.length(), content="2")
+  inspect(planned[0].seq(), content="0")
+  inspect(planned[1].seq(), content="1")
+  inspect(oplog.op_count(), content="0")
+  inspect(oplog.has_pending(), content="false")
+
+  ignore(try! oplog.apply_remote(child))
+  ignore(try! oplog.apply_remote(parent))
+  inspect(oplog.op_count(), content="2")
+  inspect(oplog.has_pending(), content="false")
+}
+
+///|
 test "local insert origin preflight leaves causal state unchanged" {
   let oplog = OpLog::new("local")
   let result : Result[Unit, OpLogError] = try {
@@ -231,6 +258,10 @@ test "apply_remote raises MissingOrigin for delete with no origin_left" {
     Err(MissingOrigin) => ()
     _ => fail("expected MissingOrigin")
   }
+  let valid = @core.Op::new_insert(-1, [], "remote", 0, "ok", None, None)
+  let applied = try! oplog.apply_remote(valid)
+  inspect(applied.length(), content="1")
+  inspect(oplog.op_count(), content="1")
 }
 
 ///|

@@ -2,6 +2,39 @@
 // Run with: moon bench --package oplog --release
 
 ///|
+fn benchmark_raw_versions(n : Int) -> Array[@core.RawVersion] {
+  let raws : Array[@core.RawVersion] = []
+  for i in 0..<n {
+    raws.push(@core.RawVersion::new("bench", i))
+  }
+  raws
+}
+
+///|
+test "oplog - immutable hashset build (1000 raw versions)" (b : @bench.T) {
+  let raws = benchmark_raw_versions(1000)
+  b.bench(fn() {
+    let mut set : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.new()
+    for raw in raws {
+      set = set.add(raw)
+    }
+    b.keep(set.length())
+  })
+}
+
+///|
+test "oplog - mutable hashset build (1000 raw versions)" (b : @bench.T) {
+  let raws = benchmark_raw_versions(1000)
+  b.bench(fn() {
+    let set : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+    for raw in raws {
+      set.add(raw)
+    }
+    b.keep(set.length())
+  })
+}
+
+///|
 /// Benchmark: Insert operations (linear, 100 ops)
 test "oplog - insert (100 ops)" (b : @bench.T) {
   b.bench(fn() {

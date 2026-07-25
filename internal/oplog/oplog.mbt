@@ -262,14 +262,14 @@ pub fn OpLog::validate_remote_batch(
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise OpLogError {
-  let mut batch : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.new()
+  let batch : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for op in remote_ops {
     let raw = @core.RawVersion::new(op.agent(), op.seq())
     // Check for duplicates within the batch
     if batch.contains(raw) {
       raise OpLogError::DuplicateOperation(raw~)
     }
-    batch = batch.add(raw)
+    batch.add(raw)
   }
   for op in remote_ops {
     for parent in op.parents() {
@@ -286,11 +286,147 @@ pub fn OpLog::validate_remote_batch(
 }
 
 ///|
+/// Report whether remote operations are waiting for dependencies.
+pub fn OpLog::has_pending(self : OpLog) -> Bool {
+  !self.pending.is_empty()
+}
+
+///|
+/// Plan dependency-ready operations without mutating the causal graph.
+/// Returns `(ready, remaining)` in the same order as drain_pending.
+fn OpLog::plan_remote_candidates(
+  self : OpLog,
+  candidates : Array[@core.Op],
+) -> (Array[@core.Op], Array[@core.Op]) raise OpLogError {
+  let mut candidates = candidates
+  let planned : Array[@core.Op] = []
+  let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let mut progress = true
+  while progress {
+    progress = false
+    let remaining : Array[@core.Op] = []
+    for op in candidates {
+      let raw = @core.RawVersion::new(op.agent(), op.seq())
+      if self.graph.raw_to_lv(raw) is Some(_) || planned_raws.contains(raw) {
+        progress = true
+        continue
+      }
+      if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
+        raise OpLogError::MissingOrigin
+      }
+      let mut ready = true
+      for parent in op.parents_iter() {
+        if self.graph.raw_to_lv(parent) is None &&
+          !planned_raws.contains(parent) {
+          ready = false
+          break
+        }
+      }
+      if ready {
+        match op.origin_left() {
+          None => ()
+          Some(origin) =>
+            if self.graph.raw_to_lv(origin) is None &&
+              !planned_raws.contains(origin) {
+              ready = false
+            }
+        }
+      }
+      if ready {
+        match op.origin_right() {
+          None => ()
+          Some(origin) =>
+            if self.graph.raw_to_lv(origin) is None &&
+              !planned_raws.contains(origin) {
+              ready = false
+            }
+        }
+      }
+      if ready {
+        planned.push(op)
+        planned_raws.add(raw)
+        progress = true
+      } else {
+        remaining.push(op)
+      }
+    }
+    candidates = remaining
+  }
+  (planned, candidates)
+}
+
+///|
+/// Plan the operations that remote application would drain without mutating
+/// the causal graph or pending queue. The result preserves drain order.
+pub fn OpLog::plan_remote(
+  self : OpLog,
+  incoming : Array[@core.Op],
+) -> Array[@core.Op] raise OpLogError {
+  let candidates = self.pending.copy()
+  for op in incoming {
+    candidates.push(op)
+  }
+  let (planned, _) = self.plan_remote_candidates(candidates)
+  planned
+}
+
+///|
+/// Remove invalid pending operations and their causal dependents.
+pub fn OpLog::discard_pending_dependents(
+  self : OpLog,
+  roots : Array[@core.RawVersion],
+) -> Unit {
+  let rejected : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for root in roots {
+    rejected.add(root)
+  }
+  let mut changed = true
+  while changed {
+    changed = false
+    let remaining : Array[@core.Op] = []
+    for op in self.pending {
+      let raw = @core.RawVersion::new(op.agent(), op.seq())
+      let mut dependent = rejected.contains(raw)
+      if !dependent {
+        for parent in op.parents_iter() {
+          if rejected.contains(parent) {
+            dependent = true
+            break
+          }
+        }
+      }
+      if !dependent {
+        match op.origin_left() {
+          Some(origin) => dependent = rejected.contains(origin)
+          None => ()
+        }
+      }
+      if !dependent {
+        match op.origin_right() {
+          Some(origin) => dependent = rejected.contains(origin)
+          None => ()
+        }
+      }
+      if dependent {
+        rejected.add(raw)
+        changed = true
+      } else {
+        remaining.push(op)
+      }
+    }
+    self.pending = remaining
+  }
+}
+
+///|
 /// Apply a remote operation
 pub fn OpLog::apply_remote(
   self : OpLog,
   op : @core.Op,
 ) -> Array[@core.Op] raise OpLogError {
+  if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
+    raise OpLogError::MissingOrigin
+  }
   self.pending.push(op)
   self.drain_pending()
 }
@@ -407,30 +543,22 @@ fn OpLog::try_apply_remote(
 }
 
 ///|
-/// Drain pending operations that now have all dependencies
+/// Drain pending operations that now have all dependencies.
+/// Readiness is shared with plan_remote so preflight and commit cannot drift.
 fn OpLog::drain_pending(self : OpLog) -> Array[@core.Op] raise OpLogError {
+  let (planned, remaining) = self.plan_remote_candidates(self.pending)
   let applied : Array[@core.Op] = []
-  let mut pending = self.pending
-  let mut progress = true
-  while progress {
-    progress = false
-    let remaining : Array[@core.Op] = []
-    for op in pending {
-      let (keep_pending, local_op) = self.try_apply_remote(op)
-      if keep_pending {
-        remaining.push(op)
-      } else {
-        match local_op {
-          Some(applied_op) => {
-            applied.push(applied_op)
-            progress = true
-          }
-          None => ()
-        }
+  for op in planned {
+    let (keep_pending, local_op) = self.try_apply_remote(op)
+    if keep_pending {
+      remaining.push(op)
+    } else {
+      match local_op {
+        Some(applied_op) => applied.push(applied_op)
+        None => ()
       }
     }
-    pending = remaining
   }
-  self.pending = pending
+  self.pending = remaining
   applied
 }

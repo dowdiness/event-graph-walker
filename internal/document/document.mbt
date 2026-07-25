@@ -406,6 +406,88 @@ fn Document::validate_target_lv(
 }
 
 ///|
+/// Classify one remote Fugue origin without raising, so all invalid pending
+/// dependents can be discarded before the first error is propagated.
+fn Document::preflight_remote_origin(
+  self : Document,
+  graph : @causal_graph.CausalGraph,
+  origin : @core.RawVersion,
+  planned_inserts : @hashset.HashSet[@core.RawVersion],
+  planned_noninserts : @hashset.HashSet[@core.RawVersion],
+) -> DocumentError? {
+  match graph.raw_to_lv(origin) {
+    Some(lv) =>
+      match self.tree.get(@fugue.Lv(lv)) {
+        Some(_) => None
+        None =>
+          Some(
+            DocumentError::Fugue(
+              @fugue.FugueError::MissingItem(id=@fugue.Lv(lv)),
+            ),
+          )
+      }
+    None =>
+      if planned_inserts.contains(origin) {
+        None
+      } else if planned_noninserts.contains(origin) {
+        Some(DocumentError::MissingOrigin(raw=origin))
+      } else {
+        None
+      }
+  }
+}
+
+///|
+/// Validate remote Fugue origins for the complete pending-drain plan before
+/// the OpLog can allocate any of its local versions.
+fn Document::preflight_remote_targets(
+  self : Document,
+  ops : Array[@core.Op],
+) -> Unit raise DocumentError {
+  let graph = self.oplog.causal_graph()
+  let planned_inserts : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let planned_noninserts : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([],
+  )
+  for op in ops {
+    let raw = @core.RawVersion::new(op.agent(), op.seq())
+    match op.content() {
+      @core.Insert(_) => planned_inserts.add(raw)
+      @core.Delete | @core.Undelete => planned_noninserts.add(raw)
+    }
+  }
+  let mut failure : DocumentError? = None
+  let invalid_roots : Array[@core.RawVersion] = []
+  for op in ops {
+    let raw = @core.RawVersion::new(op.agent(), op.seq())
+    for origin in [op.origin_left(), op.origin_right()] {
+      match origin {
+        None => ()
+        Some(origin) =>
+          match
+            self.preflight_remote_origin(
+              graph, origin, planned_inserts, planned_noninserts,
+            ) {
+            None => ()
+            Some(error) => {
+              invalid_roots.push(raw)
+              if failure is None {
+                failure = Some(error)
+              }
+            }
+          }
+      }
+    }
+  }
+  if !invalid_roots.is_empty() {
+    self.oplog.discard_pending_dependents(invalid_roots)
+  }
+  match failure {
+    None => ()
+    Some(error) => raise error
+  }
+}
+
+///|
 /// Result of a target-aware delete or undelete request.
 pub enum TargetEditResult {
   Applied
@@ -527,6 +609,22 @@ pub fn Document::apply_remote(
     @core.Insert(text) => validate_insert_content(text)
     @core.Delete | @core.Undelete => ()
   }
+  let had_pending = self.oplog.has_pending()
+  let planned_ops = if had_pending {
+    self.oplog.plan_remote([op]) catch {
+      e => raise DocumentError::OpLog(e)
+    }
+  } else {
+    [op]
+  }
+  let preflight_ops = if had_pending {
+    let ops = planned_ops.copy()
+    ops.push(op)
+    ops
+  } else {
+    planned_ops
+  }
+  self.preflight_remote_targets(preflight_ops)
   let applied_ops = self.oplog.apply_remote(op) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -685,6 +783,10 @@ pub fn Document::merge_remote(
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }
+  let planned_ops = self.oplog.plan_remote(remote_ops) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  self.preflight_remote_targets(planned_ops)
   // Invalidate before merge so partial-merge failures can't leave stale cache.
   // TODO(phase3): Replace invalidate_cache() with MergeCache for incremental
   // position cache updates during merge. MergeCache::new() decides whether to
