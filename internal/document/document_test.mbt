@@ -117,6 +117,52 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
 }
 
 ///|
+test "apply_remote validates an unready incoming origin before pending" {
+  let doc = Document::new("local")
+  let _ = try! doc.insert(0, "x")
+  let delete_op = try! doc.delete(0)
+  let graph_only = @core.RawVersion::new("local", delete_op.seq())
+  let missing_parent = @core.RawVersion::new("ghost", 0)
+  let pending = @core.Op::new_insert(
+    -1,
+    [missing_parent],
+    "remote",
+    0,
+    "p",
+    None,
+    None,
+  )
+  try! doc.apply_remote(pending)
+  let before_snapshot = doc.causal_snapshot()
+  let bad = @core.Op::new_insert(
+    -1,
+    [missing_parent],
+    "remote",
+    1,
+    "b",
+    Some(graph_only),
+    None,
+  )
+  let result : Result[Unit, DocumentError] = try {
+    doc.apply_remote(bad)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  match result {
+    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(_))) => ()
+    _ => fail("expected graph-only origin error")
+  }
+  inspect(
+    doc.causal_snapshot().op_count() == before_snapshot.op_count(),
+    content="true",
+  )
+  let parent = @core.Op::new_insert(-1, [], "ghost", 0, "g", None, None)
+  try! doc.apply_remote(parent)
+  inspect(doc.visible_count(), content="2")
+}
+
+///|
 test "merge_remote rejects graph-only target before oplog mutation" {
   let doc = Document::new("local")
   let _ = try! doc.insert(0, "x")

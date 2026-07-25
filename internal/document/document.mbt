@@ -609,14 +609,22 @@ pub fn Document::apply_remote(
     @core.Insert(text) => validate_insert_content(text)
     @core.Delete | @core.Undelete => ()
   }
-  let planned_ops = if self.oplog.has_pending() {
+  let had_pending = self.oplog.has_pending()
+  let planned_ops = if had_pending {
     self.oplog.plan_remote([op]) catch {
       e => raise DocumentError::OpLog(e)
     }
   } else {
     [op]
   }
-  self.preflight_remote_targets(planned_ops)
+  let preflight_ops = if had_pending {
+    let ops = planned_ops.copy()
+    ops.push(op)
+    ops
+  } else {
+    planned_ops
+  }
+  self.preflight_remote_targets(preflight_ops)
   let applied_ops = self.oplog.apply_remote(op) catch {
     e => raise DocumentError::OpLog(e)
   }
