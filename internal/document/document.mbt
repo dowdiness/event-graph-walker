@@ -817,33 +817,58 @@ pub fn Document::apply_remote(
 }
 
 ///|
+/// Merge remote operations with an injectable prepared-plan commit shell.
+fn Document::merge_remote_with(
+  self : Document,
+  remote_ops : Array[@core.Op],
+  remote_frontier : Array[@core.RawVersion],
+  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+) -> Unit raise DocumentError {
+  self.cursor = None
+  // Validate the complete batch before touching state, so malformed content
+  // and invalid batch closure fail atomically (issue #31).
+  validate_remote_ops(remote_ops[:])
+  self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  let plan = self.oplog.prepare_remote(remote_ops) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  self.preflight_remote_targets(plan.operations())
+  // Retain the pre-commit frontier. Branch advances this shared tree once
+  // admission has committed the prepared plan.
+  let branch = @branch.Branch::from_tree_and_oplog(self.tree, self.oplog)
+  // Invalidate before merge so admission and partial-merge failures cannot
+  // leave a stale position cache behind.
+  self.invalidate_cache()
+  let outcome = commit_remote_plan(plan, commit)
+  match outcome {
+    RemoteAdmissionOutcome::Complete(_) => {
+      let _ = branch.advance(self.oplog.get_frontier()) catch {
+        e => raise DocumentError::Branch(e)
+      }
+    }
+    RemoteAdmissionOutcome::Partial(committed, error) => {
+      let _ = branch.advance(self.oplog.get_frontier()) catch {
+        e => raise DocumentError::Branch(e)
+      }
+      raise DocumentError::OpLog(
+        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
+      )
+    }
+  }
+}
+
+///|
 /// Merge remote operations into this document
 pub fn Document::merge_remote(
   self : Document,
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
-  self.cursor = None
-  // Validate Insert content for the entire batch before touching state, so
-  // a malformed op anywhere in the batch fails the whole call atomically
-  // (issue #31).
-  validate_remote_ops(remote_ops[:])
-  self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
-    e => raise DocumentError::OpLog(e)
-  }
-  let planned_ops = self.oplog.plan_remote(remote_ops) catch {
-    e => raise DocumentError::OpLog(e)
-  }
-  self.preflight_remote_targets(planned_ops[:])
-  // Invalidate before merge so partial-merge failures can't leave stale cache.
-  // TODO(phase3): Replace invalidate_cache() with MergeCache for incremental
-  // position cache updates during merge. MergeCache::new() decides whether to
-  // do incremental updates or drop-and-rebuild based on merge_size vs doc_size.
-  self.invalidate_cache()
-  // Use the branch module's merge convenience function
-  @branch.merge_remote_ops(self.tree, self.oplog, remote_ops) catch {
-    e => raise DocumentError::Branch(e)
-  }
+  self.merge_remote_with(remote_ops, remote_frontier, plan => {
+    self.oplog.commit_remote(plan)
+  })
 }
 
 ///|

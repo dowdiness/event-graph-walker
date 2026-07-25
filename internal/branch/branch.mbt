@@ -14,7 +14,7 @@
 /// This is a snapshot of the document that can be efficiently
 /// advanced forward by applying new operations.
 pub struct Branch {
-  priv frontier : @core.Frontier // Version frontier this branch represents
+  priv mut frontier : @core.Frontier // Version frontier this branch represents
   priv tree : @fugue.FugueTree[String] // CRDT tree state at this frontier
   priv oplog : @oplog.OpLog // Reference to the operation log
 }
@@ -111,6 +111,15 @@ pub fn Branch::advance(
     }
     { frontier: target_frontier, tree, oplog: self.oplog }
   }
+}
+
+///|
+/// Advance this retained branch monotonically to the current OpLog frontier.
+fn Branch::advance_to_current(self : Branch) -> Branch raise BranchError {
+  let current_frontier = self.oplog.get_frontier()
+  let advanced = self.advance(current_frontier)
+  self.frontier = advanced.frontier
+  self
 }
 
 ///|
@@ -216,23 +225,58 @@ pub fn Branch::checkout_version_vector(
 ///
 /// # Returns
 /// A new Branch with the merged state
+fn Branch::merge_remote_ops_with(
+  self : Branch,
+  remote_ops : Array[@core.Op],
+  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+) -> Branch raise BranchError {
+  let plan = self.oplog.prepare_remote(remote_ops) catch {
+    e => raise BranchError::OpLog(e)
+  }
+  let outcome = commit_remote_plan(plan, commit)
+  match outcome {
+    BranchRemoteAdmissionOutcome::Complete => self.advance_to_current()
+    BranchRemoteAdmissionOutcome::Partial(committed, error) => {
+      let _ = self.advance_to_current()
+      raise BranchError::OpLog(
+        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
+      )
+    }
+  }
+}
+
+///|
+/// Translate only partial admission into a branch projection outcome.
+priv enum BranchRemoteAdmissionOutcome {
+  Complete
+  Partial(Array[@core.Op], @causal_graph.CausalGraphError)
+}
+
+///|
+/// Catch only a typed partial admission; unknown OpLog failures propagate.
+fn commit_remote_plan(
+  plan : @oplog.RemoteAdmissionPlan,
+  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+) -> BranchRemoteAdmissionOutcome raise BranchError {
+  try commit(plan) catch {
+    @oplog.OpLogError::PartialRemoteAdmission(committed~, error~) =>
+      BranchRemoteAdmissionOutcome::Partial(committed, error)
+    error => raise BranchError::OpLog(error)
+  } noraise {
+    applied => {
+      let _ = applied
+      BranchRemoteAdmissionOutcome::Complete
+    }
+  }
+}
+
+///|
+/// Merge remote operations into this branch using one prepared admission.
 pub fn Branch::merge_remote_ops(
   self : Branch,
   remote_ops : Array[@core.Op],
 ) -> Branch raise BranchError {
-  // Add remote operations to oplog (buffering if parents are missing)
-  for remote_op in remote_ops {
-    let _ = self.oplog.apply_remote(remote_op) catch {
-      e => raise BranchError::OpLog(e)
-    }
-  }
-
-  // Get the new frontier after adding remote ops
-  let new_frontier = self.oplog.get_frontier()
-
-  // Use Branch::advance to apply the new operations
-  // This leverages the walker to apply operations in causal order
-  self.advance(new_frontier)
+  self.merge_remote_ops_with(remote_ops, plan => self.oplog.commit_remote(plan))
 }
 
 ///|
