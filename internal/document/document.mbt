@@ -393,12 +393,26 @@ pub fn Document::replace_range(
 }
 
 ///|
+/// Validate that a local CRDT target exists before allocating a new op.
+fn Document::validate_target_lv(
+  self : Document,
+  target_lv : Int,
+) -> Unit raise DocumentError {
+  match self.tree.get(@fugue.Lv(target_lv)) {
+    Some(_) => ()
+    None =>
+      raise DocumentError::Fugue(@fugue.MissingItem(id=@fugue.Lv(target_lv)))
+  }
+}
+
+///|
 /// Create and apply an undelete operation for a specific LV
 /// Used by undo to revive a deleted item and create a syncable op
 pub fn Document::undelete(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.validate_target_lv(target_lv)
   self.cursor = None
   let op = self.oplog.undelete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
@@ -425,6 +439,7 @@ pub fn Document::delete_by_lv(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.validate_target_lv(target_lv)
   self.cursor = None
   let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)

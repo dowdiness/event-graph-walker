@@ -82,6 +82,7 @@ pub fn OpLog::delete(
   self : OpLog,
   origin_left : Int,
 ) -> @core.Op raise OpLogError {
+  let origin_left_raw = self.raw_target_from_lv(origin_left)
   let parents = self.graph.get_frontier().to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
@@ -99,13 +100,12 @@ pub fn OpLog::delete(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let origin_left_raw = self.raw_from_lv(origin_left)
   let op = @core.Op::new_delete(
     lv,
     parents_raw,
     self.agent_id,
     seq,
-    origin_left_raw,
+    Some(origin_left_raw),
   )
   self.add_op(op)
   op
@@ -117,6 +117,7 @@ pub fn OpLog::undelete(
   self : OpLog,
   origin_left : Int,
 ) -> @core.Op raise OpLogError {
+  let origin_left_raw = self.raw_target_from_lv(origin_left)
   let parents = self.graph.get_frontier().to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
@@ -134,13 +135,12 @@ pub fn OpLog::undelete(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let origin_left_raw = self.raw_from_lv(origin_left)
   let op = @core.Op::new_undelete(
     lv,
     parents_raw,
     self.agent_id,
     seq,
-    origin_left_raw,
+    Some(origin_left_raw),
   )
   self.add_op(op)
   op
@@ -291,6 +291,22 @@ pub fn OpLog::apply_remote(
 ) -> Array[@core.Op] raise OpLogError {
   self.pending.push(op)
   self.drain_pending()
+}
+
+///|
+/// Resolve a target LV for a delete or undelete operation.
+/// Unlike insert origins, a target cannot be the root sentinel.
+fn OpLog::raw_target_from_lv(
+  self : OpLog,
+  lv : Int,
+) -> @core.RawVersion raise OpLogError {
+  if lv == -1 {
+    raise OpLogError::MissingLocalVersion(lv~)
+  }
+  match self.graph.lv_to_raw(lv) {
+    Some(raw) => raw
+    None => raise OpLogError::MissingLocalVersion(lv~)
+  }
 }
 
 ///|

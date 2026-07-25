@@ -1,6 +1,29 @@
 ///| Blackbox tests for OpLog error paths
 
 ///|
+test "local delete and undelete reject the root sentinel before allocation" {
+  let delete_log = OpLog::new("local")
+  let delete_result : Result[Unit, OpLogError] = try {
+    let _ = delete_log.delete(-1)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(delete_result is Err(_), content="true")
+  inspect(delete_log.op_count(), content="0")
+
+  let undelete_log = OpLog::new("local")
+  let undelete_result : Result[Unit, OpLogError] = try {
+    let _ = undelete_log.undelete(-1)
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(undelete_result is Err(_), content="true")
+  inspect(undelete_log.op_count(), content="0")
+}
+
+///|
 test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
   let oplog = OpLog::new("local")
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)

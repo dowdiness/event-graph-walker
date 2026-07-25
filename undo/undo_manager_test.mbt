@@ -1,6 +1,80 @@
 ///| UndoManager blackbox tests
 
 ///|
+/// Test document for characterizing unrecoverable internal failures.
+struct FailureProbeDoc {
+  mut applied : Array[String]
+  mut fail_target : Int
+}
+
+///|
+pub impl @undo.Undoable for FailureProbeDoc with fn lv_to_position(self, lv) {
+  ignore(self)
+  Some(lv)
+}
+
+///|
+pub impl @undo.Undoable for FailureProbeDoc with fn delete_lv(self, lv) -> Unit raise @undo.UndoError {
+  if lv == self.fail_target {
+    raise @undo.UndoError::Internal(detail="injected delete failure")
+  }
+  self.applied.push("delete:" + lv.to_string())
+}
+
+///|
+pub impl @undo.Undoable for FailureProbeDoc with fn undelete_lv(self, lv) -> Unit raise @undo.UndoError {
+  if lv == self.fail_target {
+    raise @undo.UndoError::Internal(detail="injected undelete failure")
+  }
+  self.applied.push("undelete:" + lv.to_string())
+}
+
+///|
+test "internal undo failure clears history and restores tracking" {
+  let manager = @undo.UndoManager::new("alice")
+  manager.record_insert(1, "alice", 1000)
+  manager.record_insert(2, "alice", 1000)
+  let doc : FailureProbeDoc = { applied: [], fail_target: 1 }
+  let result : Result[Bool, @undo.UndoError] = Ok(manager.undo(doc)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(detail~)) =>
+      inspect(detail, content="injected delete failure")
+    _ => fail("Expected internal undo error")
+  }
+  inspect(doc.applied.join(","), content="delete:2")
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="false")
+  inspect(manager.is_tracking(), content="true")
+  manager.record_insert(3, "alice", 2000)
+  inspect(manager.can_undo(), content="true")
+}
+
+///|
+test "internal redo failure clears history and restores tracking" {
+  let manager = @undo.UndoManager::new("alice")
+  manager.record_insert(1, "alice", 1000)
+  manager.record_insert(2, "alice", 1000)
+  let doc : FailureProbeDoc = { applied: [], fail_target: 99 }
+  inspect(manager.undo(doc), content="true")
+  doc.applied = []
+  doc.fail_target = 1
+  let result : Result[Bool, @undo.UndoError] = Ok(manager.redo(doc)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(detail~)) =>
+      inspect(detail, content="injected undelete failure")
+    _ => fail("Expected internal redo error")
+  }
+  inspect(doc.applied.join(","), content="undelete:2")
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="false")
+  inspect(manager.is_tracking(), content="true")
+}
+
+///|
 test "basic undo insert" {
   let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
@@ -530,9 +604,21 @@ test "undo returns false when every item in the popped group is stale" {
   // Alice's only undo item is an Insert whose LV is now deleted upstream.
   // Popping the group runs `lv_to_position(...) == None`, skips, and pushes
   // no redo item. Return must be `false`.
+  let alice_before_stale_undo = doc_a.version()
+  let bob_before_stale_undo = doc_b.version()
   inspect(mgr_a.can_undo(), content="true")
   inspect(mgr_a.undo(doc_a), content="false")
   inspect(doc_a.text(), content="")
+  // A stale undo is a true no-op for the shared document: it creates no
+  // CRDT operation and therefore no delta for the peer.
+  inspect(doc_a.version() == alice_before_stale_undo, content="true")
+  let delta_after_stale_undo = doc_a
+    .sync()
+    .export_since(alice_before_stale_undo)
+  let _ = doc_b.sync().apply(delta_after_stale_undo)
+  inspect(doc_b.version() == bob_before_stale_undo, content="true")
+  inspect(doc_a.version() == doc_b.version(), content="true")
+  inspect(doc_a.text() == doc_b.text(), content="true")
   // The popped group is consumed even on no-op (the LVs are stale forever,
   // so retaining the group would be useless), and nothing makes it to redo.
   inspect(mgr_a.can_undo(), content="false")

@@ -9,8 +9,11 @@ pub impl @undo.Undoable for TextState with fn lv_to_position(self, lv) {
 ///|
 pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
   let _ = self.inner.delete_by_lv(lv) catch {
-    // Fugue MissingItem: item already deleted by a concurrent op — skip silently
-    @document.DocumentError::Fugue(_) => raise @undo.UndoError::ItemNotFound
+    // A missing Fugue item violates the local undo target invariant.
+    @document.DocumentError::Fugue(_) =>
+      raise @undo.UndoError::Internal(
+        detail="missing document item during delete_lv",
+      )
     // Any other DocumentError is an internal error — propagate
     _ =>
       raise @undo.UndoError::Internal(detail="document error during delete_lv")
@@ -20,8 +23,11 @@ pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
 ///|
 pub impl @undo.Undoable for TextState with fn undelete_lv(self, lv) {
   let _ = self.inner.undelete(lv) catch {
-    // Fugue MissingItem: item not in tree — skip silently
-    @document.DocumentError::Fugue(_) => raise @undo.UndoError::ItemNotFound
+    // A missing Fugue item violates the local undo target invariant.
+    @document.DocumentError::Fugue(_) =>
+      raise @undo.UndoError::Internal(
+        detail="missing document item during undelete_lv",
+      )
     // Any other DocumentError is an internal error — propagate
     _ =>
       raise @undo.UndoError::Internal(

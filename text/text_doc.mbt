@@ -1,6 +1,32 @@
 ///| TextState - Main entry point for user-friendly text CRDT API
 
 ///|
+/// A validated local insert request ready for the imperative CRDT shell.
+priv struct InsertPlan {
+  position : Int
+  text : String
+}
+
+///|
+/// Validate a local insert without touching document state.
+fn plan_insert(
+  position : Int,
+  text : String,
+  doc_len : Int,
+) -> InsertPlan raise TextError {
+  if position > doc_len {
+    raise TextError::InvalidPosition(pos=position, len=doc_len)
+  }
+  if text.length() == 0 {
+    return { position, text }
+  }
+  if !is_well_formed_utf16(text) {
+    raise TextError::InvalidText(detail="malformed UTF-16")
+  }
+  { position, text }
+}
+
+///|
 /// A collaborative text document with automatic conflict resolution
 pub(all) struct TextState {
   priv inner : @document.Document
@@ -74,15 +100,12 @@ pub fn TextState::insert(
   text : String,
 ) -> Unit raise TextError {
   let doc_len = self.len()
-  let pos_val = pos.value()
-  if pos_val > doc_len {
-    raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
-  }
-  if text.length() == 0 {
+  let plan = plan_insert(pos.value(), text, doc_len)
+  if plan.text.length() == 0 {
     return
   }
   try {
-    let _ = self.inner.insert(pos_val, text)
+    let _ = self.inner.insert(plan.position, plan.text)
   } catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
@@ -125,7 +148,8 @@ pub fn TextState::replace_range(
 ) -> Unit raise TextError {
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
-  self.inner.replace_range(start, end, text) catch {
+  let plan = plan_insert(start, text, doc_len)
+  self.inner.replace_range(start, end, plan.text) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
 }

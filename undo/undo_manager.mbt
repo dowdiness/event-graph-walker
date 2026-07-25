@@ -102,6 +102,8 @@ fn UndoManager::record_item(
 /// `try { mgr.undo(doc) } catch { _ => false }` wrapper can use the return
 /// value directly as "did undo happen?" without prechecking `can_undo()`.
 /// For peer sync after undo: capture version before calling, then export_since.
+/// An internal failure restores tracking, clears both history stacks, and
+/// propagates the error; the CRDT document is not rolled back.
 pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
@@ -140,6 +142,9 @@ pub fn[D : Undoable] UndoManager::undo(
       UndoError::ItemNotFound => continue
       e => {
         self.tracking_enabled = was_tracking
+        // Internal failures may follow partial CRDT application. Do not leave
+        // stale history that could issue more operations against that state.
+        self.clear()
         raise e
       }
     }
@@ -162,7 +167,9 @@ pub fn[D : Undoable] UndoManager::undo(
 /// Pop redo group and reapply. Push inverse group back to undo stack.
 /// Returns `true` only if at least one item in the popped group was
 /// actually reapplied; `false` if the redo stack was empty OR every item
-/// was a no-op (see `undo` for the rationale).
+/// was a no-op (see `undo` for the rationale). An internal failure restores
+/// tracking, clears both history stacks, and propagates the error; the CRDT
+/// document is not rolled back.
 pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
@@ -201,6 +208,9 @@ pub fn[D : Undoable] UndoManager::redo(
       UndoError::ItemNotFound => continue
       e => {
         self.tracking_enabled = was_tracking
+        // Internal failures may follow partial CRDT application. Do not leave
+        // stale history that could issue more operations against that state.
+        self.clear()
         raise e
       }
     }

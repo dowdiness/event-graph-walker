@@ -45,6 +45,30 @@ test "apply_remote invalidates position cache on partial failure" {
 }
 
 ///|
+test "unknown local delete target does not poison later synchronization" {
+  let alice = Document::new("alice")
+  let bob = Document::new("bob")
+  let _ = try! alice.insert(0, "A")
+  let delete_op = try! alice.delete(0)
+  let result : Result[Unit, DocumentError] = Ok(
+    // The delete operation LV is in the causal graph but is not a Fugue item.
+    {
+      let _ = alice.delete_by_lv(delete_op.lv())
+      ()
+    },
+  ) catch {
+    error => Err(error)
+  }
+  inspect(result is Err(_), content="true")
+
+  let _ = try! alice.insert(0, "A")
+  for op in alice.get_all_ops() {
+    try! bob.apply_remote(op)
+  }
+  inspect(bob.to_text(), content="A")
+}
+
+///|
 test "cache coherent after apply_remote insert: visible count and text correct" {
   let alice = Document::new("alice")
   let bob = Document::new("bob")

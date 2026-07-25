@@ -27,14 +27,17 @@ struct UndoGroup {
 ///|
 /// Errors that can occur during undo/redo operations
 pub(all) suberror UndoError {
+  /// The target is stale or already absent in the requested undo direction.
+  /// This is an expected no-op only when no compensating operation is needed.
   ItemNotFound
+  /// The document or local undo target violated an internal invariant.
   Internal(detail~ : String)
 }
 
 ///|
 pub fn UndoError::message(self : UndoError) -> String {
   match self {
-    ItemNotFound => "Undo target item not found in document"
+    ItemNotFound => "Undo target is stale or already absent"
     Internal(detail~) => "Internal undo error: \{detail}"
   }
 }

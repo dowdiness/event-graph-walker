@@ -67,6 +67,26 @@ test "TextState::replace_range handles shorter replacement" {
 }
 
 ///|
+test "TextState::replace_range rejects malformed text atomically" {
+  let doc = try! TextState::new("alice")
+  let _ = doc.insert(Pos::at(0), "abcdef")
+  let before_text = doc.text()
+  let before_version = doc.version()
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(
+    doc.replace_range(try! Range::from_ints(1, 4), malformed),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text() == before_text, content="true")
+  inspect(doc.version() == before_version, content="true")
+}
+
+///|
 test "TextState::replace_range handles equal-length replacement" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "abcdef")
@@ -141,6 +161,21 @@ test "TextError::help provides guidance" {
     err.help(),
     content="Use a position between 0 and 5 (inclusive for insert, exclusive for delete)",
   )
+}
+
+///|
+test "TextError::InvalidText provides local diagnostics" {
+  let err : TextError = TextError::InvalidText(detail="malformed UTF-16")
+  inspect(err.message(), content="Invalid text: malformed UTF-16")
+  inspect(
+    err.help(),
+    content="Provide valid Unicode text without lone surrogates",
+  )
+  inspect(
+    err.debug(),
+    content="TextError::InvalidText { detail: malformed UTF-16 }",
+  )
+  inspect(err.is_retryable(), content="false")
 }
 
 ///|
@@ -275,6 +310,40 @@ test "TextState insert at invalid position raises error" {
 }
 
 ///|
+test "TextState insert rejects malformed local text atomically" {
+  let doc = try! TextState::new("alice")
+  let _ = doc.insert(Pos::at(0), "seed")
+  let before_text = doc.text()
+  let before_version = doc.version()
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(2), malformed)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text() == before_text, content="true")
+  inspect(doc.version() == before_version, content="true")
+}
+
+///|
+test "TextState insert validates position before local text" {
+  let doc = try! TextState::new("alice")
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(1), malformed)) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidPosition(pos~, len~)) => {
+      inspect(pos, content="1")
+      inspect(len, content="0")
+    }
+    _ => fail("Expected InvalidPosition error")
+  }
+}
+
+///|
 test "TextState delete at invalid position raises error" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hi")
@@ -319,6 +388,82 @@ test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
   inspect(doc.text(), content="")
   let _ = mgr.redo(doc)
   inspect(doc.text(), content="a😀b")
+}
+
+///|
+test "TextState::insert_and_record rejects malformed text atomically" {
+  let doc = try! TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let before_version = doc.version()
+  let result : Result[Unit, TextError] = Ok(
+    doc.insert_and_record(Pos::at(0), malformed, mgr, timestamp_ms=1000),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text(), content="")
+  inspect(doc.version() == before_version, content="true")
+  inspect(mgr.can_undo(), content="false")
+}
+
+///|
+test "TextState::replace_range_and_record rejects malformed text atomically" {
+  let doc = try! TextState::new("alice")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
+  let before_text = doc.text()
+  let before_version = doc.version()
+  let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
+  let result : Result[Unit, TextError] = Ok(
+    doc.replace_range_and_record(
+      try! Range::from_ints(1, 4),
+      malformed,
+      mgr,
+      timestamp_ms=2000,
+    ),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(InvalidText(detail~)) => inspect(detail, content="malformed UTF-16")
+    _ => fail("Expected InvalidText error")
+  }
+  inspect(doc.text() == before_text, content="true")
+  inspect(doc.version() == before_version, content="true")
+  let _ = mgr.undo(doc)
+  inspect(doc.text(), content="")
+}
+
+///|
+test "TextState unknown undo target preserves causal state" {
+  let doc = try! TextState::new("alice")
+  let peer = try! TextState::new("bob")
+  let mgr = @undo.UndoManager::new("alice")
+  let _ = doc.insert(Pos::at(0), "A")
+  let _ = doc.delete(Pos::at(0))
+  // LV 1 is the local delete operation: it exists in the causal graph but
+  // is not a Fugue item and therefore cannot be an undelete target.
+  mgr.record_delete(1, "alice", 1000)
+  let before_version = doc.version()
+  let result : Result[Bool, @undo.UndoError] = Ok(mgr.undo(doc)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(_)) => ()
+    _ => fail("Expected internal undo error")
+  }
+  inspect(doc.version() == before_version, content="true")
+  inspect(mgr.can_undo(), content="false")
+  inspect(mgr.can_redo(), content="false")
+
+  let _ = doc.insert(@text.Pos::at(0), "A")
+  let _ = peer.sync().apply(doc.sync().export_all())
+  inspect(peer.text(), content="A")
+  inspect(doc.version() == peer.version(), content="true")
 }
 
 ///|
