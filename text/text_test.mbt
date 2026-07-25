@@ -486,6 +486,86 @@ test "TextState::replace_range_and_record inserts non-BMP text atomically" {
 }
 
 ///|
+test "Undo Delete stale visible target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let bob_mgr = @undo.UndoManager::new("bob")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let _ = alice.delete_and_record(Pos::at(0), alice_mgr, timestamp_ms=2000)
+  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=2000)
+  inspect(bob_mgr.undo(bob), content="true")
+  let _ = alice.sync().apply(bob.sync().export_all())
+  inspect(alice.text(), content="A")
+  let before = alice.version()
+
+  inspect(alice_mgr.undo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_undo(), content="true")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "Redo Insert stale visible target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let bob_mgr = @undo.UndoManager::new("bob")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  inspect(alice_mgr.undo(alice), content="true")
+  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=2000)
+  inspect(bob_mgr.undo(bob), content="true")
+  let _ = alice.sync().apply(bob.sync().export_all())
+  inspect(alice.text(), content="A")
+  let before = alice.version()
+
+  inspect(alice_mgr.redo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "Redo Delete stale absent target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let bob_mgr = @undo.UndoManager::new("bob")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let _ = alice.delete_and_record(Pos::at(0), alice_mgr, timestamp_ms=2000)
+  inspect(alice_mgr.undo(alice), content="true")
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let bob_before_delete = bob.version()
+  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=3000)
+  let _ = alice.sync().apply(bob.sync().export_since(bob_before_delete))
+  inspect(alice.text(), content="")
+  let before = alice.version()
+
+  inspect(alice_mgr.redo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "Undo Insert stale absent target preserves sync state" {
+  let alice = try! TextState::new("alice")
+  let bob = try! TextState::new("bob")
+  let alice_mgr = @undo.UndoManager::new("alice")
+  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = bob.sync().apply(alice.sync().export_all())
+  let _ = bob.delete(Pos::at(0))
+  let _ = alice.sync().apply(bob.sync().export_all())
+  let before = alice.version()
+
+  inspect(alice_mgr.undo(alice), content="false")
+  inspect(alice.sync().export_since(before).is_empty(), content="true")
+  inspect(alice_mgr.can_undo(), content="false")
+  inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
 test "TextView::runs iterates over runs" {
   let doc = try! TextState::new("alice")
   let _ = doc.insert(Pos::at(0), "Hello")

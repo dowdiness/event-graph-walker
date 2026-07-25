@@ -1,6 +1,22 @@
 ///| Types for undo/redo tracking
 
 ///|
+pub enum CompensatingEditResult {
+  Applied
+  Stale
+} derive(Debug, Eq)
+
+///|
+pub fn CompensatingEditResult::applied() -> CompensatingEditResult {
+  Applied
+}
+
+///|
+pub fn CompensatingEditResult::stale() -> CompensatingEditResult {
+  Stale
+}
+
+///|
 pub enum UndoOpType {
   Insert
   Delete
@@ -27,8 +43,8 @@ struct UndoGroup {
 ///|
 /// Errors that can occur during undo/redo operations
 pub(all) suberror UndoError {
-  /// The target is stale or already absent in the requested undo direction.
-  /// This is an expected no-op only when no compensating operation is needed.
+  /// Deprecated compatibility error for legacy Undoable Adapters.
+  /// New Adapters return CompensatingEditResult::Stale instead.
   ItemNotFound
   /// The document or local undo target violated an internal invariant.
   Internal(detail~ : String)

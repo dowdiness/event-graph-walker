@@ -94,9 +94,8 @@ fn UndoManager::record_item(
 /// Pop undo group and apply inverses locally. Push inverse group to redo stack.
 /// Returns `true` only if at least one inverse was actually applied to `doc`;
 /// `false` if the undo stack was empty OR every item in the popped group was
-/// a no-op (concurrent peer deletion → `lv_to_position` returned `None`, or
-/// `UndoError::ItemNotFound`). The "popped but no-op" case is treated as
-/// `false` so callers don't trigger post-undo machinery (cursor adjustment,
+/// a stale no-op. The "popped but no-op" case is treated as `false` so
+/// callers don't trigger post-undo machinery (cursor adjustment,
 /// peer broadcast, dirty flag, redo-stack push) on a document that didn't
 /// change. Mirrors `Document::undo`'s contract so a
 /// `try { mgr.undo(doc) } catch { _ => false }` wrapper can use the return
@@ -116,30 +115,28 @@ pub fn[D : Undoable] UndoManager::undo(
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
     try {
-      match item.op_type {
+      let result = match item.op_type {
         Insert =>
-          match doc.lv_to_position(item.target_lv) {
-            Some(_) => {
-              doc.delete_lv(item.target_lv)
-              redo_items.push({
-                target_lv: item.target_lv,
-                op_type: Insert,
-                content: item.content,
-              })
-            }
-            None => ()
+          doc.delete_lv(item.target_lv) catch {
+            UndoError::ItemNotFound => Stale
+            e => raise e
           }
-        Delete => {
-          doc.undelete_lv(item.target_lv)
+        Delete =>
+          doc.undelete_lv(item.target_lv) catch {
+            UndoError::ItemNotFound => Stale
+            e => raise e
+          }
+      }
+      match result {
+        Applied =>
           redo_items.push({
             target_lv: item.target_lv,
-            op_type: Delete,
+            op_type: item.op_type,
             content: item.content,
           })
-        }
+        Stale => ()
       }
     } catch {
-      UndoError::ItemNotFound => continue
       e => {
         self.tracking_enabled = was_tracking
         // Internal failures may follow partial CRDT application. Do not leave
@@ -156,10 +153,9 @@ pub fn[D : Undoable] UndoManager::undo(
   }
   self.tracking_enabled = was_tracking
   // Return whether anything actually changed. Popping a group whose items
-  // are all stale (peer-deleted, `ItemNotFound`) leaves the document
-  // untouched and no redo group is pushed — those cases must surface as
-  // `false` so callers don't run post-undo machinery (cursor adjustment,
-  // peer broadcast, dirty flag) on a no-op.
+  // are all stale leaves the document untouched and no redo group is pushed
+  // — those cases must surface as `false` so callers don't run post-undo
+  // machinery (cursor adjustment, peer broadcast, dirty flag) on a no-op.
   any_applied
 }
 
@@ -182,30 +178,28 @@ pub fn[D : Undoable] UndoManager::redo(
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
     try {
-      match item.op_type {
-        Insert => {
-          doc.undelete_lv(item.target_lv)
-          undo_items.push({
-            target_lv: item.target_lv,
-            op_type: Insert,
-            content: item.content,
-          })
-        }
+      let result = match item.op_type {
+        Insert =>
+          doc.undelete_lv(item.target_lv) catch {
+            UndoError::ItemNotFound => Stale
+            e => raise e
+          }
         Delete =>
-          match doc.lv_to_position(item.target_lv) {
-            Some(_) => {
-              doc.delete_lv(item.target_lv)
-              undo_items.push({
-                target_lv: item.target_lv,
-                op_type: Delete,
-                content: item.content,
-              })
-            }
-            None => ()
+          doc.delete_lv(item.target_lv) catch {
+            UndoError::ItemNotFound => Stale
+            e => raise e
           }
       }
+      match result {
+        Applied =>
+          undo_items.push({
+            target_lv: item.target_lv,
+            op_type: item.op_type,
+            content: item.content,
+          })
+        Stale => ()
+      }
     } catch {
-      UndoError::ItemNotFound => continue
       e => {
         self.tracking_enabled = was_tracking
         // Internal failures may follow partial CRDT application. Do not leave

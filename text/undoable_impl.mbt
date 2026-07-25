@@ -2,36 +2,32 @@
 ///  Lives in text/ package where TextState's private fields are accessible.
 
 ///|
-pub impl @undo.Undoable for TextState with fn lv_to_position(self, lv) {
-  self.inner.lv_to_position(lv)
-}
-
-///|
-pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
-  let _ = self.inner.delete_by_lv(lv) catch {
-    // A missing Fugue item violates the local undo target invariant.
-    @document.DocumentError::Fugue(_) =>
-      raise @undo.UndoError::Internal(
-        detail="missing document item during delete_lv",
-      )
-    // Any other DocumentError is an internal error — propagate
-    _ =>
-      raise @undo.UndoError::Internal(detail="document error during delete_lv")
+fn map_target_edit_result(
+  result : @document.TargetEditResult,
+) -> @undo.CompensatingEditResult {
+  match result {
+    @document.TargetEditResult::Applied =>
+      @undo.CompensatingEditResult::applied()
+    @document.TargetEditResult::Stale => @undo.CompensatingEditResult::stale()
   }
 }
 
 ///|
+pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
+  let result = self.inner.delete_if_visible(lv) catch {
+    _ =>
+      raise @undo.UndoError::Internal(detail="document error during delete_lv")
+  }
+  map_target_edit_result(result)
+}
+
+///|
 pub impl @undo.Undoable for TextState with fn undelete_lv(self, lv) {
-  let _ = self.inner.undelete(lv) catch {
-    // A missing Fugue item violates the local undo target invariant.
-    @document.DocumentError::Fugue(_) =>
-      raise @undo.UndoError::Internal(
-        detail="missing document item during undelete_lv",
-      )
-    // Any other DocumentError is an internal error — propagate
+  let result = self.inner.undelete_if_deleted(lv) catch {
     _ =>
       raise @undo.UndoError::Internal(
         detail="document error during undelete_lv",
       )
   }
+  map_target_edit_result(result)
 }

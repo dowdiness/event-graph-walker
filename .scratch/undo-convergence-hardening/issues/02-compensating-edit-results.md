@@ -4,11 +4,11 @@
 
 **Blocked by:** #01 — Prevent poisoned causal state on target preflight failure.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The undo Module owns the named compensating-edit result.
-- [ ] Delete and undelete classify visible, deleted, and structurally missing targets symmetrically.
-- [ ] Applied creates exactly one compensating CRDT operation.
-- [ ] Stale creates no CRDT operation and no synchronization delta.
-- [ ] UndoManager records opposite history only for Applied outcomes.
-- [ ] Undo Delete and Redo Insert do not emit undelete operations when the target is already visible.
+- [x] The undo Module owns the named compensating-edit result.
+- [x] Delete and undelete classify visible, deleted, and structurally missing targets symmetrically.
+- [x] Applied creates exactly one compensating CRDT operation.
+- [x] Stale creates no CRDT operation and no synchronization delta.
+- [x] UndoManager records opposite history only for Applied outcomes.
+- [x] Undo Delete and Redo Insert do not emit undelete operations when the target is already visible.

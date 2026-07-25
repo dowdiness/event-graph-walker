@@ -5,28 +5,33 @@
 struct FailureProbeDoc {
   mut applied : Array[String]
   mut fail_target : Int
+  stale_target : Int?
 }
 
 ///|
-pub impl @undo.Undoable for FailureProbeDoc with fn lv_to_position(self, lv) {
-  ignore(self)
-  Some(lv)
-}
-
-///|
-pub impl @undo.Undoable for FailureProbeDoc with fn delete_lv(self, lv) -> Unit raise @undo.UndoError {
+pub impl @undo.Undoable for FailureProbeDoc with fn delete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
   if lv == self.fail_target {
     raise @undo.UndoError::Internal(detail="injected delete failure")
   }
+  match self.stale_target {
+    Some(target) if target == lv => return @undo.CompensatingEditResult::stale()
+    _ => ()
+  }
   self.applied.push("delete:" + lv.to_string())
+  @undo.CompensatingEditResult::applied()
 }
 
 ///|
-pub impl @undo.Undoable for FailureProbeDoc with fn undelete_lv(self, lv) -> Unit raise @undo.UndoError {
+pub impl @undo.Undoable for FailureProbeDoc with fn undelete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
   if lv == self.fail_target {
     raise @undo.UndoError::Internal(detail="injected undelete failure")
   }
+  match self.stale_target {
+    Some(target) if target == lv => return @undo.CompensatingEditResult::stale()
+    _ => ()
+  }
   self.applied.push("undelete:" + lv.to_string())
+  @undo.CompensatingEditResult::applied()
 }
 
 ///|
@@ -34,7 +39,11 @@ test "internal undo failure clears history and restores tracking" {
   let manager = @undo.UndoManager::new("alice")
   manager.record_insert(1, "alice", 1000)
   manager.record_insert(2, "alice", 1000)
-  let doc : FailureProbeDoc = { applied: [], fail_target: 1 }
+  let doc : FailureProbeDoc = {
+    applied: [],
+    fail_target: 1,
+    stale_target: None,
+  }
   let result : Result[Bool, @undo.UndoError] = Ok(manager.undo(doc)) catch {
     error => Err(error)
   }
@@ -56,7 +65,11 @@ test "internal redo failure clears history and restores tracking" {
   let manager = @undo.UndoManager::new("alice")
   manager.record_insert(1, "alice", 1000)
   manager.record_insert(2, "alice", 1000)
-  let doc : FailureProbeDoc = { applied: [], fail_target: 99 }
+  let doc : FailureProbeDoc = {
+    applied: [],
+    fail_target: 99,
+    stale_target: None,
+  }
   inspect(manager.undo(doc), content="true")
   doc.applied = []
   doc.fail_target = 1
@@ -72,6 +85,21 @@ test "internal redo failure clears history and restores tracking" {
   inspect(manager.can_undo(), content="false")
   inspect(manager.can_redo(), content="false")
   inspect(manager.is_tracking(), content="true")
+}
+
+///|
+test "stale result consumes group without opposite history" {
+  let manager = @undo.UndoManager::new("alice")
+  manager.record_insert(1, "alice", 1000)
+  let doc : FailureProbeDoc = {
+    applied: [],
+    fail_target: 99,
+    stale_target: Some(1),
+  }
+  inspect(manager.undo(doc), content="false")
+  inspect(doc.applied.join(","), content="")
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="false")
 }
 
 ///|
@@ -575,54 +603,6 @@ test "oscillating undo/redo across boundary stays consistent" {
   inspect(doc.text(), content="H")
   inspect(mgr.redo(doc), content="false")
   inspect(doc.text(), content="H")
-}
-
-///|
-/// When a group is popped but every item is stale — peer deleted the
-/// inserted LVs concurrently, so `lv_to_position` returns `None` for each
-/// inverse — no inverse is actually applied and no redo group is pushed.
-/// The Bool return must be `false` in that case, not `true`, so callers
-/// using it as "did undo happen?" don't run post-undo machinery (cursor
-/// adjust, broadcast, dirty flag) on a no-op. Caught by chatgpt-codex on
-/// PR #42.
-test "undo returns false when every item in the popped group is stale" {
-  let doc_a = try! @text.TextState::new("alice")
-  let doc_b = try! @text.TextState::new("bob")
-  let mgr_a = @undo.UndoManager::new("alice")
-
-  // Alice inserts "X" and records it for undo.
-  doc_a.insert_and_record(@text.Pos::at(0), "X", mgr_a, timestamp_ms=1000)
-  inspect(doc_a.text(), content="X")
-
-  // Sync to Bob, then Bob deletes Alice's "X". Sync back.
-  let _ = doc_b.sync().apply(doc_a.sync().export_all())
-  inspect(doc_b.text(), content="X")
-  let _ = doc_b.delete(@text.Pos::at(0))
-  let _ = doc_a.sync().apply(doc_b.sync().export_all())
-  inspect(doc_a.text(), content="")
-
-  // Alice's only undo item is an Insert whose LV is now deleted upstream.
-  // Popping the group runs `lv_to_position(...) == None`, skips, and pushes
-  // no redo item. Return must be `false`.
-  let alice_before_stale_undo = doc_a.version()
-  let bob_before_stale_undo = doc_b.version()
-  inspect(mgr_a.can_undo(), content="true")
-  inspect(mgr_a.undo(doc_a), content="false")
-  inspect(doc_a.text(), content="")
-  // A stale undo is a true no-op for the shared document: it creates no
-  // CRDT operation and therefore no delta for the peer.
-  inspect(doc_a.version() == alice_before_stale_undo, content="true")
-  let delta_after_stale_undo = doc_a
-    .sync()
-    .export_since(alice_before_stale_undo)
-  let _ = doc_b.sync().apply(delta_after_stale_undo)
-  inspect(doc_b.version() == bob_before_stale_undo, content="true")
-  inspect(doc_a.version() == doc_b.version(), content="true")
-  inspect(doc_a.text() == doc_b.text(), content="true")
-  // The popped group is consumed even on no-op (the LVs are stale forever,
-  // so retaining the group would be useless), and nothing makes it to redo.
-  inspect(mgr_a.can_undo(), content="false")
-  inspect(mgr_a.can_redo(), content="false")
 }
 
 ///|

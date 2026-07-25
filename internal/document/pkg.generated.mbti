@@ -41,6 +41,7 @@ pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::delete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError
+pub fn Document::delete_if_visible(Self, Int) -> TargetEditResult raise DocumentError
 pub fn Document::delete_range(Self, Int, Int) -> Unit raise DocumentError
 pub fn Document::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
 pub fn Document::get_all_ops(Self) -> Array[@core.Op]
@@ -56,6 +57,7 @@ pub fn Document::new(String) -> Self
 pub fn Document::replace_range(Self, Int, Int, String) -> Unit raise DocumentError
 pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
+pub fn Document::undelete_if_deleted(Self, Int) -> TargetEditResult raise DocumentError
 pub fn Document::visible_count(Self) -> Int
 pub impl @core.RawToLv for Document
 
@@ -71,6 +73,11 @@ pub fn MergeCache::insert_at(Self, Int, VisibleRun) -> Unit
 pub fn MergeCache::new(@order-tree.OrderTree[VisibleRun]?, Int, Int) -> Self
 pub fn MergeCache::remove_at(Self, Int) -> Unit
 pub fn MergeCache::take(Self) -> @order-tree.OrderTree[VisibleRun]?
+
+pub enum TargetEditResult {
+  Applied
+  Stale
+}
 
 type VisibleRun derive(Eq, @debug.Debug)
 pub impl @rle.HasLength for VisibleRun
