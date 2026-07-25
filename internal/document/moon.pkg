@@ -10,6 +10,7 @@ import {
   "dowdiness/order-tree" @order_tree,
   "moonbitlang/core/bench",
   "moonbitlang/core/debug",
+  "moonbitlang/core/hashset",
 }
 
 import {

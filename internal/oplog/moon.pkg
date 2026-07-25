@@ -4,6 +4,7 @@ import {
   "dowdiness/rle",
   "moonbitlang/core/bench",
   "moonbitlang/core/json",
+  "moonbitlang/core/hashset",
   "moonbitlang/core/immut/hashset" @immut/hashset,
 }
 
