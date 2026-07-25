@@ -36,6 +36,157 @@ test "oplog - mutable hashset build (1000 raw versions)" (b : @bench.T) {
 
 ///|
 /// Benchmark: Insert operations (linear, 100 ops)
+fn benchmark_remote_chain(n : Int) -> Array[@core.Op] {
+  let ops : Array[@core.Op] = []
+  for i in 0..<n {
+    let parents = if i == 0 {
+      []
+    } else {
+      [@core.RawVersion::new("remote", i - 1)]
+    }
+    ops.push(@core.Op::new_insert(-1, parents, "remote", i, "x", None, None))
+  }
+  ops
+}
+
+///|
+fn benchmark_apply_reverse_chain(
+  oplog : OpLog,
+  ops : Array[@core.Op],
+) -> Unit raise OpLogError {
+  for i in 0..<ops.length() {
+    ignore(oplog.apply_remote(ops[ops.length() - i - 1]))
+  }
+}
+
+///|
+fn benchmark_reverse_ops(ops : Array[@core.Op]) -> Array[@core.Op] {
+  let reversed : Array[@core.Op] = []
+  for i in 0..<ops.length() {
+    reversed.push(ops[ops.length() - i - 1])
+  }
+  reversed
+}
+
+///|
+test "oplog - reverse dependency chain apply (100 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(100)
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      try! benchmark_apply_reverse_chain(oplog, ops)
+      b.keep(oplog.op_count())
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - reverse dependency chain apply (1000 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(1000)
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      try! benchmark_apply_reverse_chain(oplog, ops)
+      b.keep(oplog.op_count())
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - reverse dependency chain apply (10000 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(10000)
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      try! benchmark_apply_reverse_chain(oplog, ops)
+      b.keep(oplog.op_count())
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - reverse dependency chain plan batch (100 ops)" (b : @bench.T) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(100))
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      let planned = try! oplog.plan_remote(ops)
+      b.keep(planned.length())
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - reverse dependency chain plan batch (1000 ops)" (b : @bench.T) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(1000))
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      let planned = try! oplog.plan_remote(ops)
+      b.keep(planned.length())
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - reverse dependency chain plan batch (10000 ops)" (b : @bench.T) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(10000))
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      let planned = try! oplog.plan_remote(ops)
+      b.keep(planned.length())
+    },
+    count=1,
+  )
+}
+
+///|
+fn benchmark_remote_branches(depth : Int) -> Array[@core.Op] {
+  let agents = ["remote-a", "remote-b", "remote-c", "remote-d"]
+  let ops : Array[@core.Op] = []
+  for level in 0..<depth {
+    for branch in 0..<agents.length() {
+      let parents = if level == 0 {
+        []
+      } else {
+        [@core.RawVersion::new(agents[branch], level - 1)]
+      }
+      ops.push(
+        @core.Op::new_insert(
+          -1,
+          parents,
+          agents[branch],
+          level,
+          "x",
+          None,
+          None,
+        ),
+      )
+    }
+  }
+  ops
+}
+
+///|
+test "oplog - reverse branching dependencies apply (4 x 250 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_branches(250)
+  b.bench(
+    fn() {
+      let oplog = OpLog::new("local")
+      try! benchmark_apply_reverse_chain(oplog, ops)
+      b.keep(oplog.op_count())
+    },
+    count=1,
+  )
+}
+
+///|
 test "oplog - insert (100 ops)" (b : @bench.T) {
   b.bench(fn() {
     let oplog = OpLog::new("agent_a")
