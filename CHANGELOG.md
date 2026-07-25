@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- The public `undo.Undoable` interface now hides visibility lookup and returns
+  `CompensatingEditResult::Applied` or `::Stale` from `delete_lv` and
+  `undelete_lv`. Custom adapters must follow the migration guide in
+  [`docs/MIGRATING_UNDO_API.md`](docs/MIGRATING_UNDO_API.md).
+- The legacy `UndoError::ItemNotFound` variant has been removed. Stale targets
+  are reported as `CompensatingEditResult::Stale` instead.
+
 ## [0.5.0] - 2026-07-23
 
 ### Breaking changes
