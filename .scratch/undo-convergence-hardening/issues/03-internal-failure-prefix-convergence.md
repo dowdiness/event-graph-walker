@@ -4,11 +4,11 @@
 
 **Blocked by:** #02 — Make compensating edits report Applied or Stale.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Tracking state is restored after an Internal failure.
-- [ ] All local undo and redo history is invalidated.
-- [ ] Already-applied valid CRDT operations remain exportable.
-- [ ] A second peer can apply the valid operation prefix.
-- [ ] The affected peers converge after synchronization.
-- [ ] No Document snapshot or rollback mechanism is introduced.
+- [x] Tracking state is restored after an Internal failure.
+- [x] All local undo and redo history is invalidated.
+- [x] Already-applied valid CRDT operations remain exportable.
+- [x] A second peer can apply the valid operation prefix.
+- [x] The affected peers converge after synchronization.
+- [x] No Document snapshot or rollback mechanism is introduced.

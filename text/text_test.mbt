@@ -1,5 +1,29 @@
 ///|
 /// Tests for user-friendly text API
+
+///|
+/// Test-only Adapter for validating post-commit Internal failure behavior.
+struct PartialFailureDoc {
+  inner : TextState
+  mut delete_calls : Int
+  fail_after : Int
+}
+
+///|
+pub impl @undo.Undoable for PartialFailureDoc with fn delete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
+  if self.delete_calls >= self.fail_after {
+    raise @undo.UndoError::Internal(detail="injected post-commit failure")
+  }
+  self.delete_calls = self.delete_calls + 1
+  @undo.Undoable::delete_lv(self.inner, lv)
+}
+
+///|
+pub impl @undo.Undoable for PartialFailureDoc with fn undelete_lv(self, lv) -> @undo.CompensatingEditResult raise @undo.UndoError {
+  @undo.Undoable::undelete_lv(self.inner, lv)
+}
+
+///|
 test "TextState::new creates empty document" {
   let doc = try! TextState::new("alice")
   inspect(doc.text(), content="")
@@ -563,6 +587,38 @@ test "Undo Insert stale absent target preserves sync state" {
   inspect(alice.sync().export_since(before).is_empty(), content="true")
   inspect(alice_mgr.can_undo(), content="false")
   inspect(alice_mgr.can_redo(), content="false")
+}
+
+///|
+test "post-commit internal failure preserves CRDT prefix and clears history" {
+  let source = try! TextState::new("alice")
+  let peer = try! TextState::new("bob")
+  let manager = @undo.UndoManager::new("alice")
+  let _ = source.insert_and_record(Pos::at(0), "AB", manager, timestamp_ms=1000)
+  let _ = source.insert_and_record(Pos::at(2), "C", manager, timestamp_ms=2000)
+  inspect(manager.undo(source), content="true")
+  inspect(source.text(), content="AB")
+  let failing : PartialFailureDoc = {
+    inner: source,
+    delete_calls: 0,
+    fail_after: 1,
+  }
+  let result : Result[Bool, @undo.UndoError] = Ok(manager.undo(failing)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(detail~)) =>
+      inspect(detail, content="injected post-commit failure")
+    _ => fail("Expected post-commit internal failure")
+  }
+  inspect(failing.inner.text(), content="A")
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="false")
+  inspect(manager.is_tracking(), content="true")
+
+  let _ = peer.sync().apply(failing.inner.sync().export_all())
+  inspect(peer.text(), content="A")
+  inspect(peer.version() == failing.inner.version(), content="true")
 }
 
 ///|
