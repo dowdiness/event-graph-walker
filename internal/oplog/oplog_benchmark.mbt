@@ -50,6 +50,97 @@ fn benchmark_remote_chain(n : Int) -> Array[@core.Op] {
 }
 
 ///|
+fn benchmark_remote_live_planner(
+  n : Int,
+) -> RemoteAdmissionPlanner raise OpLogError {
+  let planner = RemoteAdmissionPlanner()
+  for i in 0..<n {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "compact-benchmark-live",
+      i,
+      "x",
+      None,
+      None,
+    )
+    planner.register_pending(op, _ => false)
+  }
+  planner
+}
+
+///|
+fn benchmark_remote_compaction_planner(
+  n : Int,
+) -> RemoteAdmissionPlanner raise OpLogError {
+  let planner = RemoteAdmissionPlanner()
+  let rejected : Array[@core.RawVersion] = []
+  for i in 0..<n {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "compact-benchmark",
+      i,
+      "x",
+      None,
+      None,
+    )
+    planner.register_pending(op, _ => false)
+    if i % 2 == 0 {
+      rejected.push(remote_admission_raw(op))
+    }
+  }
+  planner.reject_pending_dependents(rejected)
+  planner
+}
+
+///|
+/// The closure only times the O(N) live-index rebuild; all N nodes remain
+/// live, so repeating compact rebuilds the same-sized planner.
+test "oplog - remote planner compact clean-live rebuild (10000 live nodes)" (
+  b : @bench.T,
+) {
+  let planner = try! benchmark_remote_live_planner(10000)
+  b.bench(
+    fn() {
+      planner.compact(_ => false)
+      b.keep(planner)
+    },
+    count=10,
+  )
+}
+
+///|
+/// The closure times fresh build+reject lifecycle work without compaction;
+/// pair this with the following benchmark to isolate compaction overhead.
+test "oplog - remote planner build+reject baseline (10000 entries)" (
+  b : @bench.T,
+) {
+  b.bench(
+    fn() {
+      let planner = try! benchmark_remote_compaction_planner(10000)
+      b.keep(planner)
+    },
+    count=10,
+  )
+}
+
+///|
+/// The closure times fresh build+reject plus policy-triggered compaction at
+/// weighted stale = 2 * live. Compare it with the matched baseline above.
+test "oplog - remote planner build+reject+policy compact (10000 entries)" (
+  b : @bench.T,
+) {
+  b.bench(
+    fn() {
+      let planner = try! benchmark_remote_compaction_planner(10000)
+      b.keep((planner.maybe_compact(_ => false), planner))
+    },
+    count=10,
+  )
+}
+
+///|
 fn benchmark_apply_reverse_chain(
   oplog : OpLog,
   ops : Array[@core.Op],

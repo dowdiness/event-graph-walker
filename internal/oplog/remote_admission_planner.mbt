@@ -6,12 +6,23 @@
 /// overlay; canonical state changes happen through the explicit registration,
 /// acknowledgement, and rejection transitions below.
 priv struct RemoteAdmissionPlanner {
-  pending : Map[@core.RawVersion, RemoteAdmissionNode]
-  mut pending_order : Array[@core.RawVersion]
-  waiters : Map[@core.RawVersion, Array[RemoteAdmissionWaiter]]
-  ready : @priority_queue.PriorityQueue[RemoteAdmissionReady]
+  mut pending : Map[@core.RawVersion, RemoteAdmissionNode]
+  mut pending_order : Array[RemoteAdmissionOrderEntry]
+  mut waiters : Map[@core.RawVersion, Array[RemoteAdmissionWaiter]]
+  mut ready : @priority_queue.PriorityQueue[RemoteAdmissionReady]
   mut next_arrival : Int
   mut generation : Int
+  mut stale_order_tombstones : Int
+  mut stale_waiter_refs : Int
+  mut stale_ready_refs : Int
+}
+
+///|
+/// Arrival-qualified order identity. A retry appends a new entry instead of
+/// requiring a suffix scan to find the live occurrence.
+priv struct RemoteAdmissionOrderEntry {
+  raw : @core.RawVersion
+  arrival : Int
 }
 
 ///|
@@ -26,7 +37,10 @@ priv struct RemoteAdmissionWaiter {
 priv struct RemoteAdmissionNode {
   op : @core.Op
   arrival : Int
+  dependencies : Array[@core.RawVersion]
+  waiting_dependencies : Array[@core.RawVersion]
   mut unresolved_count : Int
+  mut ready_refs : Int
 }
 
 ///|
@@ -42,8 +56,23 @@ priv struct RemoteAdmissionReady {
 priv struct RemoteAdmissionPlan {
   planned : Array[@core.Op]
   planned_raws : @hashset.HashSet[@core.RawVersion]
+  staged : Map[@core.RawVersion, RemoteAdmissionNode]
   staged_order : Array[@core.RawVersion]
+  initial_unresolved : Map[@core.RawVersion, Int]
+  initial_waiting : Map[@core.RawVersion, Array[@core.RawVersion]]
+  next_arrival : Int
   generation : Int
+  mut consumed : Bool
+}
+
+///|
+/// Result of the private begin transition. These states are deliberately not
+/// OpLog errors: public error variants belong to the integration commit.
+priv enum RemoteAdmissionBeginResult {
+  Applied
+  Stale
+  Consumed
+  Conflict
 }
 
 ///|
@@ -70,6 +99,9 @@ fn RemoteAdmissionPlanner::RemoteAdmissionPlanner() -> RemoteAdmissionPlanner {
     ready: @priority_queue.PriorityQueue::default(),
     next_arrival: 0,
     generation: 0,
+    stale_order_tombstones: 0,
+    stale_waiter_refs: 0,
+    stale_ready_refs: 0,
   }
 }
 
@@ -118,6 +150,24 @@ fn remote_admission_validate(op : @core.Op) -> Unit raise OpLogError {
   ignore(RemoteAdmissionPlanner::generation)
   ignore(RemoteAdmissionPlan::generation)
   ignore(RemoteAdmissionPlanner::arrival_of)
+  ignore(RemoteAdmissionPlanner::begin)
+  ignore(RemoteAdmissionPlanner::begin_plan)
+  ignore(RemoteAdmissionPlanner::compact)
+  ignore(RemoteAdmissionPlanner::maybe_compact)
+  ignore(RemoteAdmissionPlanner::stale_count)
+  // Keep private lifecycle constructors reachable until Commit 4 wires them.
+  let begin_result_anchor = match op.seq() % 4 {
+    0 => RemoteAdmissionBeginResult::Applied
+    1 => RemoteAdmissionBeginResult::Stale
+    2 => RemoteAdmissionBeginResult::Consumed
+    _ => RemoteAdmissionBeginResult::Conflict
+  }
+  match begin_result_anchor {
+    Applied => ()
+    Stale => ()
+    Consumed => ()
+    Conflict => ()
+  }
   if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
     raise OpLogError::MissingOrigin
   }
@@ -136,6 +186,61 @@ fn remote_admission_add_waiter(
 }
 
 ///|
+/// Add a prepared node to canonical membership without changing generation.
+/// The caller validates the plan before invoking this for every staged node.
+fn RemoteAdmissionPlanner::register_canonical(
+  self : RemoteAdmissionPlanner,
+  raw : @core.RawVersion,
+  node : RemoteAdmissionNode,
+) -> Unit {
+  let canonical = {
+    op: node.op,
+    arrival: node.arrival,
+    dependencies: node.dependencies.copy(),
+    waiting_dependencies: node.waiting_dependencies.copy(),
+    unresolved_count: node.unresolved_count,
+    ready_refs: 0,
+  }
+  self.pending.set(raw, canonical)
+  self.pending_order.push({ raw, arrival: canonical.arrival })
+  for dependency in canonical.waiting_dependencies {
+    remote_admission_add_waiter(self.waiters, dependency, {
+      raw,
+      arrival: canonical.arrival,
+    })
+  }
+  if canonical.unresolved_count == 0 {
+    self.ready.push({ round_key: 0, arrival_key: -canonical.arrival, raw })
+    canonical.ready_refs = 1
+    self.pending.set(raw, canonical)
+  }
+}
+
+///|
+/// Remove one live canonical node while retaining stale order and queue data.
+fn RemoteAdmissionPlanner::remove_canonical(
+  self : RemoteAdmissionPlanner,
+  raw : @core.RawVersion,
+) -> Bool {
+  match self.pending.get(raw) {
+    Some(node) => {
+      self.pending.remove(raw)
+      self.stale_order_tombstones += 1
+      self.stale_waiter_refs += node.unresolved_count
+      self.stale_ready_refs += node.ready_refs
+      true
+    }
+    None => false
+  }
+}
+
+///|
+/// Current retained stale-index count. Compaction is intentionally explicit.
+fn RemoteAdmissionPlanner::stale_count(self : RemoteAdmissionPlanner) -> Int {
+  self.stale_order_tombstones + self.stale_waiter_refs + self.stale_ready_refs
+}
+
+///|
 /// Register one live pending operation with an explicit admitted-status view.
 fn RemoteAdmissionPlanner::register_pending(
   self : RemoteAdmissionPlanner,
@@ -149,20 +254,22 @@ fn RemoteAdmissionPlanner::register_pending(
   remote_admission_validate(op)
   let arrival = self.next_arrival
   let dependencies = remote_admission_dependencies(op)
-  let mut unresolved_count = 0
+  let waiting_dependencies : Array[@core.RawVersion] = []
   for dependency in dependencies {
     if !is_admitted(dependency) {
-      unresolved_count += 1
-      remote_admission_add_waiter(self.waiters, dependency, { raw, arrival })
+      waiting_dependencies.push(dependency)
     }
   }
-  let node = { op, arrival, unresolved_count }
-  self.pending.set(raw, node)
-  self.pending_order.push(raw)
-  self.next_arrival += 1
-  if unresolved_count == 0 {
-    self.ready.push({ round_key: 0, arrival_key: -node.arrival, raw })
+  let node = {
+    op,
+    arrival,
+    dependencies,
+    waiting_dependencies,
+    unresolved_count: waiting_dependencies.length(),
+    ready_refs: 0,
   }
+  self.register_canonical(raw, node)
+  self.next_arrival += 1
   self.generation += 1
 }
 
@@ -177,16 +284,17 @@ fn RemoteAdmissionPlanner::acknowledge_admitted(
   self : RemoteAdmissionPlanner,
   raw : @core.RawVersion,
 ) -> Unit {
-  self.pending.remove(raw)
-  let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let removed = self.remove_canonical(raw)
+  let mut changed = removed
   match self.waiters.get(raw) {
-    Some(waiters) =>
+    Some(waiters) => {
       for waiter in waiters {
         match self.pending.get(waiter.raw) {
           Some(node) =>
-            if node.arrival == waiter.arrival && seen.add_and_check(waiter.raw) {
+            if node.arrival == waiter.arrival {
               node.unresolved_count -= 1
               self.pending.set(waiter.raw, node)
+              changed = true
               // Each acknowledgement starts the next prepare at round 0.
               if node.unresolved_count == 0 {
                 self.ready.push({
@@ -194,14 +302,25 @@ fn RemoteAdmissionPlanner::acknowledge_admitted(
                   arrival_key: -node.arrival,
                   raw: waiter.raw,
                 })
+                node.ready_refs += 1
+                self.pending.set(waiter.raw, node)
               }
+            } else {
+              // This arrival-qualified edge belongs to a rejected or admitted
+              // retry. It is removed with the bucket below.
+              self.stale_waiter_refs -= 1
             }
-          None => ()
+          None => self.stale_waiter_refs -= 1
         }
       }
+      self.waiters.remove(raw)
+      changed = true
+    }
     None => ()
   }
-  self.generation += 1
+  if changed {
+    self.generation += 1
+  }
 }
 
 ///|
@@ -236,16 +355,13 @@ fn RemoteAdmissionPlanner::reject_pending_dependents(
       None => ()
     }
   }
-  let remaining : Array[@core.RawVersion] = []
-  for raw in self.pending_order {
-    if rejected.contains(raw) {
-      self.pending.remove(raw)
-    } else {
-      remaining.push(raw)
+  let mut changed = false
+  for raw in work {
+    if self.remove_canonical(raw) {
+      changed = true
     }
   }
-  if remaining.length() != self.pending_order.length() {
-    self.pending_order = remaining
+  if changed {
     self.generation += 1
   }
 }
@@ -404,18 +520,27 @@ fn RemoteAdmissionPlanner::prepare(
     }
     remote_admission_validate(op)
     let dependencies = remote_admission_dependencies(op)
-    let node = { op, arrival: next_overlay_arrival, unresolved_count: 0 }
+    let waiting_dependencies : Array[@core.RawVersion] = []
+    for dependency in dependencies {
+      if !is_admitted(dependency) {
+        waiting_dependencies.push(dependency)
+      }
+    }
+    let node = {
+      op,
+      arrival: next_overlay_arrival,
+      dependencies,
+      waiting_dependencies,
+      unresolved_count: waiting_dependencies.length(),
+      ready_refs: 0,
+    }
     next_overlay_arrival += 1
     overlay.staged.set(raw, node)
     overlay.staged_order.push(raw)
-    let mut unresolved_count = 0
-    for dependency in dependencies {
-      if !is_admitted(dependency) {
-        unresolved_count += 1
-        overlay.add_waiter(dependency, { raw, arrival: node.arrival })
-      }
+    overlay.staged_unresolved.set(raw, waiting_dependencies.length())
+    for dependency in waiting_dependencies {
+      overlay.add_waiter(dependency, { raw, arrival: node.arrival })
     }
-    overlay.staged_unresolved.set(raw, unresolved_count)
   }
   for raw in overlay.staged_order {
     match overlay.staged.get(raw) {
@@ -461,11 +586,183 @@ fn RemoteAdmissionPlanner::prepare(
     }
     overlay.resolve_waiters(self, entry.raw, node.arrival, -entry.round_key)
   }
+  let initial_unresolved : Map[@core.RawVersion, Int] = Map::default()
+  let initial_waiting : Map[@core.RawVersion, Array[@core.RawVersion]] = Map::default()
+  for raw in overlay.staged_order {
+    match overlay.staged.get(raw) {
+      Some(node) => {
+        initial_unresolved.set(raw, node.unresolved_count)
+        initial_waiting.set(raw, node.waiting_dependencies.copy())
+      }
+      None => ()
+    }
+  }
   {
     planned: overlay.planned_operations,
     planned_raws: overlay.planned,
+    staged: overlay.staged,
     staged_order: overlay.staged_order,
+    initial_unresolved,
+    initial_waiting,
+    next_arrival: next_overlay_arrival,
     generation: self.generation,
+    consumed: false,
+  }
+}
+
+///|
+/// Begin a plan exactly once and register its staged nodes atomically.
+/// Generation and consumed checks happen before any canonical mutation.
+fn RemoteAdmissionPlanner::begin(
+  self : RemoteAdmissionPlanner,
+  plan : RemoteAdmissionPlan,
+) -> RemoteAdmissionBeginResult {
+  if plan.consumed {
+    return RemoteAdmissionBeginResult::Consumed
+  }
+  if plan.generation != self.generation {
+    return RemoteAdmissionBeginResult::Stale
+  }
+  // A generation match normally proves this. Keep the validation explicit so
+  // an ill-formed private plan still cannot partially register its prefix.
+  let seen_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for raw in plan.staged_order {
+    if !seen_raws.add_and_check(raw) {
+      return RemoteAdmissionBeginResult::Conflict
+    }
+  }
+  let seen_arrivals : @hashset.HashSet[Int] = @hashset.HashSet([])
+  if plan.next_arrival < self.next_arrival ||
+    plan.next_arrival != self.next_arrival + plan.staged_order.length() ||
+    plan.staged.length() != plan.staged_order.length() ||
+    plan.initial_unresolved.length() != plan.staged_order.length() ||
+    plan.initial_waiting.length() != plan.staged_order.length() {
+    return RemoteAdmissionBeginResult::Conflict
+  }
+  for index, raw in plan.staged_order {
+    if self.pending.contains(raw) {
+      return RemoteAdmissionBeginResult::Conflict
+    }
+    match plan.staged.get(raw) {
+      Some(node) =>
+        if remote_admission_raw(node.op) != raw ||
+          node.arrival != self.next_arrival + index ||
+          !seen_arrivals.add_and_check(node.arrival) ||
+          plan.initial_unresolved.get(raw) is None ||
+          plan.initial_waiting.get(raw) is None {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+      None => return RemoteAdmissionBeginResult::Conflict
+    }
+  }
+  for raw in plan.staged_order {
+    match plan.staged.get(raw) {
+      Some(node) => self.register_canonical(raw, node)
+      None => ()
+    }
+  }
+  self.next_arrival = plan.next_arrival
+  plan.consumed = true
+  self.generation += 1
+  RemoteAdmissionBeginResult::Applied
+}
+
+///|
+/// Name the lifecycle transition for callers that emphasize plan ownership.
+fn RemoteAdmissionPlanner::begin_plan(
+  self : RemoteAdmissionPlanner,
+  plan : RemoteAdmissionPlan,
+) -> RemoteAdmissionBeginResult {
+  self.begin(plan)
+}
+
+///|
+/// Return whether an order entry still names the live arrival for its raw key.
+fn remote_admission_order_entry_is_live(
+  pending : Map[@core.RawVersion, RemoteAdmissionNode],
+  entry : RemoteAdmissionOrderEntry,
+) -> Bool {
+  match pending.get(entry.raw) {
+    Some(node) => node.arrival == entry.arrival
+    None => false
+  }
+}
+
+///|
+/// Rebuild all indexes from live canonical nodes and their original arrivals.
+fn RemoteAdmissionPlanner::compact(
+  self : RemoteAdmissionPlanner,
+  is_admitted : (@core.RawVersion) -> Bool,
+) -> Unit {
+  let new_pending : Map[@core.RawVersion, RemoteAdmissionNode] = Map::default()
+  let new_order : Array[RemoteAdmissionOrderEntry] = []
+  let new_waiters : Map[@core.RawVersion, Array[RemoteAdmissionWaiter]] = Map::default()
+  let new_ready : @priority_queue.PriorityQueue[RemoteAdmissionReady] = @priority_queue.PriorityQueue::default()
+  for entry in self.pending_order {
+    if !remote_admission_order_entry_is_live(self.pending, entry) {
+      continue
+    }
+    match self.pending.get(entry.raw) {
+      Some(node) =>
+        if !is_admitted(entry.raw) {
+          let waiting_dependencies : Array[@core.RawVersion] = []
+          for dependency in node.dependencies {
+            if !is_admitted(dependency) {
+              waiting_dependencies.push(dependency)
+              remote_admission_add_waiter(new_waiters, dependency, {
+                raw: entry.raw,
+                arrival: node.arrival,
+              })
+            }
+          }
+          let rebuilt = {
+            op: node.op,
+            arrival: node.arrival,
+            dependencies: node.dependencies.copy(),
+            waiting_dependencies,
+            unresolved_count: waiting_dependencies.length(),
+            ready_refs: 0,
+          }
+          new_pending.set(entry.raw, rebuilt)
+          new_order.push(entry)
+          if rebuilt.unresolved_count == 0 {
+            new_ready.push({
+              round_key: 0,
+              arrival_key: -rebuilt.arrival,
+              raw: entry.raw,
+            })
+            rebuilt.ready_refs = 1
+            new_pending.set(entry.raw, rebuilt)
+          }
+        }
+      None => ()
+    }
+  }
+  self.pending = new_pending
+  self.pending_order = new_order
+  self.waiters = new_waiters
+  self.ready = new_ready
+  self.stale_order_tombstones = 0
+  self.stale_waiter_refs = 0
+  self.stale_ready_refs = 0
+  self.generation += 1
+}
+
+///|
+/// Avoid rebuilding for small churn while bounding retained stale state to a
+/// constant floor plus a multiple of live pending membership. The 2:1 ratio is
+/// the benchmarked point where JS paid about 2 ms extra for 10,000 entries.
+fn RemoteAdmissionPlanner::maybe_compact(
+  self : RemoteAdmissionPlanner,
+  is_admitted : (@core.RawVersion) -> Bool,
+) -> Bool {
+  let live = self.pending.length()
+  let stale_limit = (live * 2).max(1024)
+  if self.stale_count() >= stale_limit {
+    self.compact(is_admitted)
+    true
+  } else {
+    false
   }
 }
 
@@ -484,14 +781,20 @@ fn RemoteAdmissionPlan::remaining_raws(
   planner : RemoteAdmissionPlanner,
 ) -> Array[@core.RawVersion] {
   let remaining : Array[@core.RawVersion] = []
-  for raw in planner.pending_order {
-    match planner.pending.get(raw) {
-      Some(_) => if !self.planned_raws.contains(raw) { remaining.push(raw) }
+  for entry in planner.pending_order {
+    if !remote_admission_order_entry_is_live(planner.pending, entry) {
+      continue
+    }
+    match planner.pending.get(entry.raw) {
+      Some(_) =>
+        if !self.planned_raws.contains(entry.raw) {
+          remaining.push(entry.raw)
+        }
       None => ()
     }
   }
   for raw in self.staged_order {
-    if !self.planned_raws.contains(raw) {
+    if !self.planned_raws.contains(raw) && !planner.pending.contains(raw) {
       remaining.push(raw)
     }
   }
@@ -504,7 +807,10 @@ fn RemoteAdmissionPlanner::pending_raws(
   self : RemoteAdmissionPlanner,
 ) -> Array[@core.RawVersion] {
   [
-    for raw in self.pending_order if self.pending.contains(raw) => raw
+    for entry in self.pending_order if remote_admission_order_entry_is_live(
+      self.pending,
+      entry,
+    ) => entry.raw
   ]
 }
 

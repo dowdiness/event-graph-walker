@@ -161,7 +161,7 @@ Remove the two planner files and the priority-queue import; production remains u
 
 Add deterministic canonical transitions for staged registration, successful admission acknowledgement, plan invalidation, transitive rejection, retry, and stale-entry skipping. Prove at the planner-transition level that stale/consumed transitions occur before mutation and that a successful admission prefix remains identifiable when a later transition is not acknowledged. Implement quiescent compaction as a rebuild from live membership and original arrival ordinals using explicit admitted status.
 
-Benchmark several stale/live threshold ratios inside the package before selecting the production threshold. Record why the chosen threshold bounds retention without rebuilding on the hot path. Tests must compact with live unresolved operations and preserve subsequent prepared order and pending membership.
+Use the measured policy `weighted stale >= max(1024, 2 * live pending)`. The 10,000-entry matched lifecycle showed about 2–3 ms additional JS cost and noise-level wasm-gc cost at the trigger point. Tests must pin the floor and ratio boundaries, compact with live unresolved operations, and preserve subsequent prepared order and pending membership.
 
 **Validation**
 

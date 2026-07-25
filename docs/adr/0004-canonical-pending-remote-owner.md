@@ -40,7 +40,7 @@ A duplicate is the retransmission of the same immutable operation under the same
 
 ## Bounded cleanup
 
-Admission or rejection removes an operation from canonical pending membership immediately but may leave inactive nodes, waiter edges, or ready-queue entries in disposable internal indexes. Stale entries are ignored and can never revive an inactive operation. At a quiescent boundary after a drain, the planner deterministically rebuilds its internal indexes from live pending membership and arrival metadata when stale retention crosses a configured threshold. The threshold is selected by benchmark, but must bound retained stale state relative to live pending state rather than relying on the pending set eventually becoming empty.
+Admission or rejection removes an operation from canonical pending membership immediately but may leave inactive nodes, waiter edges, or ready-queue entries in disposable internal indexes. Stale entries are ignored and can never revive an inactive operation. At a quiescent boundary after a drain, the planner deterministically rebuilds its internal indexes from live pending membership and arrival metadata when stale retention crosses a configured threshold. The selected policy rebuilds when weighted stale references reach `max(1024, 2 * live pending)`. At 10,000 entries with half rejected, policy compaction added about 2–3 ms to the matched JS lifecycle and remained within noise on wasm-gc. This bounds retained stale state relative to live pending state without relying on the pending set eventually becoming empty or rebuilding for small churn.
 
 ## Migration validation
 
