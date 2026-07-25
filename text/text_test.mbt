@@ -32,6 +32,36 @@ pub impl @undo.Undoable for PartialFailureDoc with fn undelete_lv(self, lv) -> @
 }
 
 ///|
+test "TextState Undoable internal errors preserve target detail" {
+  let doc = try! TextState::new("alice")
+  let result : Result[@undo.CompensatingEditResult, @undo.UndoError] = Ok(
+    @undo.Undoable::delete_lv(doc, 99),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(@undo.UndoError::Internal(detail~)) => {
+      inspect(detail.contains("target_lv=99"), content="true")
+      inspect(detail.contains("missing item id=Lv(99)"), content="true")
+    }
+    _ => fail("expected detailed internal undo error")
+  }
+
+  let undelete_result : Result[@undo.CompensatingEditResult, @undo.UndoError] = Ok(
+    @undo.Undoable::undelete_lv(doc, 99),
+  ) catch {
+    error => Err(error)
+  }
+  match undelete_result {
+    Err(@undo.UndoError::Internal(detail~)) => {
+      inspect(detail.contains("target_lv=99"), content="true")
+      inspect(detail.contains("missing item id=Lv(99)"), content="true")
+    }
+    _ => fail("expected detailed internal undo error")
+  }
+}
+
+///|
 test "TextState::new creates empty document" {
   let doc = try! TextState::new("alice")
   inspect(doc.text(), content="")

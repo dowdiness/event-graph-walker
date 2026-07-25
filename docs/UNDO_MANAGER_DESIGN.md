@@ -51,6 +51,10 @@ Add an LV-based UndoManager as a **separate `undo/` package** in `event-graph-wa
 
 ## Package Structure
 
+The following sketch is historical. The shipped `Undoable` trait is in
+`undo/undoable.mbt`; the Phase 3 `Change` helper shown below is not implemented.
+Current paths in the source and generated `.mbti` files are authoritative.
+
 ```
 event-graph-walker/
 ├── undo/                    ← NEW PACKAGE
@@ -67,14 +71,14 @@ event-graph-walker/
 ├── text/
 │   └── types.mbt            # +Undoable impl
 ├── core/
-│   ├── change.mbt           # Change type + safe target_lv(resolver)
-│   └── traits.mbt           # RawToLv trait
+│   ├── change.mbt           # unimplemented Phase 3 Change plan
+│   └── traits.mbt           # historical RawToLv location
 ├── document/
-│   └── undoable.mbt          # NEW: Undoable trait (minimal host API)
+│   └── undoable.mbt          # historical location; not shipped
 │
-│   (core/: defines Change + RawToLv)
-│   (document/: defines Undoable, uses DocumentError + @oplog.Op + Int)
-│   (text/: implements Undoable for TextState, bridges Pos/@core.Change -> Int/Op and TextError -> DocumentError)
+│   (core/change.mbt is unimplemented; RawToLv ships in internal/core/traits.mbt)
+│   (document/undoable.mbt is historical; Undoable ships in undo/undoable.mbt)
+│   (text/: implements Undoable for TextState through the shipped Adapter)
 │   (undo/: generic over Undoable, no text/ dependency)
 └── ...
 ```
@@ -175,9 +179,12 @@ pub(open) trait RawToLv {
 }
 ```
 
-**File:** `event-graph-walker/core/traits.mbt` (NEW)
+**File:** `event-graph-walker/internal/core/traits.mbt` (shipped)
 
-### Step 3b: `core/change.mbt` — Move `Change` + add safe `target_lv`
+### Step 3b: `core/change.mbt` — Unimplemented Phase 3 plan
+
+`Change` and `Change::target_lv` were planned but are not shipped. Do not use
+this section as an implementation reference.
 
 ```moonbit
 ///|
@@ -203,7 +210,7 @@ pub fn Change::agent(self : Change) -> String {
 }
 ```
 
-**File:** `event-graph-walker/core/change.mbt` (NEW)
+**File:** `event-graph-walker/core/change.mbt` (not present; unimplemented plan)
 
 **Note:** `Change::target_lv(resolver)` is safe and returns `None` if the delete target cannot be resolved (missing origin or unknown RawVersion). The resolver is implemented by `Document` via `@core.RawToLv`.
 
@@ -352,7 +359,7 @@ The per-character approach just makes each LV accessible for recording.
 
 **Undo algorithm (shipped):**
 
-```
+```moonbit
 undo[D : @undo.Undoable](self, doc: D) -> Bool raise UndoError:
   group = undo_stack.pop()
   suppress tracking
@@ -404,7 +411,7 @@ moon check
 moon test
 moon info
 moon fmt
-git diff *.mbti  # verify API changes: fugue/ gets undelete+lv_to_position, core/ gets Change + RawToLv
+git diff *.mbti  # verify shipped API changes; RawToLv is in internal/core and Change is not shipped
 ```
 
 ## Usage Example
@@ -426,12 +433,13 @@ doc.delete_and_record(@text.Pos::at(4), mgr, timestamp_ms=2000)
 // and want to temporarily suppress them.)
 doc.sync().apply(remote_message)
 
-// Undo — returns Unit. Tracking is suppressed automatically during undo/redo.
-// Use export_since() to capture the inverse ops for syncing to peers.
+// Undo — returns Bool. Tracking is suppressed automatically during undo/redo.
+// Export a sync delta only when at least one edit was applied.
 let ver_before = doc.version()
-mgr.undo(doc)
-let msg = doc.sync().export_since(ver_before)
-// peer.sync().apply(msg)
+if mgr.undo(doc) {
+  let msg = doc.sync().export_since(ver_before)
+  // peer.sync().apply(msg)
+}
 ```
 
 ## Edge Cases
@@ -455,11 +463,11 @@ let msg = doc.sync().export_since(ver_before)
 | `event-graph-walker/undo/types.mbt` | Create | ~30 |
 | `event-graph-walker/undo/undo_manager.mbt` | Create | ~250 |
 | `event-graph-walker/undo/undo_manager_test.mbt` | Create | ~200 |
-| `event-graph-walker/document/undoable.mbt` | Create | ~10 |
+| `event-graph-walker/document/undoable.mbt` | Historical plan only | — |
 | `event-graph-walker/fugue/item.mbt` | Modify | +4 |
 | `event-graph-walker/fugue/tree.mbt` | Modify | +25 |
-| `event-graph-walker/core/change.mbt` | Create | ~40 |
-| `event-graph-walker/core/traits.mbt` | Create | ~8 |
+| `event-graph-walker/core/change.mbt` | Unimplemented Phase 3 plan | — |
+| `event-graph-walker/core/traits.mbt` | Historical plan; shipped under `internal/core/traits.mbt` | ~8 |
 | `event-graph-walker/text/types.mbt` | Modify | +? (Undoable impl for TextState) |
 | `event-graph-walker/text/undo_helpers.mbt` | Create | ~40 (insert_and_record, delete_and_record) |
 | `event-graph-walker/text/moon.pkg.json` | Modify | +1 (add undo import) |
@@ -467,9 +475,9 @@ let msg = doc.sync().export_since(ver_before)
 ## Implementation Status (as of 2026-02-01)
 
 **Phase 1 (local-only undo/redo):** ✅ Complete
-- ✅ `core/` package added (`Change`, `RawToLv`)
+- ✅ `RawToLv` ships under `internal/core/traits.mbt`; the planned `Change` type remains unimplemented
 - ✅ `undo/undoable.mbt` trait added (originally planned at `document/undoable.mbt`; relocated to the `undo/` package during implementation)
-- ✅ `Document` implements `@core.RawToLv`
+- ✅ `Document` implements the shipped `@core.RawToLv` trait
 - ✅ `fugue` tombstone revive + LV lookup (`mark_visible`, `undelete`, `lv_to_position`)
 - ✅ `text` implements `Undoable` for `TextState`
 - ✅ `text/undo_helpers.mbt` with `insert_and_record` + `delete_and_record`
@@ -549,6 +557,7 @@ it through `export_since()`.
 
 ## Phase 3 (Future)
 
+- Implement the planned `Change` / `Change::target_lv` helper only if a concrete consumer requires it; it is currently unimplemented.
 - Property-based tests for undo-redo roundtrip invariants across concurrent edits
 - Wire up to valtio module's TypeScript API (replace broken position-based undo)
 - Compaction/GC support (handle tombstone removal + undo interaction)

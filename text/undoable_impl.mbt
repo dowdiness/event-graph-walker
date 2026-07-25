@@ -15,8 +15,12 @@ fn map_target_edit_result(
 ///|
 pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
   let result = self.inner.delete_if_visible(lv) catch {
-    _ =>
-      raise @undo.UndoError::Internal(detail="document error during delete_lv")
+    error => {
+      let detail = TextError::from_document_error(error, self.len()).debug()
+      raise @undo.UndoError::Internal(
+        detail="delete_lv target_lv=\{lv}: \{detail}",
+      )
+    }
   }
   map_target_edit_result(result)
 }
@@ -24,10 +28,12 @@ pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
 ///|
 pub impl @undo.Undoable for TextState with fn undelete_lv(self, lv) {
   let result = self.inner.undelete_if_deleted(lv) catch {
-    _ =>
+    error => {
+      let detail = TextError::from_document_error(error, self.len()).debug()
       raise @undo.UndoError::Internal(
-        detail="document error during undelete_lv",
+        detail="undelete_lv target_lv=\{lv}: \{detail}",
       )
+    }
   }
   map_target_edit_result(result)
 }
