@@ -52,6 +52,10 @@ pub fn OpLog::insert(
       None => raise OpLogError::MissingLocalVersion(lv~)
     }
   }
+  // Resolve both insertion origins before allocating a causal version.
+  // A failed origin lookup must not leave an orphaned graph entry.
+  let origin_left_raw = self.raw_from_lv(origin_left)
+  let origin_right_raw = self.raw_from_lv(origin_right)
   let lv = self.graph.add_version(parents, self.agent_id) catch {
     error => raise OpLogError::CausalGraphError(error~)
   }
@@ -61,8 +65,6 @@ pub fn OpLog::insert(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let origin_left_raw = self.raw_from_lv(origin_left)
-  let origin_right_raw = self.raw_from_lv(origin_right)
   let op = @core.Op::new_insert(
     lv,
     parents_raw,

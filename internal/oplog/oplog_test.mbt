@@ -24,6 +24,39 @@ test "local delete and undelete reject the root sentinel before allocation" {
 }
 
 ///|
+test "local insert origin preflight leaves causal state unchanged" {
+  let oplog = OpLog::new("local")
+  let result : Result[Unit, OpLogError] = try {
+    ignore(oplog.insert("ghost", 99, -1))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(result is Err(_), content="true")
+  inspect(oplog.causal_graph().op_count(), content="0")
+  inspect(
+    oplog.causal_graph().get_frontier().to_array().is_empty(),
+    content="true",
+  )
+
+  let op = try! oplog.insert("ok", -1, -1)
+  inspect(op.lv(), content="0")
+  inspect(oplog.op_count(), content="1")
+
+  let right_oplog = OpLog::new("right")
+  let right_result : Result[Unit, OpLogError] = try {
+    ignore(right_oplog.insert("ghost", -1, 99))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(right_result is Err(_), content="true")
+  inspect(right_oplog.causal_graph().op_count(), content="0")
+  let right_op = try! right_oplog.insert("ok", -1, -1)
+  inspect(right_op.lv(), content="0")
+}
+
+///|
 test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
   let oplog = OpLog::new("local")
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
