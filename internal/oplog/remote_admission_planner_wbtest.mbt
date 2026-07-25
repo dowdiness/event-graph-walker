@@ -600,6 +600,30 @@ test "remote admission planner retry acknowledgement tombstones stay nonnegative
 }
 
 ///|
+test "remote admission acknowledgement always invalidates prepared plans" {
+  let incoming = @core.Op::new_insert(
+    -1,
+    [],
+    "ack-unrelated-incoming",
+    0,
+    "i",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare([incoming], _ => false)
+  let generation_before = planner.generation()
+  planner.acknowledge_admitted(
+    @core.RawVersion::new("ack-unrelated-admitted", 0),
+  )
+  assert_eq(planner.generation(), generation_before + 1)
+  match planner.begin(plan) {
+    RemoteAdmissionBeginResult::Stale => ()
+    _ => fail("every graph admission must invalidate a prepared plan")
+  }
+}
+
+///|
 test "remote admission planner begins staged nodes exactly once" {
   let parent = @core.Op::new_insert(-1, [], "begin-parent", 0, "p", None, None)
   let child = @core.Op::new_insert(

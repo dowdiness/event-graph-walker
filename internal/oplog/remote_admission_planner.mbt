@@ -284,8 +284,7 @@ fn RemoteAdmissionPlanner::acknowledge_admitted(
   self : RemoteAdmissionPlanner,
   raw : @core.RawVersion,
 ) -> Unit {
-  let removed = self.remove_canonical(raw)
-  let mut changed = removed
+  ignore(self.remove_canonical(raw))
   match self.waiters.get(raw) {
     Some(waiters) => {
       for waiter in waiters {
@@ -294,7 +293,6 @@ fn RemoteAdmissionPlanner::acknowledge_admitted(
             if node.arrival == waiter.arrival {
               node.unresolved_count -= 1
               self.pending.set(waiter.raw, node)
-              changed = true
               // Each acknowledgement starts the next prepare at round 0.
               if node.unresolved_count == 0 {
                 self.ready.push({
@@ -314,13 +312,12 @@ fn RemoteAdmissionPlanner::acknowledge_admitted(
         }
       }
       self.waiters.remove(raw)
-      changed = true
     }
     None => ()
   }
-  if changed {
-    self.generation += 1
-  }
+  // Every graph admission invalidates prepared overlays, even when the raw
+  // identity has no current canonical node or waiter bucket.
+  self.generation += 1
 }
 
 ///|
