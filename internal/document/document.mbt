@@ -442,7 +442,7 @@ fn Document::preflight_remote_origin(
 /// the OpLog can allocate any of its local versions.
 fn Document::preflight_remote_targets(
   self : Document,
-  ops : Array[@core.Op],
+  ops : ArrayView[@core.Op],
 ) -> Unit raise DocumentError {
   let graph = self.oplog.causal_graph()
   let planned_inserts : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
@@ -597,37 +597,32 @@ pub fn Document::undelete_if_deleted(
 }
 
 ///|
-/// Apply a remote operation to this document
-pub fn Document::apply_remote(
+priv enum RemoteAdmissionOutcome {
+  Complete(Array[@core.Op])
+  Partial(Array[@core.Op], @causal_graph.CausalGraphError)
+}
+
+///|
+/// Translate only partial admission into a projection-ready outcome.
+fn commit_remote_plan(
+  plan : @oplog.RemoteAdmissionPlan,
+  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+) -> RemoteAdmissionOutcome raise DocumentError {
+  try commit(plan) catch {
+    @oplog.OpLogError::PartialRemoteAdmission(committed~, error~) =>
+      RemoteAdmissionOutcome::Partial(committed, error)
+    error => raise DocumentError::OpLog(error)
+  } noraise {
+    applied => RemoteAdmissionOutcome::Complete(applied)
+  }
+}
+
+///|
+/// Project operations already committed by OpLog into Fugue and its cache.
+fn Document::project_remote_ops(
   self : Document,
-  op : @core.Op,
+  applied_ops : ArrayView[@core.Op],
 ) -> Unit raise DocumentError {
-  self.cursor = None
-  // Validate Insert content before touching the oplog so malformed peer ops
-  // can't persist (issue #31).
-  match op.content() {
-    @core.Insert(text) => validate_insert_content(text)
-    @core.Delete | @core.Undelete => ()
-  }
-  let had_pending = self.oplog.has_pending()
-  let planned_ops = if had_pending {
-    self.oplog.plan_remote([op]) catch {
-      e => raise DocumentError::OpLog(e)
-    }
-  } else {
-    [op]
-  }
-  let preflight_ops = if had_pending {
-    let ops = planned_ops.copy()
-    ops.push(op)
-    ops
-  } else {
-    planned_ops
-  }
-  self.preflight_remote_targets(preflight_ops)
-  let applied_ops = self.oplog.apply_remote(op) catch {
-    e => raise DocumentError::OpLog(e)
-  }
   if applied_ops.length() == 0 {
     return
   }
@@ -769,6 +764,59 @@ pub fn Document::apply_remote(
 }
 
 ///|
+/// Apply a remote operation with an injectable prepared-plan commit shell.
+fn Document::apply_remote_with(
+  self : Document,
+  op : @core.Op,
+  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+) -> Unit raise DocumentError {
+  self.cursor = None
+  // Validate Insert content before touching the oplog so malformed peer ops
+  // can't persist (issue #31).
+  validate_remote_ops([op][:])
+  let plan = self.oplog.prepare_remote([op]) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  self.preflight_remote_targets(plan.operations())
+  // Check the incoming operation independently so an unready operation with
+  // a graph-known but structurally missing origin is rejected before pending.
+  self.preflight_remote_targets([op][:])
+  // Detach before admission so a fallible commit cannot observe a stale
+  // canonical cache. The exact cache is restored once the outcome is known.
+  let detached_cache = self.indexed_state.take_cache()
+  let outcome = try commit_remote_plan(plan, commit) catch {
+    error => {
+      self.indexed_state.restore_cache(detached_cache)
+      raise error
+    }
+  } noraise {
+    outcome => outcome
+  }
+  match outcome {
+    RemoteAdmissionOutcome::Complete(applied_ops) => {
+      self.indexed_state.restore_cache(detached_cache)
+      self.project_remote_ops(applied_ops[:])
+    }
+    RemoteAdmissionOutcome::Partial(committed, error) => {
+      self.indexed_state.restore_cache(detached_cache)
+      self.project_remote_ops(committed[:])
+      raise DocumentError::OpLog(
+        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
+      )
+    }
+  }
+}
+
+///|
+/// Apply a remote operation to this document
+pub fn Document::apply_remote(
+  self : Document,
+  op : @core.Op,
+) -> Unit raise DocumentError {
+  self.apply_remote_with(op, plan => self.oplog.commit_remote(plan))
+}
+
+///|
 /// Merge remote operations into this document
 pub fn Document::merge_remote(
   self : Document,
@@ -786,7 +834,7 @@ pub fn Document::merge_remote(
   let planned_ops = self.oplog.plan_remote(remote_ops) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.preflight_remote_targets(planned_ops)
+  self.preflight_remote_targets(planned_ops[:])
   // Invalidate before merge so partial-merge failures can't leave stale cache.
   // TODO(phase3): Replace invalidate_cache() with MergeCache for incremental
   // position cache updates during merge. MergeCache::new() decides whether to
