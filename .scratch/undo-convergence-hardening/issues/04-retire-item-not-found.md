@@ -4,10 +4,10 @@
 
 **Blocked by:** #02 — Make compensating edits report Applied or Stale; #03 — Preserve valid CRDT prefixes after Internal failures.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] No production Adapter emits ItemNotFound for stale targets.
-- [ ] Legacy ItemNotFound handling is removed or explicitly retained only for compatibility.
-- [ ] Generated Interfaces contain no unintended public changes.
-- [ ] Context, ADRs, Undo design documentation, and examples describe the same contracts.
-- [ ] The full validation suite passes.
+- [x] No production Adapter emits ItemNotFound for stale targets.
+- [x] Legacy ItemNotFound handling is removed from the public Undoable contract and Manager.
+- [x] Generated Interfaces contain only the intended removal.
+- [x] Context, ADRs, Undo design documentation, and examples describe the same contracts.
+- [x] The full validation suite passes.

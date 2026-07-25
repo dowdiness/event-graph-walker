@@ -116,16 +116,8 @@ pub fn[D : Undoable] UndoManager::undo(
     let item = group.items[i]
     try {
       let result = match item.op_type {
-        Insert =>
-          doc.delete_lv(item.target_lv) catch {
-            UndoError::ItemNotFound => Stale
-            e => raise e
-          }
-        Delete =>
-          doc.undelete_lv(item.target_lv) catch {
-            UndoError::ItemNotFound => Stale
-            e => raise e
-          }
+        Insert => doc.delete_lv(item.target_lv)
+        Delete => doc.undelete_lv(item.target_lv)
       }
       match result {
         Applied =>
@@ -179,16 +171,8 @@ pub fn[D : Undoable] UndoManager::redo(
     let item = group.items[i]
     try {
       let result = match item.op_type {
-        Insert =>
-          doc.undelete_lv(item.target_lv) catch {
-            UndoError::ItemNotFound => Stale
-            e => raise e
-          }
-        Delete =>
-          doc.delete_lv(item.target_lv) catch {
-            UndoError::ItemNotFound => Stale
-            e => raise e
-          }
+        Insert => doc.undelete_lv(item.target_lv)
+        Delete => doc.delete_lv(item.target_lv)
       }
       match result {
         Applied =>

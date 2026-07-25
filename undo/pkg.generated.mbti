@@ -9,7 +9,6 @@ import {
 
 // Errors
 pub(all) suberror UndoError {
-  ItemNotFound
   Internal(detail~ : String)
 }
 pub fn UndoError::is_retryable(Self) -> Bool

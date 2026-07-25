@@ -9,6 +9,35 @@
 >
 > Phase 1 + Phase 2 shipped and are correct. Phase 3 (TypeScript wire-up, compaction) is unstarted. Verify against the source before implementing from this doc.
 
+## Current shipped compensating-edit contract
+
+The current source of truth is `undo/undoable.mbt`, `undo/undo_manager.mbt`,
+`undo/types.mbt`, and `text/undoable_impl.mbt`:
+
+```moonbit
+pub(open) trait Undoable {
+  fn delete_lv(Self, Int) -> CompensatingEditResult raise UndoError
+  fn undelete_lv(Self, Int) -> CompensatingEditResult raise UndoError
+}
+```
+
+`CompensatingEditResult::Applied` means a new CRDT operation was committed.
+`CompensatingEditResult::Stale` means the requested direction was already
+satisfied and no CRDT operation or sync delta was emitted. `UndoManager` does
+not inspect positions, tombstones, or Fugue details. Target classification is
+owned by the Document Module and mapped by the TextState Adapter.
+
+`UndoManager::undo` and `UndoManager::redo` return `Bool`: `true` means at
+least one compensating edit was applied; `false` means the stack was empty or
+the popped group was entirely stale. Internal failures restore tracking, clear
+both local history stacks, propagate the error, and do not roll back already
+committed CRDT operations. The obsolete `UndoError::ItemNotFound` compatibility
+variant has been retired; stale targets use `CompensatingEditResult::Stale`.
+
+The implementation steps below are retained as historical design rationale;
+when they conflict with the current contract above or the source, the source
+wins.
+
 ## Overview
 
 Add an LV-based UndoManager as a **separate `undo/` package** in `event-graph-walker/` that plugs into `TextState` via a small `Undoable` trait. Solves P2-1 (remote ops polluting undo stack) and P2-2 (stale positions after concurrent edits).
@@ -68,23 +97,19 @@ event-graph-walker/
 
 ## Implementation Steps
 
-### Step 0: `document/undoable.mbt` — NEW: Undoable trait
+### Step 0: `undo/undoable.mbt` — shipped Undoable trait
 
-Minimal host API needed by UndoManager. Uses MoonBit trait method signatures (no `fn`).
+The shipped trait is intentionally small. It exposes compensating-edit intent,
+not positions, tombstones, or CRDT operation payloads.
 
 ```moonbit
-///| Minimal host API needed by UndoManager.
-///  Uses only document-level types to avoid circular dependency
-///  (document/ cannot import text/ since text/ already imports document/).
-///  Mutating methods take `Self` (MoonBit structs are reference types).
 pub(open) trait Undoable {
-  lv_to_position(Self, Int) -> Int?
-  undelete_lv(Self, Int) -> @oplog.Op raise DocumentError
-  delete_lv(Self, Int) -> @oplog.Op raise DocumentError
+  fn delete_lv(Self, Int) -> CompensatingEditResult raise UndoError
+  fn undelete_lv(Self, Int) -> CompensatingEditResult raise UndoError
 }
 ```
 
-**File:** `event-graph-walker/document/undoable.mbt` (NEW)
+**File:** `event-graph-walker/undo/undoable.mbt`
 
 ### Step 1: `fugue/item.mbt` — Add `mark_visible()`
 
@@ -182,29 +207,23 @@ pub fn Change::agent(self : Change) -> String {
 
 **Note:** `Change::target_lv(resolver)` is safe and returns `None` if the delete target cannot be resolved (missing origin or unknown RawVersion). The resolver is implemented by `Document` via `@core.RawToLv`.
 
-Add `Undoable` impl for `TextState` (exact internals may vary). This impl must live
-in `text/` because it accesses TextState private fields.
+The `TextState` Adapter lives in `text/` because it accesses private fields.
+It maps the Document Module's applied/stale result to the Undoable result and
+maps unexpected Document failures to `UndoError::Internal`.
 
 ```moonbit
-///| Undoable impl for TextState
-///  Lives in text/ package where TextState's private fields are accessible.
-///|
-pub impl @document.Undoable for TextState with lv_to_position(self, lv) {
-  self.inner.lv_to_position(lv)
+pub impl @undo.Undoable for TextState with fn delete_lv(self, lv) {
+  let result = self.inner.delete_if_visible(lv) catch {
+    _ => raise @undo.UndoError::Internal(detail="document error during delete_lv")
+  }
+  map_target_edit_result(result)
 }
 
-///|
-pub impl @document.Undoable for TextState with undelete_lv(self, lv) {
-  self.inner.undelete(lv) catch {
-    e => raise e
+pub impl @undo.Undoable for TextState with fn undelete_lv(self, lv) {
+  let result = self.inner.undelete_if_deleted(lv) catch {
+    _ => raise @undo.UndoError::Internal(detail="document error during undelete_lv")
   }
-}
-
-///|
-pub impl @document.Undoable for TextState with delete_lv(self, lv) {
-  self.inner.delete_by_lv(lv) catch {
-    e => raise e
-  }
+  map_target_edit_result(result)
 }
 ```
 
@@ -262,8 +281,8 @@ pub struct UndoManager {
 | `new` | `(agent_id, capture_timeout_ms?: Int) -> UndoManager` | Constructor, default timeout 500ms |
 | `record_insert` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record insert. `target_lv` is the inserted item's LV. Filters by agent (only records if agent matches `self.agent_id`). Groups by inactivity (time since last edit). Clears redo stack. |
 | `record_delete` | `(target_lv: Int, agent: String, timestamp_ms: Int, content?: String) -> Unit` | Record delete. `target_lv` is the deleted item's LV (the tombstone). Filters by agent (only records if agent matches `self.agent_id`). Groups by inactivity (time since last edit). Clears redo stack. |
-| `undo` | `[D : @document.Undoable](self, doc: D) -> Unit raise UndoError` | Pop undo group, apply inverses locally, push to redo. Use `export_since()` after this call to get the inverse ops for syncing to peers. |
-| `redo` | `[D : @document.Undoable](self, doc: D) -> Unit raise UndoError` | Pop redo group, apply inverses locally, push to undo. Use `export_since()` after this call to get the inverse ops for syncing to peers. |
+| `undo` | `[D : @undo.Undoable](self, doc: D) -> Bool raise UndoError` | Apply compensating edits, push only Applied results to redo, and return whether anything changed. Use `export_since()` after this call to sync. |
+| `redo` | `[D : @undo.Undoable](self, doc: D) -> Bool raise UndoError` | Reapply compensating edits, push only Applied results to undo, and return whether anything changed. Use `export_since()` after this call to sync. |
 | `set_tracking` | `(enabled: Bool) -> Unit` | Suppress/resume tracking |
 | `is_tracking` | `() -> Bool` | Query tracking state |
 | `can_undo` | `() -> Bool` | Undo stack non-empty |
@@ -331,37 +350,25 @@ pub fn TextState::delete_and_record(
 already resolves origins per-character in its internal loop (document.mbt:97-138).
 The per-character approach just makes each LV accessible for recording.
 
-**Undo algorithm (Phase 2 — global sync):**
+**Undo algorithm (shipped):**
 
 ```
-undo[D : @document.Undoable](self, doc: D) -> Unit raise UndoError:
+undo[D : @undo.Undoable](self, doc: D) -> Bool raise UndoError:
   group = undo_stack.pop()
-  suppress tracking (use guard/defer to ensure restore on error)
-  redo_items = []
+  suppress tracking
   for item in group.items (reverse order):
-    try:
-      if item.op_type == Insert:
-        pos = doc.lv_to_position(item.target_lv)
-        if pos != None:
-          doc.delete_lv(item.target_lv)   # writes Delete op to oplog via Document::delete_by_lv
-          redo_items.push({ target_lv: item.target_lv, op_type: Insert, content: item.content })
-        // If pos == None, item already deleted by remote — skip, don't push to redo
-      if item.op_type == Delete:
-        doc.undelete_lv(item.target_lv)   # writes Undelete op to oplog via Document::undelete
-        redo_items.push({ target_lv: item.target_lv, op_type: Delete, content: item.content })
-    catch MissingItem:
-      // Item was GC'd or compacted — skip silently, don't push to redo
-      continue
-  if redo_items.length() > 0:
-    redo_stack.push(reversed redo_items)
-  resume tracking
-  // caller uses doc.sync().export_since(ver_before) to sync the new ops to peers
+    result = doc.delete_lv(item.target_lv) or doc.undelete_lv(item.target_lv)
+    if result == Applied: collect the opposite history item
+    if result == Stale: skip without emitting an operation
+  if any item was Applied: push the opposite group to redo_stack
+  restore tracking
+  return whether anything was Applied
 ```
 
- **Error handling:** Per-item try/catch ensures one bad item doesn't corrupt the entire group. Missing items (due to GC/compaction) are skipped silently. Only successfully applied items are pushed to redo.
-Match missing items as `DocumentError::Fugue(FugueError::MissingItem(_))` since `Undoable` methods raise `DocumentError`.
-
-**Redo is the mirror image:** Insert items → `doc.undelete_lv(target_lv)` (returns `Undelete` op), Delete items → `doc.delete_lv(target_lv)` (returns `Delete` op). Both generate ops to sync. Only push to undo stack if action succeeded.
+An `Internal` failure restores tracking, clears both local history stacks, and
+propagates without rolling back already-committed CRDT operations. Stale groups
+are consumed without creating opposite history. Redo is the mirror image and
+uses the same result contract.
 
 **Syncing undo ops:** After calling `undo`/`redo`, use `export_since()` to capture the inverse operations that were just applied, then send that message to peers via `SyncSession`. Example:
 ```moonbit
@@ -431,12 +438,13 @@ let msg = doc.sync().export_since(ver_before)
 
 | Scenario | Behavior |
 |----------|----------|
-| Undo insert already deleted by remote | `lv_to_position` → `None` → skip, don't push to redo (already gone) |
-| Undo delete of concurrently deleted item | `undelete` revives it — local user's intent wins |
+| Undo insert already deleted by remote | The Adapter returns `Stale`; no operation is emitted and nothing is pushed to redo. |
+| Undo delete of concurrently deleted item | `undelete_if_deleted` applies an Undelete operation and the local user's intent wins. |
+| Already-visible undelete target | The Adapter returns `Stale`; no operation is emitted. |
 | Multi-char insert | `insert_and_record` inserts per-char, records each LV. Time grouping batches them into one undo group. |
-| Double undo/redo | Stacks transfer correctly. Tracking suppressed during undo/redo. |
-| Error during undo/redo | Per-item try/catch skips bad items; guard/defer restores `tracking_enabled` |
-| Item GC'd/compacted | `MissingItem` caught, item skipped, redo stack only gets successful items |
+| Double undo/redo | Stacks transfer correctly. Tracking is suppressed during undo/redo. |
+| Error during undo/redo | Tracking is restored, both local history stacks are cleared, and the Internal error propagates. |
+| Structurally missing target | The Adapter raises `Internal`; it is not treated as stale. |
 | Synced edit after undo | No intent drift — undo ops are synced to peers, all replicas converge. |
 
 ## File Summary
@@ -474,8 +482,8 @@ let msg = doc.sync().export_since(ver_before)
 - ✅ `Op::new_undelete`, `Op::is_undelete`, `Op::get_delete_target` added
 - ✅ `Document::undelete`, `Document::delete_by_lv` added (return ops)
 - ✅ `Document::apply_remote` handles `Undelete` ops
-- ✅ `Undoable` trait methods return `@oplog.Op` (not `Unit`)
-- ✅ `UndoManager.undo()`/`redo()` collect and return synced ops
+- ✅ `Undoable` trait methods return `CompensatingEditResult` (not operation payloads)
+- ✅ `UndoManager.undo()`/`redo()` return whether any compensating edit was applied; callers sync with `export_since()`
 - ✅ `branch/` handles `Undelete` in apply and merge
 - ✅ Tests: `undo-insert generates Delete op`, `undo-delete generates Undelete op`, `undo ops can be applied to peer`
 
@@ -496,7 +504,8 @@ let msg = doc.sync().export_since(ver_before)
 | 7. Serialize/deserialize | `internal/core/operation.mbt` | ✅ (derived) |
 | 8. Update `UndoManager.undo()`/`redo()` | `undo/undo_manager.mbt` | ✅ |
 | 9. Update `Undoable` trait | `undo/undoable.mbt` | ✅ |
-| 10. Sync integration tests | `undo/undo_manager_test.mbt` | ✅ |
+| 10. Sync integration tests | `undo/undo_manager_test.mbt`, `text/text_test.mbt` | ✅ |
+| 11. Retire `ItemNotFound` compatibility plumbing | `undo/types.mbt`, `undo/undo_manager.mbt` | ✅ |
 
 ### Conflict Resolution Semantics
 
@@ -528,29 +537,11 @@ the implementation uses the existing `origin_left` mechanism instead.
 
 ### `UndoManager.undo()` Return Value
 
-`undo()`/`redo()` return `Unit` (raise `UndoError` on failure). The `Undoable` trait methods return `@oplog.Op` so that the ops they generate are written into the document's oplog and become visible via `export_since()`.
-
-```moonbit
-///| Undoable trait signatures
-pub(open) trait Undoable {
-  lv_to_position(Self, Int) -> Int?
-  undelete_lv(Self, Int) -> @oplog.Op raise DocumentError
-  delete_lv(Self, Int) -> @oplog.Op raise DocumentError
-}
-```
-
-Undo algorithm applies ops into the document (which writes them to the oplog). Peers are synced by calling `export_since()` after `undo()`/`redo()`:
-
-```
-undo[D : Undoable](doc: D) -> Unit raise UndoError:
-  ...
-  if item.op_type == Insert:
-    doc.delete_lv(item.target_lv)    // writes Delete op to oplog
-  if item.op_type == Delete:
-    doc.undelete_lv(item.target_lv)  // writes Undelete op to oplog
-  ...
-  // caller uses export_since(ver_before) to sync the new ops to peers
-```
+`undo()` and `redo()` return `Bool`: `true` if at least one compensating edit
+was applied, otherwise `false` for an empty or entirely stale group. Their
+`Undoable` methods return `CompensatingEditResult`, not CRDT operation payloads.
+The Document writes any applied operation to its own OpLog, and peers receive
+it through `export_since()`.
 
 ### Effort Estimate
 

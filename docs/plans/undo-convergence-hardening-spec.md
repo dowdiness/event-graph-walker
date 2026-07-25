@@ -1,14 +1,18 @@
 # Undo/Redo Convergence Hardening Specification
 
+**Status: implemented** — Tickets 01 through 04 are complete. The contracts and
+decisions below are the implementation record; verify current signatures against
+the source and generated Interfaces.
+
 ## Problem Statement
 
-A local collaborative text edit has three distinct contracts: Recoverable Edit Atomicity, Document Convergence, and Local History Best-Effort. The local text-edit path now validates recoverable failures before emitting CRDT operations, but the compensating-edit path used by Undo/Redo still exposes document representation details through its Undoable Interface.
+A local collaborative text edit has three distinct contracts: Recoverable Edit Atomicity, Document Convergence, and Local History Best-Effort. The local text-edit path validates recoverable failures before emitting CRDT operations, and the compensating-edit path now hides document representation details behind its Undoable Interface.
 
-Two failure modes remain. First, an unknown target LV can be validated too late, after the Document has advanced its causal graph but before it has a corresponding operation. That can poison subsequent synchronization. Second, Undo/Redo does not symmetrically detect Stale Undo Targets before creating an undelete operation, so a user-visible no-op can emit a new CRDT operation and alter later conflict resolution.
+The original failure modes were late validation of unknown target LVs and asymmetric Stale Undo Target handling. Ticket 01 moved target and causal-reference preflight before allocation; Tickets 02 and 04 migrated the Interface to named Applied/Stale results and retired the obsolete `ItemNotFound` plumbing.
 
 ## Solution
 
-Deepen the Undoable Interface so that the Document Module owns target-state classification and the OpLog/FugueTree preflight-and-commit seam, while the TextState Adapter exposes that result through the Undoable Interface. UndoManager should request compensating edits and receive only an applied-versus-stale result; it must not inspect visible positions or Fugue representation details.
+The Document Module owns target-state classification and the OpLog/FugueTree preflight-and-commit seam, while the TextState Adapter exposes that result through the Undoable Interface. UndoManager requests compensating edits and receives only an applied-versus-stale result; it does not inspect visible positions or Fugue representation details.
 
 The Document Module must validate the target and all causal references before allocating a new local CRDT version. A Stale Undo Target produces no CRDT operation and returns a named `Stale` result. A structurally missing target or any other invariant violation is an Internal failure. Internal failures have two explicit phases: a preflight failure leaves the Document unchanged, while a post-commit failure does not roll back already-applied valid CRDT operations. In both cases the error propagates and all local edit history is invalidated rather than attempting a Document rollback.
 
@@ -54,17 +58,17 @@ The Document Module must validate the target and all causal references before al
   | undelete | visible | `Stale` |
   | undelete | structurally missing | `Internal` |
 
-- `ItemNotFound` will not be the canonical stale result after migration. During the Interface migration it remains as a deprecated public compatibility variant, but no production Adapter emits it; the Manager may translate it to `Stale` for legacy Adapters. After all Adapters migrate, remove it at the next intentional public Interface-breaking release. Neither `Stale` nor legacy `ItemNotFound` may represent a target that is merely unavailable because causal data has not arrived.
+- `CompensatingEditResult::Stale` is the only stale outcome. The obsolete `ItemNotFound` compatibility error has been retired from the public Undoable Interface and Manager. A target that is merely unavailable because causal data has not arrived is not stale and must not be represented by a compensating-edit outcome.
 - The TextState Adapter will translate the Document Module's applied/stale result and Internal failures into the Undoable Interface without exposing Fugue details.
 - The Document Module owns target-state classification and the OpLog/FugueTree preflight-and-commit seam. It must distinguish an eligible target, a stale target, and a structurally missing target before allocating a new local causal version.
 - A preflight failure must not advance the causal graph or create an unpaired OpLog state. A post-commit Internal failure is outside rollback guarantees, but every already-applied CRDT operation must remain exportable.
 - UndoManager will record the inverse history item only when the Adapter reports `Applied`.
 - UndoManager will preserve the existing Local History Best-Effort contract: stale groups are consumed without creating opposite history; any Internal failure restores tracking, clears all local undo and redo history, and propagates the error.
 - The Document will not be copied and CRDT history will not be rolled back for Internal failures. Any already-applied valid CRDT operations remain exportable for synchronization.
-- Delivery is phased: first harden Document preflight/commit ordering and its public behavior; then migrate the Undoable Interface and symmetric stale handling; finally remove obsolete ItemNotFound plumbing and update documentation.
+- Delivery was phased: Ticket 01 hardened Document preflight/commit ordering; Ticket 02 migrated the Undoable Interface and symmetric stale handling; Tickets 03 and 04 covered failure-prefix convergence and retired obsolete compatibility plumbing.
 - The local edit planning core remains separate from the CRDT commit shell. This change does not replace the existing `InsertPlan` approach or introduce materialized input arrays in the normal path.
 - The shared document state is the convergence target. Per-agent local edit history is not replicated and is not required to converge between peers.
-- No `NotReady` outcome will be introduced unless a concrete Adapter can demonstrate a state where a target is causally unavailable but expected to become available later. Such a state must not be represented by `ItemNotFound`.
+- No `NotReady` outcome will be introduced unless a concrete Adapter can demonstrate a state where a target is causally unavailable but expected to become available later. Such a state must not be represented by `Stale`.
 
 ## Testing Decisions
 

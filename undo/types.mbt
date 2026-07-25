@@ -43,9 +43,6 @@ struct UndoGroup {
 ///|
 /// Errors that can occur during undo/redo operations
 pub(all) suberror UndoError {
-  /// Deprecated compatibility error for legacy Undoable Adapters.
-  /// New Adapters return CompensatingEditResult::Stale instead.
-  ItemNotFound
   /// The document or local undo target violated an internal invariant.
   Internal(detail~ : String)
 }
@@ -53,7 +50,6 @@ pub(all) suberror UndoError {
 ///|
 pub fn UndoError::message(self : UndoError) -> String {
   match self {
-    ItemNotFound => "Undo target is stale or already absent"
     Internal(detail~) => "Internal undo error: \{detail}"
   }
 }
