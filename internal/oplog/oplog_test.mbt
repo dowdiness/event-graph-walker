@@ -57,6 +57,43 @@ test "local insert origin preflight leaves causal state unchanged" {
 }
 
 ///|
+test "local insert origin preflight preserves existing causal state" {
+  let oplog = OpLog::new("local")
+  let seed = try! oplog.insert("seed", -1, -1)
+  let before_frontier = oplog.causal_graph().get_frontier().to_array()
+
+  let bad_left : Result[Unit, OpLogError] = try {
+    ignore(oplog.insert("ghost", 99, -1))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(bad_left is Err(_), content="true")
+  inspect(oplog.causal_graph().op_count(), content="1")
+  inspect(
+    oplog.causal_graph().get_frontier().to_array() == before_frontier,
+    content="true",
+  )
+
+  let bad_right : Result[Unit, OpLogError] = try {
+    ignore(oplog.insert("ghost", seed.lv(), 99))
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(bad_right is Err(_), content="true")
+  inspect(oplog.causal_graph().op_count(), content="1")
+  inspect(
+    oplog.causal_graph().get_frontier().to_array() == before_frontier,
+    content="true",
+  )
+
+  let next = try! oplog.insert("next", seed.lv(), -1)
+  inspect(next.lv(), content="1")
+  inspect(oplog.op_count(), content="2")
+}
+
+///|
 test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
   let oplog = OpLog::new("local")
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
