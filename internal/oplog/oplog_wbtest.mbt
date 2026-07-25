@@ -101,6 +101,60 @@ test "remote admission rejects stale plans before local mutation" {
 }
 
 ///|
+test "remote admission rejects generation mismatch after remote admission" {
+  let oplog = OpLog::new("local")
+  let stale = @core.Op::new_insert(-1, [], "stale-remote", 0, "s", None, None)
+  let independent = @core.Op::new_insert(
+    -1,
+    [],
+    "intervening-remote",
+    0,
+    "i",
+    None,
+    None,
+  )
+  let plan = try! oplog.prepare_remote([stale])
+  let admitted = try! oplog.apply_remote(independent)
+  assert_eq(admitted.length(), 1)
+  let ops_after = oplog.get_all_ops()
+  let pending_after = oplog.planner.pending_operations()
+  let count_after = oplog.op_count()
+  let runs_after = oplog.operations.length()
+  let frontier_after = oplog.get_frontier_raw()
+
+  let result : Result[Array[@core.Op], OpLogError] = Ok(
+    oplog.commit_remote(plan),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::StaleRemoteAdmissionPlan) => ()
+    _ => fail("expected stale remote admission plan")
+  }
+
+  assert_eq(oplog.op_count(), count_after)
+  assert_eq(oplog.operations.length(), runs_after)
+  assert_eq(oplog.get_frontier_raw(), frontier_after)
+  let ops_now = oplog.get_all_ops()
+  assert_eq(ops_now.length(), ops_after.length())
+  for i in 0..<ops_after.length() {
+    assert_eq(ops_now[i].lv(), ops_after[i].lv())
+    assert_eq(ops_now[i].agent(), ops_after[i].agent())
+    assert_eq(ops_now[i].seq(), ops_after[i].seq())
+    assert_eq(ops_now[i].content(), ops_after[i].content())
+  }
+  let pending_now = oplog.planner.pending_operations()
+  assert_eq(pending_now.length(), pending_after.length())
+  for i in 0..<pending_after.length() {
+    assert_eq(
+      remote_admission_raw(pending_now[i]),
+      remote_admission_raw(pending_after[i]),
+    )
+  }
+  assert_eq(oplog.has_pending(), !pending_after.is_empty())
+}
+
+///|
 test "remote admission begin rejects internal conflicts atomically" {
   let oplog = OpLog::new("local")
   let first = @core.Op::new_insert(-1, [], "conflict-first", 0, "a", None, None)

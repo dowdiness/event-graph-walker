@@ -201,6 +201,98 @@ fn oracle_four_branches(depth : Int) -> Array[@core.Op] {
 }
 
 ///|
+/// Deterministic adversarial arrival order for generated fixtures.
+fn oracle_zigzag(ops : Array[@core.Op]) -> Array[@core.Op] {
+  let ordered : Array[@core.Op] = []
+  let mut low = 0
+  let mut high = ops.length() - 1
+  while low <= high {
+    ordered.push(ops[high])
+    high = high - 1
+    if low <= high {
+      ordered.push(ops[low])
+      low = low + 1
+    }
+  }
+  ordered
+}
+
+///|
+/// Generate two parent-linked insert chains, an origin-only node, and a join.
+fn oracle_generated_insert_dag(size : Int, prefix : String) -> Array[@core.Op] {
+  let left_agent = "\{prefix}-left"
+  let right_agent = "\{prefix}-right"
+  let ops : Array[@core.Op] = []
+  for i in 0..<size {
+    let left_parents = if i == 0 {
+      []
+    } else {
+      [@core.RawVersion::new(left_agent, i - 1)]
+    }
+    let right_parents = if i == 0 {
+      []
+    } else {
+      [@core.RawVersion::new(right_agent, i - 1)]
+    }
+    let left_origin_left = if i == 0 {
+      None
+    } else {
+      Some(@core.RawVersion::new(left_agent, i - 1))
+    }
+    let left_origin_right = if i < 2 {
+      None
+    } else {
+      Some(@core.RawVersion::new(right_agent, i - 2))
+    }
+    let right_origin_left = if i == 0 {
+      None
+    } else {
+      Some(@core.RawVersion::new(left_agent, i - 1))
+    }
+    let right_origin_right = if i < 2 {
+      None
+    } else {
+      Some(@core.RawVersion::new(left_agent, i - 2))
+    }
+    ops.push(
+      @core.Op::new_insert(
+        -1, left_parents, left_agent, i, "l", left_origin_left, left_origin_right,
+      ),
+    )
+    ops.push(
+      @core.Op::new_insert(
+        -1, right_parents, right_agent, i, "r", right_origin_left, right_origin_right,
+      ),
+    )
+  }
+  let left_last = @core.RawVersion::new(left_agent, size - 1)
+  let right_last = @core.RawVersion::new(right_agent, size - 1)
+  let origin_agent = "\{prefix}-origin"
+  let origin = @core.Op::new_insert(
+    -1,
+    [],
+    origin_agent,
+    0,
+    "o",
+    Some(left_last),
+    Some(right_last),
+  )
+  ops.push(origin)
+  ops.push(
+    @core.Op::new_insert(
+      -1,
+      [left_last, right_last],
+      "\{prefix}-join",
+      0,
+      "j",
+      Some(@core.RawVersion::new(origin_agent, 0)),
+      Some(left_last),
+    ),
+  )
+  ops
+}
+
+///|
 test "oracle matches current adversarial before and after parent order" {
   let parent = @core.RawVersion::new("parent", 0)
   let child_before = @core.Op::new_insert(
@@ -529,6 +621,130 @@ test "oracle matches apply order while preserving unrelated pending" {
     oracle_remaining,
   )
   assert_eq(oplog.has_pending(), true)
+}
+
+///|
+test "oracle differentially covers the public remote admission lifecycle" {
+  for size in [1, 2, 4, 5] {
+    let prefix = "lifecycle-\{size}"
+    let generated = oracle_generated_insert_dag(size, prefix)
+    let incoming_base = if size % 2 == 0 {
+      oracle_zigzag(generated)
+    } else {
+      oracle_reverse(generated)
+    }
+    let incoming = incoming_base.copy()
+    // The batch includes a repeated delivery; the oracle must collapse it.
+    incoming.push(incoming_base[0])
+
+    let missing_raw = @core.RawVersion::new("\{prefix}-missing", 0)
+    let pending_root = @core.Op::new_insert(
+      -1,
+      [missing_raw],
+      "\{prefix}-pending-root",
+      0,
+      "p",
+      None,
+      None,
+    )
+    let pending_child = @core.Op::new_insert(
+      -1,
+      [oracle_raw(pending_root)],
+      "\{prefix}-pending-child",
+      0,
+      "c",
+      None,
+      None,
+    )
+    let oplog = OpLog::new("local")
+    // Repeated delivery while unresolved remains one pending identity.
+    assert_eq((try! oplog.apply_remote(pending_child)).length(), 0)
+    assert_eq((try! oplog.apply_remote(pending_child)).length(), 0)
+    assert_eq((try! oplog.apply_remote(pending_root)).length(), 0)
+    oracle_assert_raw_sequence(
+      oracle_raws(oplog.planner.pending_operations()),
+      [oracle_raw(pending_child), oracle_raw(pending_root)],
+    )
+
+    let candidates = oplog.planner.pending_operations()
+    for op in incoming {
+      candidates.push(op)
+    }
+    let known = oracle_raws(oplog.get_all_ops())
+    let (oracle_planned, oracle_remaining) = try! oracle_plan_remote_candidates(
+      candidates.copy(),
+      known,
+    )
+    let plan = try! oplog.prepare_remote(incoming)
+    oracle_assert_op_sequence(plan.operations().to_owned(), oracle_planned)
+    oracle_assert_raw_sequence(
+      plan.remaining_raws(oplog.planner),
+      oracle_raws(oracle_remaining),
+    )
+    let committed = try! oplog.commit_remote(plan)
+    oracle_assert_op_sequence(committed, oracle_planned)
+    oracle_assert_op_sequence(oplog.get_all_ops(), committed)
+    assert_eq(oplog.op_count(), oracle_planned.length())
+    oracle_assert_raw_sequence(
+      oracle_raws(oplog.planner.pending_operations()),
+      oracle_raws(oracle_remaining),
+    )
+    assert_eq(oplog.has_pending(), true)
+
+    // The same admitted identity is a no-op on retransmission.
+    let count_before_duplicate = oplog.op_count()
+    let duplicate = try! oplog.apply_remote(incoming_base[0])
+    assert_eq(duplicate.length(), 0)
+    assert_eq(oplog.op_count(), count_before_duplicate)
+    oracle_assert_raw_sequence(
+      oracle_raws(oplog.planner.pending_operations()),
+      oracle_raws(oracle_remaining),
+    )
+
+    // A later prepared plan supplies the missing root and drains the retained
+    // component in the same fixed-point order.
+    let missing_root = @core.Op::new_insert(
+      -1,
+      [],
+      "\{prefix}-missing",
+      0,
+      "m",
+      None,
+      None,
+    )
+    let later_candidates = oplog.planner.pending_operations()
+    later_candidates.push(missing_root)
+    let later_known = oracle_raws(oplog.get_all_ops())
+    let (later_planned, later_remaining) = try! oracle_plan_remote_candidates(
+      later_candidates.copy(),
+      later_known,
+    )
+    let later_plan = try! oplog.prepare_remote([missing_root])
+    oracle_assert_op_sequence(later_plan.operations().to_owned(), later_planned)
+    oracle_assert_raw_sequence(
+      later_plan.remaining_raws(oplog.planner),
+      oracle_raws(later_remaining),
+    )
+    let later_committed = try! oplog.commit_remote(later_plan)
+    oracle_assert_op_sequence(later_committed, later_planned)
+    assert_eq(later_remaining.length(), 0)
+    assert_eq(oplog.has_pending(), false)
+    assert_eq(
+      oplog.op_count(),
+      oracle_planned.length() + later_planned.length(),
+    )
+    let all_after = oplog.get_all_ops()
+    assert_eq(
+      all_after.length(),
+      oracle_planned.length() + later_committed.length(),
+    )
+    for i in 0..<later_committed.length() {
+      assert_eq(
+        oracle_raw(all_after[oracle_planned.length() + i]),
+        oracle_raw(later_committed[i]),
+      )
+    }
+  }
 }
 
 ///|
