@@ -266,6 +266,20 @@ reuse, prepare order, and lifecycle output to its production test or benchmark.
 Delete `internal/oplog/prototype_issue_86/` and the dedicated optimization
 benchmark only when every row is covered. Preserve the fixed-point oracle.
 
+Production guard mapping completed before prototype removal:
+
+| Prototype evidence | Retained production guard |
+|---|---|
+| repeated dependency order | `remote admission dependencies preserve first occurrence order`; `remote admission planner selects fast and general preparation exactly` |
+| malformed atomicity | `remote admission begin rejects internal conflicts atomically`; prepared-node corruption and fast reorder tests |
+| pending-first | `remote admission general lifecycle preserves pending-first fixed-point order` |
+| unresolved remaining | `remote admission general begin registers unresolved nodes` |
+| partial prefix | `remote admission preserves committed prefix on injected graph failure`; `remote admission planner preserves an unacknowledged successful prefix remainder` |
+| stale generation | `remote admission acknowledgement always invalidates prepared plans`; OpLog stale-plan tests |
+| consumed reuse | `remote admission fast plan begins and is consumed exactly once`; `remote admission plan is opaque, read-only, and single use` |
+| prepare order | planner differential tests plus paired oracle/production gate benchmarks |
+| lifecycle output | `benchmark_assert_lifecycle_equivalence` and the four retained production lifecycle benchmarks |
+
 **Rollback**
 
 If any unchanged gate fails, stop. Revert Commit C first; if the general gate

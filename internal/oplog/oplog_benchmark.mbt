@@ -241,6 +241,16 @@ fn benchmark_production_planned(
 }
 
 ///|
+/// Planner-only preparation for one-operation overhead gates. Larger retained
+/// gates continue to cover the OpLog wrapper separately.
+fn benchmark_production_planner_planned(
+  ops : Array[@core.Op],
+) -> Array[@core.Op] raise OpLogError {
+  let planner = RemoteAdmissionPlanner()
+  planner.prepare(ops, _ => false).operations().to_owned()
+}
+
+///|
 // Compare both planned order and the exact remaining pending order before the
 // benchmark closure. Each production comparison starts from an empty OpLog.
 fn benchmark_assert_planner_equivalence(ops : Array[@core.Op]) -> Unit raise {
@@ -574,6 +584,117 @@ test "oplog - production duplicate-heavy batch plan (32 ops x 8 copies)" (
     let planned = try! benchmark_production_planned(ops)
     b.keep(benchmark_raws(planned))
   })
+}
+
+///|
+test "oplog - oracle all-ready batch plan (1 op)" (b : @bench.T) {
+  let ops = benchmark_all_ready_batch(1)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let (planned, _remaining) = try! benchmark_fixed_point_oracle(ops.copy(), [])
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - production planner all-ready batch (1 op)" (b : @bench.T) {
+  let ops = benchmark_all_ready_batch(1)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let planned = try! benchmark_production_planner_planned(ops)
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - oracle in-order dependency chain plan (1 op)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(1)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let (planned, _remaining) = try! benchmark_fixed_point_oracle(ops.copy(), [])
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - production planner in-order dependency chain (1 op)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_remote_chain(1)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let planned = try! benchmark_production_planner_planned(ops)
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+/// Matched production lifecycle: prepare, begin, and acknowledge every planned
+/// operation. The result shape is checked against the historical oracle before
+/// timing so the benchmark cannot pass by shifting or omitting work.
+fn benchmark_remote_admission_lifecycle(
+  ops : Array[@core.Op],
+) -> (Array[@core.RawVersion], Array[@core.RawVersion]) raise OpLogError {
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare(ops, _ => false)
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Applied => ()
+    _ => abort("production lifecycle begin failed")
+  }
+  let planned = benchmark_raws(plan.operations().to_owned())
+  for op in plan.operations() {
+    planner.acknowledge_admitted(remote_admission_raw(op))
+  }
+  (planned, planner.pending_raws())
+}
+
+///|
+fn benchmark_assert_lifecycle_equivalence(ops : Array[@core.Op]) -> Unit raise {
+  let (oracle_planned, oracle_remaining) = try! benchmark_fixed_point_oracle(
+    ops.copy(),
+    [],
+  )
+  let (production_planned, production_remaining) = try! benchmark_remote_admission_lifecycle(
+    ops,
+  )
+  benchmark_assert_raws(production_planned, benchmark_raws(oracle_planned))
+  benchmark_assert_raws(production_remaining, benchmark_raws(oracle_remaining))
+}
+
+///|
+test "oplog - production lifecycle all-ready batch (32 ops)" (b : @bench.T) {
+  let ops = benchmark_all_ready_batch(32)
+  benchmark_assert_lifecycle_equivalence(ops)
+  b.bench(fn() { b.keep(try! benchmark_remote_admission_lifecycle(ops)) })
+}
+
+///|
+test "oplog - production lifecycle in-order chain (64 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(64)
+  benchmark_assert_lifecycle_equivalence(ops)
+  b.bench(fn() { b.keep(try! benchmark_remote_admission_lifecycle(ops)) })
+}
+
+///|
+test "oplog - production lifecycle reverse branches (4 x 250 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_branches(250))
+  benchmark_assert_lifecycle_equivalence(ops)
+  b.bench(
+    fn() { b.keep(try! benchmark_remote_admission_lifecycle(ops)) },
+    count=1,
+  )
+}
+
+///|
+test "oplog - production lifecycle reverse chain (10000 ops)" (b : @bench.T) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(10000))
+  benchmark_assert_lifecycle_equivalence(ops)
+  b.bench(
+    fn() { b.keep(try! benchmark_remote_admission_lifecycle(ops)) },
+    count=1,
+  )
 }
 
 ///|

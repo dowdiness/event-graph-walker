@@ -698,6 +698,73 @@ test "remote admission planner selects fast and general preparation exactly" {
 }
 
 ///|
+test "remote admission general lifecycle preserves pending-first fixed-point order" {
+  let parent = @core.Op::new_insert(
+    -1,
+    [],
+    "pending-first-parent",
+    0,
+    "p",
+    None,
+    None,
+  )
+  let child = @core.Op::new_insert(
+    -1,
+    [remote_admission_raw(parent)],
+    "pending-first-child",
+    0,
+    "c",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  planner.register_pending(child, _ => false)
+  let plan = planner.prepare([parent], _ => false)
+  match plan.storage {
+    DeferredFast => fail("canonical pending must select general planning")
+    ImmediateGeneral(_, planned_count=_) => ()
+  }
+  planner_assert_raws(planner_raws(plan.planned_operations()), [
+    remote_admission_raw(parent),
+    remote_admission_raw(child),
+  ])
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Applied => ()
+    _ => fail("expected pending-first general begin")
+  }
+  for op in plan.operations() {
+    planner.acknowledge_admitted(remote_admission_raw(op))
+  }
+  assert_eq(planner.pending_raws().length(), 0)
+}
+
+///|
+test "remote admission general begin registers unresolved nodes" {
+  let unknown = @core.RawVersion::new("begin-unresolved-unknown", 0)
+  let child = @core.Op::new_insert(
+    -1,
+    [unknown],
+    "begin-unresolved-child",
+    0,
+    "c",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare([child], _ => false)
+  match plan.storage {
+    DeferredFast => fail("unresolved operation must select general planning")
+    ImmediateGeneral(_, planned_count=_) => ()
+  }
+  assert_eq(plan.planned_operations().length(), 0)
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Applied => ()
+    _ => fail("expected unresolved general begin")
+  }
+  planner_assert_raws(planner.pending_raws(), [remote_admission_raw(child)])
+}
+
+///|
 test "remote admission fast begin rejects reordered dependencies atomically" {
   let parent = @core.Op::new_insert(
     -1,
