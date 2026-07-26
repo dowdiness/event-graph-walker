@@ -1,6 +1,71 @@
 ///| Tests for Document cache invalidation and position coherency
 
 ///|
+/// Document wrapping seam: a pending identity conflict does not project or advance.
+test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
+  let doc = Document::new("local")
+  let seed = try! doc.insert(0, "seed")
+  // Warm the derived position cache before the unresolved operation arrives.
+  let _ = doc.get_visible_items()
+  let missing_parent = @core.RawVersion::new("document-parent", 0)
+  let pending = @core.Op::new_insert(
+    11,
+    [missing_parent],
+    "document-pending",
+    1,
+    "a",
+    None,
+    None,
+  )
+  ignore(try! doc.apply_remote(pending))
+  let before = doc.causal_snapshot()
+  let before_frontier = doc.get_frontier()
+  let before_text = doc.to_text()
+  let before_position = doc.lv_to_position(seed.lv())
+  let conflict = @core.Op::new_insert(
+    23,
+    [missing_parent],
+    "document-pending",
+    1,
+    "b",
+    None,
+    None,
+  )
+  let result : Result[Unit, DocumentError] = try {
+    doc.apply_remote(conflict)
+    Ok(())
+  } catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))) =>
+      assert_eq(raw, @core.RawVersion::new("document-pending", 1))
+    _ => fail("expected wrapped identity conflict")
+  }
+  assert_eq(doc.causal_snapshot().op_count(), before.op_count())
+  assert_eq(doc.causal_snapshot().frontier(), before.frontier())
+  assert_eq(doc.get_frontier(), before_frontier)
+  assert_eq(doc.to_text(), before_text)
+  assert_eq(doc.lv_to_position(seed.lv()), before_position)
+  assert_eq(doc.get_all_ops().length(), before.op_count())
+
+  // The original pending payload remains authoritative and can still drain.
+  let parent = @core.Op::new_insert(
+    -1,
+    [],
+    missing_parent.agent,
+    missing_parent.seq,
+    "p",
+    None,
+    None,
+  )
+  try! doc.apply_remote(parent)
+  inspect(doc.to_text().contains("a"), content="true")
+  inspect(doc.to_text().contains("b"), content="false")
+  inspect(doc.get_all_ops().length(), content="6")
+}
+
+///|
 test "apply_remote rejects graph-only delete target before oplog mutation" {
   let doc = Document::new("local")
   let _ = try! doc.insert(0, "x")

@@ -121,6 +121,67 @@ test "container conflicting identity is failure atomic" {
 }
 
 ///|
+test "container sync rejects conflicting duplicate identities in one message atomically" {
+  let receiver = try! @container.Document::new("receiver")
+  let before_version = receiver.version().to_json_string()
+  let decode_result : Result[@container.SyncMessage, @container.DocumentError] = Ok(
+    @container.SyncMessage::from_json_string(
+      "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[" +
+      "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}}," +
+      "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"property\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"key\":\"title\",\"value\":\"fork\"}}]}",
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match decode_result {
+    Err(
+      @container.DocumentError::SyncFailed(
+        @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0)
+      )
+    ) => ()
+    _ => fail("expected in-message ConflictingIdentity")
+  }
+  inspect(receiver.version().to_json_string(), content=before_version)
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "container sync retains authoritative pending payload after identity conflict" {
+  let receiver = try! @container.Document::new("receiver")
+  let future = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":1,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":1},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
+  )
+  let deferred = try! receiver.sync().apply(future)
+  inspect(deferred.pending_operations(), content="1")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let before_version = receiver.version().to_json_string()
+  let conflict = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"tree\",\"payload\":{\"kind\":\"property\",\"timestamp\":1,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":1},\"key\":\"title\",\"value\":\"conflict\"}}]}",
+  )
+  try receiver.sync().apply(conflict) catch {
+    @container.DocumentError::SyncFailed(
+      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1)
+    ) => ()
+    _ => fail("expected pending ConflictingIdentity")
+  } noraise {
+    _ => fail("pending conflict must fail")
+  }
+  inspect(receiver.version().to_json_string(), content=before_version)
+  inspect(receiver.children(@container.root_id).is_empty(), content="true")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+
+  // The identical authoritative retransmission remains admissible.
+  let authoritative = try! @container.SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":1,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":1},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
+  )
+  let admitted = try! receiver.sync().apply(authoritative)
+  inspect(admitted.applied_tree_operations(), content="2")
+  inspect(receiver.children(@container.root_id).length(), content="2")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
 test "container cyclic message is rejected during pure preparation" {
   try
     @container.SyncMessage::from_json_string(

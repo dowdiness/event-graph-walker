@@ -16,6 +16,7 @@ pub(all) suberror OpLogError {
   MissingRemoteParent(raw~ : @core.RawVersion)
   MissingRemoteFrontier(raw~ : @core.RawVersion)
   DuplicateOperation(raw~ : @core.RawVersion)
+  ConflictingIdentity(raw~ : @core.RawVersion)
   StaleRemoteAdmissionPlan
   ConsumedRemoteAdmissionPlan
   InvalidRemoteAdmissionPlan

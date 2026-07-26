@@ -121,10 +121,24 @@ test "local insert origin preflight preserves existing causal state" {
 }
 
 ///|
-test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
+/// OpLog primary seam: identical batch repeats collapse without weakening closure.
+test "validate_remote_batch accepts identical repeated identity" {
+  let oplog = OpLog::new("local")
+  let op = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
+  let result : Result[Unit, OpLogError] = try {
+    oplog.validate_remote_batch([op, op], [@core.RawVersion::new("remote", 0)])
+    Ok(())
+  } catch {
+    e => Err(e)
+  }
+  inspect(result is Ok(_), content="true")
+}
+
+///|
+/// OpLog primary seam: a repeated identity with a different payload is typed.
+test "validate_remote_batch raises ConflictingIdentity for logical repeat" {
   let oplog = OpLog::new("local")
   let op1 = @core.Op::new_insert(-1, [], "remote", 0, "a", None, None)
-  // op2 reuses ("remote", 0) — same identity as op1
   let op2 = @core.Op::new_insert(-1, [], "remote", 0, "b", None, None)
   let result : Result[Unit, OpLogError] = try {
     oplog.validate_remote_batch([op1, op2], [])
@@ -132,13 +146,12 @@ test "validate_remote_batch raises DuplicateOperation for same agent:seq" {
   } catch {
     e => Err(e)
   }
-  inspect(result is Err(_), content="true")
   match result {
-    Err(DuplicateOperation(raw~)) => {
+    Err(ConflictingIdentity(raw~)) => {
       inspect(raw.agent, content="remote")
       inspect(raw.seq, content="0")
     }
-    _ => fail("expected DuplicateOperation")
+    _ => fail("expected ConflictingIdentity")
   }
 }
 
@@ -278,4 +291,101 @@ test "apply_remote is idempotent: already-applied op is silently skipped" {
   }
   inspect(result is Ok(_), content="true")
   inspect(oplog.op_count(), content="1")
+}
+
+///|
+/// OpLog primary seam: admitted payload conflicts fail before planner/graph mutation.
+test "apply_remote raises admitted ConflictingIdentity atomically" {
+  let oplog = OpLog::new("local")
+  let admitted = @core.Op::new_insert(
+    -1,
+    [],
+    "admitted-conflict",
+    0,
+    "a",
+    None,
+    None,
+  )
+  ignore(try! oplog.apply_remote(admitted))
+  let conflict = @core.Op::new_insert(
+    99,
+    [],
+    "admitted-conflict",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let before_frontier = oplog.get_frontier_raw()
+  let before_ops = oplog.get_all_ops()
+  let result : Result[Array[@core.Op], OpLogError] = Ok(
+    oplog.apply_remote(conflict),
+  ) catch {
+    e => Err(e)
+  }
+  match result {
+    Err(ConflictingIdentity(raw~)) =>
+      assert_eq(raw, @core.RawVersion::new("admitted-conflict", 0))
+    _ => fail("expected admitted identity conflict")
+  }
+  assert_eq(oplog.op_count(), 1)
+  assert_eq(oplog.get_frontier_raw(), before_frontier)
+  let after_ops = oplog.get_all_ops()
+  assert_eq(after_ops.length(), before_ops.length())
+  assert_eq(after_ops[0].content(), before_ops[0].content())
+  assert_eq(oplog.has_pending(), false)
+
+  let logical_duplicate = @core.Op::new_insert(
+    101,
+    [],
+    "admitted-conflict",
+    0,
+    "a",
+    None,
+    None,
+  )
+  let duplicate_result = oplog.apply_remote(logical_duplicate)
+  assert_eq(duplicate_result.length(), 0)
+  assert_eq(oplog.op_count(), 1)
+}
+
+///|
+/// OpLog primary seam: a conflict after a ready candidate admits no prefix.
+test "prepare_remote rejects conflict before ready prefix admission" {
+  let oplog = OpLog::new("ready-prefix")
+  let ready = @core.Op::new_insert(
+    -1,
+    [],
+    "ready-prefix-op",
+    0,
+    "a",
+    None,
+    None,
+  )
+  let conflict = @core.Op::new_insert(
+    5,
+    [],
+    "ready-prefix-op",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    oplog.prepare_remote([ready, conflict]),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(ConflictingIdentity(raw~)) =>
+      assert_eq(raw, @core.RawVersion::new("ready-prefix-op", 0))
+    _ => fail("expected ready-prefix identity conflict")
+  }
+  assert_eq(oplog.op_count(), 0)
+  assert_eq(oplog.has_pending(), false)
+  assert_eq(oplog.get_frontier_raw().length(), 0)
+
+  let admitted = try! oplog.apply_remote(ready)
+  assert_eq(admitted.length(), 1)
+  assert_eq(oplog.op_count(), 1)
 }

@@ -15,6 +15,8 @@ pub(all) suberror OpLogError {
   MissingRemoteFrontier(raw~ : @core.RawVersion)
   /// Remote batch contains duplicate operations (same agent:seq appears twice).
   DuplicateOperation(raw~ : @core.RawVersion)
+  /// A RawVersion was reused for a different logical operation payload.
+  ConflictingIdentity(raw~ : @core.RawVersion)
   /// A prepared remote admission plan was invalidated by another admission.
   StaleRemoteAdmissionPlan
   /// A prepared remote admission plan was committed or rejected already.

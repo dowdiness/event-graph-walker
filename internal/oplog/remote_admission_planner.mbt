@@ -165,6 +165,25 @@ fn remote_admission_same_operation(left : @core.Op, right : @core.Op) -> Bool {
 }
 
 ///|
+/// Logical equality for one RawVersion identity. Destination-local LV and
+/// parent order are not operation identity; duplicate parent multiplicity is.
+fn remote_admission_same_logical_operation(
+  left : @core.Op,
+  right : @core.Op,
+) -> Bool {
+  let left_parents = left.parents()
+  let right_parents = right.parents()
+  left_parents.sort()
+  right_parents.sort()
+  left.agent() == right.agent() &&
+  left.seq() == right.seq() &&
+  left_parents == right_parents &&
+  left.content() == right.content() &&
+  left.origin_left() == right.origin_left() &&
+  left.origin_right() == right.origin_right()
+}
+
+///|
 /// Check fast-path readiness without allocating normalized dependency metadata.
 /// Repeated dependencies are harmless because readiness is Boolean-idempotent.
 fn remote_admission_is_ready(
@@ -313,7 +332,16 @@ fn RemoteAdmissionPlanner::register_pending(
   is_admitted : (@core.RawVersion) -> Bool,
 ) -> Unit raise OpLogError {
   let raw = remote_admission_raw(op)
-  if is_admitted(raw) || self.pending.contains(raw) {
+  match self.pending.get(raw) {
+    Some(node) => {
+      if !remote_admission_same_logical_operation(node.op, op) {
+        raise OpLogError::ConflictingIdentity(raw~)
+      }
+      return
+    }
+    None => ()
+  }
+  if is_admitted(raw) {
     return
   }
   remote_admission_validate(op)
@@ -567,10 +595,21 @@ fn RemoteAdmissionPlanner::prepare_fast(
   }
   let planned : Array[@core.Op] = []
   let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let staged : Map[@core.RawVersion, @core.Op] = Map::default()
   let mut next_arrival = self.next_arrival
   for op in incoming {
     let raw = remote_admission_raw(op)
-    if is_admitted(raw) || planned_raws.contains(raw) {
+    match staged.get(raw) {
+      Some(previous) => {
+        if !remote_admission_same_logical_operation(previous, op) {
+          raise OpLogError::ConflictingIdentity(raw~)
+        }
+        continue
+      }
+      None => ()
+    }
+    staged.set(raw, op)
+    if is_admitted(raw) {
       continue
     }
     remote_admission_validate(op)
@@ -612,12 +651,39 @@ fn RemoteAdmissionPlanner::prepare(
     ready: self.ready.copy(),
     planned_operations: [],
   }
+  let incoming_staged : Map[@core.RawVersion, @core.Op] = Map::default()
   let mut next_overlay_arrival = self.next_arrival
   for op in incoming {
     let raw = remote_admission_raw(op)
-    if is_admitted(raw) ||
-      self.pending.contains(raw) ||
-      overlay.staged.contains(raw) {
+    match self.pending.get(raw) {
+      Some(node) => {
+        if !remote_admission_same_logical_operation(node.op, op) {
+          raise OpLogError::ConflictingIdentity(raw~)
+        }
+        continue
+      }
+      None => ()
+    }
+    match overlay.staged.get(raw) {
+      Some(node) => {
+        if !remote_admission_same_logical_operation(node.op, op) {
+          raise OpLogError::ConflictingIdentity(raw~)
+        }
+        continue
+      }
+      None => ()
+    }
+    match incoming_staged.get(raw) {
+      Some(previous) => {
+        if !remote_admission_same_logical_operation(previous, op) {
+          raise OpLogError::ConflictingIdentity(raw~)
+        }
+        continue
+      }
+      None => ()
+    }
+    incoming_staged.set(raw, op)
+    if is_admitted(raw) {
       continue
     }
     remote_admission_validate(op)
