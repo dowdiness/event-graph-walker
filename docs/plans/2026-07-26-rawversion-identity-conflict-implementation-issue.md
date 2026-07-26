@@ -2,13 +2,13 @@
 
 **Date:** 2026-07-26
 
-**Status:** Proposed, not filed
+**Status:** Filed as [Issue #94](https://github.com/dowdiness/event-graph-walker/issues/94)
 
 **Parent research:** Issue #88
 
 **Policy:** [ADR 0005](../adr/0005-rawversion-identity-conflicts.md)
 
-This is an implementation-issue proposal, not authorization to implement or publish. Creating an issue in `dowdiness/event-graph-walker` requires explicit approval.
+This proposal was filed as [Issue #94](https://github.com/dowdiness/event-graph-walker/issues/94). Implementation is tracked there.
 
 ## Goal and seam
 
