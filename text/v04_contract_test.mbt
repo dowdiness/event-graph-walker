@@ -1,4 +1,59 @@
 ///|
+test "text sync rejects conflicting duplicate identities in one message atomically" {
+  let receiver = try! TextState::new("receiver")
+  let before_version = receiver.version()
+  let conflict = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
+    "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}," +
+    "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[]}"
+  try SyncMessage::from_json_string(conflict) catch {
+    TextError::SyncFailed(
+      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0)
+    ) => ()
+    _ => fail("expected in-message ConflictingIdentity")
+  } noraise {
+    _ => fail("conflicting duplicate must fail during decoding")
+  }
+  inspect(receiver.text(), content="")
+  inspect(receiver.version() == before_version, content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "text sync retains authoritative pending payload after identity conflict" {
+  let receiver = try! TextState::new("receiver")
+  let future = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  let deferred = try! receiver.sync().apply(future)
+  inspect(deferred.applied_operations(), content="0")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+  let before_version = receiver.version()
+  let conflict = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  try receiver.sync().apply(conflict) catch {
+    TextError::SyncFailed(
+      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1)
+    ) => ()
+    _ => fail("expected pending ConflictingIdentity")
+  } noraise {
+    _ => fail("pending conflict must fail")
+  }
+  inspect(receiver.text(), content="")
+  inspect(receiver.version() == before_version, content="true")
+  inspect(receiver.sync().pending_sync_count(), content="1")
+
+  // The identical authoritative retransmission is still eligible to drain.
+  let authoritative = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  let admitted = try! receiver.sync().apply(authoritative)
+  inspect(admitted.applied_operations(), content="2")
+  inspect(receiver.text(), content="AB")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
 test "empty local insert is a complete no-op" {
   let document = try! TextState::new("empty-insert")
   let manager = @undo.UndoManager::new("empty-insert")

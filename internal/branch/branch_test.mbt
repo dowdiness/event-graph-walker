@@ -1,6 +1,68 @@
 ///| Tests for Branch system
 
 ///|
+/// Branch wrapping seam: a pending identity conflict leaves every projection stable.
+test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
+  let oplog = @oplog.OpLog::new("local")
+  let seed = @core.Op::new_insert(-1, [], "local", 0, "seed", None, None)
+  ignore(try! oplog.apply_remote(seed))
+  let branch = try! Branch::checkout(oplog, oplog.get_frontier())
+  let missing_parent = @core.RawVersion::new("branch-parent", 0)
+  let pending = @core.Op::new_insert(
+    11,
+    [missing_parent],
+    "branch-pending",
+    1,
+    "a",
+    None,
+    None,
+  )
+  let pending_branch = try! branch.merge_remote_ops([pending])
+  let before_frontier = pending_branch.get_frontier()
+  let before_count = oplog.op_count()
+  let conflict = @core.Op::new_insert(
+    23,
+    [missing_parent],
+    "branch-pending",
+    1,
+    "b",
+    None,
+    None,
+  )
+  let result : Result[Branch, BranchError] = Ok(
+    pending_branch.merge_remote_ops([conflict]),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(BranchError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))) =>
+      assert_eq(raw, @core.RawVersion::new("branch-pending", 1))
+    _ => fail("expected wrapped identity conflict")
+  }
+  assert_eq(oplog.op_count(), before_count)
+  assert_eq(oplog.get_frontier(), before_frontier)
+  assert_true(oplog.has_pending())
+  assert_eq(pending_branch.get_frontier(), before_frontier)
+  assert_eq(pending_branch.to_text(), "s")
+
+  // The retained pending payload, not the conflicting retransmission, drains.
+  let parent = @core.Op::new_insert(
+    -1,
+    [],
+    missing_parent.agent,
+    missing_parent.seq,
+    "p",
+    None,
+    None,
+  )
+  let drained = try! pending_branch.merge_remote_ops([parent])
+  assert_true(!oplog.has_pending())
+  assert_true(drained.to_text().contains("a"))
+  assert_true(!drained.to_text().contains("b"))
+  assert_eq(oplog.op_count(), 3)
+}
+
+///|
 /// Helper: Insert string character-by-character like Document module
 fn insert_string(oplog : @oplog.OpLog, text : String, start_lv : Int) -> Int {
   let mut last_lv = start_lv

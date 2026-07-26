@@ -139,6 +139,136 @@ test "remote admission planner suppresses identical pending and admitted duplica
 }
 
 ///|
+/// Planner preparation seam: fast staging rejects a conflicting repeat atomically.
+test "remote admission fast staging raises conflicting identity" {
+  let first = @core.Op::new_insert(-1, [], "fast-conflict", 0, "a", None, None)
+  let second = @core.Op::new_insert(-1, [], "fast-conflict", 0, "b", None, None)
+  let planner = RemoteAdmissionPlanner()
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    planner.prepare([first, second], _ => false),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::ConflictingIdentity(raw~)) =>
+      assert_eq(raw, remote_admission_raw(first))
+    _ => fail("expected fast staging conflict")
+  }
+  assert_eq(planner.pending_raws().length(), 0)
+}
+
+///|
+/// Planner preparation seam: incoming full operations remain comparable under admission hints.
+test "remote admission fast staging compares admitted repeated payloads" {
+  let first = @core.Op::new_insert(
+    -1,
+    [],
+    "admitted-repeat",
+    0,
+    "a",
+    None,
+    None,
+  )
+  let second = @core.Op::new_insert(
+    -1,
+    [],
+    "admitted-repeat",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let expected_raw = remote_admission_raw(first)
+  let planner = RemoteAdmissionPlanner()
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    planner.prepare([first, second], candidate => candidate == expected_raw),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::ConflictingIdentity(raw~)) => assert_eq(raw, expected_raw)
+    _ => fail("expected admitted repeated conflict")
+  }
+  assert_eq(planner.pending_raws().length(), 0)
+}
+
+///|
+/// Planner preparation seam: canonical pending payload remains authoritative.
+test "remote admission canonical pending raises conflicting identity" {
+  let pending = @core.Op::new_insert(
+    -1,
+    [@core.RawVersion::new("pending-unknown", 0)],
+    "canonical-conflict",
+    0,
+    "authoritative",
+    None,
+    None,
+  )
+  let incoming = @core.Op::new_insert(
+    41,
+    [@core.RawVersion::new("pending-unknown", 0)],
+    "canonical-conflict",
+    0,
+    "different",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  planner.register_pending(pending, _ => false)
+  let before = planner.pending_operations()
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    planner.prepare([incoming], _ => false),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::ConflictingIdentity(raw~)) =>
+      assert_eq(raw, remote_admission_raw(pending))
+    _ => fail("expected canonical pending conflict")
+  }
+  let after = planner.pending_operations()
+  assert_eq(after.length(), before.length())
+  assert_eq(after[0].content(), before[0].content())
+  assert_eq(after[0].lv(), before[0].lv())
+}
+
+///|
+/// Planner preparation seam: an overlay repeat is checked before readiness.
+test "remote admission overlay staging raises conflicting identity" {
+  let missing = @core.RawVersion::new("overlay-missing", 0)
+  let first = @core.Op::new_insert(
+    -1,
+    [missing],
+    "overlay-conflict",
+    0,
+    "a",
+    None,
+    None,
+  )
+  let second = @core.Op::new_insert(
+    -1,
+    [missing],
+    "overlay-conflict",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    planner.prepare([first, second], _ => false),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::ConflictingIdentity(raw~)) =>
+      assert_eq(raw, remote_admission_raw(first))
+    _ => fail("expected overlay staging conflict")
+  }
+  assert_eq(planner.pending_raws().length(), 0)
+}
+
+///|
 test "remote admission planner preserves unknown pending dependencies" {
   let unknown = @core.RawVersion::new("unknown", 0)
   let waiting = @core.Op::new_insert(

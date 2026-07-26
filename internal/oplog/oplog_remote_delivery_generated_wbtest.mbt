@@ -648,6 +648,169 @@ fn prop_generated_remote_delivery_complete(trace : RemoteDeliveryTrace) -> Bool 
 }
 
 ///|
+/// PR #92 delivery seam: identity repeats are equal only when their payload is.
+test "generated delivery distinguishes identical and conflicting payloads" {
+  let root = @core.Op::new_insert(
+    -1,
+    [],
+    "generated-identity",
+    0,
+    "a",
+    None,
+    None,
+  )
+  let identical_target = OpLog::new("generated-identical")
+  let identical_plan = try! identical_target.prepare_remote([root, root])
+  let identical = try! identical_target.commit_remote(identical_plan)
+  assert_eq(identical.length(), 1)
+  assert_eq(identical_target.op_count(), 1)
+
+  let conflicting = @core.Op::new_insert(
+    73,
+    [],
+    "generated-identity",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let conflict_target = OpLog::new("generated-conflicting")
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    conflict_target.prepare_remote([root, conflicting]),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::ConflictingIdentity(raw~)) =>
+      assert_eq(raw, @core.RawVersion::new("generated-identity", 0))
+    _ => fail("expected generated identity conflict")
+  }
+  assert_eq(conflict_target.op_count(), 0)
+  assert_eq(conflict_target.has_pending(), false)
+
+  let missing_parent = @core.RawVersion::new("generated-parent", 0)
+  let pending = @core.Op::new_insert(
+    11,
+    [missing_parent],
+    "generated-pending",
+    1,
+    "authoritative",
+    None,
+    None,
+  )
+  let pending_target = OpLog::new("generated-pending-target")
+  assert_eq(try! pending_target.apply_remote(pending).length(), 0)
+  assert_true(pending_target.has_pending())
+  assert_eq(pending_target.op_count(), 0)
+  let pending_frontier = try! pending_target.get_frontier_raw()
+  let pending_duplicate = @core.Op::new_insert(
+    12,
+    [missing_parent],
+    "generated-pending",
+    1,
+    "authoritative",
+    None,
+    None,
+  )
+  assert_eq(try! pending_target.apply_remote(pending_duplicate).length(), 0)
+  assert_true(pending_target.has_pending())
+  let retained = pending_target.planner.pending_operations()
+  assert_eq(retained.length(), 1)
+  assert_eq(retained[0].lv(), 11)
+  match retained[0].content() {
+    Insert(text) => assert_eq(text, "authoritative")
+    Delete | Undelete => fail("pending payload changed kind")
+  }
+
+  let pending_conflict = @core.Op::new_insert(
+    13,
+    [missing_parent],
+    "generated-pending",
+    1,
+    "conflict",
+    None,
+    None,
+  )
+  let pending_result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    pending_target.prepare_remote([pending_conflict]),
+  ) catch {
+    error => Err(error)
+  }
+  match pending_result {
+    Err(OpLogError::ConflictingIdentity(raw~)) =>
+      assert_eq(raw, @core.RawVersion::new("generated-pending", 1))
+    _ => fail("expected pending identity conflict")
+  }
+  assert_eq(pending_target.op_count(), 0)
+  assert_eq(try! pending_target.get_frontier_raw(), pending_frontier)
+  assert_true(pending_target.has_pending())
+  let retained_after = pending_target.planner.pending_operations()
+  match retained_after[0].content() {
+    Insert(text) => assert_eq(text, "authoritative")
+    Delete | Undelete => fail("pending payload changed kind")
+  }
+
+  let parent = @core.Op::new_insert(
+    -1,
+    [],
+    missing_parent.agent,
+    missing_parent.seq,
+    "p",
+    None,
+    None,
+  )
+  let admitted = try! pending_target.apply_remote(parent)
+  assert_eq(admitted.length(), 2)
+  assert_eq(pending_target.op_count(), 2)
+  assert_true(!pending_target.has_pending())
+  let admitted_frontier = try! pending_target.get_frontier_raw()
+
+  let admitted_source = pending_target
+    .get_all_ops()
+    .iter()
+    .find_first(op => op.agent() == "generated-pending")
+    .unwrap()
+  let admitted_text = match admitted_source.content() {
+    Insert(text) => text
+    Delete | Undelete => fail("admitted pending operation changed kind")
+  }
+  let admitted_duplicate = @core.Op::new_insert(
+    99,
+    admitted_source.parents(),
+    admitted_source.agent(),
+    admitted_source.seq(),
+    admitted_text,
+    admitted_source.origin_left(),
+    admitted_source.origin_right(),
+  )
+  assert_eq(try! pending_target.apply_remote(admitted_duplicate).length(), 0)
+  assert_eq(pending_target.op_count(), 2)
+  assert_eq(try! pending_target.get_frontier_raw(), admitted_frontier)
+  let admitted_conflict = @core.Op::new_insert(
+    100,
+    [missing_parent],
+    "generated-pending",
+    1,
+    "conflict",
+    None,
+    None,
+  )
+  let admitted_result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    pending_target.prepare_remote([admitted_conflict]),
+  ) catch {
+    error => Err(error)
+  }
+  match admitted_result {
+    Err(OpLogError::ConflictingIdentity(raw~)) =>
+      assert_eq(raw, @core.RawVersion::new("generated-pending", 1))
+    _ => fail("expected admitted identity conflict")
+  }
+  assert_eq(pending_target.op_count(), 2)
+  assert_eq(try! pending_target.get_frontier_raw(), admitted_frontier)
+  assert_true(!pending_target.has_pending())
+}
+
+///|
 fn prop_generated_remote_delivery_duplicates(
   trace : RemoteDeliveryTrace,
 ) -> Bool {

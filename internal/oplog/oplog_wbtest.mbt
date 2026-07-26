@@ -1,6 +1,105 @@
 ///| Whitebox tests for OpLog internal functions
 
 ///|
+/// OpLog primary seam: logical identity comparison is structural and LV-free.
+test "OpLog logical operation equality ignores destination LV and parent order" {
+  let left = @core.RawVersion::new("left", 1)
+  let right = @core.RawVersion::new("right", 2)
+  let first = @core.Op::new_insert(
+    7,
+    [right, left, right],
+    "agent",
+    3,
+    "x",
+    Some(left),
+    Some(right),
+  )
+  let reordered = @core.Op::new_insert(
+    99,
+    [left, right, right],
+    "agent",
+    3,
+    "x",
+    Some(left),
+    Some(right),
+  )
+  assert_true(remote_admission_same_logical_operation(first, reordered))
+
+  let parent_conflict = @core.Op::new_insert(
+    99,
+    [left, right, left],
+    "agent",
+    3,
+    "x",
+    Some(left),
+    Some(right),
+  )
+  assert_true(!remote_admission_same_logical_operation(first, parent_conflict))
+  let content_conflict = @core.Op::new_insert(
+    99,
+    [left, right, right],
+    "agent",
+    3,
+    "y",
+    Some(left),
+    Some(right),
+  )
+  assert_true(!remote_admission_same_logical_operation(first, content_conflict))
+  let left_origin_conflict = @core.Op::new_insert(
+    99,
+    [left, right, right],
+    "agent",
+    3,
+    "x",
+    Some(right),
+    Some(right),
+  )
+  assert_true(
+    !remote_admission_same_logical_operation(first, left_origin_conflict),
+  )
+  let right_origin_conflict = @core.Op::new_insert(
+    99,
+    [left, right, right],
+    "agent",
+    3,
+    "x",
+    Some(left),
+    Some(left),
+  )
+  assert_true(
+    !remote_admission_same_logical_operation(first, right_origin_conflict),
+  )
+  let delete_conflict = @core.Op::new_delete(
+    99,
+    [left, right, right],
+    "agent",
+    3,
+    Some(left),
+  )
+  assert_true(!remote_admission_same_logical_operation(first, delete_conflict))
+  let agent_conflict = @core.Op::new_insert(
+    99,
+    [left, right, right],
+    "other",
+    3,
+    "x",
+    Some(left),
+    Some(right),
+  )
+  assert_true(!remote_admission_same_logical_operation(first, agent_conflict))
+  let seq_conflict = @core.Op::new_insert(
+    99,
+    [left, right, right],
+    "agent",
+    4,
+    "x",
+    Some(left),
+    Some(right),
+  )
+  assert_true(!remote_admission_same_logical_operation(first, seq_conflict))
+}
+
+///|
 test "add_op auto-merges contiguous insert ops" {
   let oplog = OpLog::new("test")
   let _ = try! oplog.insert("a", -1, -1)

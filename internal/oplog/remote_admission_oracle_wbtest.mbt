@@ -486,7 +486,6 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
 test "oracle characterizes malformed delete and undelete admission" {
   let oplog = OpLog::new("local")
   let delete_raw = @core.RawVersion::new("malformed-delete", 0)
-  let undelete_raw = @core.RawVersion::new("malformed-undelete", 0)
   let delete_seed = @core.Op::new_insert(
     -1,
     [],
@@ -508,9 +507,8 @@ test "oracle characterizes malformed delete and undelete admission" {
   ignore(try! oplog.apply_remote(delete_seed))
   ignore(try! oplog.apply_remote(undelete_seed))
 
-  // Planning checks identity first, so an already-admitted malformed identity
-  // is skipped. Public application validates the malformed input first and
-  // rejects it before duplicate handling can make it a no-op.
+  // Planning compares every retained logical field, while public application
+  // preserves its malformed-origin validation boundary before preparation.
   let malformed_delete = @core.Op::new_delete(
     -1,
     [],
@@ -525,11 +523,15 @@ test "oracle characterizes malformed delete and undelete admission" {
     0,
     None,
   )
-  try! oracle_compare_plan(oplog, [malformed_delete, malformed_undelete], [
-    delete_raw, undelete_raw,
-  ])
-  let planned = try! oplog.plan_remote([malformed_delete, malformed_undelete])
-  assert_eq(planned.length(), 0)
+  let plan_result : Result[Array[@core.Op], OpLogError] = Ok(
+    oplog.plan_remote([malformed_delete, malformed_undelete]),
+  ) catch {
+    error => Err(error)
+  }
+  match plan_result {
+    Err(OpLogError::ConflictingIdentity(raw~)) => assert_eq(raw, delete_raw)
+    _ => fail("expected malformed identity conflict during planning")
+  }
 
   let delete_result : Result[Array[@core.Op], OpLogError] = Ok(
     oplog.apply_remote(malformed_delete),

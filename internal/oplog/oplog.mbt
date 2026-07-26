@@ -268,20 +268,22 @@ pub fn OpLog::get_frontier_raw(
 
 ///|
 /// Validate that a remote batch is closed w.r.t. parents and frontier.
-/// Also checks for duplicate operations within the batch.
+/// Repeated identities are collapsed when logically equal and rejected when not.
 pub fn OpLog::validate_remote_batch(
   self : OpLog,
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise OpLogError {
-  let batch : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let batch : Map[@core.RawVersion, @core.Op] = Map::default()
   for op in remote_ops {
     let raw = @core.RawVersion::new(op.agent(), op.seq())
-    // Check for duplicates within the batch
-    if batch.contains(raw) {
-      raise OpLogError::DuplicateOperation(raw~)
+    match batch.get(raw) {
+      Some(previous) =>
+        if !remote_admission_same_logical_operation(previous, op) {
+          raise OpLogError::ConflictingIdentity(raw~)
+        }
+      None => batch.set(raw, op)
     }
-    batch.add(raw)
   }
   for op in remote_ops {
     for parent in op.parents() {
@@ -304,11 +306,34 @@ pub fn OpLog::has_pending(self : OpLog) -> Bool {
 }
 
 ///|
+/// Compare incoming operations with full payloads retained in admitted history.
+fn OpLog::preflight_remote_identities(
+  self : OpLog,
+  incoming : Array[@core.Op],
+) -> Unit raise OpLogError {
+  for op in incoming {
+    let raw = remote_admission_raw(op)
+    match self.graph.raw_to_lv(raw) {
+      Some(lv) =>
+        match self.get_op(lv) {
+          Some(admitted) =>
+            if !remote_admission_same_logical_operation(admitted, op) {
+              raise OpLogError::ConflictingIdentity(raw~)
+            }
+          None => raise OpLogError::MissingLocalVersion(lv~)
+        }
+      None => ()
+    }
+  }
+}
+
+///|
 /// Prepare a remote admission without changing graph, log, or planner state.
 pub fn OpLog::prepare_remote(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> RemoteAdmissionPlan raise OpLogError {
+  self.preflight_remote_identities(incoming)
   self.planner.prepare(incoming, raw => self.graph.raw_to_lv(raw) is Some(_))
 }
 

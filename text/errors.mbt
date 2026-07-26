@@ -149,6 +149,13 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="duplicate operation in batch: \{raw}",
         ),
       )
+    ConflictingIdentity(raw~) =>
+      TextError::SyncFailed(
+        @sync.Failure::ConflictingIdentity(
+          replica_id=raw.agent,
+          sequence=raw.seq,
+        ),
+      )
     StaleRemoteAdmissionPlan =>
       TextError::Internal(detail="stale remote admission plan")
     ConsumedRemoteAdmissionPlan =>
