@@ -11,6 +11,115 @@ fn build_doc(n : Int) -> Document {
   doc
 }
 
+///|
+fn build_remote_chain(n : Int) -> Array[@core.Op] {
+  let ops : Array[@core.Op] = []
+  for i in 0..<n {
+    let parents = if i == 0 {
+      []
+    } else {
+      [@core.RawVersion::new("remote", i - 1)]
+    }
+    ops.push(@core.Op::new_insert(-1, parents, "remote", i, "x", None, None))
+  }
+  ops
+}
+
+///|
+fn reverse_remote_ops(ops : Array[@core.Op]) -> Array[@core.Op] {
+  let reversed : Array[@core.Op] = []
+  for i in 0..<ops.length() {
+    reversed.push(ops[ops.length() - i - 1])
+  }
+  reversed
+}
+
+///|
+fn merge_remote_chain(doc : Document, ops : Array[@core.Op]) -> Unit {
+  doc.merge_remote(ops, []) catch {
+    _ => abort("remote merge failed in benchmark")
+  }
+}
+
+///|
+fn build_remote_branches(depth : Int) -> Array[@core.Op] {
+  let agents = ["remote-a", "remote-b", "remote-c", "remote-d"]
+  let ops : Array[@core.Op] = []
+  for level in 0..<depth {
+    for branch in 0..<agents.length() {
+      let parents = if level == 0 {
+        []
+      } else {
+        [@core.RawVersion::new(agents[branch], level - 1)]
+      }
+      ops.push(
+        @core.Op::new_insert(
+          -1,
+          parents,
+          agents[branch],
+          level,
+          "x",
+          None,
+          None,
+        ),
+      )
+    }
+  }
+  ops
+}
+
+///|
+test "bench: merge reverse branching dependencies (4 x 250 ops)" (b : @bench.T) {
+  let ops = reverse_remote_ops(build_remote_branches(250))
+  b.bench(
+    fn() {
+      let doc = Document::new("local")
+      merge_remote_chain(doc, ops)
+      b.keep(doc.visible_count())
+    },
+    count=1,
+  )
+}
+
+///|
+test "bench: merge reverse dependency chain (100 ops)" (b : @bench.T) {
+  let ops = reverse_remote_ops(build_remote_chain(100))
+  b.bench(
+    fn() {
+      let doc = Document::new("local")
+      merge_remote_chain(doc, ops)
+      b.keep(doc.visible_count())
+    },
+    count=1,
+  )
+}
+
+///|
+test "bench: merge reverse dependency chain (1000 ops)" (b : @bench.T) {
+  let ops = reverse_remote_ops(build_remote_chain(1000))
+  b.bench(
+    fn() {
+      let doc = Document::new("local")
+      merge_remote_chain(doc, ops)
+      b.keep(doc.visible_count())
+    },
+    count=1,
+  )
+}
+
+///|
+test "bench: merge reverse dependency chain (10000 ops)" (b : @bench.T) {
+  let ops = reverse_remote_ops(build_remote_chain(10000))
+  b.bench(
+    fn() {
+      let doc = Document::new("local")
+      merge_remote_chain(doc, ops)
+      b.keep(doc.visible_count())
+    },
+    count=1,
+  )
+}
+
 // =============================================================================
 // Cache rebuild cost: invalidate warm cache, then force rebuild via position query.
 // This is the cost paid after every remote op in the current implementation.

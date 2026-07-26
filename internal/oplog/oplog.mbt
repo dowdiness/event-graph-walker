@@ -4,7 +4,7 @@
 /// OpLog - stores operations with causal graph
 pub struct OpLog {
   priv operations : @rle.Rle[@core.OpRun] // All operations in LV order, RLE-compressed
-  priv mut pending : Array[@core.Op] // Remote ops waiting for missing parents
+  priv planner : RemoteAdmissionPlanner // Canonical remote pending owner
   priv graph : @causal_graph.CausalGraph // The causal graph
   priv agent_id : String // This agent's ID
 }
@@ -14,7 +14,7 @@ pub struct OpLog {
 pub fn OpLog::new(agent_id : String) -> OpLog {
   {
     operations: @rle.Rle::Rle(),
-    pending: [],
+    planner: RemoteAdmissionPlanner(),
     graph: @causal_graph.CausalGraph::new(),
     agent_id,
   }
@@ -75,6 +75,10 @@ pub fn OpLog::insert(
     origin_right_raw,
   )
   self.add_op(op)
+  self.planner.acknowledge_admitted(@core.RawVersion::new(op.agent(), op.seq()))
+  ignore(
+    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+  )
   op
 }
 
@@ -110,6 +114,10 @@ pub fn OpLog::delete(
     Some(origin_left_raw),
   )
   self.add_op(op)
+  self.planner.acknowledge_admitted(@core.RawVersion::new(op.agent(), op.seq()))
+  ignore(
+    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+  )
   op
 }
 
@@ -145,6 +153,10 @@ pub fn OpLog::undelete(
     Some(origin_left_raw),
   )
   self.add_op(op)
+  self.planner.acknowledge_admitted(@core.RawVersion::new(op.agent(), op.seq()))
+  ignore(
+    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+  )
   op
 }
 
@@ -288,86 +300,27 @@ pub fn OpLog::validate_remote_batch(
 ///|
 /// Report whether remote operations are waiting for dependencies.
 pub fn OpLog::has_pending(self : OpLog) -> Bool {
-  !self.pending.is_empty()
+  self.planner.has_pending()
 }
 
 ///|
-/// Plan dependency-ready operations without mutating the causal graph.
-/// Returns `(ready, remaining)` in the same order as drain_pending.
-fn OpLog::plan_remote_candidates(
+/// Prepare a remote admission without changing graph, log, or planner state.
+pub fn OpLog::prepare_remote(
   self : OpLog,
-  candidates : Array[@core.Op],
-) -> (Array[@core.Op], Array[@core.Op]) raise OpLogError {
-  let mut candidates = candidates
-  let planned : Array[@core.Op] = []
-  let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  let mut progress = true
-  while progress {
-    progress = false
-    let remaining : Array[@core.Op] = []
-    for op in candidates {
-      let raw = @core.RawVersion::new(op.agent(), op.seq())
-      if self.graph.raw_to_lv(raw) is Some(_) || planned_raws.contains(raw) {
-        progress = true
-        continue
-      }
-      if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
-        raise OpLogError::MissingOrigin
-      }
-      let mut ready = true
-      for parent in op.parents_iter() {
-        if self.graph.raw_to_lv(parent) is None &&
-          !planned_raws.contains(parent) {
-          ready = false
-          break
-        }
-      }
-      if ready {
-        match op.origin_left() {
-          None => ()
-          Some(origin) =>
-            if self.graph.raw_to_lv(origin) is None &&
-              !planned_raws.contains(origin) {
-              ready = false
-            }
-        }
-      }
-      if ready {
-        match op.origin_right() {
-          None => ()
-          Some(origin) =>
-            if self.graph.raw_to_lv(origin) is None &&
-              !planned_raws.contains(origin) {
-              ready = false
-            }
-        }
-      }
-      if ready {
-        planned.push(op)
-        planned_raws.add(raw)
-        progress = true
-      } else {
-        remaining.push(op)
-      }
-    }
-    candidates = remaining
-  }
-  (planned, candidates)
+  incoming : Array[@core.Op],
+) -> RemoteAdmissionPlan raise OpLogError {
+  self.planner.prepare(incoming, raw => self.graph.raw_to_lv(raw) is Some(_))
 }
 
 ///|
 /// Plan the operations that remote application would drain without mutating
-/// the causal graph or pending queue. The result preserves drain order.
+/// the causal graph or pending planner. The result preserves drain order.
 pub fn OpLog::plan_remote(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> Array[@core.Op] raise OpLogError {
-  let candidates = self.pending.copy()
-  for op in incoming {
-    candidates.push(op)
-  }
-  let (planned, _) = self.plan_remote_candidates(candidates)
-  planned
+  let plan = self.prepare_remote(incoming)
+  plan.operations().to_owned()
 }
 
 ///|
@@ -376,59 +329,105 @@ pub fn OpLog::discard_pending_dependents(
   self : OpLog,
   roots : Array[@core.RawVersion],
 ) -> Unit {
-  let rejected : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  for root in roots {
-    rejected.add(root)
-  }
-  let mut changed = true
-  while changed {
-    changed = false
-    let remaining : Array[@core.Op] = []
-    for op in self.pending {
-      let raw = @core.RawVersion::new(op.agent(), op.seq())
-      let mut dependent = rejected.contains(raw)
-      if !dependent {
-        for parent in op.parents_iter() {
-          if rejected.contains(parent) {
-            dependent = true
-            break
-          }
-        }
-      }
-      if !dependent {
-        match op.origin_left() {
-          Some(origin) => dependent = rejected.contains(origin)
-          None => ()
-        }
-      }
-      if !dependent {
-        match op.origin_right() {
-          Some(origin) => dependent = rejected.contains(origin)
-          None => ()
-        }
-      }
-      if dependent {
-        rejected.add(raw)
-        changed = true
-      } else {
-        remaining.push(op)
-      }
-    }
-    self.pending = remaining
-  }
+  self.planner.reject_pending_dependents(roots)
+  ignore(
+    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+  )
 }
 
 ///|
-/// Apply a remote operation
+/// Apply a remote operation through the prepared-plan compatibility wrapper.
 pub fn OpLog::apply_remote(
   self : OpLog,
   op : @core.Op,
 ) -> Array[@core.Op] raise OpLogError {
+  // Preserve the old complete upfront malformed-origin validation boundary.
   if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
     raise OpLogError::MissingOrigin
   }
-  self.pending.push(op)
-  self.drain_pending()
+  let plan = self.prepare_remote([op])
+  self.commit_remote(plan)
+}
+
+///|
+/// Translate planner lifecycle failures to the public OpLog error boundary.
+fn OpLog::begin_remote_plan(
+  self : OpLog,
+  plan : RemoteAdmissionPlan,
+) -> Unit raise OpLogError {
+  match
+    self.planner.begin_plan(plan, raw => self.graph.raw_to_lv(raw) is Some(_)) {
+    RemoteAdmissionBeginResult::Applied => ()
+    RemoteAdmissionBeginResult::Stale =>
+      raise OpLogError::StaleRemoteAdmissionPlan
+    RemoteAdmissionBeginResult::Consumed =>
+      raise OpLogError::ConsumedRemoteAdmissionPlan
+    RemoteAdmissionBeginResult::Conflict =>
+      raise OpLogError::InvalidRemoteAdmissionPlan
+  }
+}
+
+///|
+/// Commit a prepared remote plan with an injectable single-operation shell.
+fn OpLog::commit_remote_with(
+  self : OpLog,
+  plan : RemoteAdmissionPlan,
+  commit_one : (@core.Op) -> @core.Op raise OpLogError,
+) -> Array[@core.Op] raise OpLogError {
+  self.begin_remote_plan(plan)
+  let committed : Array[@core.Op] = []
+  for op in plan.operations() {
+    let result : Result[@core.Op, OpLogError] = Ok(commit_one(op)) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(OpLogError::CausalGraphError(error~)) => {
+        ignore(
+          self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+        )
+        raise OpLogError::PartialRemoteAdmission(committed~, error~)
+      }
+      Err(error) => {
+        ignore(
+          self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+        )
+        raise error
+      }
+      Ok(local_op) => {
+        self.planner.acknowledge_admitted(remote_admission_raw(op))
+        committed.push(local_op)
+      }
+    }
+  }
+  ignore(
+    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+  )
+  committed
+}
+
+///|
+/// Commit one operation using the production graph/log shell.
+fn OpLog::commit_one_remote(
+  self : OpLog,
+  op : @core.Op,
+) -> @core.Op raise OpLogError {
+  let (keep_pending, local_op) = self.try_apply_remote(op)
+  guard !keep_pending else {
+    abort("prepared remote operation lost dependency readiness")
+  }
+  match local_op {
+    Some(committed) => committed
+    None => abort("prepared remote operation was admitted outside OpLog")
+  }
+}
+
+///|
+/// Commit a prepared remote admission exactly once.
+pub fn OpLog::commit_remote(
+  self : OpLog,
+  plan : RemoteAdmissionPlan,
+) -> Array[@core.Op] raise OpLogError {
+  self.commit_remote_with(plan, op => self.commit_one_remote(op))
 }
 
 ///|
@@ -540,25 +539,4 @@ fn OpLog::try_apply_remote(
   }
   self.add_op(local_op)
   (false, Some(local_op))
-}
-
-///|
-/// Drain pending operations that now have all dependencies.
-/// Readiness is shared with plan_remote so preflight and commit cannot drift.
-fn OpLog::drain_pending(self : OpLog) -> Array[@core.Op] raise OpLogError {
-  let (planned, remaining) = self.plan_remote_candidates(self.pending)
-  let applied : Array[@core.Op] = []
-  for op in planned {
-    let (keep_pending, local_op) = self.try_apply_remote(op)
-    if keep_pending {
-      remaining.push(op)
-    } else {
-      match local_op {
-        Some(applied_op) => applied.push(applied_op)
-        None => ()
-      }
-    }
-  }
-  self.pending = remaining
-  applied
 }

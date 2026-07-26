@@ -57,6 +57,26 @@ fn IndexedState::invalidate(self : IndexedState) -> Unit {
 }
 
 ///|
+/// Detach the cache for a transactional mutation. The canonical cache slot is
+/// empty while the caller performs a fallible commit.
+fn IndexedState::take_cache(
+  self : IndexedState,
+) -> @order_tree.OrderTree[VisibleRun]? {
+  let cache = self.cache
+  self.cache = None
+  cache
+}
+
+///|
+/// Restore a cache detached by `take_cache` without cloning it.
+fn IndexedState::restore_cache(
+  self : IndexedState,
+  cache : @order_tree.OrderTree[VisibleRun]?,
+) -> Unit {
+  self.cache = cache
+}
+
+///|
 /// Incrementally insert a visible item. Returns false when no warm index was
 /// available, matching the old cache-validity fallback in Document.
 fn IndexedState::insert_at(

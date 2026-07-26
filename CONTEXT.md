@@ -30,6 +30,42 @@ _Avoid_: full transactional rollback
 A causal operation that changes shared document state. A local edit request or compensating edit may emit multiple CRDT operations.
 _Avoid_: edit, transaction
 
+**Duplicate remote operation**:
+A retransmission of the same immutable CRDT operation under the same operation identity. It does not create another pending operation or another admission.
+_Avoid_: identity conflict, repeated apply
+
+**Operation identity conflict**:
+Two remote operation payloads that claim the same operation identity but differ in content, parents, or origins. It is a protocol violation, not a duplicate remote operation.
+_Avoid_: duplicate operation
+
+**Pending remote operation**:
+A received remote CRDT operation that has not been admitted because one or more dependencies are absent. It remains eligible for later admission unless rejected.
+_Avoid_: buffered operation, queued operation
+
+**Dependency-ready remote operation**:
+A received remote CRDT operation whose causal parents and origin references have all been admitted. Dependency readiness does not establish that its content or referenced document targets are semantically valid.
+_Avoid_: ready operation, valid remote operation
+
+**Remote operation preflight**:
+Validation that a dependency-ready remote CRDT operation has acceptable content and semantically valid document targets before admission.
+_Avoid_: dependency check, readiness check
+
+**Rejected remote admission attempt**:
+A remote operation admission attempt that failed preflight. The affected pending operations are removed, but the operation identity is not permanently blacklisted and may be evaluated again if received later.
+_Avoid_: rejected identity, invalid tombstone
+
+**Remote admission plan**:
+A non-mutating prospective ordering of pending and incoming remote operations used for complete preflight before admission. A plan is not itself an admission.
+_Avoid_: transaction, committed batch
+
+**Remote operation admission**:
+The local acceptance of a dependency-ready remote CRDT operation into shared causal history after preflight. Once admitted, it is not rolled back by a later internal projection failure.
+_Avoid_: remote apply, merge commit
+
+**Partial remote admission failure**:
+An internal failure after a prepared plan has already admitted a valid prefix. The admitted prefix remains committed and must be projected before the failure propagates; the failed operation and later operations remain pending.
+_Avoid_: batch rollback, partial success
+
 **Document Convergence**:
 The guarantee that peers receiving the same valid CRDT operations eventually reach the same shared document state.
 _Avoid_: undo-history convergence
