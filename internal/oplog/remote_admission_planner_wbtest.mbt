@@ -631,6 +631,135 @@ test "remote admission planner retry acknowledgement tombstones stay nonnegative
 }
 
 ///|
+test "remote admission planner selects fast and general preparation exactly" {
+  let admitted_parent = @core.RawVersion::new("fast-admitted-parent", 0)
+  let admitted = @core.Op::new_insert(
+    -1,
+    [],
+    "fast-admitted-parent",
+    0,
+    "known",
+    None,
+    None,
+  )
+  let parent = @core.Op::new_insert(-1, [], "fast-parent", 0, "p", None, None)
+  let parent_raw = remote_admission_raw(parent)
+  let child = @core.Op::new_insert(
+    -1,
+    [parent_raw, parent_raw],
+    "fast-child",
+    0,
+    "c",
+    Some(parent_raw),
+    Some(admitted_parent),
+  )
+  let known : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([
+    admitted_parent,
+  ])
+  let fast_planner = RemoteAdmissionPlanner()
+  let fast_plan = fast_planner.prepare([admitted, parent, parent, child], dependency => {
+    known.contains(dependency)
+  })
+  match fast_plan.storage {
+    DeferredFast => ()
+    ImmediateGeneral(_, planned_count=_) => fail("expected deferred fast plan")
+  }
+  planner_assert_raws(planner_raws(fast_plan.planned_operations()), [
+    parent_raw,
+    remote_admission_raw(child),
+  ])
+
+  let unready_planner = RemoteAdmissionPlanner()
+  let unready_plan = unready_planner.prepare([child, parent], dependency => {
+    known.contains(dependency)
+  })
+  match unready_plan.storage {
+    DeferredFast => fail("first unready operation must rerun general planning")
+    ImmediateGeneral(_, planned_count=_) => ()
+  }
+
+  let missing = @core.RawVersion::new("fast-pending-missing", 0)
+  let pending = @core.Op::new_insert(
+    -1,
+    [missing],
+    "fast-pending",
+    0,
+    "x",
+    None,
+    None,
+  )
+  let pending_planner = RemoteAdmissionPlanner()
+  pending_planner.register_pending(pending, _ => false)
+  let pending_plan = pending_planner.prepare([parent], _ => false)
+  match pending_plan.storage {
+    DeferredFast => fail("canonical pending must force general planning")
+    ImmediateGeneral(_, planned_count=_) => ()
+  }
+}
+
+///|
+test "remote admission fast begin rejects reordered dependencies atomically" {
+  let parent = @core.Op::new_insert(
+    -1,
+    [],
+    "fast-begin-parent",
+    0,
+    "p",
+    None,
+    None,
+  )
+  let child = @core.Op::new_insert(
+    -1,
+    [remote_admission_raw(parent)],
+    "fast-begin-child",
+    0,
+    "c",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare([parent, child], _ => false)
+  match plan.storage {
+    DeferredFast => ()
+    ImmediateGeneral(_, planned_count=_) => fail("expected fast capability")
+  }
+  let first = plan.planned[0]
+  plan.planned[0] = plan.planned[1]
+  plan.planned[1] = first
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected reordered fast dependency conflict")
+  }
+  assert_eq(planner.pending_raws().length(), 0)
+  assert_eq(planner.generation(), 0)
+  assert_eq(planner.next_arrival, 0)
+  assert_true(!plan.consumed)
+}
+
+///|
+test "remote admission fast plan begins and is consumed exactly once" {
+  let op = @core.Op::new_insert(-1, [], "fast-consumed", 0, "x", None, None)
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare([op], _ => false)
+  match plan.storage {
+    DeferredFast => ()
+    ImmediateGeneral(_, planned_count=_) => fail("expected fast capability")
+  }
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Applied => ()
+    _ => fail("expected fast begin")
+  }
+  let generation_after = planner.generation()
+  let pending_after = planner.pending_raws()
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Consumed => ()
+    _ => fail("expected consumed fast plan")
+  }
+  planner_assert_raws(planner.pending_raws(), pending_after)
+  assert_eq(planner.generation(), generation_after)
+}
+
+///|
 test "remote admission acknowledgement always invalidates prepared plans" {
   let incoming = @core.Op::new_insert(
     -1,
@@ -760,6 +889,7 @@ test "remote admission planner assigns post-staging arrivals on begin" {
   let old_next_arrival = planner.next_arrival
   let plan = planner.prepare(staged, _ => false)
   match plan.storage {
+    DeferredFast => fail("expected general arrival capability")
     ImmediateGeneral(nodes, planned_count=_) =>
       for i, node in nodes {
         assert_eq(node.arrival, old_next_arrival + i)
@@ -866,6 +996,7 @@ test "remote admission planner rejects duplicate staged arrivals before mutation
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([staged, staged_other], _ => false)
   match plan.storage {
+    DeferredFast => fail("expected general duplicate-arrival capability")
     ImmediateGeneral(nodes, planned_count=_) => {
       let first = nodes[0]
       let second = nodes[1]
@@ -905,6 +1036,7 @@ test "remote admission planner rejects gapped staged arrivals atomically" {
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
   match plan.storage {
+    DeferredFast => fail("expected general gapped-arrival capability")
     ImmediateGeneral(nodes, planned_count=_) => {
       let second_node = nodes[1]
       nodes[1] = {
@@ -957,6 +1089,7 @@ test "remote admission planner rejects staged payload mismatch atomically" {
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
   match plan.storage {
+    DeferredFast => fail("expected general payload capability")
     ImmediateGeneral(nodes, planned_count=_) => {
       let second_node = nodes[1]
       nodes[1] = {
@@ -1081,7 +1214,23 @@ test "remote admission planner rejects reordered and injected planned entries" {
     None,
     None,
   )
+  let arrival_blocker_dependency = @core.RawVersion::new(
+    "planned-order-arrival-blocker", 0,
+  )
+  let arrival_blocker = @core.Op::new_insert(
+    -1,
+    [arrival_blocker_dependency],
+    "planned-order-arrival-pending",
+    0,
+    "x",
+    None,
+    None,
+  )
   let arrival_planner = RemoteAdmissionPlanner()
+  arrival_planner.register_pending(arrival_blocker, _ => false)
+  let arrival_pending_before = arrival_planner.pending_raws()
+  let arrival_generation_before = arrival_planner.generation()
+  let arrival_next_before = arrival_planner.next_arrival
   let arrival_plan = arrival_planner.prepare([first_ready, second_ready], _ => {
     false
   })
@@ -1092,9 +1241,9 @@ test "remote admission planner rejects reordered and injected planned entries" {
     RemoteAdmissionBeginResult::Conflict => ()
     _ => fail("expected compatibility arrival-order conflict")
   }
-  assert_eq(arrival_planner.pending_raws().length(), 0)
-  assert_eq(arrival_planner.generation(), 0)
-  assert_eq(arrival_planner.next_arrival, 0)
+  planner_assert_raws(arrival_planner.pending_raws(), arrival_pending_before)
+  assert_eq(arrival_planner.generation(), arrival_generation_before)
+  assert_eq(arrival_planner.next_arrival, arrival_next_before)
   assert_true(!arrival_plan.consumed)
 
   let unknown = @core.RawVersion::new("planned-injected-unknown", 0)
@@ -1173,6 +1322,7 @@ test "remote admission planner rejects inconsistent waiting metadata atomically"
   let waiting_planner = RemoteAdmissionPlanner()
   let waiting_plan = waiting_planner.prepare([staged], _ => false)
   match waiting_plan.storage {
+    DeferredFast => fail("expected general waiting-metadata capability")
     ImmediateGeneral(nodes, planned_count=_) => {
       let node = nodes[0]
       nodes[0] = {
@@ -1197,6 +1347,7 @@ test "remote admission planner rejects inconsistent waiting metadata atomically"
   let count_planner = RemoteAdmissionPlanner()
   let count_plan = count_planner.prepare([staged], _ => false)
   match count_plan.storage {
+    DeferredFast => fail("expected general unresolved-count capability")
     ImmediateGeneral(nodes, planned_count=_) => {
       let node = nodes[0]
       nodes[0] = {
@@ -1240,11 +1391,23 @@ test "remote admission operation copy cannot mutate prepared storage" {
     None,
   )
   let planner = RemoteAdmissionPlanner()
+  let blocker_dependency = @core.RawVersion::new("operation-copy-blocker", 0)
+  let blocker = @core.Op::new_insert(
+    -1,
+    [blocker_dependency],
+    "operation-copy-pending",
+    0,
+    "b",
+    None,
+    None,
+  )
+  planner.register_pending(blocker, _ => false)
   let plan = planner.prepare([original], _ => false)
   let owning_copy = plan.operations().to_owned()
   owning_copy[0] = replacement
   assert_true(remote_admission_same_operation(plan.planned[0], original))
   match plan.storage {
+    DeferredFast => fail("expected general operation-copy capability")
     ImmediateGeneral(nodes, planned_count=_) =>
       assert_true(remote_admission_same_operation(nodes[0].op, original))
   }

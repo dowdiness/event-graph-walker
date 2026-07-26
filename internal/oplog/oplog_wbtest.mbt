@@ -168,20 +168,7 @@ test "remote admission begin rejects internal conflicts atomically" {
     None,
   )
   let plan = try! oplog.prepare_remote([first, second])
-  match plan.storage {
-    ImmediateGeneral(nodes, planned_count=_) => {
-      let first_node = nodes[0]
-      let second_node = nodes[1]
-      nodes[1] = {
-        op: second_node.op,
-        raw: first_node.raw,
-        arrival: second_node.arrival,
-        dependencies: second_node.dependencies,
-        waiting_dependencies: second_node.waiting_dependencies,
-        unresolved_count: second_node.unresolved_count,
-      }
-    }
-  }
+  plan.planned[1] = plan.planned[0]
   let result : Result[Array[@core.Op], OpLogError] = Ok(
     oplog.commit_remote(plan),
   ) catch {

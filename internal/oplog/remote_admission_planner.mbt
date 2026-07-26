@@ -57,6 +57,7 @@ priv struct RemoteAdmissionPreparedNode {
 ///|
 /// Private representation of staged capability data.
 priv enum RemoteAdmissionPlanStorage {
+  DeferredFast
   ImmediateGeneral(Array[RemoteAdmissionPreparedNode], planned_count~ : Int)
 }
 
@@ -161,6 +162,36 @@ fn remote_admission_same_operation(left : @core.Op, right : @core.Op) -> Bool {
   left.content() == right.content() &&
   left.origin_left() == right.origin_left() &&
   left.origin_right() == right.origin_right()
+}
+
+///|
+/// Check fast-path readiness without allocating normalized dependency metadata.
+/// Repeated dependencies are harmless because readiness is Boolean-idempotent.
+fn remote_admission_is_ready(
+  op : @core.Op,
+  planned : @hashset.HashSet[@core.RawVersion],
+  is_admitted : (@core.RawVersion) -> Bool,
+) -> Bool {
+  for dependency in op.parents_iter() {
+    if !is_admitted(dependency) && !planned.contains(dependency) {
+      return false
+    }
+  }
+  match op.origin_left() {
+    Some(origin) =>
+      if !is_admitted(origin) && !planned.contains(origin) {
+        return false
+      }
+    None => ()
+  }
+  match op.origin_right() {
+    Some(origin) =>
+      if !is_admitted(origin) && !planned.contains(origin) {
+        return false
+      }
+    None => ()
+  }
+  true
 }
 
 ///|
@@ -524,12 +555,52 @@ fn RemoteAdmissionOverlay::resolve_waiters(
 }
 
 ///|
+/// Use a single arrival-order pass when no canonical pending operation can take
+/// precedence and every incoming dependency is admitted or planned earlier.
+fn RemoteAdmissionPlanner::prepare_fast(
+  self : RemoteAdmissionPlanner,
+  incoming : Array[@core.Op],
+  is_admitted : (@core.RawVersion) -> Bool,
+) -> RemoteAdmissionPlan? raise OpLogError {
+  if !self.pending.is_empty() {
+    return None
+  }
+  let planned : Array[@core.Op] = []
+  let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let mut next_arrival = self.next_arrival
+  for op in incoming {
+    let raw = remote_admission_raw(op)
+    if is_admitted(raw) || planned_raws.contains(raw) {
+      continue
+    }
+    remote_admission_validate(op)
+    if !remote_admission_is_ready(op, planned_raws, is_admitted) {
+      return None
+    }
+    planned.push(op)
+    planned_raws.add(raw)
+    next_arrival += 1
+  }
+  Some({
+    planned,
+    storage: DeferredFast,
+    next_arrival,
+    generation: self.generation,
+    consumed: false,
+  })
+}
+
+///|
 /// Prepare without changing canonical membership, ordinals, queues, or generation.
 fn RemoteAdmissionPlanner::prepare(
   self : RemoteAdmissionPlanner,
   incoming : Array[@core.Op],
   is_admitted : (@core.RawVersion) -> Bool,
 ) -> RemoteAdmissionPlan raise OpLogError {
+  match self.prepare_fast(incoming, is_admitted) {
+    Some(plan) => return plan
+    None => ()
+  }
   let overlay = {
     staged: Map::default(),
     staged_order: [],
@@ -658,113 +729,157 @@ fn RemoteAdmissionPlanner::begin(
   if plan.generation != self.generation {
     return RemoteAdmissionBeginResult::Stale
   }
-  let (nodes, planned_count) = match plan.storage {
-    ImmediateGeneral(nodes, planned_count~) => (nodes, planned_count)
-  }
-  if plan.planned.length() != planned_count ||
-    plan.next_arrival < self.next_arrival ||
-    plan.next_arrival != self.next_arrival + nodes.length() {
-    return RemoteAdmissionBeginResult::Conflict
-  }
-
-  // Build disposable indexes so compatibility-order validation remains linear
-  // even when queue order reverses arrival order.
-  let staged_index : Map[@core.RawVersion, RemoteAdmissionPreparedNode] = Map::default()
-  for node in nodes {
-    staged_index.set(node.raw, node)
-  }
-  let planned_states : Map[@core.RawVersion, (Int, Int)] = Map::default()
-  let mut previous_round = -1
-  let mut previous_arrival = -1
-  for op in plan.planned {
-    let raw = remote_admission_raw(op)
-    if planned_states.contains(raw) {
-      return RemoteAdmissionBeginResult::Conflict
-    }
-    let (exact, arrival, dependencies) = match self.pending.get(raw) {
-      Some(node) =>
-        (
-          remote_admission_same_operation(op, node.op),
-          node.arrival,
-          node.dependencies,
+  match plan.storage {
+    DeferredFast => {
+      if !self.pending.is_empty() ||
+        plan.next_arrival != self.next_arrival + plan.planned.length() {
+        return RemoteAdmissionBeginResult::Conflict
+      }
+      let seen_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+      let prepared : Array[(@core.RawVersion, RemoteAdmissionNode)] = []
+      for index, op in plan.planned {
+        let raw = remote_admission_raw(op)
+        if is_admitted(raw) ||
+          seen_raws.contains(raw) ||
+          !remote_admission_is_ready(op, seen_raws, is_admitted) ||
+          ((op.is_delete() || op.is_undelete()) && op.origin_left() is None) {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+        let dependencies = remote_admission_dependencies(op)
+        let waiting_dependencies : Array[@core.RawVersion] = []
+        for dependency in dependencies {
+          if !is_admitted(dependency) {
+            waiting_dependencies.push(dependency)
+          }
+        }
+        prepared.push(
+          (
+            raw,
+            {
+              op,
+              arrival: self.next_arrival + index,
+              dependencies,
+              waiting_dependencies,
+              unresolved_count: waiting_dependencies.length(),
+              ready_refs: 0,
+            },
+          ),
         )
-      None =>
-        match staged_index.get(raw) {
+        seen_raws.add(raw)
+      }
+      // The complete temporary node array exists before registration starts.
+      for raw_node in prepared {
+        let (raw, node) = raw_node
+        self.register_canonical(raw, node)
+      }
+    }
+    ImmediateGeneral(nodes, planned_count~) => {
+      if plan.planned.length() != planned_count ||
+        plan.next_arrival < self.next_arrival ||
+        plan.next_arrival != self.next_arrival + nodes.length() {
+        return RemoteAdmissionBeginResult::Conflict
+      }
+
+      // Build disposable indexes so compatibility-order validation remains
+      // linear even when queue order reverses arrival order.
+      let staged_index : Map[@core.RawVersion, RemoteAdmissionPreparedNode] = Map::default()
+      for node in nodes {
+        staged_index.set(node.raw, node)
+      }
+      let planned_states : Map[@core.RawVersion, (Int, Int)] = Map::default()
+      let mut previous_round = -1
+      let mut previous_arrival = -1
+      for op in plan.planned {
+        let raw = remote_admission_raw(op)
+        if planned_states.contains(raw) {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+        let (exact, arrival, dependencies) = match self.pending.get(raw) {
           Some(node) =>
             (
               remote_admission_same_operation(op, node.op),
               node.arrival,
               node.dependencies,
             )
-          None => return RemoteAdmissionBeginResult::Conflict
+          None =>
+            match staged_index.get(raw) {
+              Some(node) =>
+                (
+                  remote_admission_same_operation(op, node.op),
+                  node.arrival,
+                  node.dependencies,
+                )
+              None => return RemoteAdmissionBeginResult::Conflict
+            }
         }
-    }
-    if !exact {
-      return RemoteAdmissionBeginResult::Conflict
-    }
-    let mut round = 0
-    for dependency in dependencies {
-      if is_admitted(dependency) {
-        continue
-      }
-      match planned_states.get(dependency) {
-        Some((dependency_round, dependency_arrival)) => {
-          let imposed_round = if arrival > dependency_arrival {
-            dependency_round
-          } else {
-            dependency_round + 1
+        if !exact {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+        let mut round = 0
+        for dependency in dependencies {
+          if is_admitted(dependency) {
+            continue
           }
-          round = round.max(imposed_round)
+          match planned_states.get(dependency) {
+            Some((dependency_round, dependency_arrival)) => {
+              let imposed_round = if arrival > dependency_arrival {
+                dependency_round
+              } else {
+                dependency_round + 1
+              }
+              round = round.max(imposed_round)
+            }
+            None => return RemoteAdmissionBeginResult::Conflict
+          }
         }
-        None => return RemoteAdmissionBeginResult::Conflict
+        if round < previous_round ||
+          (round == previous_round && arrival <= previous_arrival) {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+        planned_states.set(raw, (round, arrival))
+        previous_round = round
+        previous_arrival = arrival
+      }
+
+      let seen_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+      for index, node in nodes {
+        let raw = remote_admission_raw(node.op)
+        if node.raw != raw ||
+          is_admitted(raw) ||
+          !seen_raws.add_and_check(raw) ||
+          self.pending.contains(raw) ||
+          node.arrival != self.next_arrival + index ||
+          (
+            (node.op.is_delete() || node.op.is_undelete()) &&
+            node.op.origin_left() is None
+          ) ||
+          node.dependencies != remote_admission_dependencies(node.op) {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+        let expected_waiting : Array[@core.RawVersion] = []
+        for dependency in node.dependencies {
+          if !is_admitted(dependency) {
+            expected_waiting.push(dependency)
+          }
+        }
+        if node.waiting_dependencies != expected_waiting ||
+          node.unresolved_count != expected_waiting.length() {
+          return RemoteAdmissionBeginResult::Conflict
+        }
+      }
+
+      // All validation completes before canonical registration starts.
+      for node in nodes {
+        self.register_canonical(node.raw, {
+          op: node.op,
+          arrival: node.arrival,
+          dependencies: node.dependencies,
+          waiting_dependencies: node.waiting_dependencies,
+          unresolved_count: node.unresolved_count,
+          ready_refs: 0,
+        })
       }
     }
-    if round < previous_round ||
-      (round == previous_round && arrival <= previous_arrival) {
-      return RemoteAdmissionBeginResult::Conflict
-    }
-    planned_states.set(raw, (round, arrival))
-    previous_round = round
-    previous_arrival = arrival
-  }
-
-  let seen_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  for index, node in nodes {
-    let raw = remote_admission_raw(node.op)
-    if node.raw != raw ||
-      is_admitted(raw) ||
-      !seen_raws.add_and_check(raw) ||
-      self.pending.contains(raw) ||
-      node.arrival != self.next_arrival + index ||
-      (
-        (node.op.is_delete() || node.op.is_undelete()) &&
-        node.op.origin_left() is None
-      ) ||
-      node.dependencies != remote_admission_dependencies(node.op) {
-      return RemoteAdmissionBeginResult::Conflict
-    }
-    let expected_waiting : Array[@core.RawVersion] = []
-    for dependency in node.dependencies {
-      if !is_admitted(dependency) {
-        expected_waiting.push(dependency)
-      }
-    }
-    if node.waiting_dependencies != expected_waiting ||
-      node.unresolved_count != expected_waiting.length() {
-      return RemoteAdmissionBeginResult::Conflict
-    }
-  }
-
-  // All validation completes before canonical registration starts.
-  for node in nodes {
-    self.register_canonical(node.raw, {
-      op: node.op,
-      arrival: node.arrival,
-      dependencies: node.dependencies,
-      waiting_dependencies: node.waiting_dependencies,
-      unresolved_count: node.unresolved_count,
-      ready_refs: 0,
-    })
   }
   self.next_arrival = plan.next_arrival
   plan.consumed = true
@@ -912,6 +1027,7 @@ fn RemoteAdmissionPlan::remaining_raws(
     }
   }
   match self.storage {
+    DeferredFast => ()
     ImmediateGeneral(nodes, planned_count=_) =>
       for node in nodes {
         if !planned_raws.contains(node.raw) &&
