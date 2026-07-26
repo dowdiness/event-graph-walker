@@ -44,6 +44,23 @@ priv struct RemoteAdmissionNode {
 }
 
 ///|
+/// Immutable staged metadata owned by one prepared capability.
+priv struct RemoteAdmissionPreparedNode {
+  op : @core.Op
+  raw : @core.RawVersion
+  arrival : Int
+  dependencies : Array[@core.RawVersion]
+  waiting_dependencies : Array[@core.RawVersion]
+  unresolved_count : Int
+}
+
+///|
+/// Private representation of staged capability data.
+priv enum RemoteAdmissionPlanStorage {
+  ImmediateGeneral(Array[RemoteAdmissionPreparedNode], planned_count~ : Int)
+}
+
+///|
 /// A max-first queue entry. Negative keys invert the desired min order.
 priv struct RemoteAdmissionReady {
   round_key : Int
@@ -55,12 +72,7 @@ priv struct RemoteAdmissionReady {
 /// Non-mutating preparation result. Its fields are private to this package.
 pub struct RemoteAdmissionPlan {
   priv planned : Array[@core.Op]
-  priv planned_raws : @hashset.HashSet[@core.RawVersion]
-  priv staged : Map[@core.RawVersion, @core.Op]
-  priv staged_arrivals : Map[@core.RawVersion, Int]
-  priv staged_order : Array[@core.RawVersion]
-  priv initial_unresolved : Map[@core.RawVersion, Int]
-  priv initial_waiting : Map[@core.RawVersion, Array[@core.RawVersion]]
+  priv storage : RemoteAdmissionPlanStorage
   priv next_arrival : Int
   priv generation : Int
   priv mut consumed : Bool
@@ -136,6 +148,19 @@ fn remote_admission_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
     None => ()
   }
   dependencies
+}
+
+///|
+/// Compare complete immutable operation payloads for capability validation.
+/// `Op` deliberately has no public `Eq`, so this private boundary is required.
+fn remote_admission_same_operation(left : @core.Op, right : @core.Op) -> Bool {
+  left.lv() == right.lv() &&
+  left.parents() == right.parents() &&
+  left.agent() == right.agent() &&
+  left.seq() == right.seq() &&
+  left.content() == right.content() &&
+  left.origin_left() == right.origin_left() &&
+  left.origin_right() == right.origin_right()
 }
 
 ///|
@@ -592,25 +617,27 @@ fn RemoteAdmissionPlanner::prepare(
     }
     overlay.resolve_waiters(self, entry.raw, node.arrival, -entry.round_key)
   }
-  let initial_unresolved : Map[@core.RawVersion, Int] = Map::default()
-  let initial_waiting : Map[@core.RawVersion, Array[@core.RawVersion]] = Map::default()
+  let staged_nodes : Array[RemoteAdmissionPreparedNode] = []
   for raw in overlay.staged_order {
     match overlay.staged.get(raw) {
-      Some(node) => {
-        initial_unresolved.set(raw, node.unresolved_count)
-        initial_waiting.set(raw, node.waiting_dependencies.copy())
-      }
+      Some(node) =>
+        staged_nodes.push({
+          op: node.op,
+          raw,
+          arrival: node.arrival,
+          dependencies: node.dependencies,
+          waiting_dependencies: node.waiting_dependencies,
+          unresolved_count: node.unresolved_count,
+        })
       None => ()
     }
   }
   {
     planned: overlay.planned_operations,
-    planned_raws: overlay.planned,
-    staged: overlay.staged.map((_, node) => node.op),
-    staged_arrivals: overlay.staged.map((_, node) => node.arrival),
-    staged_order: overlay.staged_order,
-    initial_unresolved,
-    initial_waiting,
+    storage: ImmediateGeneral(
+      staged_nodes,
+      planned_count=overlay.planned_operations.length(),
+    ),
     next_arrival: next_overlay_arrival,
     generation: self.generation,
     consumed: false,
@@ -623,6 +650,7 @@ fn RemoteAdmissionPlanner::prepare(
 fn RemoteAdmissionPlanner::begin(
   self : RemoteAdmissionPlanner,
   plan : RemoteAdmissionPlan,
+  is_admitted : (@core.RawVersion) -> Bool,
 ) -> RemoteAdmissionBeginResult {
   if plan.consumed {
     return RemoteAdmissionBeginResult::Consumed
@@ -630,75 +658,113 @@ fn RemoteAdmissionPlanner::begin(
   if plan.generation != self.generation {
     return RemoteAdmissionBeginResult::Stale
   }
-  // A generation match normally proves this. Keep the validation explicit so
-  // an ill-formed private plan still cannot partially register its prefix.
-  let seen_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  for raw in plan.staged_order {
-    if !seen_raws.add_and_check(raw) {
-      return RemoteAdmissionBeginResult::Conflict
-    }
+  let (nodes, planned_count) = match plan.storage {
+    ImmediateGeneral(nodes, planned_count~) => (nodes, planned_count)
   }
-  let seen_arrivals : @hashset.HashSet[Int] = @hashset.HashSet([])
-  if plan.next_arrival < self.next_arrival ||
-    plan.next_arrival != self.next_arrival + plan.staged_order.length() ||
-    plan.staged.length() != plan.staged_order.length() ||
-    plan.staged_arrivals.length() != plan.staged_order.length() ||
-    plan.initial_unresolved.length() != plan.staged_order.length() ||
-    plan.initial_waiting.length() != plan.staged_order.length() ||
-    plan.planned_raws.length() != plan.planned.length() {
+  if plan.planned.length() != planned_count ||
+    plan.next_arrival < self.next_arrival ||
+    plan.next_arrival != self.next_arrival + nodes.length() {
     return RemoteAdmissionBeginResult::Conflict
   }
-  let seen_planned : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+
+  // Build disposable indexes so compatibility-order validation remains linear
+  // even when queue order reverses arrival order.
+  let staged_index : Map[@core.RawVersion, RemoteAdmissionPreparedNode] = Map::default()
+  for node in nodes {
+    staged_index.set(node.raw, node)
+  }
+  let planned_states : Map[@core.RawVersion, (Int, Int)] = Map::default()
+  let mut previous_round = -1
+  let mut previous_arrival = -1
   for op in plan.planned {
     let raw = remote_admission_raw(op)
-    if !seen_planned.add_and_check(raw) ||
-      !plan.planned_raws.contains(raw) ||
-      (!self.pending.contains(raw) && !plan.staged.contains(raw)) {
+    if planned_states.contains(raw) {
       return RemoteAdmissionBeginResult::Conflict
     }
-  }
-  for index, raw in plan.staged_order {
-    if self.pending.contains(raw) {
-      return RemoteAdmissionBeginResult::Conflict
-    }
-    match plan.staged.get(raw) {
-      Some(op) =>
-        match plan.staged_arrivals.get(raw) {
-          Some(arrival) =>
-            if remote_admission_raw(op) != raw ||
-              arrival != self.next_arrival + index ||
-              !seen_arrivals.add_and_check(arrival) ||
-              plan.initial_unresolved.get(raw) is None ||
-              plan.initial_waiting.get(raw) is None {
-              return RemoteAdmissionBeginResult::Conflict
-            }
+    let (exact, arrival, dependencies) = match self.pending.get(raw) {
+      Some(node) =>
+        (
+          remote_admission_same_operation(op, node.op),
+          node.arrival,
+          node.dependencies,
+        )
+      None =>
+        match staged_index.get(raw) {
+          Some(node) =>
+            (
+              remote_admission_same_operation(op, node.op),
+              node.arrival,
+              node.dependencies,
+            )
           None => return RemoteAdmissionBeginResult::Conflict
         }
-      None => return RemoteAdmissionBeginResult::Conflict
+    }
+    if !exact {
+      return RemoteAdmissionBeginResult::Conflict
+    }
+    let mut round = 0
+    for dependency in dependencies {
+      if is_admitted(dependency) {
+        continue
+      }
+      match planned_states.get(dependency) {
+        Some((dependency_round, dependency_arrival)) => {
+          let imposed_round = if arrival > dependency_arrival {
+            dependency_round
+          } else {
+            dependency_round + 1
+          }
+          round = round.max(imposed_round)
+        }
+        None => return RemoteAdmissionBeginResult::Conflict
+      }
+    }
+    if round < previous_round ||
+      (round == previous_round && arrival <= previous_arrival) {
+      return RemoteAdmissionBeginResult::Conflict
+    }
+    planned_states.set(raw, (round, arrival))
+    previous_round = round
+    previous_arrival = arrival
+  }
+
+  let seen_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for index, node in nodes {
+    let raw = remote_admission_raw(node.op)
+    if node.raw != raw ||
+      is_admitted(raw) ||
+      !seen_raws.add_and_check(raw) ||
+      self.pending.contains(raw) ||
+      node.arrival != self.next_arrival + index ||
+      (
+        (node.op.is_delete() || node.op.is_undelete()) &&
+        node.op.origin_left() is None
+      ) ||
+      node.dependencies != remote_admission_dependencies(node.op) {
+      return RemoteAdmissionBeginResult::Conflict
+    }
+    let expected_waiting : Array[@core.RawVersion] = []
+    for dependency in node.dependencies {
+      if !is_admitted(dependency) {
+        expected_waiting.push(dependency)
+      }
+    }
+    if node.waiting_dependencies != expected_waiting ||
+      node.unresolved_count != expected_waiting.length() {
+      return RemoteAdmissionBeginResult::Conflict
     }
   }
-  for raw in plan.staged_order {
-    match plan.staged.get(raw) {
-      Some(op) =>
-        match plan.staged_arrivals.get(raw) {
-          Some(arrival) =>
-            match
-              (plan.initial_unresolved.get(raw), plan.initial_waiting.get(raw)) {
-              (Some(unresolved_count), Some(waiting_dependencies)) =>
-                self.register_canonical(raw, {
-                  op,
-                  arrival,
-                  dependencies: remote_admission_dependencies(op),
-                  waiting_dependencies: waiting_dependencies.copy(),
-                  unresolved_count,
-                  ready_refs: 0,
-                })
-              (_, _) => ()
-            }
-          None => ()
-        }
-      None => ()
-    }
+
+  // All validation completes before canonical registration starts.
+  for node in nodes {
+    self.register_canonical(node.raw, {
+      op: node.op,
+      arrival: node.arrival,
+      dependencies: node.dependencies,
+      waiting_dependencies: node.waiting_dependencies,
+      unresolved_count: node.unresolved_count,
+      ready_refs: 0,
+    })
   }
   self.next_arrival = plan.next_arrival
   plan.consumed = true
@@ -711,8 +777,9 @@ fn RemoteAdmissionPlanner::begin(
 fn RemoteAdmissionPlanner::begin_plan(
   self : RemoteAdmissionPlanner,
   plan : RemoteAdmissionPlan,
+  is_admitted : (@core.RawVersion) -> Bool,
 ) -> RemoteAdmissionBeginResult {
-  self.begin(plan)
+  self.begin(plan, is_admitted)
 }
 
 ///|
@@ -828,22 +895,30 @@ fn RemoteAdmissionPlan::remaining_raws(
   planner : RemoteAdmissionPlanner,
 ) -> Array[@core.RawVersion] {
   let remaining : Array[@core.RawVersion] = []
+  let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for op in self.planned {
+    planned_raws.add(remote_admission_raw(op))
+  }
   for entry in planner.pending_order {
     if !remote_admission_order_entry_is_live(planner.pending, entry) {
       continue
     }
     match planner.pending.get(entry.raw) {
       Some(_) =>
-        if !self.planned_raws.contains(entry.raw) {
+        if !planned_raws.contains(entry.raw) {
           remaining.push(entry.raw)
         }
       None => ()
     }
   }
-  for raw in self.staged_order {
-    if !self.planned_raws.contains(raw) && !planner.pending.contains(raw) {
-      remaining.push(raw)
-    }
+  match self.storage {
+    ImmediateGeneral(nodes, planned_count=_) =>
+      for node in nodes {
+        if !planned_raws.contains(node.raw) &&
+          !planner.pending.contains(node.raw) {
+          remaining.push(node.raw)
+        }
+      }
   }
   remaining
 }

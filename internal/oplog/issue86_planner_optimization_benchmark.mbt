@@ -1019,7 +1019,7 @@ fn issue86_current_admission_lifecycle(
 ) -> (Array[@core.RawVersion], Array[@core.RawVersion]) raise OpLogError {
   let planner = RemoteAdmissionPlanner()
   let plan = planner.prepare(ops, _ => false)
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Applied => ()
     _ => abort("current lifecycle begin failed")
   }

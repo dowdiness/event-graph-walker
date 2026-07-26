@@ -355,7 +355,8 @@ fn OpLog::begin_remote_plan(
   self : OpLog,
   plan : RemoteAdmissionPlan,
 ) -> Unit raise OpLogError {
-  match self.planner.begin_plan(plan) {
+  match
+    self.planner.begin_plan(plan, raw => self.graph.raw_to_lv(raw) is Some(_)) {
     RemoteAdmissionBeginResult::Applied => ()
     RemoteAdmissionBeginResult::Stale =>
       raise OpLogError::StaleRemoteAdmissionPlan

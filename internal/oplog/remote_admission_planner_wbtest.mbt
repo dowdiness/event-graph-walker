@@ -648,7 +648,7 @@ test "remote admission acknowledgement always invalidates prepared plans" {
     @core.RawVersion::new("ack-unrelated-admitted", 0),
   )
   assert_eq(planner.generation(), generation_before + 1)
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Stale => ()
     _ => fail("every graph admission must invalidate a prepared plan")
   }
@@ -681,7 +681,7 @@ test "remote admission planner begins staged nodes exactly once" {
     known.contains(raw)
   })
   let generation_before = planner.generation()
-  match planner.begin_plan(plan) {
+  match planner.begin_plan(plan, _ => false) {
     RemoteAdmissionBeginResult::Applied => ()
     _ => fail("expected staged registration")
   }
@@ -696,7 +696,7 @@ test "remote admission planner begins staged nodes exactly once" {
   let consumed_order = planner.pending_order.copy()
   let consumed_stale = planner.stale_count()
   let consumed_next_arrival = planner.next_arrival
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Consumed => ()
     _ => fail("expected consumed plan")
   }
@@ -759,11 +759,13 @@ test "remote admission planner assigns post-staging arrivals on begin" {
   let planner = RemoteAdmissionPlanner()
   let old_next_arrival = planner.next_arrival
   let plan = planner.prepare(staged, _ => false)
-  for i, raw in plan.staged_order {
-    let arrival = plan.staged_arrivals[raw]
-    assert_eq(arrival, old_next_arrival + i)
+  match plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) =>
+      for i, node in nodes {
+        assert_eq(node.arrival, old_next_arrival + i)
+      }
   }
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Applied => ()
     _ => fail("expected staged registration")
   }
@@ -795,7 +797,7 @@ test "remote admission planner preserves an unacknowledged successful prefix rem
   let planner = RemoteAdmissionPlanner()
   let plan = planner.prepare(incoming, raw => known.contains(raw))
   let planned = plan.planned_operations()
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Applied => ()
     _ => fail("expected staged registration")
   }
@@ -824,7 +826,7 @@ test "remote admission planner rejects stale plans before mutation" {
   let generation_before = planner.generation()
   let order_before = planner.pending_order.copy()
   let stale_before = planner.stale_count()
-  match planner.begin(stale_plan) {
+  match planner.begin(stale_plan, _ => false) {
     RemoteAdmissionBeginResult::Stale => ()
     _ => fail("expected stale plan")
   }
@@ -840,7 +842,7 @@ test "remote admission planner rejects stale plans before mutation" {
 }
 
 ///|
-test "remote admission planner rejects malformed staged order before mutation" {
+test "remote admission planner rejects duplicate staged arrivals before mutation" {
   let live = @core.Op::new_insert(-1, [], "conflict-live", 0, "l", None, None)
   let staged = @core.Op::new_insert(
     -1,
@@ -863,15 +865,28 @@ test "remote admission planner rejects malformed staged order before mutation" {
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([staged, staged_other], _ => false)
-  plan.staged_order[1] = plan.staged_order[0]
+  match plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) => {
+      let first = nodes[0]
+      let second = nodes[1]
+      nodes[1] = {
+        op: second.op,
+        raw: second.raw,
+        arrival: first.arrival,
+        dependencies: second.dependencies,
+        waiting_dependencies: second.waiting_dependencies,
+        unresolved_count: second.unresolved_count,
+      }
+    }
+  }
   let pending_before = planner.pending_raws()
   let order_length_before = planner.pending_order.length()
   let generation_before = planner.generation()
   let stale_before = planner.stale_count()
   let next_arrival_before = planner.next_arrival
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Conflict => ()
-    _ => fail("expected malformed staged order conflict")
+    _ => fail("expected duplicate staged arrival conflict")
   }
   planner_assert_raws(planner.pending_raws(), pending_before)
   assert_eq(planner.pending_order.length(), order_length_before)
@@ -889,16 +904,26 @@ test "remote admission planner rejects gapped staged arrivals atomically" {
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
-  let second_raw = remote_admission_raw(second)
-  let second_arrival = plan.staged_arrivals[second_raw]
-  plan.staged_arrivals.set(second_raw, second_arrival + 1)
+  match plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) => {
+      let second_node = nodes[1]
+      nodes[1] = {
+        op: second_node.op,
+        raw: second_node.raw,
+        arrival: second_node.arrival + 1,
+        dependencies: second_node.dependencies,
+        waiting_dependencies: second_node.waiting_dependencies,
+        unresolved_count: second_node.unresolved_count,
+      }
+    }
+  }
   let pending_before = planner.pending_raws()
   let order_before = planner.pending_order.copy()
   let generation_before = planner.generation()
   let stale_before = planner.stale_count()
   let next_arrival_before = planner.next_arrival
   let consumed_before = plan.consumed
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Conflict => ()
     _ => fail("expected gapped arrival conflict")
   }
@@ -915,25 +940,44 @@ test "remote admission planner rejects gapped staged arrivals atomically" {
 }
 
 ///|
-test "remote admission planner rejects staged raw/op mismatch atomically" {
+test "remote admission planner rejects staged payload mismatch atomically" {
   let live = @core.Op::new_insert(-1, [], "raw-live", 0, "l", None, None)
   let first = @core.Op::new_insert(-1, [], "raw-first", 0, "f", None, None)
   let second = @core.Op::new_insert(-1, [], "raw-second", 0, "s", None, None)
-  let mismatch = @core.Op::new_insert(-1, [], "raw-other", 0, "x", None, None)
+  let mismatch = @core.Op::new_insert(
+    -1,
+    [],
+    "raw-second",
+    0,
+    "changed",
+    None,
+    None,
+  )
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
-  let second_raw = remote_admission_raw(second)
-  plan.staged.set(second_raw, mismatch)
+  match plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) => {
+      let second_node = nodes[1]
+      nodes[1] = {
+        op: mismatch,
+        raw: second_node.raw,
+        arrival: second_node.arrival,
+        dependencies: second_node.dependencies,
+        waiting_dependencies: second_node.waiting_dependencies,
+        unresolved_count: second_node.unresolved_count,
+      }
+    }
+  }
   let pending_before = planner.pending_raws()
   let order_before = planner.pending_order.copy()
   let generation_before = planner.generation()
   let stale_before = planner.stale_count()
   let next_arrival_before = planner.next_arrival
   let consumed_before = plan.consumed
-  match planner.begin(plan) {
+  match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Conflict => ()
-    _ => fail("expected raw/op mismatch conflict")
+    _ => fail("expected staged payload mismatch conflict")
   }
   planner_assert_raws(planner.pending_raws(), pending_before)
   assert_eq(planner.pending_order.length(), order_before.length())
@@ -945,6 +989,269 @@ test "remote admission planner rejects staged raw/op mismatch atomically" {
   assert_eq(planner.stale_count(), stale_before)
   assert_eq(planner.next_arrival, next_arrival_before)
   assert_eq(plan.consumed, consumed_before)
+}
+
+///|
+test "remote admission planner rejects pending planned payload mismatch atomically" {
+  let pending = @core.Op::new_insert(
+    -1,
+    [],
+    "planned-payload",
+    0,
+    "original",
+    None,
+    None,
+  )
+  let changed = @core.Op::new_insert(
+    -1,
+    [],
+    "planned-payload",
+    0,
+    "changed",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  planner.register_pending(pending, _ => false)
+  let plan = planner.prepare([], _ => false)
+  assert_eq(plan.planned.length(), 1)
+  plan.planned[0] = changed
+  let pending_before = planner.pending_raws()
+  let generation_before = planner.generation()
+  let next_arrival_before = planner.next_arrival
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected pending planned payload conflict")
+  }
+  planner_assert_raws(planner.pending_raws(), pending_before)
+  assert_eq(planner.generation(), generation_before)
+  assert_eq(planner.next_arrival, next_arrival_before)
+  assert_true(!plan.consumed)
+}
+
+///|
+test "remote admission planner rejects reordered and injected planned entries" {
+  let parent = @core.Op::new_insert(
+    -1,
+    [],
+    "planned-order-parent",
+    0,
+    "p",
+    None,
+    None,
+  )
+  let child = @core.Op::new_insert(
+    -1,
+    [remote_admission_raw(parent)],
+    "planned-order-child",
+    0,
+    "c",
+    None,
+    None,
+  )
+  let reordered_planner = RemoteAdmissionPlanner()
+  let reordered_plan = reordered_planner.prepare([child, parent], _ => false)
+  let first = reordered_plan.planned[0]
+  reordered_plan.planned[0] = reordered_plan.planned[1]
+  reordered_plan.planned[1] = first
+  match reordered_planner.begin(reordered_plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected reordered planned conflict")
+  }
+  assert_eq(reordered_planner.pending_raws().length(), 0)
+  assert_eq(reordered_planner.generation(), 0)
+  assert_eq(reordered_planner.next_arrival, 0)
+  assert_true(!reordered_plan.consumed)
+
+  let first_ready = @core.Op::new_insert(
+    -1,
+    [],
+    "planned-order-first-ready",
+    0,
+    "a",
+    None,
+    None,
+  )
+  let second_ready = @core.Op::new_insert(
+    -1,
+    [],
+    "planned-order-second-ready",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let arrival_planner = RemoteAdmissionPlanner()
+  let arrival_plan = arrival_planner.prepare([first_ready, second_ready], _ => {
+    false
+  })
+  let arrival_first = arrival_plan.planned[0]
+  arrival_plan.planned[0] = arrival_plan.planned[1]
+  arrival_plan.planned[1] = arrival_first
+  match arrival_planner.begin(arrival_plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected compatibility arrival-order conflict")
+  }
+  assert_eq(arrival_planner.pending_raws().length(), 0)
+  assert_eq(arrival_planner.generation(), 0)
+  assert_eq(arrival_planner.next_arrival, 0)
+  assert_true(!arrival_plan.consumed)
+
+  let unknown = @core.RawVersion::new("planned-injected-unknown", 0)
+  let ready = @core.Op::new_insert(
+    -1,
+    [],
+    "planned-injected-ready",
+    0,
+    "r",
+    None,
+    None,
+  )
+  let blocked = @core.Op::new_insert(
+    -1,
+    [unknown],
+    "planned-injected-blocked",
+    0,
+    "b",
+    None,
+    None,
+  )
+  let injected_planner = RemoteAdmissionPlanner()
+  let injected_plan = injected_planner.prepare([ready, blocked], _ => false)
+  assert_eq(injected_plan.planned.length(), 1)
+  injected_plan.planned[0] = blocked
+  match injected_planner.begin(injected_plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected prematurely injected planned conflict")
+  }
+  assert_eq(injected_planner.pending_raws().length(), 0)
+  assert_eq(injected_planner.generation(), 0)
+  assert_eq(injected_planner.next_arrival, 0)
+  assert_true(!injected_plan.consumed)
+}
+
+///|
+test "remote admission planner rejects newly admitted staged raw atomically" {
+  let staged = @core.Op::new_insert(
+    -1,
+    [],
+    "newly-admitted-staged",
+    0,
+    "x",
+    None,
+    None,
+  )
+  let raw = remote_admission_raw(staged)
+  let known : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare([staged], dependency => known.contains(dependency))
+  known.add(raw)
+  let generation_before = planner.generation()
+  let next_arrival_before = planner.next_arrival
+  match planner.begin(plan, dependency => known.contains(dependency)) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected newly admitted staged conflict")
+  }
+  assert_eq(planner.pending_raws().length(), 0)
+  assert_eq(planner.generation(), generation_before)
+  assert_eq(planner.next_arrival, next_arrival_before)
+  assert_true(!plan.consumed)
+}
+
+///|
+test "remote admission planner rejects inconsistent waiting metadata atomically" {
+  let dependency = @core.RawVersion::new("waiting-metadata-dependency", 0)
+  let staged = @core.Op::new_insert(
+    -1,
+    [dependency],
+    "waiting-metadata-staged",
+    0,
+    "x",
+    None,
+    None,
+  )
+  let waiting_planner = RemoteAdmissionPlanner()
+  let waiting_plan = waiting_planner.prepare([staged], _ => false)
+  match waiting_plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) => {
+      let node = nodes[0]
+      nodes[0] = {
+        op: node.op,
+        raw: node.raw,
+        arrival: node.arrival,
+        dependencies: node.dependencies,
+        waiting_dependencies: [],
+        unresolved_count: node.unresolved_count,
+      }
+    }
+  }
+  match waiting_planner.begin(waiting_plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected waiting dependency conflict")
+  }
+  assert_eq(waiting_planner.pending_raws().length(), 0)
+  assert_eq(waiting_planner.generation(), 0)
+  assert_eq(waiting_planner.next_arrival, 0)
+  assert_true(!waiting_plan.consumed)
+
+  let count_planner = RemoteAdmissionPlanner()
+  let count_plan = count_planner.prepare([staged], _ => false)
+  match count_plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) => {
+      let node = nodes[0]
+      nodes[0] = {
+        op: node.op,
+        raw: node.raw,
+        arrival: node.arrival,
+        dependencies: node.dependencies,
+        waiting_dependencies: node.waiting_dependencies,
+        unresolved_count: node.unresolved_count + 1,
+      }
+    }
+  }
+  match count_planner.begin(count_plan, _ => false) {
+    RemoteAdmissionBeginResult::Conflict => ()
+    _ => fail("expected unresolved count conflict")
+  }
+  assert_eq(count_planner.pending_raws().length(), 0)
+  assert_eq(count_planner.generation(), 0)
+  assert_eq(count_planner.next_arrival, 0)
+  assert_true(!count_plan.consumed)
+}
+
+///|
+test "remote admission operation copy cannot mutate prepared storage" {
+  let original = @core.Op::new_insert(
+    -1,
+    [],
+    "operation-copy",
+    0,
+    "original",
+    None,
+    None,
+  )
+  let replacement = @core.Op::new_insert(
+    -1,
+    [],
+    "operation-copy",
+    0,
+    "replacement",
+    None,
+    None,
+  )
+  let planner = RemoteAdmissionPlanner()
+  let plan = planner.prepare([original], _ => false)
+  let owning_copy = plan.operations().to_owned()
+  owning_copy[0] = replacement
+  assert_true(remote_admission_same_operation(plan.planned[0], original))
+  match plan.storage {
+    ImmediateGeneral(nodes, planned_count=_) =>
+      assert_true(remote_admission_same_operation(nodes[0].op, original))
+  }
+  match planner.begin(plan, _ => false) {
+    RemoteAdmissionBeginResult::Applied => ()
+    _ => fail("owning operation copy changed the prepared capability")
+  }
 }
 
 ///|
