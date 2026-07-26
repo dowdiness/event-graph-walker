@@ -141,6 +141,124 @@ test "oplog - remote planner build+reject+policy compact (10000 entries)" (
 }
 
 ///|
+// Benchmark-only copy of the historical pending-first fixed-point planner.
+// This must remain independent of OpLog and receives admitted identities
+// explicitly so the timed oracle has no hidden graph state.
+fn benchmark_fixed_point_oracle(
+  candidates : Array[@core.Op],
+  known : Array[@core.RawVersion],
+) -> (Array[@core.Op], Array[@core.Op]) raise OpLogError {
+  let mut candidates = candidates
+  let planned : Array[@core.Op] = []
+  let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let known_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet(known)
+  let mut progress = true
+  while progress {
+    progress = false
+    let remaining : Array[@core.Op] = []
+    for op in candidates {
+      let raw = @core.RawVersion::new(op.agent(), op.seq())
+      if known_raws.contains(raw) || planned_raws.contains(raw) {
+        progress = true
+        continue
+      }
+      if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
+        raise OpLogError::MissingOrigin
+      }
+      let mut ready = true
+      for parent in op.parents_iter() {
+        if !known_raws.contains(parent) && !planned_raws.contains(parent) {
+          ready = false
+          break
+        }
+      }
+      if ready {
+        match op.origin_left() {
+          None => ()
+          Some(origin) =>
+            if !known_raws.contains(origin) && !planned_raws.contains(origin) {
+              ready = false
+            }
+        }
+      }
+      if ready {
+        match op.origin_right() {
+          None => ()
+          Some(origin) =>
+            if !known_raws.contains(origin) && !planned_raws.contains(origin) {
+              ready = false
+            }
+        }
+      }
+      if ready {
+        planned.push(op)
+        planned_raws.add(raw)
+        progress = true
+      } else {
+        remaining.push(op)
+      }
+    }
+    candidates = remaining
+  }
+  (planned, candidates)
+}
+
+///|
+fn benchmark_raws(ops : Array[@core.Op]) -> Array[@core.RawVersion] {
+  [
+    for op in ops => @core.RawVersion::new(op.agent(), op.seq())
+  ]
+}
+
+///|
+fn benchmark_assert_raws(
+  actual : Array[@core.RawVersion],
+  expected : Array[@core.RawVersion],
+) -> Unit raise {
+  assert_eq(actual.length(), expected.length())
+  for i in 0..<actual.length() {
+    assert_eq(actual[i], expected[i])
+  }
+}
+
+///|
+fn benchmark_production_plan(
+  ops : Array[@core.Op],
+) -> (Array[@core.Op], Array[@core.RawVersion]) raise OpLogError {
+  let oplog = OpLog::new("local")
+  let plan = oplog.prepare_remote(ops)
+  (plan.operations().to_owned(), plan.remaining_raws(oplog.planner))
+}
+
+///|
+/// Benchmark-only: planned ops for production path timing. Creates a fresh
+/// OpLog and delegates to the compatibility wrapper.
+fn benchmark_production_planned(
+  ops : Array[@core.Op],
+) -> Array[@core.Op] raise OpLogError {
+  let oplog = OpLog::new("local")
+  oplog.plan_remote(ops)
+}
+
+///|
+// Compare both planned order and the exact remaining pending order before the
+// benchmark closure. Each production comparison starts from an empty OpLog.
+fn benchmark_assert_planner_equivalence(ops : Array[@core.Op]) -> Unit raise {
+  let (oracle_planned, oracle_remaining) = benchmark_fixed_point_oracle(
+    ops.copy(),
+    [],
+  )
+  let (production_planned, production_remaining) = benchmark_production_plan(
+    ops,
+  )
+  benchmark_assert_raws(
+    benchmark_raws(oracle_planned),
+    benchmark_raws(production_planned),
+  )
+  benchmark_assert_raws(benchmark_raws(oracle_remaining), production_remaining)
+}
+
+///|
 fn benchmark_apply_reverse_chain(
   oplog : OpLog,
   ops : Array[@core.Op],
@@ -199,39 +317,99 @@ test "oplog - reverse dependency chain apply (10000 ops)" (b : @bench.T) {
 }
 
 ///|
-test "oplog - reverse dependency chain plan batch (100 ops)" (b : @bench.T) {
+test "oplog - oracle reverse dependency chain plan batch (100 ops)" (
+  b : @bench.T,
+) {
   let ops = benchmark_reverse_ops(benchmark_remote_chain(100))
+  try! benchmark_assert_planner_equivalence(ops)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
-      let planned = try! oplog.plan_remote(ops)
-      b.keep(planned.length())
+      let (planned, _remaining) = try! benchmark_fixed_point_oracle(
+        ops.copy(),
+        [],
+      )
+      b.keep(benchmark_raws(planned))
     },
     count=1,
   )
 }
 
 ///|
-test "oplog - reverse dependency chain plan batch (1000 ops)" (b : @bench.T) {
+test "oplog - production reverse dependency chain plan batch (100 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(100))
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(
+    fn() {
+      let planned = try! benchmark_production_planned(ops)
+      b.keep(benchmark_raws(planned))
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - oracle reverse dependency chain plan batch (1000 ops)" (
+  b : @bench.T,
+) {
   let ops = benchmark_reverse_ops(benchmark_remote_chain(1000))
+  try! benchmark_assert_planner_equivalence(ops)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
-      let planned = try! oplog.plan_remote(ops)
-      b.keep(planned.length())
+      let (planned, _remaining) = try! benchmark_fixed_point_oracle(
+        ops.copy(),
+        [],
+      )
+      b.keep(benchmark_raws(planned))
     },
     count=1,
   )
 }
 
 ///|
-test "oplog - reverse dependency chain plan batch (10000 ops)" (b : @bench.T) {
-  let ops = benchmark_reverse_ops(benchmark_remote_chain(10000))
+test "oplog - production reverse dependency chain plan batch (1000 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(1000))
+  try! benchmark_assert_planner_equivalence(ops)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
-      let planned = try! oplog.plan_remote(ops)
-      b.keep(planned.length())
+      let planned = try! benchmark_production_planned(ops)
+      b.keep(benchmark_raws(planned))
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - oracle reverse dependency chain plan batch (10000 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(10000))
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(
+    fn() {
+      let (planned, _remaining) = try! benchmark_fixed_point_oracle(
+        ops.copy(),
+        [],
+      )
+      b.keep(benchmark_raws(planned))
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - production reverse dependency chain plan batch (10000 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_chain(10000))
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(
+    fn() {
+      let planned = try! benchmark_production_planned(ops)
+      b.keep(benchmark_raws(planned))
     },
     count=1,
   )
@@ -275,6 +453,127 @@ test "oplog - reverse branching dependencies apply (4 x 250 ops)" (b : @bench.T)
     },
     count=1,
   )
+}
+
+///|
+test "oplog - oracle reverse branching dependencies plan batch (4 x 250 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_branches(250))
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(
+    fn() {
+      let (planned, _remaining) = try! benchmark_fixed_point_oracle(
+        ops.copy(),
+        [],
+      )
+      b.keep(benchmark_raws(planned))
+    },
+    count=1,
+  )
+}
+
+///|
+test "oplog - production reverse branching dependencies plan batch (4 x 250 ops)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_reverse_ops(benchmark_remote_branches(250))
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(
+    fn() {
+      let planned = try! benchmark_production_planned(ops)
+      b.keep(benchmark_raws(planned))
+    },
+    count=1,
+  )
+}
+
+///|
+fn benchmark_all_ready_batch(n : Int) -> Array[@core.Op] {
+  let ops : Array[@core.Op] = []
+  for i in 0..<n {
+    ops.push(@core.Op::new_insert(-1, [], "ready", i, "x", None, None))
+  }
+  ops
+}
+
+///|
+fn benchmark_duplicate_heavy_batch(
+  unique_count : Int,
+  copies : Int,
+) -> Array[@core.Op] {
+  let unique = benchmark_all_ready_batch(unique_count)
+  let ops : Array[@core.Op] = []
+  for _ in 0..<copies {
+    for op in unique {
+      ops.push(op)
+    }
+  }
+  ops
+}
+
+///|
+test "oplog - oracle all-ready batch plan (32 ops)" (b : @bench.T) {
+  let ops = benchmark_all_ready_batch(32)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let (planned, _remaining) = try! benchmark_fixed_point_oracle(ops.copy(), [])
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - production all-ready batch plan (32 ops)" (b : @bench.T) {
+  let ops = benchmark_all_ready_batch(32)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let planned = try! benchmark_production_planned(ops)
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - oracle in-order dependency chain plan (64 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(64)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let (planned, _remaining) = try! benchmark_fixed_point_oracle(ops.copy(), [])
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - production in-order dependency chain plan (64 ops)" (b : @bench.T) {
+  let ops = benchmark_remote_chain(64)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let planned = try! benchmark_production_planned(ops)
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - oracle duplicate-heavy batch plan (32 ops x 8 copies)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_duplicate_heavy_batch(32, 8)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let (planned, _remaining) = try! benchmark_fixed_point_oracle(ops.copy(), [])
+    b.keep(benchmark_raws(planned))
+  })
+}
+
+///|
+test "oplog - production duplicate-heavy batch plan (32 ops x 8 copies)" (
+  b : @bench.T,
+) {
+  let ops = benchmark_duplicate_heavy_batch(32, 8)
+  try! benchmark_assert_planner_equivalence(ops)
+  b.bench(fn() {
+    let planned = try! benchmark_production_planned(ops)
+    b.keep(benchmark_raws(planned))
+  })
 }
 
 ///|
