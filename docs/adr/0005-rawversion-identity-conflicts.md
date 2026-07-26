@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Reject RawVersion identity conflicts without retaining conflict evidence
