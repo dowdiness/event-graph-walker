@@ -14,7 +14,7 @@ A standalone authoritative `pending : Array[Op]` with genuinely disposable index
 
 ## Prepared admission
 
-Preparing incoming operations is non-mutating and uses a temporary preparation overlay rather than cloning or reversibly mutating canonical planner state. The overlay contains staged incoming nodes, hypothetical unresolved-count deltas, planned identities, ordering metadata, and the additional waiter relationships needed by the prospective batch. It reads existing pending membership and indexes but writes nothing back. Its cost scales with incoming operations and dependency edges actually examined or woken, not with an unconditional copy of all pending state.
+Preparing incoming operations is non-mutating and uses a temporary preparation overlay rather than cloning or reversibly mutating canonical planner state. The overlay contains staged incoming nodes, hypothetical unresolved-count deltas, planned identities, ordering metadata, and the additional waiter relationships needed by the prospective batch. It reads existing pending membership and indexes but writes nothing back. The general path copies the current disposable ready queue, including any stale ready entries retained until quiescent compaction. Copy cost is proportional to that queue's current length; it does not clone canonical pending membership, pending nodes, waiter maps, or arrival metadata. Its remaining work scales with incoming operations and dependency edges examined or woken.
 
 OpLog returns an opaque, single-use `RemoteAdmissionPlan` containing pending additions, the complete compatibility-ordered ready plan, and a planner generation token. Document can inspect a read-only view of its planned operations for complete preflight, but cannot construct or mutate the plan. On success, Document gives that same capability back to OpLog for commit; OpLog does not replan from raw incoming operations. A failed preflight registers none of the incoming operations; it may still issue an explicit rejection transition that removes invalid roots and their transitive dependents from existing pending membership. Commit rejects reuse or a generation mismatch rather than applying a stale plan.
 
@@ -41,6 +41,77 @@ A duplicate is the retransmission of the same immutable operation under the same
 ## Bounded cleanup
 
 Admission or rejection removes an operation from canonical pending membership immediately but may leave inactive nodes, waiter edges, or ready-queue entries in disposable internal indexes. Stale entries are ignored and can never revive an inactive operation. At a quiescent boundary after a drain, the planner deterministically rebuilds its internal indexes from live pending membership and arrival metadata when stale retention crosses a configured threshold. The selected policy rebuilds when weighted stale references reach `max(1024, 2 * live pending)`. At 10,000 entries with half rejected, policy compaction added about 2–3 ms to the matched JS lifecycle and remained within noise on wasm-gc. This bounds retained stale state relative to live pending state without relying on the pending set eventually becoming empty or rebuilding for small churn.
+
+## Final split representation
+
+The accepted production representation was completed in `cc7df51`, `b3288a9`,
+`f1d3a54`, and `516d753`. Dependency normalization uses a small ordered `Array`
+rather than a per-operation hash set. `RemoteAdmissionPlan` keeps its public
+opaque, single-use shape and stores private staged data in one of two forms:
+
+- `DeferredFast` is a no-payload marker. It is selected only when canonical
+  pending membership is empty and one arrival-order scan finds every dependency
+  admitted or planned earlier. The first unready operation discards the local
+  attempt and restarts through the general path.
+- `ImmediateGeneral` retains the existing overlay and priority-queue drain,
+  including a copy of the disposable ready queue, then materializes one
+  arrival-ordered prepared-node array plus the planned count. It does not retain
+  the former staged, arrival, waiting, unresolved, and planned-membership maps
+  in the capability.
+
+Begin remains separate from acknowledgement. The fast variant builds and
+validates every canonical node in a temporary array before registration.
+
+The general variant validates planned count, exact operation payloads, normalized
+dependencies, waiting filters, unresolved counts, admitted status, contiguous
+arrivals, and compatibility `(round, arrival)` order before registration.
+
+Canonical registration defensively copies dependency metadata. OpLog
+acknowledges each identity only after graph and operation-log commit succeeds.
+
+This split adds a bounded discarded scan when fast preparation encounters its
+first unready operation. The general capability may hold the same shallow,
+immutable `Op` value in both its compatibility projection and prepared-node
+array.
+
+These costs are preferable to retaining the multi-map capability or weakening
+atomic validation. Callers still receive only `ArrayView[Op]`.
+
+## Final measurements
+
+All acceptance results use five runs per target and the median of paired
+speedups or regressions. Equality checks run outside timed closures.
+
+The raw commands and values are recorded in
+[Issue #86](https://github.com/dowdiness/event-graph-walker/issues/86#issuecomment-5082623153).
+
+| Planner gate | wasm-gc | JS |
+|---|---:|---:|
+| reverse 10,000 speedup | 318.6x | 270.6x |
+| branches 4x250 speedup | 12.25x | 12.10x |
+| ready 1 regression | +17.10% | +17.28% |
+| in-order 1 regression | +17.41% | +12.97% |
+| ready 32 regression | -0.71% | -4.57% |
+| in-order 64 regression | -16.37% | -21.08% |
+
+Matched prepare, begin, and acknowledgement lifecycle medians also passed the
+additional 20% regression gate.
+
+| Lifecycle scenario | wasm-gc change | JS change |
+|---|---:|---:|
+| ready 32 | -44.4% | -43.0% |
+| in-order 64 | -33.1% | -27.8% |
+| branches 4x250 | -5.3% | -0.4% |
+| reverse 10,000 | -30.8% | -18.5% |
+
+The integrated Document reverse-10,000 median was 80.64 ms on wasm-gc and
+125.66 ms on JS. Against the original immediate pre-cutover runs, this is a
+105.3x and 90.4x speedup. Against the five-run historical medians remeasured at
+`7238c8b` on the final toolchain, it is 149.6x and 134.6x.
+
+The historical commands, environment, and raw runs are recorded in the
+[baseline comment](https://github.com/dowdiness/event-graph-walker/issues/86#issuecomment-5082403057).
+All unchanged acceptance gates passed.
 
 ## Migration validation
 

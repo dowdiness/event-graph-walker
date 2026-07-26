@@ -1,8 +1,18 @@
-# Issue #86 production plan: Remote Admission Planner
+# Issue #86 production plan: remote admission planner
 
-**Status:** ready for execution
-**Decision:** [ADR-0004](../adr/0004-canonical-pending-remote-owner.md)
+**Status:** completed and archived (2026-07-26)
+**Decision:** [ADR-0004](../../adr/0004-canonical-pending-remote-owner.md)
 **Scope:** `internal/oplog`, `internal/document`, and compatibility validation in `internal/branch`
+**Completion:** production cutover through `aa9fe59`; accepted optimization and evidence through `516d753`
+
+> This plan is complete. The
+> [gate optimization follow-up](./2026-07-26-issue-86-planner-gate-optimization.md)
+> is archived beside it. Final measurements are recorded in
+> [ADR 0004](../../adr/0004-canonical-pending-remote-owner.md) and
+> [Issue #86](https://github.com/dowdiness/event-graph-walker/issues/86#issuecomment-5082623153).
+> One implementation detail differs from the stronger cost wording below: the
+> general overlay copies the disposable ready queue, but it does not clone
+> canonical pending membership or node metadata.
 
 ## Goal
 
@@ -380,20 +390,20 @@ Operation identity conflicts are not generated as valid duplicate cases; they re
 
 ## Production cutover checklist
 
-- [ ] Exact fixed-point oracle exists only in white-box tests and benchmarks.
-- [ ] No production call path shadow-runs the oracle.
-- [ ] Remote Admission Planner is the only owner of pending membership.
-- [ ] Planner code imports no CausalGraph, Document, Fugue, filesystem, clock, or network capability.
-- [ ] Preparation uses an overlay and does not copy all pending state unconditionally.
-- [ ] `RemoteAdmissionPlan` is opaque, single-use, generation-checked, and exposes only `ArrayView`.
-- [ ] Complete Document preflight occurs before registration or admission.
-- [ ] Planner resolution follows successful OpLog commit, never readiness alone.
-- [ ] `OpLogError::PartialRemoteAdmission` carries the exact committed prefix and typed causal-graph cause.
-- [ ] Document applies or advances that prefix before re-raising; unknown errors are rethrown.
-- [ ] Document merge captures the pre-commit Branch/frontier and projects once.
-- [ ] Existing public OpLog and Branch convenience methods remain compatible.
-- [ ] Rejection is attempt-scoped; no permanent identity tombstone exists.
-- [ ] Compaction bounds stale retention relative to live pending state.
-- [ ] All `.mbti` changes are intentional.
-- [ ] Full tests pass and all four performance gates hold on wasm-gc and JS as specified.
-- [ ] Prototype evidence has been migrated before prototype deletion.
+- [x] Exact fixed-point oracle exists only in white-box tests and benchmarks.
+- [x] No production call path shadow-runs the oracle.
+- [x] Remote Admission Planner is the only owner of pending membership.
+- [x] Planner code imports no CausalGraph, Document, Fugue, filesystem, clock, or network capability.
+- [x] Preparation does not clone canonical pending membership; ADR 0004 records the general path's disposable ready-queue copy.
+- [x] `RemoteAdmissionPlan` is opaque, single-use, generation-checked, and exposes only `ArrayView`.
+- [x] Complete Document preflight occurs before registration or admission.
+- [x] Planner resolution follows successful OpLog commit, never readiness alone.
+- [x] `OpLogError::PartialRemoteAdmission` carries the exact committed prefix and typed causal-graph cause.
+- [x] Document applies or advances that prefix before re-raising; unknown errors are rethrown.
+- [x] Document merge captures the pre-commit Branch/frontier and projects once.
+- [x] Existing public OpLog and Branch convenience methods remain compatible.
+- [x] Rejection is attempt-scoped; no permanent identity tombstone exists.
+- [x] Compaction bounds stale retention relative to live pending state.
+- [x] All `.mbti` changes are intentional.
+- [x] Full tests pass and all performance gates hold on wasm-gc and JS as specified.
+- [x] Prototype evidence was migrated before prototype deletion.

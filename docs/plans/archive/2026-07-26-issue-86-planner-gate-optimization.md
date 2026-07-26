@@ -1,9 +1,13 @@
 # Issue #86: planner gate optimization
 
-**Status:** ready-for-implementation
+**Status:** completed and archived (2026-07-26)
 **Date:** 2026-07-26
 **Depends on:** ADR 0004 and the completed production cutover through `aa9fe59`
-**Evidence:** `06e7c8d`, `internal/oplog/issue86_planner_optimization_benchmark.mbt`
+**Evidence:** prototype evidence at `06e7c8d`; production optimization `cc7df51`, `b3288a9`, `f1d3a54`; accepted gates and prototype removal `516d753`
+**Final results:** [Issue #86](https://github.com/dowdiness/event-graph-walker/issues/86#issuecomment-5082623153)
+
+> This plan is complete. ADR 0004 records the final split representation,
+> consequences, and accepted measurements.
 
 ## Goal
 
