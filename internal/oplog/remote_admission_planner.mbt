@@ -116,18 +116,23 @@ fn remote_admission_raw(op : @core.Op) -> @core.RawVersion {
 /// Normalize all causal and origin edges while preserving first occurrence.
 fn remote_admission_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
   let dependencies : Array[@core.RawVersion] = []
-  let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for dependency in op.parents_iter() {
-    if seen.add_and_check(dependency) {
+    if !dependencies.contains(dependency) {
       dependencies.push(dependency)
     }
   }
   match op.origin_left() {
-    Some(origin) => if seen.add_and_check(origin) { dependencies.push(origin) }
+    Some(origin) =>
+      if !dependencies.contains(origin) {
+        dependencies.push(origin)
+      }
     None => ()
   }
   match op.origin_right() {
-    Some(origin) => if seen.add_and_check(origin) { dependencies.push(origin) }
+    Some(origin) =>
+      if !dependencies.contains(origin) {
+        dependencies.push(origin)
+      }
     None => ()
   }
   dependencies

@@ -75,6 +75,37 @@ test "remote admission planner matches adversarial and reverse order" {
 }
 
 ///|
+test "remote admission dependencies preserve first occurrence order" {
+  let first = @core.RawVersion::new("dependency-first", 0)
+  let second = @core.RawVersion::new("dependency-second", 0)
+  let third = @core.RawVersion::new("dependency-third", 0)
+  let parent_origin_overlap = @core.Op::new_insert(
+    -1,
+    [first, second, first],
+    "parent-origin-overlap",
+    0,
+    "x",
+    Some(second),
+    Some(third),
+  )
+  planner_assert_raws(remote_admission_dependencies(parent_origin_overlap), [
+    first, second, third,
+  ])
+  let repeated_origins = @core.Op::new_insert(
+    -1,
+    [first],
+    "repeated-origins",
+    0,
+    "x",
+    Some(third),
+    Some(third),
+  )
+  planner_assert_raws(remote_admission_dependencies(repeated_origins), [
+    first, third,
+  ])
+}
+
+///|
 test "remote admission planner matches joins and repeated origin edges" {
   let left = @core.RawVersion::new("left", 0)
   let right = @core.RawVersion::new("right", 0)
