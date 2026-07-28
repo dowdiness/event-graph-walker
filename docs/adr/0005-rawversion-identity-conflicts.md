@@ -59,6 +59,6 @@ Façade-only leaves a real lower-interface gap. Digest retention solves a prunin
 
 The guarantee lasts only while an authoritative full payload remains pending or admitted. If log pruning, snapshot restore, or identity-only persistence removes it, the repository must decide what canonical evidence survives and how it is versioned. The generic `OpRun` JSON field `start_lv` does not answer that question; it is not sync identity (`internal/core/op_run_json.mbt:42-89`).
 
-A future implementation may add `OpLogError::ConflictingIdentity(raw)`. That is an intentional exported `.mbti` change, even though the comparator stays private. Richer commit/report receipts remain Issue #72's concern. Issue #87 retains performance measurement, and PRs #90, #91, and #92 retain their property scopes.
+The implementation adds `OpLogError::ConflictingIdentity(raw)`. This is an intentional exported `.mbti` change, even though the comparator stays private. Richer commit/report receipts remain Issue #72's concern. Issue #87 retains performance measurement, and PRs #90, #91, and #92 retain their property scopes.
 
-This proposed ADR changes no production code, error surface, persistence, or wire format. Implementation is scoped in `docs/plans/2026-07-26-rawversion-identity-conflict-implementation-issue.md`.
+The completed implementation record is archived at `docs/plans/archive/2026-07-26-rawversion-identity-conflict-implementation-issue.md`. It changes no persistence or wire format.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-28
+
 ### Breaking changes
 
 - The public `undo.Undoable` interface now hides visibility lookup and returns
@@ -15,15 +17,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [`docs/MIGRATING_UNDO_API.md`](docs/MIGRATING_UNDO_API.md).
 - The legacy `UndoError::ItemNotFound` variant has been removed. Stale targets
   are reported as `CompensatingEditResult::Stale` instead.
+- `TextError` now includes `InvalidText(detail)` for malformed local UTF-16.
+  Exhaustive error matches must handle the new variant.
+
+### Changed
+
+- `UndoManager::undo` and `redo` return `false` when the selected group is
+  entirely stale. Stale groups emit no CRDT operation or synchronization delta.
+
+### Fixed
+
+- Remote admission now preflights dependency-ready operations, including
+  pending dependents and Fugue origins, before mutating shared state.
+- Direct `OpLog`, `Document`, and `Branch` admission now rejects a reused
+  `RawVersion` with different logical parents, content, or origins. Destination-
+  local LVs and parent order remain non-conflicting, matching the public
+  synchronization façades.
 
 ### Performance
 
 - Remote operation admission now uses incremental dependency planning instead
   of repeated fixed-point scans while preserving pending-first compatibility
-  order. Release-mode reverse-chain medians at 10,000 operations improved
-  planner preparation by 318.6x on wasm-gc and 270.6x on JS; the integrated
-  Document path improved by 105.3x and 90.4x, respectively, against immediate
-  pre-cutover runs.
+  order. For reverse chains of 10,000 operations, release-mode planner
+  preparation medians improved by 318.6x on wasm-gc and 270.6x on JS against
+  the test-only fixed-point oracle. The integrated Document path improved by
+  105.3x and 90.4x, respectively, against immediate pre-cutover runs.
+- Rebuilding stale-dominated ready snapshots reduced the affected single-
+  delivery lifecycle median from 12.00 ms to 3.57 ms on wasm-gc and from
+  12.72 ms to 5.25 ms on JS, improvements of 70.25% and 58.73%. Clean and
+  batched control paths retain their existing behavior.
 
 ## [0.5.0] - 2026-07-23
 
@@ -299,7 +321,8 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.2.0...v0.3.0
