@@ -40,13 +40,13 @@ These are useful when changing internals, reviewing algorithm choices, or planni
 - [Decisions needed](decisions-needed.md)
 - [Decision records](decisions/)
 - [Plans](plans/)
-  - [Parse, Don't Validate audit and improvement plan](plans/2026-07-21-parse-dont-validate-audit.md)
 - [Benchmark records](benchmarks/)
 
 ## Historical, Spec, Or Exploratory Material
 
 Read these with care. They contain formalization, planned work, or notes that may not describe current implemented behavior unless confirmed by code and current API docs.
 
+- [Parse, Don't Validate audit and improvement plan](plans/archive/2026-07-21-parse-dont-validate-audit.md) - archived after phases 1–6a; operation identity remains deferred.
 - [Formal specification](FORMAL_SPECIFICATION.md) - includes path drift and aspirational/unverified notes.
 - [RLE design plan](RLE_DESIGN_PLAN.md) - planned/exploratory RLE design material.
 

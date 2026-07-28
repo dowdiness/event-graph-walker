@@ -1,7 +1,7 @@
 # Parse, don't validate audit and improvement plan
 
 **Date:** 2026-07-21  
-**Status:** In progress (phases 1–6a complete; operation identity deferred)
+**Status:** Archived (phases 1–6a complete; operation identity deferred)
 
 **Scope:** `dowdiness/event-graph-walker`
 
