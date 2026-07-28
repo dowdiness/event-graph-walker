@@ -141,6 +141,328 @@ test "oplog - remote planner build+reject+policy compact (10000 entries)" (
 }
 
 ///|
+/// Build retained ready-queue state only through production planner lifecycle
+/// transitions. Two canonical nodes remain live: one ready and one unresolved.
+/// Each acknowledged ready node contributes one stale order tombstone and one
+/// stale ready reference, so 511/512/513 entries exercise weighted stale counts
+/// 1022/1024/1026 around the policy floor.
+fn benchmark_retained_ready_planner(
+  stale_ready_entries : Int,
+) -> RemoteAdmissionPlanner raise OpLogError {
+  let planner = RemoteAdmissionPlanner()
+  planner.register_pending(
+    @core.Op::new_insert(-1, [], "retained-ready-live", 0, "x", None, None),
+    _ => false,
+  )
+  planner.register_pending(
+    @core.Op::new_insert(
+      -1,
+      [@core.RawVersion::new("retained-ready-missing", 0)],
+      "retained-ready-unresolved",
+      0,
+      "x",
+      None,
+      None,
+    ),
+    _ => false,
+  )
+  for i in 0..<stale_ready_entries {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "retained-ready-stale",
+      i,
+      "x",
+      None,
+      None,
+    )
+    planner.register_pending(op, _ => false)
+    planner.acknowledge_admitted(remote_admission_raw(op))
+  }
+  planner
+}
+
+///|
+/// Pin retained counts and exact prepare output before timing. The benchmark
+/// closure performs 100 non-mutating preparations against one prebuilt state;
+/// divide the reported duration by 100 for the per-prepare cost.
+fn benchmark_repeated_retained_ready_prepare(
+  b : @bench.T,
+  stale_ready_entries : Int,
+  after_quiescent_policy : Bool,
+  incoming : Array[@core.Op],
+) -> Unit raise {
+  let before = try! benchmark_retained_ready_planner(stale_ready_entries)
+  let after = try! benchmark_retained_ready_planner(stale_ready_entries)
+  assert_eq(before.pending.length(), 2)
+  assert_eq(before.ready.length(), stale_ready_entries + 1)
+  assert_eq(before.stale_ready_refs, stale_ready_entries)
+  assert_eq(before.stale_count(), stale_ready_entries * 2)
+  let policy_compacted = after.maybe_compact(_ => false)
+  assert_eq(policy_compacted, stale_ready_entries >= 512)
+  assert_eq(after.pending.length(), 2)
+  if policy_compacted {
+    assert_eq(after.ready.length(), 1)
+    assert_eq(after.stale_ready_refs, 0)
+    assert_eq(after.stale_count(), 0)
+  } else {
+    assert_eq(after.ready.length(), stale_ready_entries + 1)
+    assert_eq(after.stale_ready_refs, stale_ready_entries)
+    assert_eq(after.stale_count(), stale_ready_entries * 2)
+  }
+  let before_plan = try! before.prepare(incoming, _ => false)
+  let after_plan = try! after.prepare(incoming, _ => false)
+  benchmark_assert_raws(
+    benchmark_raws(before_plan.operations().to_owned()),
+    benchmark_raws(after_plan.operations().to_owned()),
+  )
+  benchmark_assert_raws(
+    before_plan.remaining_raws(before),
+    after_plan.remaining_raws(after),
+  )
+  let planner = if after_quiescent_policy {
+    assert_true(policy_compacted)
+    after
+  } else {
+    before
+  }
+  b.bench(fn() {
+    let mut planned_count = 0
+    for _ in 0..<100 {
+      let plan = try! planner.prepare(incoming, _ => false)
+      planned_count += plan.operations().length()
+    }
+    b.keep(planned_count)
+  })
+}
+
+///|
+test "oplog - retained stale ready below policy, small-ready prepare x100 (511 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(
+    b,
+    511,
+    false,
+    benchmark_remote_chain(1),
+  )
+}
+
+///|
+test "oplog - retained stale ready below policy, unresolved prepare x100 (511 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(b, 511, false, [
+    benchmark_remote_chain(2)[1],
+  ])
+}
+
+///|
+test "oplog - retained stale ready at policy, small-ready prepare x100 (512 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(
+    b,
+    512,
+    false,
+    benchmark_remote_chain(1),
+  )
+}
+
+///|
+test "oplog - compacted at policy, small-ready prepare x100 (0 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(
+    b,
+    512,
+    true,
+    benchmark_remote_chain(1),
+  )
+}
+
+///|
+test "oplog - retained stale ready at policy, unresolved prepare x100 (512 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(b, 512, false, [
+    benchmark_remote_chain(2)[1],
+  ])
+}
+
+///|
+test "oplog - compacted at policy, unresolved prepare x100 (0 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(b, 512, true, [
+    benchmark_remote_chain(2)[1],
+  ])
+}
+
+///|
+test "oplog - retained stale ready above policy, small-ready prepare x100 (513 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(
+    b,
+    513,
+    false,
+    benchmark_remote_chain(1),
+  )
+}
+
+///|
+test "oplog - retained stale ready above policy, unresolved prepare x100 (513 stale)" (
+  b : @bench.T,
+) {
+  benchmark_repeated_retained_ready_prepare(b, 513, false, [
+    benchmark_remote_chain(2)[1],
+  ])
+}
+
+///|
+/// One unresolved operation keeps canonical pending membership live while
+/// independent remote deliveries pass through the production OpLog lifecycle.
+fn benchmark_remote_stream_blocker() -> @core.Op {
+  @core.Op::new_insert(
+    -1,
+    [@core.RawVersion::new("incidence-missing", 0)],
+    "incidence-blocked",
+    0,
+    "blocked",
+    None,
+    None,
+  )
+}
+
+///|
+/// Replay either one-operation deliveries or one batch through production
+/// prepare/begin/acknowledge/compaction transitions. A fresh OpLog is required
+/// inside timing because the trace mutates graph and planner state.
+fn benchmark_remote_stream_lifecycle(
+  ready_ops : Array[@core.Op],
+  retain_unresolved : Bool,
+  batched : Bool,
+) -> OpLog raise OpLogError {
+  let oplog = OpLog::new("incidence-local")
+  if retain_unresolved {
+    ignore(oplog.apply_remote(benchmark_remote_stream_blocker()))
+  }
+  if batched {
+    let plan = oplog.prepare_remote(ready_ops)
+    ignore(oplog.commit_remote(plan))
+  } else {
+    for op in ready_ops {
+      ignore(oplog.apply_remote(op))
+    }
+  }
+  oplog
+}
+
+///|
+/// Observe each delivery immediately before its one production prepare call.
+/// Every `apply_remote` returns through commit and `maybe_compact`, so the
+/// maximum prepares per quiescent caller transition is structurally one.
+fn benchmark_remote_stream_incidence(
+  ready_ops : Array[@core.Op],
+) -> (Int, Int, Int, Int, Int, Int) raise OpLogError {
+  let oplog = OpLog::new("incidence-evidence")
+  ignore(oplog.apply_remote(benchmark_remote_stream_blocker()))
+  let mut prepares_with_stale_ready = 0
+  let mut max_stale_ready = 0
+  let mut max_weighted_stale = 0
+  let mut max_ready_length = 0
+  let mut max_live_pending = 0
+  let mut compactions = 0
+  for op in ready_ops {
+    let stale_before = oplog.planner.stale_count()
+    if oplog.planner.stale_ready_refs > 0 {
+      prepares_with_stale_ready += 1
+    }
+    max_stale_ready = max_stale_ready.max(oplog.planner.stale_ready_refs)
+    max_weighted_stale = max_weighted_stale.max(stale_before)
+    max_ready_length = max_ready_length.max(oplog.planner.ready.length())
+    max_live_pending = max_live_pending.max(oplog.planner.pending.length())
+    ignore(oplog.apply_remote(op))
+    if stale_before > 0 && oplog.planner.stale_count() == 0 {
+      compactions += 1
+    }
+  }
+  (
+    prepares_with_stale_ready, max_stale_ready, max_weighted_stale, max_ready_length,
+    max_live_pending, compactions,
+  )
+}
+
+///|
+/// Pin equal admitted output for the production single-delivery control,
+/// retained-pending stream, and retained-pending batch before timing.
+fn benchmark_assert_remote_stream_equivalence(
+  ready_ops : Array[@core.Op],
+) -> Unit raise {
+  let control = try! benchmark_remote_stream_lifecycle(ready_ops, false, false)
+  let retained = try! benchmark_remote_stream_lifecycle(ready_ops, true, false)
+  let batched = try! benchmark_remote_stream_lifecycle(ready_ops, true, true)
+  let expected = benchmark_raws(control.get_all_ops())
+  benchmark_assert_raws(benchmark_raws(retained.get_all_ops()), expected)
+  benchmark_assert_raws(benchmark_raws(batched.get_all_ops()), expected)
+  assert_eq(expected.length(), ready_ops.length())
+  assert_true(!control.has_pending())
+  assert_true(retained.has_pending())
+  assert_true(batched.has_pending())
+  let (
+    prepares_with_stale_ready,
+    max_stale_ready,
+    max_weighted_stale,
+    max_ready_length,
+    max_live_pending,
+    compactions,
+  ) = try! benchmark_remote_stream_incidence(ready_ops)
+  assert_eq(prepares_with_stale_ready, ready_ops.length() - 1)
+  assert_eq(max_stale_ready, 511)
+  assert_eq(max_weighted_stale, 1022)
+  assert_eq(max_ready_length, 511)
+  assert_eq(max_live_pending, 1)
+  assert_eq(compactions, 1)
+}
+
+///|
+test "oplog - realistic remote stream, no pending (512 single deliveries)" (
+  b : @bench.T,
+) {
+  let ready_ops = benchmark_remote_chain(512)
+  try! benchmark_assert_remote_stream_equivalence(ready_ops)
+  b.bench(fn() {
+    let oplog = try! benchmark_remote_stream_lifecycle(ready_ops, false, false)
+    b.keep((oplog.op_count(), oplog.has_pending()))
+  })
+}
+
+///|
+test "oplog - realistic remote stream, one unresolved pending (512 single deliveries)" (
+  b : @bench.T,
+) {
+  let ready_ops = benchmark_remote_chain(512)
+  try! benchmark_assert_remote_stream_equivalence(ready_ops)
+  b.bench(fn() {
+    let oplog = try! benchmark_remote_stream_lifecycle(ready_ops, true, false)
+    b.keep((oplog.op_count(), oplog.has_pending()))
+  })
+}
+
+///|
+test "oplog - realistic remote batch, one unresolved pending (512 ops)" (
+  b : @bench.T,
+) {
+  let ready_ops = benchmark_remote_chain(512)
+  try! benchmark_assert_remote_stream_equivalence(ready_ops)
+  b.bench(fn() {
+    let oplog = try! benchmark_remote_stream_lifecycle(ready_ops, true, true)
+    b.keep((oplog.op_count(), oplog.has_pending()))
+  })
+}
+
+///|
 // Benchmark-only copy of the historical pending-first fixed-point planner.
 // This must remain independent of OpLog and receives admitted identities
 // explicitly so the timed oracle has no hidden graph state.
