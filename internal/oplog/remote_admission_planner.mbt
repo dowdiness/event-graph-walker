@@ -583,6 +583,37 @@ fn RemoteAdmissionOverlay::resolve_waiters(
 }
 
 ///|
+/// Build the disposable ready queue used by one general preparation.
+///
+/// Copying remains cheaper for clean and live-heavy states. When retained stale
+/// ready entries outnumber live pending membership by at least 16:1, rebuilding
+/// from canonical order avoids repeatedly draining stale queue entries. The
+/// ratio uses division to avoid overflow-prone multiplication.
+fn RemoteAdmissionPlanner::prepare_ready_snapshot(
+  self : RemoteAdmissionPlanner,
+) -> @priority_queue.PriorityQueue[RemoteAdmissionReady] {
+  let live_pending = self.pending.length()
+  if live_pending == 0 || self.stale_ready_refs / live_pending < 16 {
+    return self.ready.copy()
+  }
+  let ready : @priority_queue.PriorityQueue[RemoteAdmissionReady] = @priority_queue.PriorityQueue::default()
+  for entry in self.pending_order {
+    match self.pending.get(entry.raw) {
+      Some(node) =>
+        if node.arrival == entry.arrival && node.unresolved_count == 0 {
+          ready.push({
+            round_key: 0,
+            arrival_key: -node.arrival,
+            raw: entry.raw,
+          })
+        }
+      None => ()
+    }
+  }
+  ready
+}
+
+///|
 /// Use a single arrival-order pass when no canonical pending operation can take
 /// precedence and every incoming dependency is admitted or planned earlier.
 fn RemoteAdmissionPlanner::prepare_fast(
@@ -648,7 +679,7 @@ fn RemoteAdmissionPlanner::prepare(
     waiter_edges: Map::default(),
     planned: @hashset.HashSet([]),
     ready_rounds: Map::default(),
-    ready: self.ready.copy(),
+    ready: self.prepare_ready_snapshot(),
     planned_operations: [],
   }
   let incoming_staged : Map[@core.RawVersion, @core.Op] = Map::default()

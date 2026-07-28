@@ -1615,6 +1615,115 @@ test "remote admission operation copy cannot mutate prepared storage" {
 }
 
 ///|
+test "remote admission ready snapshot pins stale-to-live selection boundary" {
+  let missing = @core.RawVersion::new("snapshot-missing", 0)
+  let selected = RemoteAdmissionPlanner()
+  selected.register_pending(
+    @core.Op::new_insert(
+      -1,
+      [missing],
+      "snapshot-selected-unresolved",
+      0,
+      "u",
+      None,
+      None,
+    ),
+    _ => false,
+  )
+  let selected_ready : Array[@core.RawVersion] = []
+  for i in 0..<3 {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "snapshot-selected-ready",
+      i,
+      "r",
+      None,
+      None,
+    )
+    selected.register_pending(op, _ => false)
+    selected_ready.push(remote_admission_raw(op))
+  }
+  for i in 0..<64 {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "snapshot-selected-stale",
+      i,
+      "s",
+      None,
+      None,
+    )
+    selected.register_pending(op, _ => false)
+    selected.acknowledge_admitted(remote_admission_raw(op))
+  }
+  assert_eq(selected.pending.length(), 4)
+  assert_eq(selected.stale_ready_refs, 64)
+  assert_eq(selected.ready.length(), 67)
+  let rebuilt = selected.prepare_ready_snapshot()
+  assert_eq(rebuilt.length(), 3)
+  for expected in selected_ready {
+    match rebuilt.pop() {
+      Some(entry) => assert_eq(entry.raw, expected)
+      None => fail("expected rebuilt live ready entry")
+    }
+  }
+  assert_eq(selected.ready.length(), 67)
+
+  let copied = RemoteAdmissionPlanner()
+  copied.register_pending(
+    @core.Op::new_insert(
+      -1,
+      [missing],
+      "snapshot-copied-unresolved",
+      0,
+      "u",
+      None,
+      None,
+    ),
+    _ => false,
+  )
+  for i in 0..<4 {
+    copied.register_pending(
+      @core.Op::new_insert(-1, [], "snapshot-copied-ready", i, "r", None, None),
+      _ => false,
+    )
+  }
+  for i in 0..<64 {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "snapshot-copied-stale",
+      i,
+      "s",
+      None,
+      None,
+    )
+    copied.register_pending(op, _ => false)
+    copied.acknowledge_admitted(remote_admission_raw(op))
+  }
+  assert_eq(copied.pending.length(), 5)
+  assert_eq(copied.prepare_ready_snapshot().length(), 68)
+
+  let empty = RemoteAdmissionPlanner()
+  for i in 0..<64 {
+    let op = @core.Op::new_insert(
+      -1,
+      [],
+      "snapshot-empty-stale",
+      i,
+      "s",
+      None,
+      None,
+    )
+    empty.register_pending(op, _ => false)
+    empty.acknowledge_admitted(remote_admission_raw(op))
+  }
+  assert_eq(empty.pending.length(), 0)
+  assert_eq(empty.prepare_ready_snapshot().length(), 64)
+}
+
+///|
 test "remote admission planner compacts stale indexes and preserves live arrivals" {
   let root = @core.Op::new_insert(-1, [], "compact-root", 0, "r", None, None)
   let child = @core.Op::new_insert(
