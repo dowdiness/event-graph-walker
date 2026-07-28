@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The legacy `UndoError::ItemNotFound` variant has been removed. Stale targets
   are reported as `CompensatingEditResult::Stale` instead.
 
+### Performance
+
+- Remote operation admission now uses incremental dependency planning instead
+  of repeated fixed-point scans while preserving pending-first compatibility
+  order. Release-mode reverse-chain medians at 10,000 operations improved
+  planner preparation by 318.6x on wasm-gc and 270.6x on JS; the integrated
+  Document path improved by 105.3x and 90.4x, respectively, against immediate
+  pre-cutover runs.
+
 ## [0.5.0] - 2026-07-23
 
 ### Breaking changes
