@@ -185,6 +185,26 @@ test "time grouping split across timeout" {
 }
 
 ///|
+test "stop capturing isolates an atomic batch from adjacent input" {
+  let manager = @undo.UndoManager::new("alice", capture_timeout_ms=500)
+  manager.record_insert(1, "alice", 100)
+  manager.stop_capturing()
+  manager.record_insert(2, "alice", 101)
+  manager.record_insert(3, "alice", 102)
+  manager.stop_capturing()
+  manager.record_insert(4, "alice", 103)
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:4")
+  doc.applied = []
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:3,delete:2")
+  doc.applied = []
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:1")
+}
+
+///|
 test "per-agent filtering" {
   let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")

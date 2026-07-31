@@ -7,6 +7,7 @@ pub struct UndoManager {
   priv mut redo_stack : Array[UndoGroup]
   priv capture_timeout_ms : Int
   priv mut last_change_ms : Int
+  priv mut force_new_group : Bool
   priv mut tracking_enabled : Bool
 } derive(Debug)
 
@@ -23,6 +24,7 @@ pub fn UndoManager::new(
     redo_stack: [],
     capture_timeout_ms,
     last_change_ms: 0,
+    force_new_group: false,
     tracking_enabled: true,
   }
 }
@@ -74,9 +76,13 @@ fn UndoManager::record_item(
   }
   let item : UndoItem = { target_lv, op_type, content }
   // Check if we should merge into the current group or start a new one
-  let should_merge = match self.undo_stack.last() {
-    Some(_) => timestamp_ms - self.last_change_ms < self.capture_timeout_ms
-    None => false
+  let should_merge = if self.force_new_group {
+    false
+  } else {
+    match self.undo_stack.last() {
+      Some(_) => timestamp_ms - self.last_change_ms < self.capture_timeout_ms
+      None => false
+    }
   }
   if should_merge {
     match self.undo_stack.last() {
@@ -87,7 +93,15 @@ fn UndoManager::record_item(
     self.undo_stack.push({ items: [item], timestamp: timestamp_ms })
   }
   self.last_change_ms = timestamp_ms
+  self.force_new_group = false
   self.redo_stack = []
+}
+
+///|
+/// Prevent the next recorded operation from merging with the current undo
+/// group. Tracking and existing undo/redo history are preserved.
+pub fn UndoManager::stop_capturing(self : UndoManager) -> Unit {
+  self.force_new_group = true
 }
 
 ///|
