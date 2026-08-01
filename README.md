@@ -14,7 +14,7 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 
 Package metadata in `moon.mod`:
 
-- Version: `0.6.0`
+- Version: `0.7.0`
 - Repository: <https://github.com/dowdiness/event-graph-walker>
 - License: `Apache-2.0`
 - Description: `Implementation of the eg-walker CRDT algorithm with FugueMax sequence CRDT`
@@ -155,6 +155,9 @@ Undo/redo support for text documents.
 
 - `UndoManager::new(agent_id)` creates an undo manager for local edits.
 - Use `TextState::insert_and_record`, `delete_and_record`, `replace_range_and_record`, or `delete_range_and_record` to record local edits.
+- Call `UndoManager::stop_capturing()` to force the next recorded edit to begin
+  a new undo group. Calling it before and after a multi-operation batch isolates
+  that batch from adjacent input while preserving grouping within the batch.
 - `can_undo()`, `can_redo()`, `undo(doc)`, and `redo(doc)` drive UI undo/redo controls.
 
 See [docs/EXAMPLES.md](docs/EXAMPLES.md) for a complete undo/redo example.
