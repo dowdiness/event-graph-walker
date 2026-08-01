@@ -26,6 +26,10 @@ _Avoid_: full transactional rollback
 
 ## Shared Document
 
+**Shared document projection**:
+The application of an admitted CRDT operation to the local materialized document state. Projection failure does not undo remote operation admission.
+_Avoid_: remote operation admission, remote apply
+
 **CRDT operation**:
 A causal operation that changes shared document state. A local edit request or compensating edit may emit multiple CRDT operations.
 _Avoid_: edit, transaction
