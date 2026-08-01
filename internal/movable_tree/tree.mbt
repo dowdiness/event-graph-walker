@@ -267,3 +267,22 @@ pub fn MovableTree::get_property(
     None => None
   }
 }
+
+///|
+/// Return an owning snapshot of a node's current properties, sorted by
+/// MoonBit's deterministic shortlex `String` comparison.
+/// Missing nodes return an empty snapshot. Nodes retained under the trash
+/// sentinel keep their current properties.
+pub fn MovableTree::properties(
+  self : MovableTree,
+  id : TreeNodeId,
+) -> Array[(String, String)] {
+  match self.nodes.get(id) {
+    Some(node) => {
+      let properties = node.properties.iter().to_array()
+      properties.sort_by_key(property => property.0)
+      properties
+    }
+    None => []
+  }
+}

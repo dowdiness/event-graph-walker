@@ -37,6 +37,30 @@ test "TreeState properties replicate" {
 }
 
 ///|
+test "TreeState exposes deterministic owning property snapshots" {
+  let state = TreeState::new("alice")
+  let node = state.create_node(parent=root_id)
+  state.set_property(node, "zeta", "last")
+  state.set_property(node, "alfa", "first")
+  let snapshot = state.properties(node)
+  assert_eq(snapshot, [("alfa", "first"), ("zeta", "last")])
+  snapshot[0] = ("alfa", "changed")
+  assert_eq(state.properties(node), [("alfa", "first"), ("zeta", "last")])
+  let missing = TreeNodeId::TreeNodeId("missing", 99)
+  assert_eq(state.properties(missing), [])
+}
+
+///|
+test "TreeState property snapshots retain trashed node properties" {
+  let state = TreeState::new("alice")
+  let node = state.create_node(parent=root_id)
+  state.set_property(node, "status", "archived")
+  state.delete_node(node)
+  inspect(state.is_alive(node), content="false")
+  assert_eq(state.properties(node), [("status", "archived")])
+}
+
+///|
 test "TreeState full synchronization converges" {
   let alice = TreeState::new("alice")
   let bob = TreeState::new("bob")

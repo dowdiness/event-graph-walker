@@ -145,7 +145,7 @@ Primary movable-tree API.
 - `TreeState::new(replica_id)` creates a local replica.
 - `create_node(parent~)` and `create_node_after(parent~, after~)` add nodes.
 - `move_node(target~, new_parent~)` and `delete_node(id)` update structure.
-- `children(id)`, `is_alive(id)`, `set_property(id, key, value)`, and `get_property(id, key)` inspect or annotate nodes.
+- `children(id)`, `is_alive(id)`, `set_property(id, key, value)`, `get_property(id, key)`, and `properties(id)` inspect or annotate nodes. `properties(id)` returns an owning `Array[(String, String)]` snapshot of the current winning key/value pairs, sorted by MoonBit's deterministic shortlex `String` comparison. Missing nodes return `[]`; nodes retained under the trash sentinel keep their current properties.
 - `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange tree operations between replicas.
 - `root_id` is the root sentinel; deleted nodes move under the trash sentinel.
 
@@ -166,6 +166,7 @@ Advanced document-level API that combines movable tree nodes, per-block text, sy
 - `Document::new(replica_id)` creates a document replica.
 - `create_node(parent~)`, `move_node(...)`, and `delete_node(id)` manage the document tree.
 - `insert_text(block, pos, text)`, `delete_text(block, pos)`, `replace_text(block, text)`, `get_text(block)`, and `text_len(block)` manage text inside a node.
+- `set_property(block, key, value)`, `get_property(block, key)`, and `properties(block)` annotate nodes. `properties(block)` returns an owning `Array[(String, String)]` snapshot of the current winning key/value pairs, sorted by MoonBit's deterministic shortlex `String` comparison. Missing nodes return `[]`; nodes retained under the trash sentinel keep their current properties.
 - `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange tree and text operations.
 - `undo()`, `redo()`, `can_undo()`, and `can_redo()` provide document-level undo/redo.
 

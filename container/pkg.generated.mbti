@@ -46,6 +46,7 @@ pub fn Document::move_node_before(Self, target~ : TreeNodeId, parent~ : TreeNode
 pub fn Document::new(String) -> Self raise DocumentError
 pub fn Document::new_with_sync_limits(String, @sync.Limits) -> Self raise DocumentError
 pub fn Document::parent(Self, TreeNodeId) -> TreeNodeId?
+pub fn Document::properties(Self, TreeNodeId) -> Array[(String, String)]
 pub fn Document::redo(Self) -> Bool raise DocumentError
 pub fn Document::replace_text(Self, TreeNodeId, String) -> Unit raise DocumentError
 pub fn Document::set_property(Self, TreeNodeId, String, String) -> Unit
