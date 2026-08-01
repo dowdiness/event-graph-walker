@@ -1,6 +1,6 @@
 name = "dowdiness/event-graph-walker"
 
-version = "0.7.0"
+version = "0.7.1"
 
 import {
   "moonbitlang/quickcheck@0.14.0",
