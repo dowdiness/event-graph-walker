@@ -51,6 +51,16 @@ test "TreeState exposes deterministic owning property snapshots" {
 }
 
 ///|
+test "TreeState property snapshots retain trashed node properties" {
+  let state = TreeState::new("alice")
+  let node = state.create_node(parent=root_id)
+  state.set_property(node, "status", "archived")
+  state.delete_node(node)
+  inspect(state.is_alive(node), content="false")
+  assert_eq(state.properties(node), [("status", "archived")])
+}
+
+///|
 test "TreeState full synchronization converges" {
   let alice = TreeState::new("alice")
   let bob = TreeState::new("bob")

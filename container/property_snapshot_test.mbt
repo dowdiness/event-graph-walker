@@ -57,3 +57,13 @@ test "Document property snapshots converge after concurrent sync" {
     ("title", "alice title"),
   ])
 }
+
+///|
+test "Document property snapshots retain trashed node properties" {
+  let document = try! @container.Document::new("alice")
+  let node = try! document.create_node(parent=@container.root_id)
+  document.set_property(node, "status", "archived")
+  try! document.delete_node(node)
+  assert_eq(document.is_alive(node), false)
+  assert_eq(document.properties(node), [("status", "archived")])
+}

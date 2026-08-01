@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Document::properties` and `TreeState::properties` return owning snapshots of
   current winning property key/value pairs sorted by MoonBit's deterministic
-  shortlex `String` comparison.
+  shortlex `String` comparison. Missing nodes return empty snapshots, while
+  nodes retained under the trash sentinel keep their current properties.
 
 ## [0.6.0] - 2026-07-28
 
