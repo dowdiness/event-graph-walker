@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Document::properties` and `TreeState::properties` return deterministic,
-  owning snapshots of a node's current winning property key/value pairs.
+- `Document::properties` and `TreeState::properties` return owning snapshots of
+  current winning property key/value pairs sorted by MoonBit's deterministic
+  shortlex `String` comparison.
 
 ## [0.6.0] - 2026-07-28
 

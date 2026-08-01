@@ -1,15 +1,15 @@
 ///|
-test "Document properties returns current winning values in key order" {
+test "Document properties returns current winning values in shortlex String order" {
   let document = try! @container.Document::new("alice")
   let node = try! document.create_node(parent=@container.root_id)
-  document.set_property(node, "zeta", "last")
-  document.set_property(node, "alfa", "first-old")
-  document.set_property(node, "midl", "center")
+  document.set_property(node, "title", "last-old")
+  document.set_property(node, "zeta", "middle")
   document.set_property(node, "alfa", "first")
+  document.set_property(node, "title", "last")
   assert_eq(document.properties(node), [
     ("alfa", "first"),
-    ("midl", "center"),
-    ("zeta", "last"),
+    ("zeta", "middle"),
+    ("title", "last"),
   ])
 }
 

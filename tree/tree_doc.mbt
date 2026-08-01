@@ -233,7 +233,8 @@ pub fn TreeState::get_property(
 }
 
 ///|
-/// Return an owning snapshot of a node's current properties in key order.
+/// Return an owning snapshot of a node's current properties, sorted by
+/// MoonBit's deterministic shortlex `String` comparison.
 /// Missing nodes have no visible properties.
 pub fn TreeState::properties(
   self : TreeState,
