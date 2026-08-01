@@ -26,7 +26,7 @@ These are executable observations for one representative tree/property batch, no
 
 Complete replay is also too expensive to assume on every local command. At 499 existing records, the representative four-operation command produced a 2,002-operation, 320,782-byte canonical history. The median of five isolated process medians was:
 
-| Backend | End-to-end reconstruction median |
+| Backend | End-to-end reconstruction median (ms) |
 |---|---:|
 | native | 142.752 ms |
 | JavaScript | 299.768 ms |
@@ -58,7 +58,8 @@ A future internal prepared-local-mutation design is the preferred research direc
 5. pending-state requirements and exclusive writer ownership are explicit;
 6. successful commit has defined local undo and redo semantics rather than inheriting remote-apply behavior accidentally;
 7. recoverable preparation and pre-commit failures preserve Recoverable Edit Atomicity, or the capability remains unavailable;
-8. latency and memory are measured separately for preparation, commit, export, and canonical encoding on supported targets.
+8. after commit begins, the validated path is infallible, or the proposal defines rollback or typed partial-commit reporting, projection, and local-history invalidation without misclassifying partial shared mutation as a recoverable edit failure; failure injection covers every operation boundary;
+9. latency and memory are measured separately for preparation, commit, export, and canonical encoding on supported targets.
 
 This research direction must inspect whether existing private stamping and undo machinery can stage closure-free local mutation descriptions safely. It must not introduce a generic application command abstraction or make replica identity itself a write capability.
 
