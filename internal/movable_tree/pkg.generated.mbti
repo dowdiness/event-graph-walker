@@ -28,6 +28,7 @@ pub fn MovableTree::is_alive(Self, TreeNodeId) -> Bool
 pub fn MovableTree::is_ancestor_of(Self, TreeNodeId, TreeNodeId) -> Bool
 pub fn MovableTree::new() -> Self
 pub fn MovableTree::parent(Self, TreeNodeId) -> TreeNodeId?
+pub fn MovableTree::properties(Self, TreeNodeId) -> Array[(String, String)]
 pub fn MovableTree::remove_node(Self, TreeNodeId) -> Unit
 pub fn MovableTree::set_property(Self, TreeNodeId, String, String) -> Unit
 pub fn MovableTree::would_create_cycle(Self, TreeNodeId, TreeNodeId) -> Bool

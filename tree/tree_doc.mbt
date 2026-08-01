@@ -233,6 +233,16 @@ pub fn TreeState::get_property(
 }
 
 ///|
+/// Return an owning snapshot of a node's current properties in key order.
+/// Missing nodes have no visible properties.
+pub fn TreeState::properties(
+  self : TreeState,
+  id : TreeNodeId,
+) -> Array[(String, String)] {
+  self.document.properties(id.to_inner())
+}
+
+///|
 pub fn TreeState::version(self : TreeState) -> Version {
   Version(self.document.version())
 }

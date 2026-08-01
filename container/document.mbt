@@ -1367,6 +1367,16 @@ pub fn Document::get_property(
 }
 
 ///|
+/// Return an owning snapshot of a node's current properties in key order.
+/// Missing nodes have no visible properties.
+pub fn Document::properties(
+  self : Document,
+  id : TreeNodeId,
+) -> Array[(String, String)] {
+  self.tree.properties(id.to_inner())
+}
+
+///|
 /// Export the full document sync payload.
 ///
 /// Tree ops are replayed before text ops on receipt so newly-created blocks

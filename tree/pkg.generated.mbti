@@ -68,6 +68,7 @@ pub fn TreeState::is_alive(Self, TreeNodeId) -> Bool
 pub fn TreeState::move_node(Self, target~ : TreeNodeId, new_parent~ : TreeNodeId) -> Unit raise TreeError
 pub fn TreeState::new(String) -> Self raise TreeError
 pub fn TreeState::new_with_sync_limits(String, @sync.Limits) -> Self raise TreeError
+pub fn TreeState::properties(Self, TreeNodeId) -> Array[(String, String)]
 pub fn TreeState::set_property(Self, TreeNodeId, String, String) -> Unit
 pub fn TreeState::sync(Self) -> SyncSession
 pub fn TreeState::version(Self) -> Version

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Document::properties` and `TreeState::properties` return deterministic,
+  owning snapshots of a node's current winning property key/value pairs.
+
 ## [0.6.0] - 2026-07-28
 
 ### Breaking changes

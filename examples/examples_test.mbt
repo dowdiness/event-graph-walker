@@ -18,6 +18,7 @@ test "documented tree sync sequence compiles" {
   let bob = try! @tree.TreeState::new("bob-tree")
   let _ = try! bob.sync().apply(try! alice.sync().export_all())
   inspect(bob.get_property(node, "name") == Some("project"), content="true")
+  assert_eq(bob.properties(node), [("name", "project")])
 }
 
 ///|

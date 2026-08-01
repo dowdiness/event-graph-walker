@@ -1,6 +1,6 @@
 # Examples
 
-These examples use only v0.5 façade APIs. Equivalent cases are compiled as
+These examples use only public façade APIs. Equivalent cases are compiled as
 tests in `examples/examples_test.mbt`.
 
 ## Text synchronization
@@ -48,6 +48,7 @@ let bob = @tree.TreeState::new("bob-tree")
 let report = bob.sync().apply(alice.sync().export_all())
 println(report.applied_operations())
 println(bob.get_property(project, "name"))
+println(bob.properties(project)) // [("name", "project")]
 ```
 
 Tree JSON uses `event-graph-walker/tree-sync`; it is deliberately incompatible
