@@ -4,6 +4,7 @@ version = "0.6.0"
 
 import {
   "moonbitlang/quickcheck@0.14.0",
+  "moonbitlang/async@0.20.2",
   "dowdiness/btree@0.1.0",
   "dowdiness/rle@0.2.3",
   "dowdiness/order-tree@0.1.1",

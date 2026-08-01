@@ -1,0 +1,6 @@
+import {
+  "dowdiness/event-graph-walker/container",
+  "moonbitlang/core/bench",
+}
+
+pkgtype(kind: "executable")

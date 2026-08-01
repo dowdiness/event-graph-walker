@@ -19,3 +19,11 @@ verify-publish:
 
 # Run the same complete verification pipeline as CI.
 ci: verify verify-publish
+
+# Run the throwaway Issue #101 local-footprint prototype.
+prototype-issue-101:
+    moon run --release --target native prototypes/issue_101_local_footprint
+
+# Run its non-interactive reconstruction timing on one backend.
+prototype-issue-101-batch target="native":
+    moon run --release --target {{target}} prototypes/issue_101_local_footprint/batch
