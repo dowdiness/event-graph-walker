@@ -65,7 +65,7 @@ pub fn Branch::checkout(
   // Apply each operation to the tree
   let cg = oplog.causal_graph()
   for op in ops {
-    apply_operation_to_tree(tree, op, cg)
+    apply_projection(tree, op, cg)
   }
 
   // Return branch with reconstructed state
@@ -107,7 +107,7 @@ pub fn Branch::advance(
     let tree = self.tree
     let cg = self.oplog.causal_graph()
     for op in advance_ops {
-      apply_operation_to_tree(tree, op, cg)
+      apply_projection(tree, op, cg)
     }
     { frontier: target_frontier, tree, oplog: self.oplog }
   }
@@ -277,78 +277,4 @@ pub fn Branch::merge_remote_ops(
   remote_ops : Array[@core.Op],
 ) -> Branch raise BranchError {
   self.merge_remote_ops_with(remote_ops, plan => self.oplog.commit_remote(plan))
-}
-
-///|
-/// Apply an operation to a FugueTree
-///
-/// This is a helper function that applies either an Insert or Delete
-/// operation to the tree, handling the FugueMax integration.
-fn apply_operation_to_tree(
-  tree : @fugue.FugueTree[String],
-  op : @core.Op,
-  cg : @causal_graph.CausalGraph,
-) -> Unit raise BranchError {
-  let origin_left : @fugue.Lv? = match op.origin_left() {
-    None => None
-    Some(raw) =>
-      match cg.raw_to_lv(raw) {
-        Some(lv) => Some(@fugue.Lv(lv))
-        None => raise BranchError::MissingOrigin(raw~)
-      }
-  }
-  let origin_right : @fugue.Lv? = match op.origin_right() {
-    None => None
-    Some(raw) =>
-      match cg.raw_to_lv(raw) {
-        Some(lv) => Some(@fugue.Lv(lv))
-        None => raise BranchError::MissingOrigin(raw~)
-      }
-  }
-  match op.content() {
-    @core.Insert(text) => {
-      // Get Lamport timestamp and agent from causal graph
-      let lv = op.lv()
-      let (timestamp, agent) = match cg[lv] {
-        Some(entry) => (entry.timestamp, entry.agent)
-        None => raise BranchError::MissingOp(lv~)
-      }
-
-      // Insert into tree with FugueMax algorithm
-      tree.insert({
-        id: @fugue.Lv(lv),
-        content: text,
-        origin_left,
-        origin_right,
-        timestamp: @fugue.Timestamp(timestamp),
-        agent: @fugue.ReplicaId(agent),
-      })
-    }
-    @core.Delete =>
-      match origin_left {
-        Some(lv) => {
-          let (del_ts, del_agent) = match cg[op.lv()] {
-            Some(entry) => (entry.timestamp, entry.agent)
-            None => raise BranchError::MissingOp(lv=op.lv())
-          }
-          tree.delete_with_ts(lv, del_ts, del_agent) catch {
-            e => raise BranchError::Fugue(e)
-          }
-        }
-        None => ()
-      }
-    @core.Undelete =>
-      match origin_left {
-        Some(lv) => {
-          let (undel_ts, undel_agent) = match cg[op.lv()] {
-            Some(entry) => (entry.timestamp, entry.agent)
-            None => raise BranchError::MissingOp(lv=op.lv())
-          }
-          tree.undelete_with_ts(lv, undel_ts, undel_agent) catch {
-            e => raise BranchError::Fugue(e)
-          }
-        }
-        None => ()
-      }
-  }
 }
