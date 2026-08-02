@@ -1,0 +1,16 @@
+target=wasm-gc
+scenario=ops-64
+repetitions=5
+timestamp=2026-08-03T00:54:08+09:00
+source_revision=fcade51423de79865af953cd45dc4118b24ed7e9
+measurement_command=nu scripts/measure-prepared-local-mutation-memory.nu wasm-gc ops-64
+child_runner=moonrun --test-args <driver-args> _build/wasm-gc/release/test/container/container.whitebox_test.wasm --
+kernel=Linux (Ubuntu 24.04)
+cpu=AMD Ryzen 7 6800H with Radeon Graphics
+node=unsupported
+gnu_time=time (GNU Time) UNKNOWN
+moon=moon 0.1.20260713 (75c7e1f 2026-07-13) ~/.moon/bin/moon
+moonc v0.10.4+2cc641edf (2026-07-15) ~/.moon/bin/moonc
+moonrun 0.1.20260713 (75c7e1f 2026-07-13) ~/.moon/bin/moonrun
+
+Feature flags enabled: rr_moon_mod,rr_moon_pkg

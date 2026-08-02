@@ -1,0 +1,16 @@
+target=js
+scenario=records-128-4
+repetitions=5
+timestamp=2026-08-03T00:53:41+09:00
+source_revision=fcade51423de79865af953cd45dc4118b24ed7e9
+measurement_command=nu scripts/measure-prepared-local-mutation-memory.nu js records-128-4
+child_runner=node --enable-source-maps _build/js/release/test/container/container.whitebox_test.js <driver-args>
+kernel=Linux (Ubuntu 24.04)
+cpu=AMD Ryzen 7 6800H with Radeon Graphics
+node=v24.14.1
+gnu_time=time (GNU Time) UNKNOWN
+moon=moon 0.1.20260713 (75c7e1f 2026-07-13) ~/.moon/bin/moon
+moonc v0.10.4+2cc641edf (2026-07-15) ~/.moon/bin/moonc
+moonrun 0.1.20260713 (75c7e1f 2026-07-13) ~/.moon/bin/moonrun
+
+Feature flags enabled: rr_moon_mod,rr_moon_pkg

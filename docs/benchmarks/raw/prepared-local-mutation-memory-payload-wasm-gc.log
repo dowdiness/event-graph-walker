@@ -1,0 +1,23 @@
+issue107-memory stage=baseline
+issue107-memory scenario=empty-4 stage=prepare before_ops=1 after_ops=1 prepared_ops=4 successor_json_bytes=1752 successor_canonical_bytes=619 fence_json_bytes=357 fence_canonical_bytes=120 logical_encoded_payload_lower_bound_bytes=2848
+issue107-memory scenario=records-128-4 stage=prepare before_ops=513 after_ops=513 prepared_ops=4 successor_json_bytes=201502 successor_canonical_bytes=83486 fence_json_bytes=199973 fence_canonical_bytes=82869 logical_encoded_payload_lower_bound_bytes=567830
+issue107-memory scenario=records-499-4 stage=prepare before_ops=1997 after_ops=1997 prepared_ops=4 successor_json_bytes=785861 successor_canonical_bytes=326491 fence_json_bytes=784320 fence_canonical_bytes=325874 logical_encoded_payload_lower_bound_bytes=2222546
+issue107-memory scenario=ops-1 stage=prepare before_ops=1 after_ops=1 prepared_ops=1 successor_json_bytes=731 successor_canonical_bytes=237 fence_json_bytes=351 fence_canonical_bytes=114 logical_encoded_payload_lower_bound_bytes=1433
+issue107-memory scenario=ops-4 stage=prepare before_ops=1 after_ops=1 prepared_ops=4 successor_json_bytes=1712 successor_canonical_bytes=579 fence_json_bytes=351 fence_canonical_bytes=114 logical_encoded_payload_lower_bound_bytes=2756
+issue107-memory scenario=ops-16 stage=prepare before_ops=1 after_ops=1 prepared_ops=16 successor_json_bytes=5736 successor_canonical_bytes=2027 fence_json_bytes=354 fence_canonical_bytes=117 logical_encoded_payload_lower_bound_bytes=8234
+issue107-memory scenario=ops-64 stage=prepare before_ops=1 after_ops=1 prepared_ops=64 successor_json_bytes=21864 successor_canonical_bytes=7787 fence_json_bytes=354 fence_canonical_bytes=117 logical_encoded_payload_lower_bound_bytes=30122
+issue107-memory scenario=empty-4 stage=commit before_ops=1 after_ops=5 prepared_ops=4 successor_json_bytes=1752 successor_canonical_bytes=619 fence_json_bytes=357 fence_canonical_bytes=120 logical_encoded_payload_lower_bound_bytes=2848
+issue107-memory scenario=records-128-4 stage=commit before_ops=513 after_ops=517 prepared_ops=4 successor_json_bytes=201502 successor_canonical_bytes=83486 fence_json_bytes=199973 fence_canonical_bytes=82869 logical_encoded_payload_lower_bound_bytes=567830
+issue107-memory scenario=records-499-4 stage=commit before_ops=1997 after_ops=2001 prepared_ops=4 successor_json_bytes=785861 successor_canonical_bytes=326491 fence_json_bytes=784320 fence_canonical_bytes=325874 logical_encoded_payload_lower_bound_bytes=2222546
+issue107-memory scenario=ops-1 stage=commit before_ops=1 after_ops=2 prepared_ops=1 successor_json_bytes=731 successor_canonical_bytes=237 fence_json_bytes=351 fence_canonical_bytes=114 logical_encoded_payload_lower_bound_bytes=1433
+issue107-memory scenario=ops-4 stage=commit before_ops=1 after_ops=5 prepared_ops=4 successor_json_bytes=1712 successor_canonical_bytes=579 fence_json_bytes=351 fence_canonical_bytes=114 logical_encoded_payload_lower_bound_bytes=2756
+issue107-memory scenario=ops-16 stage=commit before_ops=1 after_ops=17 prepared_ops=16 successor_json_bytes=5736 successor_canonical_bytes=2027 fence_json_bytes=354 fence_canonical_bytes=117 logical_encoded_payload_lower_bound_bytes=8234
+issue107-memory scenario=ops-64 stage=commit before_ops=1 after_ops=65 prepared_ops=64 successor_json_bytes=21864 successor_canonical_bytes=7787 fence_json_bytes=354 fence_canonical_bytes=117 logical_encoded_payload_lower_bound_bytes=30122
+issue107-memory scenario=empty-4 stage=fixture operations=1
+issue107-memory scenario=records-128-4 stage=fixture operations=513
+issue107-memory scenario=records-499-4 stage=fixture operations=1997
+issue107-memory scenario=ops-1 stage=fixture operations=1
+issue107-memory scenario=ops-4 stage=fixture operations=1
+issue107-memory scenario=ops-16 stage=fixture operations=1
+issue107-memory scenario=ops-64 stage=fixture operations=1
+Total tests: 22, passed: 22, failed: 0.

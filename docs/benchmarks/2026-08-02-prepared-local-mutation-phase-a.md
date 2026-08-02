@@ -1,5 +1,7 @@
 # Prepared local mutation — Phase A stage measurements
 
+> **Note (2026-08-03):** The preliminary cost data in this report is superseded by [Phase A cost characterization (2026-08-03)](2026-08-03-prepared-local-mutation-phase-a-cost.md), which adds commit-only latency, direct-local baseline, memory/RSS, and ops-scaling measurements. This report's correctness checkpoint (18 behavioral tests, 837-test suite, `just ci` green, no `.mbti` drift) remains valid historical evidence.
+
 **Date:** 2026-08-02
 **Issue:** #107
 **Design:** ADR0006 (prepared local mutation)

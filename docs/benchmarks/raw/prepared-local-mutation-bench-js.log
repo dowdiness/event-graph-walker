@@ -1,0 +1,98 @@
+issue107 scenario=empty-4 phase=before operations=1
+issue107 scenario=records-128-4 phase=before operations=513
+issue107 scenario=records-499-4 phase=before operations=1997
+issue107 scenario=records-499-4 phase=before operations=1997
+issue107 stage=commit-only sample=0 elapsed_us=86684.04199999895
+issue107 stage=commit-only sample=1 elapsed_us=81937.01299999884
+issue107 stage=commit-only sample=2 elapsed_us=107593.4959999995
+issue107 stage=commit-only sample=3 elapsed_us=69464.156
+issue107 stage=commit-only sample=4 elapsed_us=70796.21899999984
+issue107 stage=commit-only sample=5 elapsed_us=70794.49299999942
+issue107 stage=commit-only sample=6 elapsed_us=71276.66400000089
+issue107 stage=commit-only sample=7 elapsed_us=68320.82199999968
+issue107 stage=commit-only sample=8 elapsed_us=67982.55699999936
+issue107 stage=commit-only sample=9 elapsed_us=63788.59999999986
+issue107 scenario=records-499-4 phase=before operations=1997
+issue107 scenario=records-499-4 phase=after operations=2001
+issue107 scenario=records-499-4 phase=before operations=1997
+issue107 scenario=records-499-4 phase=after operations=2001
+issue107 scenario=records-499-4 phase=before operations=1997
+issue107 scenario=records-499-4 phase=after operations=2001
+issue107 stage=direct-local sample=0 elapsed_us=387.24400000137393
+issue107 stage=direct-local sample=1 elapsed_us=588.3820000017295
+issue107 stage=direct-local sample=2 elapsed_us=396.8860000022687
+issue107 stage=direct-local sample=3 elapsed_us=650.3850000008242
+issue107 stage=direct-local sample=4 elapsed_us=413.3189999993192
+issue107 stage=direct-local sample=5 elapsed_us=583.0239999995683
+issue107 stage=direct-local sample=6 elapsed_us=449.0029999979015
+issue107 stage=direct-local sample=7 elapsed_us=338.04199999940465
+issue107 stage=direct-local sample=8 elapsed_us=556.7459999983839
+issue107 stage=direct-local sample=9 elapsed_us=377.7650000010908
+issue107 scenario=ops-1 phase=before operations=1
+issue107 scenario=ops-4 phase=before operations=1
+issue107 scenario=ops-16 phase=before operations=1
+issue107 scenario=ops-64 phase=before operations=1
+issue107 scenario=ops-1 phase=before operations=1
+issue107 scenario=ops-4 phase=before operations=1
+issue107 scenario=ops-16 phase=before operations=1
+issue107 scenario=ops-64 phase=before operations=1
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:75 ("issue 107 full prepare empty-4") ok
+time (mean ± σ)         range (min … max)
+ 115.45 µs ±   5.81 µs   109.85 µs … 125.03 µs  in 10 ×    757 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:80 ("issue 107 full prepare records-128-4") ok
+time (mean ± σ)         range (min … max)
+  25.19 ms ±   3.06 ms    23.56 ms …  31.18 ms  in 10 ×      4 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:85 ("issue 107 full prepare records-499-4") ok
+time (mean ± σ)         range (min … max)
+ 113.79 ms ±  10.25 ms   100.12 ms … 134.87 ms  in 10 ×      1 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:106 ("issue 107 detached lowering records-499-4") ok
+time (mean ± σ)         range (min … max)
+ 202.81 µs ±   7.48 µs   193.27 µs … 213.84 µs  in 10 ×    508 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:121 ("issue 107 successor message records-499-4") ok
+time (mean ± σ)         range (min … max)
+   3.88 ms ± 362.85 µs     3.32 ms …   4.39 ms  in 10 ×     29 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:133 ("issue 107 JSON encoding records-499-4") ok
+time (mean ± σ)         range (min … max)
+  27.10 ms ± 879.65 µs    25.92 ms …  28.36 ms  in 10 ×      4 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:139 ("issue 107 canonical encoding records-499-4") ok
+time (mean ± σ)         range (min … max)
+  14.69 ms ± 519.48 µs    13.95 ms …  15.39 ms  in 10 ×      7 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:145 ("issue 107 fence validation records-499-4") ok
+time (mean ± σ)         range (min … max)
+  48.76 ms ±   1.67 ms    46.68 ms …  51.84 ms  in 10 ×      3 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:213 ("issue 107 commit only records-499-4") ok
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:233 ("issue 107 post-commit full export records-499-4") ok
+time (mean ± σ)         range (min … max)
+   2.16 ms ± 120.90 µs     2.03 ms …   2.35 ms  in 10 ×     39 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:239 ("issue 107 post-commit JSON encoding records-499-4") ok
+time (mean ± σ)         range (min … max)
+  30.91 ms ±   2.41 ms    27.74 ms …  34.82 ms  in 10 ×      4 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:246 ("issue 107 post-commit canonical encoding records-499-4") ok
+time (mean ± σ)         range (min … max)
+  19.45 ms ±   1.37 ms    17.60 ms …  21.82 ms  in 10 ×      6 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:253 ("issue 107 direct local baseline records-499-4") ok
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:277 ("issue 107 detached lowering ops-1") ok
+time (mean ± σ)         range (min … max)
+ 737.32 ns ±  11.49 ns   723.67 ns … 756.49 ns  in 10 × 100000 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:282 ("issue 107 detached lowering ops-4") ok
+time (mean ± σ)         range (min … max)
+   1.18 µs ±  18.51 ns     1.17 µs …   1.22 µs  in 10 ×  84791 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:287 ("issue 107 detached lowering ops-16") ok
+time (mean ± σ)         range (min … max)
+   4.38 µs ±  68.08 ns     4.31 µs …   4.51 µs  in 10 ×  23156 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:292 ("issue 107 detached lowering ops-64") ok
+time (mean ± σ)         range (min … max)
+  17.87 µs ± 661.71 ns    17.17 µs …  19.03 µs  in 10 ×   5822 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:297 ("issue 107 full prepare ops-1") ok
+time (mean ± σ)         range (min … max)
+  64.11 µs ±   8.14 µs    57.05 µs …  82.69 µs  in 10 ×   1388 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:302 ("issue 107 full prepare ops-4") ok
+time (mean ± σ)         range (min … max)
+ 113.76 µs ±   6.91 µs   105.36 µs … 127.16 µs  in 10 ×    588 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:307 ("issue 107 full prepare ops-16") ok
+time (mean ± σ)         range (min … max)
+ 346.91 µs ±  23.60 µs   317.60 µs … 383.90 µs  in 10 ×    306 runs
+[dowdiness/event-graph-walker] bench container/prepared_local_mutation_benchmark_wbtest.mbt:312 ("issue 107 full prepare ops-64") ok
+time (mean ± σ)         range (min … max)
+   1.28 ms ± 135.10 µs     1.18 ms …   1.56 ms  in 10 ×     81 runs
+Total tests: 21, passed: 21, failed: 0.

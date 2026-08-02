@@ -1,0 +1,16 @@
+source_revision=fcade51423de79865af953cd45dc4118b24ed7e9
+target=wasm-gc
+command=just prototype-prepared-local-mutation-bench wasm-gc
+benchmark_harness_samples=10
+manual_commit_warmups=3
+manual_commit_samples=10
+runner=moonrun
+node=unsupported
+gnu_time=time (GNU Time) UNKNOWN
+kernel=Linux A6 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+cpu=AMD Ryzen 7 6800H with Radeon Graphics
+moon=moon 0.1.20260713 (75c7e1f 2026-07-13) ~/.moon/bin/moon
+moonc v0.10.4+2cc641edf (2026-07-15) ~/.moon/bin/moonc
+moonrun 0.1.20260713 (75c7e1f 2026-07-13) ~/.moon/bin/moonrun
+
+Feature flags enabled: rr_moon_mod,rr_moon_pkg

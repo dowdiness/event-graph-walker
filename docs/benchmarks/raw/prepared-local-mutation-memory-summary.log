@@ -1,0 +1,140 @@
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-empty-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-empty-4.meta.txt
+╭───┬────────┬──────────┬─────────┬────────────────┬─────────────────────┬─────╮
+│ # │ target │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_k │ ... │
+│   │        │          │         │                │ ib                  │     │
+├───┼────────┼──────────┼─────────┼────────────────┼─────────────────────┼─────┤
+│ 0 │ js     │ empty-4  │ fixture │          57460 │                 332 │ ... │
+│ 1 │ js     │ empty-4  │ prepare │          58464 │                1336 │ ... │
+│ 2 │ js     │ empty-4  │ commit  │          58728 │                1600 │ ... │
+╰───┴────────┴──────────┴─────────┴────────────────┴─────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-empty-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-empty-4.meta.txt
+╭───┬─────────┬──────────┬─────────┬────────────────┬────────────────────┬─────╮
+│ # │ target  │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_ │ ... │
+│   │         │          │         │                │ kib                │     │
+├───┼─────────┼──────────┼─────────┼────────────────┼────────────────────┼─────┤
+│ 0 │ wasm-gc │ empty-4  │ fixture │          23260 │                268 │ ... │
+│ 1 │ wasm-gc │ empty-4  │ prepare │          25528 │               2536 │ ... │
+│ 2 │ wasm-gc │ empty-4  │ commit  │          25692 │               2700 │ ... │
+╰───┴─────────┴──────────┴─────────┴────────────────┴────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-records-128-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-records-128-4.meta.txt
+╭───┬────────┬───────────────┬─────────┬────────────────┬────────────────┬─────╮
+│ # │ target │   scenario    │  stage  │ median_rss_kib │ baseline_adjus │ ... │
+│   │        │               │         │                │ ted_kib        │     │
+├───┼────────┼───────────────┼─────────┼────────────────┼────────────────┼─────┤
+│ 0 │ js     │ records-128-4 │ fixture │          73712 │          16376 │ ... │
+│ 1 │ js     │ records-128-4 │ prepare │         102180 │          44844 │ ... │
+│ 2 │ js     │ records-128-4 │ commit  │         110072 │          52736 │ ... │
+╰───┴────────┴───────────────┴─────────┴────────────────┴────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-records-128-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-records-128-4.meta.txt
+╭───┬─────────┬───────────────┬─────────┬────────────────┬───────────────┬─────╮
+│ # │ target  │   scenario    │  stage  │ median_rss_kib │ baseline_adju │ ... │
+│   │         │               │         │                │ sted_kib      │     │
+├───┼─────────┼───────────────┼─────────┼────────────────┼───────────────┼─────┤
+│ 0 │ wasm-gc │ records-128-4 │ fixture │          36772 │         13704 │ ... │
+│ 1 │ wasm-gc │ records-128-4 │ prepare │          46972 │         23904 │ ... │
+│ 2 │ wasm-gc │ records-128-4 │ commit  │          55144 │         32076 │ ... │
+╰───┴─────────┴───────────────┴─────────┴────────────────┴───────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-records-499-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-records-499-4.meta.txt
+╭───┬────────┬───────────────┬─────────┬────────────────┬────────────────┬─────╮
+│ # │ target │   scenario    │  stage  │ median_rss_kib │ baseline_adjus │ ... │
+│   │        │               │         │                │ ted_kib        │     │
+├───┼────────┼───────────────┼─────────┼────────────────┼────────────────┼─────┤
+│ 0 │ js     │ records-499-4 │ fixture │          87320 │          30084 │ ... │
+│ 1 │ js     │ records-499-4 │ prepare │         190060 │         132824 │ ... │
+│ 2 │ js     │ records-499-4 │ commit  │         240172 │         182936 │ ... │
+╰───┴────────┴───────────────┴─────────┴────────────────┴────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-records-499-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-records-499-4.meta.txt
+╭───┬─────────┬───────────────┬─────────┬────────────────┬───────────────┬─────╮
+│ # │ target  │   scenario    │  stage  │ median_rss_kib │ baseline_adju │ ... │
+│   │         │               │         │                │ sted_kib      │     │
+├───┼─────────┼───────────────┼─────────┼────────────────┼───────────────┼─────┤
+│ 0 │ wasm-gc │ records-499-4 │ fixture │          46288 │         23192 │ ... │
+│ 1 │ wasm-gc │ records-499-4 │ prepare │          85352 │         62256 │ ... │
+│ 2 │ wasm-gc │ records-499-4 │ commit  │          93024 │         69928 │ ... │
+╰───┴─────────┴───────────────┴─────────┴────────────────┴───────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-1.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-1.meta.txt
+╭───┬────────┬──────────┬─────────┬────────────────┬─────────────────────┬─────╮
+│ # │ target │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_k │ ... │
+│   │        │          │         │                │ ib                  │     │
+├───┼────────┼──────────┼─────────┼────────────────┼─────────────────────┼─────┤
+│ 0 │ js     │ ops-1    │ fixture │          57552 │                 392 │ ... │
+│ 1 │ js     │ ops-1    │ prepare │          58104 │                 944 │ ... │
+│ 2 │ js     │ ops-1    │ commit  │          58224 │                1064 │ ... │
+╰───┴────────┴──────────┴─────────┴────────────────┴─────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-1.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-1.meta.txt
+╭───┬─────────┬──────────┬─────────┬────────────────┬────────────────────┬─────╮
+│ # │ target  │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_ │ ... │
+│   │         │          │         │                │ kib                │     │
+├───┼─────────┼──────────┼─────────┼────────────────┼────────────────────┼─────┤
+│ 0 │ wasm-gc │ ops-1    │ fixture │          23288 │                228 │ ... │
+│ 1 │ wasm-gc │ ops-1    │ prepare │          25484 │               2424 │ ... │
+│ 2 │ wasm-gc │ ops-1    │ commit  │          25424 │               2364 │ ... │
+╰───┴─────────┴──────────┴─────────┴────────────────┴────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-4.meta.txt
+╭───┬────────┬──────────┬─────────┬────────────────┬─────────────────────┬─────╮
+│ # │ target │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_k │ ... │
+│   │        │          │         │                │ ib                  │     │
+├───┼────────┼──────────┼─────────┼────────────────┼─────────────────────┼─────┤
+│ 0 │ js     │ ops-4    │ fixture │          57504 │                 312 │ ... │
+│ 1 │ js     │ ops-4    │ prepare │          58328 │                1136 │ ... │
+│ 2 │ js     │ ops-4    │ commit  │          58800 │                1608 │ ... │
+╰───┴────────┴──────────┴─────────┴────────────────┴─────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-4.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-4.meta.txt
+╭───┬─────────┬──────────┬─────────┬────────────────┬────────────────────┬─────╮
+│ # │ target  │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_ │ ... │
+│   │         │          │         │                │ kib                │     │
+├───┼─────────┼──────────┼─────────┼────────────────┼────────────────────┼─────┤
+│ 0 │ wasm-gc │ ops-4    │ fixture │          23216 │                200 │ ... │
+│ 1 │ wasm-gc │ ops-4    │ prepare │          25404 │               2388 │ ... │
+│ 2 │ wasm-gc │ ops-4    │ commit  │          25504 │               2488 │ ... │
+╰───┴─────────┴──────────┴─────────┴────────────────┴────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-16.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-16.meta.txt
+╭───┬────────┬──────────┬─────────┬────────────────┬─────────────────────┬─────╮
+│ # │ target │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_k │ ... │
+│   │        │          │         │                │ ib                  │     │
+├───┼────────┼──────────┼─────────┼────────────────┼─────────────────────┼─────┤
+│ 0 │ js     │ ops-16   │ fixture │          57548 │                 484 │ ... │
+│ 1 │ js     │ ops-16   │ prepare │          60748 │                3684 │ ... │
+│ 2 │ js     │ ops-16   │ commit  │          66920 │                9856 │ ... │
+╰───┴────────┴──────────┴─────────┴────────────────┴─────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-16.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-16.meta.txt
+╭───┬─────────┬──────────┬─────────┬────────────────┬────────────────────┬─────╮
+│ # │ target  │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_ │ ... │
+│   │         │          │         │                │ kib                │     │
+├───┼─────────┼──────────┼─────────┼────────────────┼────────────────────┼─────┤
+│ 0 │ wasm-gc │ ops-16   │ fixture │          23260 │                288 │ ... │
+│ 1 │ wasm-gc │ ops-16   │ prepare │          25660 │               2688 │ ... │
+│ 2 │ wasm-gc │ ops-16   │ commit  │          26684 │               3712 │ ... │
+╰───┴─────────┴──────────┴─────────┴────────────────┴────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-64.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-js-ops-64.meta.txt
+╭───┬────────┬──────────┬─────────┬────────────────┬─────────────────────┬─────╮
+│ # │ target │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_k │ ... │
+│   │        │          │         │                │ ib                  │     │
+├───┼────────┼──────────┼─────────┼────────────────┼─────────────────────┼─────┤
+│ 0 │ js     │ ops-64   │ fixture │          57448 │                 212 │ ... │
+│ 1 │ js     │ ops-64   │ prepare │          68360 │               11124 │ ... │
+│ 2 │ js     │ ops-64   │ commit  │          69608 │               12372 │ ... │
+╰───┴────────┴──────────┴─────────┴────────────────┴─────────────────────┴─────╯
+raw=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-64.tsv
+metadata=docs/benchmarks/raw/prepared-local-mutation-memory-wasm-gc-ops-64.meta.txt
+╭───┬─────────┬──────────┬─────────┬────────────────┬────────────────────┬─────╮
+│ # │ target  │ scenario │  stage  │ median_rss_kib │ baseline_adjusted_ │ ... │
+│   │         │          │         │                │ kib                │     │
+├───┼─────────┼──────────┼─────────┼────────────────┼────────────────────┼─────┤
+│ 0 │ wasm-gc │ ops-64   │ fixture │          23240 │                208 │ ... │
+│ 1 │ wasm-gc │ ops-64   │ prepare │          30512 │               7480 │ ... │
+│ 2 │ wasm-gc │ ops-64   │ commit  │          30884 │               7852 │ ... │
+╰───┴─────────┴──────────┴─────────┴────────────────┴────────────────────┴─────╯
