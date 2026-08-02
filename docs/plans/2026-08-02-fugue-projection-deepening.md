@@ -27,7 +27,8 @@ Create one deep in-process module whose interface applies one admitted operation
 - Two per-operation entry points:
   - `apply` mutates Fugue and returns `Unit`.
   - `apply_with_visible_change` performs the same mutation and returns `VisibilityChange`.
-- `pub(all) VisibilityChange::{BecameVisible, BecameHidden, Unchanged}`.
+- One allocation-free `apply_all(ArrayView[Op])` convenience for Branch's already-collected causal sequences. It preserves per-operation semantics and successful prefixes.
+- `pub(all) VisibilityChange::{BecameVisible, BecameHidden, Unchanged}` with identity-only variants; it carries no text or coordinates.
 - `pub(all) FugueProjectionError` owned by the new package.
 - Branch, merge-context, and Document adapters.
 - Test ownership migration and matched release-mode performance evidence.
@@ -38,14 +39,14 @@ Create one deep in-process module whose interface applies one admitted operation
 - Branch retreat behavior and delete-winner recomputation.
 - Fugue representation or method changes.
 - IndexedState or `VisibleRun` representation changes.
-- Batch projection interfaces, callbacks, observer traits, mode parameters, or collection results.
+- Owning or atomic batch projection interfaces, callbacks, observer traits, mode parameters, or collection results. `apply_all` accepts only a borrowed `ArrayView` and promises no rollback.
 - New `BranchError` or `DocumentError` variants.
 - Top-level `text`, `container`, peer-sync, JSON, canonical-byte, or wire-format changes.
 - A new ADR or GitHub issue. This is a reversible internal refactor; `CONTEXT.md` already records the domain term.
 
 ## Current State
 
-- `apply_operation_to_tree` has three references: its definition plus Branch checkout and forward advance (`internal/branch/branch.mbt:55-115,282-354`; confirmed with `moon ide find-references`).
+- Before the refactor, `apply_operation_to_tree` had three references: its definition plus Branch checkout and forward advance (`internal/branch/branch.mbt:55-115,282-354` at the baseline commit). The completed migration must leave no definition or reference.
 - `MergeContext::apply_operations` owns a second per-operation translation inside its RLE traversal (`internal/branch/branch_merge.mbt:23-120`). Its public interface and RLE traversal must remain stable.
 - `Document::project_remote_ops` has two callers for complete and partial remote admission (`internal/document/document.mbt:620-805`). It currently chooses incremental index maintenance only when the admitted prefix has at most three operations and IndexedState is warm.
 - Large Document merges invalidate IndexedState and advance a retained Branch (`internal/document/document.mbt:821-859`).
@@ -66,6 +67,12 @@ pub fn apply(
   causal_graph : @causal_graph.CausalGraph,
 ) -> Unit raise FugueProjectionError
 
+pub fn apply_all(
+  tree : @fugue.FugueTree[String],
+  operations : ArrayView[@core.Op],
+  causal_graph : @causal_graph.CausalGraph,
+) -> Unit raise FugueProjectionError
+
 pub fn apply_with_visible_change(
   tree : @fugue.FugueTree[String],
   op : @core.Op,
@@ -73,15 +80,15 @@ pub fn apply_with_visible_change(
 ) -> VisibilityChange raise FugueProjectionError
 ```
 
-Both the enum and error are `pub(all)` so Document can pattern-match changes and both adapters can translate errors across package seams.
+Both `FugueProjectionError` and `VisibilityChange` are `pub(all)` for exhaustive adapter translation.
 
-`VisibilityChange` describes the semantic visibility outcome, not the input CRDT operation, a sequence coordinate, or an IndexedState command:
+`VisibilityChange` describes the semantic visibility outcome, not the input CRDT operation, a sequence coordinate, content payload, or an IndexedState command:
 
-- `BecameVisible(lv, text)`: one item entered the visible sequence.
-- `BecameHidden(lv)`: one item left the visible sequence.
-- `Unchanged`: Fugue processed the operation but the visible sequence did not change.
+- `BecameVisible(lv)` identifies the item that entered the visible sequence.
+- `BecameHidden(lv)` identifies the item that left the visible sequence.
+- `Unchanged` reports that visibility did not change.
 
-Insert and a winning Undelete produce `BecameVisible`; a winning Delete of a visible target produces `BecameHidden`; LWW losses, already-satisfied visibility, and targetless Delete/Undelete produce `Unchanged`. Document derives coordinates through its existing adapters: post-mutation Fugue lookup for `BecameVisible`, and the still-unmodified IndexedState for `BecameHidden`.
+Insert and a winning Undelete produce `BecameVisible`; a winning Delete of a visible target produces `BecameHidden`; LWW losses, already-satisfied visibility, and targetless Delete/Undelete produce `Unchanged`. Document derives coordinates and visible content through its existing adapters: post-mutation Fugue lookup for `BecameVisible`, and the still-unmodified IndexedState for `BecameHidden`.
 
 `FugueProjectionError` owns:
 
@@ -107,11 +114,11 @@ No adapter adds a fallback arm that hides a future projection-error variant. An 
 
 | Operation and state | Entry point | Expected result | Mutation/error timing |
 | --- | --- | --- | --- |
-| Insert with resolvable origins and causal entry | either | tree gains visible item; observed path returns `BecameVisible(op.lv, text)` | origins and causal entry resolve before mutation |
+| Insert with resolvable origins and causal entry | either | tree gains visible item; observed path returns `BecameVisible(op.lv)` | origins and causal entry resolve before mutation |
 | Delete targets visible item and wins LWW | observed | `BecameHidden(target_lv)` | target and causal entry checked before mutation |
 | Delete targets invisible item and wins LWW metadata | observed | `Unchanged` | Fugue metadata may change; visibility does not |
 | Delete loses LWW | observed | `Unchanged` | visibility unchanged |
-| Undelete targets invisible item and wins LWW | observed | `BecameVisible(target_lv, target_text)` | target and causal entry checked before mutation |
+| Undelete targets invisible item and wins LWW | observed | `BecameVisible(target_lv)` | target and causal entry checked before mutation |
 | Undelete targets visible item or loses LWW | observed | `Unchanged` | visibility unchanged |
 | Delete/Undelete has no `origin_left` | either | no-op; observed path returns `Unchanged` | preserve current behavior; no causal metadata lookup required |
 | Required insert origin cannot resolve | either | `MissingOrigin(raw)` | before tree mutation |
@@ -138,14 +145,14 @@ No adapter adds a fallback arm that hides a future projection-error variant. An 
 ### Checked but not used
 
 - `Result`: typed `raise FugueProjectionError` matches neighboring package interfaces and avoids dual failure channels.
-- `ArrayView`, `Array`, and `Iter`: the selected interface is deliberately per-operation so later failure cannot hide earlier successful changes and existing Array/RLE loops remain allocation-free.
+- `ArrayView`, `Array`, and `Iter`: reuse `ArrayView` only for `apply_all` so Branch can cross the package seam once for an already-collected causal sequence without copying. RLE traversal remains caller-owned and per-operation; later failure never hides earlier successful changes.
 - `Map` and `Set`: projection performs no independent membership indexing.
 - `StringView`, `Bytes`, `BytesView`, `Buffer`, and `StringBuilder`: projection neither slices nor rebuilds text.
 - A projection trait or adapter port: both dependencies are in-process and there is one concrete Fugue implementation; a new port would be hypothetical.
 
 ### New-definition responsibility
 
-- `VisibilityChange` describes only the semantic visibility outcome required across the projection seam.
+- `VisibilityChange` describes only the semantic visibility identity required across the projection seam; visible content remains adapter-owned.
 - `FugueProjectionError` classifies failures detected by the owning module.
 - A private resolved-operation representation may separate deterministic origin/metadata resolution from mutation. It must not escape the package or duplicate `Op` storage.
 - Each outer package may add one private error translator. No new low-level loops are needed.
@@ -155,12 +162,13 @@ No adapter adds a fallback arm that hides a future projection-error variant. An 
 The structural constraint is necessary but not proof of non-regression:
 
 - `apply` must perform no position lookup, visibility-change construction, callback, or collection allocation.
-- `apply_with_visible_change` must not call `FugueTree::lv_to_position`; it returns identity/content only.
-- Document retains its current coordinate mechanisms: Fugue lookup after an item becomes visible and IndexedState lookup while its pre-hide view is still intact.
+- `apply_all` must iterate a borrowed `ArrayView` without copying and preserve the successful prefix on failure.
+- `apply_with_visible_change` must not call `FugueTree::lv_to_position` or return text; it returns identity-only visibility state.
+- Document retains its current coordinate/content mechanisms: Fugue lookup after an item becomes visible and IndexedState lookup while its pre-hide view is still intact.
 - `apply_with_visible_change` is used only under Document's existing small-prefix/warm-index condition.
 - RLE and ArrayView iteration remain in their current callers.
 
-Before production edits, record two independent baseline sets of five release-mode process runs on the same machine and toolchain for both JS and wasm-gc. Record the environment before timing:
+Record ten paired release-mode baseline/candidate process runs on the same machine and toolchain for both JS and wasm-gc. Alternate process order within each pair so thermal drift cannot systematically favor either revision. Record the environment before timing:
 
 | Evidence | Required value |
 | --- | --- |
@@ -181,13 +189,15 @@ moon bench --release --target js --package internal/document
 moon bench --release --target wasm-gc --package internal/document
 ```
 
-Before the refactor, add benchmark-only Document cases that exercise warm-index Insert, Delete, and Undelete projection at 1k and 10k items, plus a practical 100k characterization with setup outside the timed closure. Record those alongside Branch checkout, advance, repeated advance, MergeContext apply-50, existing Document small remote apply, and Document large merge scenarios. For each target/scenario:
+Before the refactor, add benchmark-only Document cases that exercise warm-index Insert, Delete, and Undelete projection at 1k and 10k items, plus a practical 100k characterization with setup outside the timed closure. Record those alongside Branch checkout, advance, repeated advance, MergeContext apply-50, existing Document small remote apply, and Document large merge scenarios. For each target/scenario, use a paired robust comparison:
 
-1. `baseline` is the median of the ten baseline process results.
-2. `repeat_spread` is the absolute percentage difference between the two five-run baseline medians.
-3. `tolerance = max(5%, repeat_spread)`.
-4. Run one five-process candidate set. If its median exceeds `baseline * (1 + tolerance)`, rerun once.
-5. Two failing candidate sets reject the package seam or per-operation loop placement; do not merge.
+1. Collect ten baseline/candidate pairs. Run baseline first in odd pairs and candidate first in even pairs.
+2. For each pair compute the symmetric log ratio `r_i = ln(candidate_i / baseline_i)`. The reported paired delta is `exp(median(r_i)) - 1`.
+3. Measure baseline repeat spread from the same interleaved run as the larger relative distance from the baseline median to the linearly interpolated 10th and 90th percentiles: `max(abs(p10 / median - 1), abs(p90 / median - 1))`. This central-80% radius is robust to one process outlier while still exposing unstable scenarios.
+4. `tolerance = max(5%, repeat_spread)`.
+5. A scenario passes when its paired delta is at most its tolerance. Also report the unpaired medians and delta as diagnostics, but do not use them for the verdict because host drift can bias independent medians.
+6. Preserve all raw values and the two five-pair block medians. If the two block verdicts disagree after ten pairs, mark the scenario `INCONCLUSIVE` and collect another alternating five pairs. Classify the resulting fifteen-pair pooled delta against the unchanged ten-pair baseline-derived tolerance. Never convert an inconclusive or failing result into a pass by dropping an outlier.
+7. A failing paired gate rejects the package seam or loop placement. A measured cross-package cost may be addressed only by the borrowed, prefix-preserving `apply_all`; any source change requires a fresh complete gate.
 
 Freeze this selector map before the first baseline. The benchmark-only observed cases are appended in the listed order after the current eleven Document benchmarks; if any index changes, update the map and rerun every baseline and candidate set.
 
@@ -218,58 +228,25 @@ moon bench --release --target <js|wasm-gc> \
   --package <package> --file <file> --index <index>
 ```
 
-D1-D9 use five explicit `monotonic_clock_start`/`monotonic_clock_end` samples per process rather than `Bench::bench`: the core bench runner calibrates by invoking a closure repeatedly, which cannot preserve an equivalent one-shot mutable fixture. Each sample constructs, replays, and primes a fresh Document before starting the clock, times exactly one `apply_remote`, then checks correctness after stopping the clock.
+D1-D9 use five explicit `monotonic_clock_start`/`monotonic_clock_end` samples per process rather than `Bench::bench`: the core bench runner calibrates by invoking a closure repeatedly, which cannot preserve an equivalent one-shot mutable fixture. Each sample constructs, replays, and primes a fresh Document before starting the clock, asserts that IndexedState is ready, times exactly one `apply_remote`, then checks correctness after stopping the clock.
 
-Record all five raw process values plus the median in each result cell. Do not aggregate operation kinds or scales into one verdict:
+Alternate baseline and candidate processes for each selector, reversing order on every other pair, so host/thermal drift cannot systematically favor one revision. Record all ten raw paired values, robust baseline spread, paired delta, both five-pair block deltas, and unpaired-median diagnostics. Do not aggregate operation kinds or scales into one verdict:
 
-| Target | Scenario key | Baseline A | Baseline B | Spread | Tolerance | Candidate A | Candidate B if needed | Result |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| JS | B1 | | | | | | | |
-| JS | B2 | | | | | | | |
-| JS | B3 | | | | | | | |
-| JS | B4 | | | | | | | |
-| JS | B5 | | | | | | | |
-| JS | D1 | | | | | | | |
-| JS | D2 | | | | | | | |
-| JS | D3 | | | | | | | |
-| JS | D4 | | | | | | | |
-| JS | D5 | | | | | | | |
-| JS | D6 | | | | | | | |
-| JS | D7 | | | | | | | |
-| JS | D8 | | | | | | | |
-| JS | D9 | | | | | | | |
-| JS | D10 | | | | | | | |
-| JS | D11 | | | | | | | |
-| JS | D12 | | | | | | | |
-| wasm-gc | B1 | | | | | | | |
-| wasm-gc | B2 | | | | | | | |
-| wasm-gc | B3 | | | | | | | |
-| wasm-gc | B4 | | | | | | | |
-| wasm-gc | B5 | | | | | | | |
-| wasm-gc | D1 | | | | | | | |
-| wasm-gc | D2 | | | | | | | |
-| wasm-gc | D3 | | | | | | | |
-| wasm-gc | D4 | | | | | | | |
-| wasm-gc | D5 | | | | | | | |
-| wasm-gc | D6 | | | | | | | |
-| wasm-gc | D7 | | | | | | | |
-| wasm-gc | D8 | | | | | | | |
-| wasm-gc | D9 | | | | | | | |
-| wasm-gc | D10 | | | | | | | |
-| wasm-gc | D11 | | | | | | | |
-| wasm-gc | D12 | | | | | | | |
+| Target | Scenario key | Baseline raw | Candidate raw | Repeat spread | Tolerance | Paired delta | Block A | Block B | Unpaired delta | Result |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `<js or wasm-gc>` | `<B1–B5 or D1–D12>` | | | | | | | | | |
 
 ## Steps and Tiny Commits
 
 1. **Prepare the exact base.** Fetch `origin/main`, create a dedicated Event Graph Walker worktree whose HEAD contains it, initialize dependencies, and verify the recorded Canopy submodule identity if the worktree is attached to a parent checkout.
-2. **Pin the baseline.** Add only the matched warm-index benchmark cases, run the two five-run baseline sets, and fill the baseline columns above before production behavior edits.
-3. **Write the first failing test.** Create the package manifest and the behavioral test matrix in `internal/fugue_projection`; begin with Insert returning `BecameVisible(op.lv, text)`. Confirm red for the missing interface.
-4. **Commit 1 — `feat(projection): add deep Fugue projection module`.** Implement the deterministic resolution core, imperative mutation shell, two entry points, enum, typed error, and focused tests. Add matrix rows incrementally through red-green-refactor. Validate only the new package.
-5. **Commit 2 — `refactor(branch): use Fugue projection module`.** Add the package import; route checkout, forward advance, and MergeContext's existing RLE loop through tree-only `apply`; translate errors into existing BranchError variants. Preserve public `MergeContext::apply_operations` and retreat behavior.
-6. **Commit 3 — `refactor(document): consume visibility changes`.** Add the package import; preserve the current incremental guard; use the observed entry only while incremental maintenance is active and tree-only `apply` otherwise. For `BecameVisible`, retain the current post-mutation Fugue position lookup. For `BecameHidden`, resolve the old position from the still-unmodified IndexedState before deleting its run. Apply each change immediately; on lookup or index-update failure, retain current invalidate-and-fallback behavior.
+2. **Pin the baseline.** Add only the matched warm-index benchmark cases and preserve the baseline commit and environment evidence before production behavior edits.
+3. **Write the first failing test.** Create the package manifest and the behavioral test matrix in `internal/fugue_projection`; begin with Insert returning `BecameVisible(op.lv)`. Confirm red for the missing interface.
+4. **Commit 1 — `feat(projection): add deep Fugue projection module`.** Implement the deterministic resolution core, imperative mutation shell, per-operation entries, borrowed `apply_all`, identity-only visibility enum, typed error, and focused tests. Add matrix rows incrementally through red-green-refactor. Validate only the new package.
+5. **Commit 2 — `refactor(branch): use Fugue projection module`.** Add the package import; route checkout and forward advance through borrowed `apply_all`, and MergeContext's existing RLE loop through tree-only `apply`; translate errors into existing BranchError variants. Preserve public `MergeContext::apply_operations` and retreat behavior.
+6. **Commit 3 — `refactor(document): consume visibility changes`.** Add the package import; preserve the current incremental guard; use the observed entry only while incremental maintenance is active and tree-only `apply` otherwise. For a visible identity, retain the current post-mutation Fugue position/content lookup. For a hidden identity, resolve the old position from the still-unmodified IndexedState before deleting its run. Apply each change immediately; on lookup or index-update failure, retain current invalidate-and-fallback behavior.
 7. **Commit 4 — `test(projection): enforce semantic ownership`.** Reconcile every test against the inventory below. Keep adapter and integration assertions; do not copy them into the new package. Remove a test only when every assertion belongs to projection semantics and an equivalent matrix test is already green. Record any deletion by test name in the commit message.
 8. **Run independent review.** After the targeted loop is green, dispatch `moonbit-reviewer` for package direction, error fidelity, LWW/coordinate semantics, test ownership, mutation timing, `.mbti` risk, and benchmark validity. Resolve every high-confidence finding.
-9. **Run candidate evidence.** Execute five candidate runs per target/package, rerun one failing set once, fill the table, and reject or revise the seam if the gate fails.
+9. **Run candidate evidence.** Execute ten alternating baseline/candidate pairs per selector, compute the paired robust verdict, extend only inconclusive selectors by five pairs, and reject or revise the seam if the gate fails.
 10. **Synchronize and finalize.** Fetch `origin/main` again; if HEAD no longer contains it, sync and repeat affected tests, review, and performance evidence. Run format/info, inspect interfaces, commit the clean candidate, and execute the final gate.
 
 ## Test Migration Inventory
@@ -318,11 +295,11 @@ Before deleting anything, produce a diff-local checklist of every touched test n
 
 ## Acceptance Criteria
 
-- [ ] One package owns all per-operation Op→Fugue translation semantics.
+- [ ] One package owns all per-operation Op→Fugue translation semantics; `apply_all` is only an allocation-free ArrayView loop over those semantics.
 - [ ] Branch and MergeContext contain no second origin/timestamp/content dispatch for forward projection.
 - [ ] Document contains no second CRDT-operation interpretation; it only selects an entry point, derives adapter-owned coordinates, and adapts `VisibilityChange` to IndexedState.
 - [ ] `apply` performs no visible-position lookup or change allocation.
-- [ ] `apply_with_visible_change` returns identity/content visibility outcomes without tree-position traversal and applies the same Fugue mutation as `apply`.
+- [ ] `apply_with_visible_change` returns an identity-only visibility outcome without tree-position traversal and applies the same Fugue mutation as `apply`.
 - [ ] Every projection error occurs before Fugue mutation and leaves Fugue unchanged.
 - [ ] Later failure never rolls back admission or an earlier successful projection prefix.
 - [ ] Every `FugueProjectionError` follows the exact translation table; BranchError and DocumentError gain no variants, and top-level interfaces and wire bytes do not change.
@@ -337,7 +314,7 @@ Run serially from the Event Graph Walker module root unless noted:
 
 ```bash
 NEW_MOON_MOD=0 moon ide outline internal/fugue_projection
-NEW_MOON_MOD=0 moon ide find-references apply_operation_to_tree
+! rg -n 'apply_operation_to_tree' internal/branch
 NEW_MOON_MOD=0 moon ide find-references 'Document::project_remote_ops'
 NEW_MOON_MOD=0 moon ide find-references 'MergeContext::apply_operations'
 NEW_MOON_MOD=0 moon test internal/fugue_projection
@@ -366,8 +343,8 @@ A rebase, amend, generated-interface change, package-manifest change, submodule-
 
 ## Risks
 
-- A cross-package call in a per-operation hot loop may not inline. The performance gate, not structural reasoning, decides whether the seam is acceptable.
-- The observed adapter must derive `BecameHidden` position from IndexedState before mutating that index; a Fugue traversal would change the current hot-path cost.
+- A cross-package call in a per-operation hot loop may not inline. The measured Branch case is routed through borrowed `apply_all`; the complete performance gate, not structural reasoning, decides whether that seam is acceptable.
+- The observed adapter must derive a hidden identity's position from IndexedState before mutating that index; a Fugue traversal would change the current hot-path cost.
 - Test deletion can hide behavior if ownership is not mapped row-by-row before removal.
 - The new package must not acquire OpLog merely to simplify callers; that would leak admission through the seam.
 

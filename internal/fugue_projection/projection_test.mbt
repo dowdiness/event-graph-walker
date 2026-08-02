@@ -12,8 +12,30 @@ fn target_fixture() -> (@causal_graph.CausalGraph, @core.Op) {
 }
 
 ///|
+fn assert_visible(
+  change : VisibilityChange,
+  expected : @fugue.Lv,
+) -> Unit raise {
+  match change {
+    VisibilityChange::BecameVisible(lv) => assert_eq(lv, expected)
+    _ => fail("expected visible change")
+  }
+}
+
+///|
+fn assert_hidden(change : VisibilityChange, expected : @fugue.Lv) -> Unit raise {
+  match change {
+    VisibilityChange::BecameHidden(lv) => assert_eq(lv, expected)
+    _ => fail("expected hidden change")
+  }
+}
+
+///|
 fn assert_unchanged(change : VisibilityChange) -> Unit raise {
-  assert_true(change is Unchanged)
+  match change {
+    VisibilityChange::Unchanged => ()
+    _ => fail("expected unchanged")
+  }
 }
 
 ///|
@@ -46,13 +68,7 @@ test "insert returns visible change" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   let change = try! apply_with_visible_change(tree, op, graph)
-  match change {
-    BecameVisible(id, text) => {
-      assert_eq(id, @fugue.Lv(lv))
-      assert_eq(text, "A")
-    }
-    _ => fail("expected BecameVisible")
-  }
+  assert_visible(change, @fugue.Lv(lv))
   assert_eq(tree.to_text(), "A")
 }
 
@@ -73,13 +89,7 @@ test "insert resolves a present origin before mutation" {
   try! apply(tree, first, graph)
 
   let change = try! apply_with_visible_change(tree, second, graph)
-  match change {
-    BecameVisible(id, text) => {
-      assert_eq(id, @fugue.Lv(second_lv))
-      assert_eq(text, "B")
-    }
-    _ => fail("expected visible insert")
-  }
+  assert_visible(change, @fugue.Lv(second_lv))
   assert_eq(tree.to_text(), "AB")
 }
 
@@ -91,10 +101,7 @@ test "apply and observed insert have identical tree effects" {
 
   try! apply(direct, op, graph)
   let change = try! apply_with_visible_change(observed, op, graph)
-  match change {
-    BecameVisible(_, _) => ()
-    _ => fail("expected visible insert")
-  }
+  assert_visible(change, @fugue.Lv(0))
   assert_eq(direct.to_text(), observed.to_text())
   assert_eq(direct.visible_count(), observed.visible_count())
 }
@@ -149,10 +156,7 @@ test "delete of visible target becomes hidden" {
   try! apply(tree, insert, graph)
 
   let change = try! apply_with_visible_change(tree, delete, graph)
-  match change {
-    BecameHidden(id) => assert_eq(id, @fugue.Lv(0))
-    _ => fail("expected hidden target")
-  }
+  assert_hidden(change, @fugue.Lv(0))
   assert_eq(tree.to_text(), "")
 }
 
@@ -236,13 +240,7 @@ test "winning undelete of invisible target becomes visible with content" {
   try! apply(tree, delete, graph)
 
   let change = try! apply_with_visible_change(tree, undelete, graph)
-  match change {
-    BecameVisible(id, text) => {
-      assert_eq(id, @fugue.Lv(0))
-      assert_eq(text, "A")
-    }
-    _ => fail("expected revived target")
-  }
+  assert_visible(change, @fugue.Lv(0))
   assert_eq(tree.to_text(), "A")
 }
 
@@ -348,9 +346,11 @@ test "targetless delete and undelete are no-ops without causal entries" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   try! apply(tree, delete, graph)
-  assert_unchanged(try! apply_with_visible_change(tree, delete, graph))
+  let delete_change = try! apply_with_visible_change(tree, delete, graph)
+  assert_unchanged(delete_change)
   try! apply(tree, undelete, graph)
-  assert_unchanged(try! apply_with_visible_change(tree, undelete, graph))
+  let undelete_change = try! apply_with_visible_change(tree, undelete, graph)
+  assert_unchanged(undelete_change)
   assert_eq(tree.visible_count(), 0)
 }
 
@@ -480,8 +480,13 @@ test "a later projection failure preserves the earlier successful prefix" {
   )
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
-  try! apply(tree, target, graph)
-  match capture_apply(tree, bad_delete, graph) {
+  let result : Result[Unit, FugueProjectionError] = try {
+    apply_all(tree, [target, bad_delete][:], graph)
+    Ok(())
+  } catch {
+    error => Err(error)
+  }
+  match result {
     Err(FugueProjectionError::Fugue(_)) => ()
     _ => fail("expected failed later projection")
   }

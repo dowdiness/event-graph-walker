@@ -636,23 +636,8 @@ fn Document::project_remote_ops(
   let cg = self.oplog.causal_graph()
   for applied in applied_ops {
     if incremental {
-      match apply_projection_with_visible_change(self.tree, applied, cg) {
-        @fugue_projection.VisibilityChange::BecameVisible(lv, text) =>
-          match self.tree.lv_to_position(lv) {
-            Some(pos) =>
-              if !self.indexed_state.insert_at(pos, {
-                  start_lv: lv.0,
-                  text,
-                  count: 1,
-                }) {
-                self.invalidate_cache()
-                incremental = false
-              }
-            None => {
-              self.invalidate_cache()
-              incremental = false
-            }
-          }
+      let change = apply_projection_with_visible_change(self.tree, applied, cg)
+      match change {
         @fugue_projection.VisibilityChange::BecameHidden(lv) =>
           // The tree has changed, but IndexedState has not. Resolve the old
           // visible position before removing its run from the cache.
@@ -663,6 +648,23 @@ fn Document::project_remote_ops(
                 incremental = false
               }
             None => {
+              self.invalidate_cache()
+              incremental = false
+            }
+          }
+        @fugue_projection.VisibilityChange::BecameVisible(lv) =>
+          // Both the post-mutation position and content come from Fugue.
+          match (self.tree.lv_to_position(lv), self.tree.get(lv)) {
+            (Some(pos), Some(item)) =>
+              if !self.indexed_state.insert_at(pos, {
+                  start_lv: lv.0,
+                  text: item.content,
+                  count: 1,
+                }) {
+                self.invalidate_cache()
+                incremental = false
+              }
+            _ => {
               self.invalidate_cache()
               incremental = false
             }

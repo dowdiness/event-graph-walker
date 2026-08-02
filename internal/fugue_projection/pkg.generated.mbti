@@ -10,6 +10,8 @@ import {
 // Values
 pub fn apply(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> Unit raise FugueProjectionError
 
+pub fn apply_all(@fugue.FugueTree[String], ArrayView[@core.Op], @causal_graph.CausalGraph) -> Unit raise FugueProjectionError
+
 pub fn apply_with_visible_change(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> VisibilityChange raise FugueProjectionError
 
 // Errors
@@ -21,7 +23,7 @@ pub(all) suberror FugueProjectionError {
 
 // Types and methods
 pub(all) enum VisibilityChange {
-  BecameVisible(@fugue.Lv, String)
+  BecameVisible(@fugue.Lv)
   BecameHidden(@fugue.Lv)
   Unchanged
 }

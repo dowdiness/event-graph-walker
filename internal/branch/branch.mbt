@@ -62,11 +62,8 @@ pub fn Branch::checkout(
   // Use walker to get all operations in causal order
   let ops = oplog.walk_and_collect(frontier)
 
-  // Apply each operation to the tree
-  let cg = oplog.causal_graph()
-  for op in ops {
-    apply_projection(tree, op, cg)
-  }
+  // Apply each operation to the tree through one translated error boundary.
+  apply_projections(tree, ops[:], oplog.causal_graph())
 
   // Return branch with reconstructed state
   { frontier, tree, oplog }
@@ -105,10 +102,7 @@ pub fn Branch::advance(
   } else {
     // Fast path: advance only — apply k new ops incrementally
     let tree = self.tree
-    let cg = self.oplog.causal_graph()
-    for op in advance_ops {
-      apply_projection(tree, op, cg)
-    }
+    apply_projections(tree, advance_ops[:], self.oplog.causal_graph())
     { frontier: target_frontier, tree, oplog: self.oplog }
   }
 }
