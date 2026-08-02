@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/internal/fugue_projection"
+
+import {
+  "dowdiness/event-graph-walker/internal/causal_graph",
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/fugue",
+}
+
+// Values
+pub fn apply(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> Unit raise FugueProjectionError
+
+pub fn apply_with_visible_change(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> VisibilityChange raise FugueProjectionError
+
+// Errors
+pub(all) suberror FugueProjectionError {
+  MissingOrigin(raw~ : @core.RawVersion)
+  MissingCausalEntry(lv~ : Int)
+  Fugue(error~ : @fugue.FugueError)
+}
+
+// Types and methods
+pub(all) enum VisibilityChange {
+  BecameVisible(@fugue.Lv, String)
+  BecameHidden(@fugue.Lv)
+  Unchanged
+}
+
+// Type aliases
+
+// Traits
+
