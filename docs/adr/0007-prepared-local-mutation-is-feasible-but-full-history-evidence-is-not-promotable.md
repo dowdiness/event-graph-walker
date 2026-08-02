@@ -55,7 +55,7 @@ Production promotion requires both:
 - Follow-up research Issue [#108](https://github.com/dowdiness/event-graph-walker/issues/108), which addresses the architectural consequences above with its own ordered evidence gates.
 - Measurements at each intended consumer's configured maximum encoded-byte and record limits, using acceptance criteria defined by that consumer before production integration.
 
-Neither exists at the time of this decision.
+Issue #108 now tracks the first requirement. Consumer-specific acceptance criteria and limit-scale evidence do not yet exist.
 
 ## ADR 0006 status
 
