@@ -259,7 +259,10 @@ fn benchmark_remote_projection(
         _ => abort("benchmark setup failed")
       }
     }
-    ignore(sample.get_visible_items())
+    // Warm Document's IndexedState so project_remote_ops takes its observed
+    // incremental projection path rather than the tree-only fallback.
+    ignore(sample.to_text())
+    assert_true(sample.indexed_state.is_ready())
     let start = @bench.monotonic_clock_start()
     sample.apply_remote(incoming) catch {
       _ => abort("benchmark projection failed")
