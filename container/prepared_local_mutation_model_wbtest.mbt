@@ -281,6 +281,64 @@ fn PreparedLocalMutation::evidence(
 }
 
 ///|
+fn prepared_local_lower_tree_property_append(
+  document : Document,
+  parent : @mt.TreeNodeId,
+  properties : ArrayView[(String, String)],
+) -> Array[PreparedLocalTreeRecord] raise DocumentError {
+  let node : @mt.TreeNodeId = {
+    agent: document.agent_id,
+    counter: document.next_counter,
+  }
+  let position = document.position_after_last_child(parent)
+  let records : Array[PreparedLocalTreeRecord] = []
+  let mut writer = DetachedLocalWriter::from_document(document)
+  let (create_stamp, after_create) = writer.advance()
+  writer = after_create
+  let create_op : @mt.TreeMoveOp = {
+    timestamp: create_stamp.timestamp,
+    target: node,
+    new_parent: parent,
+    position,
+    agent: document.agent_id,
+  }
+  records.push({
+    lv: create_stamp.lv,
+    sync: {
+      version: create_stamp.version,
+      parents: create_stamp.parents,
+      op: @mt.Move(create_op),
+    },
+    undo: TreeCreate(target=node, parent~, pos=position),
+  })
+  let prepared_values : Map[String, String] = Map::default()
+  for property in properties {
+    let (key, value) = property
+    let (stamp, next) = writer.advance()
+    writer = next
+    let property_op : @mt.TreePropertyOp = {
+      timestamp: stamp.timestamp,
+      target: node,
+      key,
+      value,
+      agent: document.agent_id,
+    }
+    let old_value = prepared_values.get(key)
+    prepared_values.set(key, value)
+    records.push({
+      lv: stamp.lv,
+      sync: {
+        version: stamp.version,
+        parents: stamp.parents,
+        op: @mt.SetProperty(property_op),
+      },
+      undo: PropertySet(target=node, key~, old_value~, new_value=value),
+    })
+  }
+  records
+}
+
+///|
 fn Document::try_prepare_tree_property_append(
   self : Document,
   parent : TreeNodeId,
@@ -302,55 +360,9 @@ fn Document::try_prepare_tree_property_append(
   if !self.is_local_parent_valid(parent_inner) {
     return PreparationRejected(ParentUnavailable)
   }
-  let node : @mt.TreeNodeId = {
-    agent: self.agent_id,
-    counter: self.next_counter,
-  }
-  let position = self.position_after_last_child(parent_inner)
-  let records : Array[PreparedLocalTreeRecord] = []
-  let mut writer = DetachedLocalWriter::from_document(self)
-  let (create_stamp, after_create) = writer.advance()
-  writer = after_create
-  let create_op : @mt.TreeMoveOp = {
-    timestamp: create_stamp.timestamp,
-    target: node,
-    new_parent: parent_inner,
-    position,
-    agent: self.agent_id,
-  }
-  records.push({
-    lv: create_stamp.lv,
-    sync: {
-      version: create_stamp.version,
-      parents: create_stamp.parents,
-      op: @mt.Move(create_op),
-    },
-    undo: TreeCreate(target=node, parent=parent_inner, pos=position),
-  })
-  let prepared_values : Map[String, String] = Map::default()
-  for property in properties {
-    let (key, value) = property
-    let (stamp, next) = writer.advance()
-    writer = next
-    let property_op : @mt.TreePropertyOp = {
-      timestamp: stamp.timestamp,
-      target: node,
-      key,
-      value,
-      agent: self.agent_id,
-    }
-    let old_value = prepared_values.get(key)
-    prepared_values.set(key, value)
-    records.push({
-      lv: stamp.lv,
-      sync: {
-        version: stamp.version,
-        parents: stamp.parents,
-        op: @mt.SetProperty(property_op),
-      },
-      undo: PropertySet(target=node, key~, old_value~, new_value=value),
-    })
-  }
+  let records = prepared_local_lower_tree_property_append(
+    self, parent_inner, properties,
+  )
   let successor = prepared_local_successor_message(self, records)
   let successor_json = successor.to_json_string()
   PreparationReady({
