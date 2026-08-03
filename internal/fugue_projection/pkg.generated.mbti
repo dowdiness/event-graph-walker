@@ -12,7 +12,13 @@ pub fn apply(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> U
 
 pub fn apply_all(@fugue.FugueTree[String], ArrayView[@core.Op], @causal_graph.CausalGraph) -> Unit raise FugueProjectionError
 
-pub fn apply_with_visible_change(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> VisibilityChange raise FugueProjectionError
+pub fn apply_with_visible_change(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> Double raise FugueProjectionError
+
+pub fn is_became_hidden(Double) -> Bool
+
+pub fn is_became_visible(Double) -> Bool
+
+pub fn visibility_identity(Double) -> @fugue.Lv
 
 // Errors
 pub(all) suberror FugueProjectionError {
@@ -22,13 +28,9 @@ pub(all) suberror FugueProjectionError {
 }
 
 // Types and methods
-pub(all) enum VisibilityChange {
-  BecameVisible(@fugue.Lv)
-  BecameHidden(@fugue.Lv)
-  Unchanged
-}
 
 // Type aliases
+pub type VisibilityChange = Double
 
 // Traits
 

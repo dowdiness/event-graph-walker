@@ -28,7 +28,7 @@ Create one deep in-process module whose interface applies one admitted operation
   - `apply` mutates Fugue and returns `Unit`.
   - `apply_with_visible_change` performs the same mutation and returns `VisibilityChange`.
 - One allocation-free `apply_all(ArrayView[Op])` convenience for Branch's already-collected causal sequences. It preserves per-operation semantics and successful prefixes.
-- `pub(all) VisibilityChange::{BecameVisible, BecameHidden, Unchanged}` with identity-only variants; it carries no text or coordinates.
+- Allocation-free `VisibilityChange = Double` with `is_became_visible`, `is_became_hidden`, and `visibility_identity` decoders. The scalar carries only semantic kind and identity, never text or coordinates.
 - `pub(all) FugueProjectionError` owned by the new package.
 - Branch, merge-context, and Document adapters.
 - Test ownership migration and matched release-mode performance evidence.
@@ -80,15 +80,15 @@ pub fn apply_with_visible_change(
 ) -> VisibilityChange raise FugueProjectionError
 ```
 
-Both `FugueProjectionError` and `VisibilityChange` are `pub(all)` for exhaustive adapter translation.
+`FugueProjectionError` is `pub(all)` for exhaustive adapter translation. `VisibilityChange` is an internal-package type alias over `Double`: zero means unchanged, positive `lv + 1` means became visible, and negative `-(lv + 1)` means became hidden. Every nonnegative Int LV plus one is represented exactly by Double, including `Int::MAX_VALUE`; a white-box boundary test locks this total encoding.
 
-`VisibilityChange` describes the semantic visibility outcome, not the input CRDT operation, a sequence coordinate, content payload, or an IndexedState command:
+The decoder interface describes the semantic visibility outcome, not the input CRDT operation, a sequence coordinate, content payload, or an IndexedState command:
 
-- `BecameVisible(lv)` identifies the item that entered the visible sequence.
-- `BecameHidden(lv)` identifies the item that left the visible sequence.
-- `Unchanged` reports that visibility did not change.
+- `is_became_visible(change)` identifies the visible case; `visibility_identity(change)` returns the LV.
+- `is_became_hidden(change)` identifies the hidden case; `visibility_identity(change)` returns the LV.
+- When both predicates are false, visibility is unchanged and `visibility_identity` must not be called.
 
-Insert and a winning Undelete produce `BecameVisible`; a winning Delete of a visible target produces `BecameHidden`; LWW losses, already-satisfied visibility, and targetless Delete/Undelete produce `Unchanged`. Document derives coordinates and visible content through its existing adapters: post-mutation Fugue lookup for `BecameVisible`, and the still-unmodified IndexedState for `BecameHidden`.
+Insert and a winning Undelete produce became-visible; a winning Delete of a visible target produces became-hidden; LWW losses, already-satisfied visibility, and targetless Delete/Undelete produce unchanged. Document derives coordinates and visible content through its existing adapters: post-mutation Fugue lookup for became-visible, and the still-unmodified IndexedState for became-hidden.
 
 `FugueProjectionError` owns:
 
@@ -241,7 +241,7 @@ Alternate baseline and candidate processes for each selector, reversing order on
 1. **Prepare the exact base.** Fetch `origin/main`, create a dedicated Event Graph Walker worktree whose HEAD contains it, initialize dependencies, and verify the recorded Canopy submodule identity if the worktree is attached to a parent checkout.
 2. **Pin the baseline.** Add only the matched warm-index benchmark cases and preserve the baseline commit and environment evidence before production behavior edits.
 3. **Write the first failing test.** Create the package manifest and the behavioral test matrix in `internal/fugue_projection`; begin with Insert returning `BecameVisible(op.lv)`. Confirm red for the missing interface.
-4. **Commit 1 — `feat(projection): add deep Fugue projection module`.** Implement the deterministic resolution core, imperative mutation shell, per-operation entries, borrowed `apply_all`, identity-only visibility enum, typed error, and focused tests. Add matrix rows incrementally through red-green-refactor. Validate only the new package.
+4. **Commit 1 — `feat(projection): add deep Fugue projection module`.** Implement the deterministic resolution core, imperative mutation shell, per-operation entries, borrowed `apply_all`, allocation-free identity-only visibility scalar, typed error, and focused tests. Add matrix rows incrementally through red-green-refactor. Validate only the new package.
 5. **Commit 2 — `refactor(branch): use Fugue projection module`.** Add the package import; route checkout and forward advance through borrowed `apply_all`, and MergeContext's existing RLE loop through tree-only `apply`; translate errors into existing BranchError variants. Preserve public `MergeContext::apply_operations` and retreat behavior.
 6. **Commit 3 — `refactor(document): consume visibility changes`.** Add the package import; preserve the current incremental guard; use the observed entry only while incremental maintenance is active and tree-only `apply` otherwise. For a visible identity, retain the current post-mutation Fugue position/content lookup. For a hidden identity, resolve the old position from the still-unmodified IndexedState before deleting its run. Apply each change immediately; on lookup or index-update failure, retain current invalidate-and-fallback behavior.
 7. **Commit 4 — `test(projection): enforce semantic ownership`.** Reconcile every test against the inventory below. Keep adapter and integration assertions; do not copy them into the new package. Remove a test only when every assertion belongs to projection semantics and an equivalent matrix test is already green. Record any deletion by test name in the commit message.

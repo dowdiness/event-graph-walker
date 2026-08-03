@@ -1,9 +1,49 @@
 ///|
 /// The semantic visibility result of one projected operation.
-pub(all) enum VisibilityChange {
-  BecameVisible(@fugue.Lv)
-  BecameHidden(@fugue.Lv)
-  Unchanged
+///
+/// The scalar encoding keeps this hot cross-package result allocation-free.
+/// Double exactly represents every Int LV plus one: zero is unchanged,
+/// positive values identify visible LVs, and negative values identify hidden
+/// LVs.
+pub type VisibilityChange = Double
+
+///|
+pub fn is_became_visible(change : VisibilityChange) -> Bool {
+  change > 0.0
+}
+
+///|
+pub fn is_became_hidden(change : VisibilityChange) -> Bool {
+  change < 0.0
+}
+
+///|
+/// Return the changed identity. Call only when `became_visible` or
+/// `became_hidden` is true.
+pub fn visibility_identity(change : VisibilityChange) -> @fugue.Lv {
+  if change > 0.0 {
+    @fugue.Lv((change - 1.0).to_int())
+  } else {
+    @fugue.Lv((-change - 1.0).to_int())
+  }
+}
+
+///|
+#inline
+fn encode_visible(lv : @fugue.Lv) -> VisibilityChange {
+  lv.0.to_double() + 1.0
+}
+
+///|
+#inline
+fn encode_hidden(lv : @fugue.Lv) -> VisibilityChange {
+  -(lv.0.to_double() + 1.0)
+}
+
+///|
+#inline
+fn encode_unchanged() -> VisibilityChange {
+  0.0
 }
 
 ///|
@@ -146,24 +186,24 @@ pub fn apply_with_visible_change(
   match op.content() {
     @core.Insert(text) => {
       insert(tree, op, text, causal_graph)
-      VisibilityChange::BecameVisible(@fugue.Lv(op.lv()))
+      encode_visible(@fugue.Lv(op.lv()))
     }
     @core.Delete => {
       let visible_before = tree.visible_count()
       let target = delete(tree, op, causal_graph)
       if target >= 0 && tree.visible_count() < visible_before {
-        VisibilityChange::BecameHidden(@fugue.Lv(target))
+        encode_hidden(@fugue.Lv(target))
       } else {
-        VisibilityChange::Unchanged
+        encode_unchanged()
       }
     }
     @core.Undelete => {
       let visible_before = tree.visible_count()
       let target = undelete(tree, op, causal_graph)
       if target >= 0 && tree.visible_count() > visible_before {
-        VisibilityChange::BecameVisible(@fugue.Lv(target))
+        encode_visible(@fugue.Lv(target))
       } else {
-        VisibilityChange::Unchanged
+        encode_unchanged()
       }
     }
   }

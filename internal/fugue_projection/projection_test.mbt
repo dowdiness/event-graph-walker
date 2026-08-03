@@ -16,25 +16,26 @@ fn assert_visible(
   change : VisibilityChange,
   expected : @fugue.Lv,
 ) -> Unit raise {
-  match change {
-    VisibilityChange::BecameVisible(lv) => assert_eq(lv, expected)
-    _ => fail("expected visible change")
+  if is_became_visible(change) {
+    assert_eq(visibility_identity(change), expected)
+  } else {
+    fail("expected visible change")
   }
 }
 
 ///|
 fn assert_hidden(change : VisibilityChange, expected : @fugue.Lv) -> Unit raise {
-  match change {
-    VisibilityChange::BecameHidden(lv) => assert_eq(lv, expected)
-    _ => fail("expected hidden change")
+  if is_became_hidden(change) {
+    assert_eq(visibility_identity(change), expected)
+  } else {
+    fail("expected hidden change")
   }
 }
 
 ///|
 fn assert_unchanged(change : VisibilityChange) -> Unit raise {
-  match change {
-    VisibilityChange::Unchanged => ()
-    _ => fail("expected unchanged")
+  if is_became_visible(change) || is_became_hidden(change) {
+    fail("expected unchanged")
   }
 }
 
