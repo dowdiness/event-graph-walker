@@ -162,7 +162,7 @@ No adapter adds a fallback arm that hides a future projection-error variant. An 
 The structural constraint is necessary but not proof of non-regression:
 
 - `apply` must perform no position lookup, visibility-change construction, callback, or collection allocation.
-- `apply_all` must iterate a borrowed `ArrayView` without copying and preserve the successful prefix on failure.
+- `apply_all` must iterate a borrowed `ArrayView` without copying and preserve the successful prefix on failure. Keep Insert lowering directly inside this batch seam: wasm-gc retains measurable per-item overhead when replay calls the raising per-operation helper.
 - `apply_with_visible_change` must not call `FugueTree::lv_to_position` or return text; it returns identity-only visibility state.
 - Document retains its current coordinate/content mechanisms: Fugue lookup after an item becomes visible and IndexedState lookup while its pre-hide view is still intact.
 - `apply_with_visible_change` is used only under Document's existing small-prefix/warm-index condition.

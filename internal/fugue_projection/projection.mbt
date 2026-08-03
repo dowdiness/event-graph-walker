@@ -171,7 +171,37 @@ pub fn apply_all(
   causal_graph : @causal_graph.CausalGraph,
 ) -> Unit raise FugueProjectionError {
   for op in operations {
-    apply(tree, op, causal_graph)
+    // Keep dispatch inside the batch seam. wasm-gc does not reliably inline a
+    // raising public per-operation call during Branch replay.
+    match op.content() {
+      @core.Insert(text) => {
+        // Keep the replay specialization explicit: wasm-gc retains measurable
+        // per-item overhead when this raising helper remains a call.
+        let origin_left = match op.origin_left() {
+          Some(raw) => Some(resolve_origin(causal_graph, raw))
+          None => None
+        }
+        let origin_right = match op.origin_right() {
+          Some(raw) => Some(resolve_origin(causal_graph, raw))
+          None => None
+        }
+        let entry = resolve_causal_entry(causal_graph, op.lv())
+        tree.insert({
+          id: @fugue.Lv(op.lv()),
+          content: text,
+          origin_left,
+          origin_right,
+          timestamp: @fugue.Timestamp(entry.timestamp),
+          agent: @fugue.ReplicaId(entry.agent),
+        })
+      }
+      @core.Delete => {
+        let _ = delete(tree, op, causal_graph)
+      }
+      @core.Undelete => {
+        let _ = undelete(tree, op, causal_graph)
+      }
+    }
   }
 }
 
