@@ -14,6 +14,8 @@ pub fn apply_all(@fugue.FugueTree[String], ArrayView[@core.Op], @causal_graph.Ca
 
 pub fn apply_with_visible_change(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph) -> Double raise FugueProjectionError
 
+pub fn[E : Error] apply_with_visible_change_as(@fugue.FugueTree[String], @core.Op, @causal_graph.CausalGraph, (FugueProjectionError) -> E) -> Double raise E
+
 pub fn is_became_hidden(Double) -> Bool
 
 pub fn is_became_visible(Double) -> Bool

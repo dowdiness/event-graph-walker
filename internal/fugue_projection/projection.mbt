@@ -209,6 +209,21 @@ pub fn apply_all(
 }
 
 ///|
+/// Apply one admitted operation and translate projection failures at the
+/// package boundary without a second catching adapter frame.
+#inline
+pub fn[E : Error] apply_with_visible_change_as(
+  tree : @fugue.FugueTree[String],
+  op : @core.Op,
+  causal_graph : @causal_graph.CausalGraph,
+  map_error : (FugueProjectionError) -> E,
+) -> VisibilityChange raise E {
+  apply_with_visible_change(tree, op, causal_graph) catch {
+    error => raise map_error(error)
+  }
+}
+
+///|
 /// Apply one admitted operation and report its semantic visibility outcome.
 pub fn apply_with_visible_change(
   tree : @fugue.FugueTree[String],

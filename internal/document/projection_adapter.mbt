@@ -32,7 +32,7 @@ fn apply_projection_with_visible_change(
   op : @core.Op,
   causal_graph : @causal_graph.CausalGraph,
 ) -> @fugue_projection.VisibilityChange raise DocumentError {
-  @fugue_projection.apply_with_visible_change(tree, op, causal_graph) catch {
-    error => raise translate_projection_error(error)
-  }
+  @fugue_projection.apply_with_visible_change_as(
+    tree, op, causal_graph, translate_projection_error,
+  )
 }

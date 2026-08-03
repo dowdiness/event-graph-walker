@@ -27,6 +27,7 @@ Create one deep in-process module whose interface applies one admitted operation
 - Two per-operation entry points:
   - `apply` mutates Fugue and returns `Unit`.
   - `apply_with_visible_change` performs the same mutation and returns `VisibilityChange`.
+  - `apply_with_visible_change_as` performs the observed mutation while translating the cold error path to the adapter's existing error type without a second catching frame.
 - One allocation-free `apply_all(ArrayView[Op])` convenience for Branch's already-collected causal sequences. It preserves per-operation semantics and successful prefixes.
 - Allocation-free `VisibilityChange = Double` with `is_became_visible`, `is_became_hidden`, and `visibility_identity` decoders. The scalar carries only semantic kind and identity, never text or coordinates.
 - `pub(all) FugueProjectionError` owned by the new package.
@@ -39,7 +40,7 @@ Create one deep in-process module whose interface applies one admitted operation
 - Branch retreat behavior and delete-winner recomputation.
 - Fugue representation or method changes.
 - IndexedState or `VisibleRun` representation changes.
-- Owning or atomic batch projection interfaces, callbacks, observer traits, mode parameters, or collection results. `apply_all` accepts only a borrowed `ArrayView` and promises no rollback.
+- Owning or atomic batch projection interfaces, visibility callbacks, observer traits, mode parameters, or collection results. `apply_all` accepts only a borrowed `ArrayView` and promises no rollback. The generic mapper on `apply_with_visible_change_as` is error-only and never observes successful mutation.
 - New `BranchError` or `DocumentError` variants.
 - Top-level `text`, `container`, peer-sync, JSON, canonical-byte, or wire-format changes.
 - A new ADR or GitHub issue. This is a reversible internal refactor; `CONTEXT.md` already records the domain term.
@@ -78,6 +79,13 @@ pub fn apply_with_visible_change(
   op : @core.Op,
   causal_graph : @causal_graph.CausalGraph,
 ) -> VisibilityChange raise FugueProjectionError
+
+pub fn[E : Error] apply_with_visible_change_as(
+  tree : @fugue.FugueTree[String],
+  op : @core.Op,
+  causal_graph : @causal_graph.CausalGraph,
+  map_error : (FugueProjectionError) -> E,
+) -> VisibilityChange raise E
 ```
 
 `FugueProjectionError` is `pub(all)` for exhaustive adapter translation. `VisibilityChange` is an internal-package type alias over `Double`: zero means unchanged, positive `lv + 1` means became visible, and negative `-(lv + 1)` means became hidden. Every nonnegative Int LV plus one is represented exactly by Double, including `Int::MAX_VALUE`; a white-box boundary test locks this total encoding.
@@ -96,7 +104,7 @@ Insert and a winning Undelete produce became-visible; a winning Delete of a visi
 - `MissingCausalEntry(lv)`;
 - `Fugue(error)`.
 
-Branch and Document translate these faithfully into existing missing-origin, missing-operation/local-version, and Fugue variants. Admission and any successful projection prefix remain committed.
+Branch and Document translate these faithfully into existing missing-origin, missing-operation/local-version, and Fugue variants. Document supplies its exhaustive translator to `apply_with_visible_change_as`; the mapper runs only after a projection error and removes the otherwise measurable second catch frame from the successful wasm-gc observed path. Admission and any successful projection prefix remain committed.
 
 ## Error Translation
 
