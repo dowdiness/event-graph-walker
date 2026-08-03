@@ -207,7 +207,6 @@ pub fn apply_all(
 
 ///|
 /// Apply one admitted operation and report its semantic visibility outcome.
-#inline
 pub fn apply_with_visible_change(
   tree : @fugue.FugueTree[String],
   op : @core.Op,
