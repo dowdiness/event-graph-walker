@@ -8,11 +8,13 @@
 pub type VisibilityChange = Double
 
 ///|
+#inline
 pub fn is_became_visible(change : VisibilityChange) -> Bool {
   change > 0.0
 }
 
 ///|
+#inline
 pub fn is_became_hidden(change : VisibilityChange) -> Bool {
   change < 0.0
 }
@@ -20,6 +22,7 @@ pub fn is_became_hidden(change : VisibilityChange) -> Bool {
 ///|
 /// Return the changed identity. Call only when `became_visible` or
 /// `became_hidden` is true.
+#inline
 pub fn visibility_identity(change : VisibilityChange) -> @fugue.Lv {
   if change > 0.0 {
     @fugue.Lv((change - 1.0).to_int())
