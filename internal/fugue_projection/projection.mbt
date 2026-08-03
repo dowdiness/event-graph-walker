@@ -211,7 +211,6 @@ pub fn apply_all(
 ///|
 /// Apply one admitted operation and translate projection failures at the
 /// package boundary without a second catching adapter frame.
-#inline
 pub fn[E : Error] apply_with_visible_change_as(
   tree : @fugue.FugueTree[String],
   op : @core.Op,
