@@ -347,10 +347,14 @@ the original pre-run provenance. Every benchmark invocation is checked against
 that original provenance. It appends to the existing `run.json`; it does not
 overwrite or delete logs. Preview either invocation with `--dry-run`.
 
-Noise controls are explicit and recorded: `--cpu-affinity 2-3` requests a
+Noise controls are explicit and recorded: `--cpu-affinity 0-7` requests a
 fail-fast child CPU affinity; `--load-average-max 2.0` waits for the one-minute
 load average with `--load-average-timeout` and `--load-average-poll`; and
-`--cooldown-seconds 2` inserts a delay between processes. Without these flags,
+`--cooldown-seconds 2` inserts a delay between processes. Affinity must retain
+all CPUs the measured runtime normally uses; narrowing a multithreaded runtime
+to an arbitrary subset can create GC/scheduler regressions that do not represent
+the deployment target. Prefer no affinity or the process's complete allowed CPU
+set unless the deployed affinity is itself under study. Without these flags,
 the selected policy is still recorded as not requested. A requested control
 that cannot be honored aborts rather than silently weakening the experiment.
 There is no outlier deletion: raw samples and failed-process logs remain in the
