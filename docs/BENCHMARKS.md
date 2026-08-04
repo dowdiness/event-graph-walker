@@ -278,6 +278,124 @@ These are raw release observations, not cross-machine thresholds or an
 attribution claim. Re-run both targets under comparable conditions before
 using the matrix to select a representation.
 
+## Fugue projection paired matrix runner
+
+The accepted Fugue projection performance gate is persisted in
+`scripts/run-fugue-projection-bench.py` and
+`scripts/summarize-fugue-projection-bench.py`. The selector map is frozen at
+B1–B5 and D1–D12, as defined in the implementation plan; do not substitute
+benchmark names or indexes. The runner executes one Moon process at a time,
+runs baseline first for odd pair numbers and candidate first for even pair
+numbers, and writes every stdout/stderr sample plus elapsed seconds and peak
+RSS under the explicitly supplied output directory.
+
+From the Event Graph Walker worktree, run the initial ten-pair matrix on both
+targets with no implicit worktree or temporary path:
+
+```bash
+python3 scripts/run-fugue-projection-bench.py \
+  --baseline-worktree /path/to/baseline/event-graph-walker \
+  --candidate-worktree /path/to/candidate/event-graph-walker \
+  --output-dir /path/to/evidence/fugue-projection-$(date +%Y%m%d-%H%M%S)
+```
+
+Use `--target js` or `--target wasm-gc` to restrict targets and
+`--selector B1` (repeatable) or `--selector js:D3` to restrict the initial
+matrix. The summarized gate requires exactly 10 initial pairs. The runner
+records the frozen map, commands, worktree revisions, environment, and
+pre-run provenance in `run.json`. It resolves the exact `--moon` executable
+and records its version and the actual Moon/moonc/moonrun toolchain. It also
+captures the exact output of `<resolved moon executable> version --all`,
+including feature flags, and fingerprints that output as part of provenance.
+Provenance also includes the revision, SHA-256 of the exact `git diff HEAD --binary`,
+staged status, SHA-256 values for every untracked `.mbt`/`.mbti`/Moon manifest,
+lock hashes, host, CPU, memory, frequency policy, and time. The persisted
+environment is a strict non-sensitive reproducibility allowlist; secrets,
+full environment values, and full-environment hashes are never recorded.
+
+If the first ten-pair summary is inconclusive, extend only the named
+`target:key` selectors. The extension range is exactly 11–15:
+
+```bash
+python3 scripts/run-fugue-projection-bench.py \
+  --baseline-worktree /path/to/baseline/event-graph-walker \
+  --candidate-worktree /path/to/candidate/event-graph-walker \
+  --output-dir /path/to/evidence/fugue-projection-YYYYMMDD-HHMMSS \
+  --extension-selector js:D3 \
+  --extension-selector wasm-gc:D2 \
+  --pair-range 11-15
+```
+
+The extension invocation must use an exact `target:key` selector whose
+baseline and candidate expected and completed inventories each contain pairs
+1–10. Before changing `run.json` or launching any benchmark process, the runner
+invokes the summarizer's authorization mode for every selector:
+
+```bash
+python3 scripts/summarize-fugue-projection-bench.py \
+  --input-dir /path/to/evidence/fugue-projection-YYYYMMDD-HHMMSS \
+  --authorize-extension js:D3
+```
+
+Authorization succeeds only when that exact selector's first-ten result is
+`INCONCLUSIVE`—the two five-pair block verdicts disagree. An initial `PASS` or
+`FAIL` is never eligible for extension. The extension must use
+`--pair-range 11-15` exactly and `--pair-count 10`; the initial runner also
+rejects every other `--pair-count`, so every generated run is summarizable.
+It must reuse the original worktrees, targets, and noise controls, and match
+the original pre-run provenance. Every benchmark invocation is checked against
+that original provenance. It appends to the existing `run.json`; it does not
+overwrite or delete logs. Preview either invocation with `--dry-run`.
+
+Noise controls are explicit and recorded: `--cpu-affinity 0-7` requests a
+fail-fast child CPU affinity; `--load-average-max 2.0` waits for the one-minute
+load average with `--load-average-timeout` and `--load-average-poll`; and
+`--cooldown-seconds 2` inserts a delay between processes. Affinity must retain
+all CPUs the measured runtime normally uses; narrowing a multithreaded runtime
+to an arbitrary subset can create GC/scheduler regressions that do not represent
+the deployment target. Prefer no affinity or the process's complete allowed CPU
+set unless the deployed affinity is itself under study. Without these flags,
+the selected policy is still recorded as not requested. A requested control
+that cannot be honored aborts rather than silently weakening the experiment.
+There is no outlier deletion: raw samples and failed-process logs remain in the
+output directory. A wide baseline tolerance is evidence of an unstable host,
+not permission to ignore a regression.
+
+Summarize to an explicit Markdown path:
+
+```bash
+python3 scripts/summarize-fugue-projection-bench.py \
+  --input-dir /path/to/evidence/fugue-projection-YYYYMMDD-HHMMSS \
+  --output /path/to/evidence/fugue-projection-YYYYMMDD-HHMMSS/summary.md
+```
+
+The summarizer parses every required `.time` file, validates elapsed/RSS
+format, and requires those values to agree with each sample's metadata. It
+validates the complete baseline/candidate pair inventory and rejects malformed,
+missing, or extra extension logs. It accepts Moon JSON
+median values and displayed values with units, normalizes to microseconds,
+computes the symmetric paired log-ratio median, and reports the first-ten
+baseline central-80% radius with `max(5%, spread)` tolerance. It reports both
+five-pair block diagnostics; disagreeing block verdicts are `INCONCLUSIVE`.
+A 15-pair inventory is rejected unless its first-ten block verdicts disagree,
+so extension samples cannot convert an initial `PASS` or `FAIL`. A valid
+15-pair extension is classified by its pooled estimate against the unchanged
+first-ten tolerance. The command exits nonzero for `FAIL` or
+`INCONCLUSIVE` (and also for malformed input).
+
+Run the stdlib-only tooling tests with:
+
+```bash
+python3 -m unittest scripts/test_fugue_projection_bench.py
+```
+
+Rerun this complete paired matrix after any MoonBit compiler, runtime, or
+`moonrun` update. `#inline` behavior and cross-package code generation are
+evidence-sensitive, so old timing evidence is not portable across toolchain
+changes. Keep the same declared controls when comparing runs and interpret
+large tolerances as a host-stability finding requiring better controls or a
+repeat—not as a reason to waive a regression.
+
 ## Running Benchmarks
 
 ```bash

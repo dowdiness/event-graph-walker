@@ -635,130 +635,44 @@ fn Document::project_remote_ops(
   }
   let cg = self.oplog.causal_graph()
   for applied in applied_ops {
-    let origin_left : @fugue.Lv? = match applied.origin_left() {
-      None => None
-      Some(raw) =>
-        match cg.raw_to_lv(raw) {
-          Some(lv) => Some(@fugue.Lv(lv))
-          None => raise DocumentError::MissingOrigin(raw~)
-        }
-    }
-    let origin_right : @fugue.Lv? = match applied.origin_right() {
-      None => None
-      Some(raw) =>
-        match cg.raw_to_lv(raw) {
-          Some(lv) => Some(@fugue.Lv(lv))
-          None => raise DocumentError::MissingOrigin(raw~)
-        }
-    }
-    match applied.content() {
-      @core.Insert(text) => {
-        let (timestamp, agent) = match cg[applied.lv()] {
-          Some(entry) => (entry.timestamp, entry.agent)
-          None =>
-            raise DocumentError::OpLog(
-              @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
-            )
-        }
-        self.tree.insert({
-          id: @fugue.Lv(applied.lv()),
-          content: text,
-          origin_left,
-          origin_right,
-          timestamp: @fugue.Timestamp(timestamp),
-          agent: @fugue.ReplicaId(agent),
-        })
-        // Incremental index update: find position of newly visible item
-        if incremental {
-          match self.tree.lv_to_position(@fugue.Lv(applied.lv())) {
-            Some(pos) =>
-              if !self.indexed_state.insert_at(pos, {
-                  start_lv: applied.lv(),
-                  text,
-                  count: 1,
-                }) {
-                self.invalidate_cache()
-                incremental = false
-              }
-            None => {
+    if incremental {
+      let change = apply_projection_with_visible_change(self.tree, applied, cg)
+      if @fugue_projection.is_became_hidden(change) {
+        let lv = @fugue_projection.visibility_identity(change)
+        // The tree has changed, but IndexedState has not. Resolve the old
+        // visible position before removing its run from the cache.
+        match self.lv_to_position(lv.0) {
+          Some(pos) =>
+            if !self.indexed_state.delete_at(pos) {
               self.invalidate_cache()
               incremental = false
             }
+          None => {
+            self.invalidate_cache()
+            incremental = false
+          }
+        }
+      } else if @fugue_projection.is_became_visible(change) {
+        let lv = @fugue_projection.visibility_identity(change)
+        // Both the post-mutation position and content come from Fugue.
+        match (self.tree.lv_to_position(lv), self.tree.get(lv)) {
+          (Some(pos), Some(item)) =>
+            if !self.indexed_state.insert_at(pos, {
+                start_lv: lv.0,
+                text: item.content,
+                count: 1,
+              }) {
+              self.invalidate_cache()
+              incremental = false
+            }
+          _ => {
+            self.invalidate_cache()
+            incremental = false
           }
         }
       }
-      @core.Delete =>
-        match origin_left {
-          Some(lv) => {
-            // For incremental: find position BEFORE deleting from tree
-            let pos_before = if incremental {
-              self.lv_to_position(lv.0)
-            } else {
-              None
-            }
-            let visible_before = self.tree.visible_count()
-            let (del_ts, del_agent) = match cg[applied.lv()] {
-              Some(entry) => (entry.timestamp, entry.agent)
-              None =>
-                raise DocumentError::OpLog(
-                  @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
-                )
-            }
-            self.tree.delete_with_ts(lv, del_ts, del_agent) catch {
-              e => raise DocumentError::Fugue(e)
-            }
-            // Only update the index if item actually became invisible
-            if incremental && self.tree.visible_count() < visible_before {
-              match pos_before {
-                Some(pos) =>
-                  if !self.indexed_state.delete_at(pos) {
-                    self.invalidate_cache()
-                    incremental = false
-                  }
-                None => {
-                  self.invalidate_cache()
-                  incremental = false
-                }
-              }
-            }
-          }
-          None => ()
-        }
-      @core.Undelete =>
-        match origin_left {
-          Some(lv) => {
-            let visible_before = self.tree.visible_count()
-            let (undel_ts, undel_agent) = match cg[applied.lv()] {
-              Some(entry) => (entry.timestamp, entry.agent)
-              None =>
-                raise DocumentError::OpLog(
-                  @oplog.OpLogError::MissingLocalVersion(lv=applied.lv()),
-                )
-            }
-            self.tree.undelete_with_ts(lv, undel_ts, undel_agent) catch {
-              e => raise DocumentError::Fugue(e)
-            }
-            // If item became visible, insert into the index
-            if incremental && self.tree.visible_count() > visible_before {
-              match (self.tree.lv_to_position(lv), self.tree[lv]) {
-                (Some(pos), Some(item)) =>
-                  if !self.indexed_state.insert_at(pos, {
-                      start_lv: lv.0,
-                      text: item.content,
-                      count: 1,
-                    }) {
-                    self.invalidate_cache()
-                    incremental = false
-                  }
-                _ => {
-                  self.invalidate_cache()
-                  incremental = false
-                }
-              }
-            }
-          }
-          None => ()
-        }
+    } else {
+      apply_projection(self.tree, applied, cg)
     }
   }
 }

@@ -231,3 +231,190 @@ test "bench: warm cache position query (10000 chars)" (b : @bench.T) {
   ignore(doc.lv_at_position(0))
   b.bench(fn() { b.keep(doc.lv_at_position(5000)) })
 }
+
+// =============================================================================
+// Warm-index remote projection: five isolated apply_remote timings.
+// Each sample creates, replays, and primes a fresh target before the clock.
+// =============================================================================
+
+///|
+fn benchmark_remote_projection(
+  b : @bench.T,
+  name : String,
+  base_ops : Array[@core.Op],
+  setup_ops : Array[@core.Op],
+  incoming : @core.Op,
+  expected_count : Int,
+) -> Unit raise {
+  let timings : Array[Double] = []
+  for _ in 0..<5 {
+    let sample = Document::new("sample")
+    for op in base_ops {
+      sample.apply_remote(op) catch {
+        _ => abort("benchmark setup failed")
+      }
+    }
+    for op in setup_ops {
+      sample.apply_remote(op) catch {
+        _ => abort("benchmark setup failed")
+      }
+    }
+    // Warm Document's IndexedState so project_remote_ops takes its observed
+    // incremental projection path rather than the tree-only fallback.
+    ignore(sample.to_text())
+    assert_true(sample.indexed_state.is_ready())
+    let start = @bench.monotonic_clock_start()
+    sample.apply_remote(incoming) catch {
+      _ => abort("benchmark projection failed")
+    }
+    let elapsed_us = @bench.monotonic_clock_end(start)
+    assert_eq(sample.visible_count(), expected_count)
+    timings.push(elapsed_us)
+  }
+  let sorted = timings.copy()
+  sorted.sort()
+  let median_us = sorted[2]
+  let raw_us = timings.map(value => value.to_string()).join(",")
+  println(
+    "{\"benchmark\":\"\{name}\",\"raw_us\":[\{raw_us}],\"median_us\":\{median_us.to_string()}}",
+  )
+  b.keep(timings)
+}
+
+///|
+test "bench: observed Insert (1000-char warm index)" (b : @bench.T) {
+  let source = build_doc(1000)
+  let base_ops = source.get_all_ops()
+  let incoming = try! source.insert(500, "y")
+  benchmark_remote_projection(
+    b,
+    "bench: observed Insert (1000-char warm index)",
+    base_ops,
+    [],
+    incoming,
+    1001,
+  )
+}
+
+///|
+test "bench: observed Insert (10000-char warm index)" (b : @bench.T) {
+  let source = build_doc(10000)
+  let base_ops = source.get_all_ops()
+  let incoming = try! source.insert(5000, "y")
+  benchmark_remote_projection(
+    b,
+    "bench: observed Insert (10000-char warm index)",
+    base_ops,
+    [],
+    incoming,
+    10001,
+  )
+}
+
+///|
+test "bench: observed Insert (100000-char warm index)" (b : @bench.T) {
+  let source = build_doc(100000)
+  let base_ops = source.get_all_ops()
+  let incoming = try! source.insert(50000, "y")
+  benchmark_remote_projection(
+    b,
+    "bench: observed Insert (100000-char warm index)",
+    base_ops,
+    [],
+    incoming,
+    100001,
+  )
+}
+
+///|
+test "bench: observed Delete (1000-char warm index)" (b : @bench.T) {
+  let source = build_doc(1000)
+  let base_ops = source.get_all_ops()
+  let incoming = try! source.delete(500)
+  benchmark_remote_projection(
+    b,
+    "bench: observed Delete (1000-char warm index)",
+    base_ops,
+    [],
+    incoming,
+    999,
+  )
+}
+
+///|
+test "bench: observed Delete (10000-char warm index)" (b : @bench.T) {
+  let source = build_doc(10000)
+  let base_ops = source.get_all_ops()
+  let incoming = try! source.delete(5000)
+  benchmark_remote_projection(
+    b,
+    "bench: observed Delete (10000-char warm index)",
+    base_ops,
+    [],
+    incoming,
+    9999,
+  )
+}
+
+///|
+test "bench: observed Delete (100000-char warm index)" (b : @bench.T) {
+  let source = build_doc(100000)
+  let base_ops = source.get_all_ops()
+  let incoming = try! source.delete(50000)
+  benchmark_remote_projection(
+    b,
+    "bench: observed Delete (100000-char warm index)",
+    base_ops,
+    [],
+    incoming,
+    99999,
+  )
+}
+
+///|
+test "bench: observed Undelete (1000-char warm index)" (b : @bench.T) {
+  let source = build_doc(1000)
+  let base_ops = source.get_all_ops()
+  let delete_op = try! source.delete(500)
+  let incoming = try! source.undelete(500)
+  benchmark_remote_projection(
+    b,
+    "bench: observed Undelete (1000-char warm index)",
+    base_ops,
+    [delete_op],
+    incoming,
+    1000,
+  )
+}
+
+///|
+test "bench: observed Undelete (10000-char warm index)" (b : @bench.T) {
+  let source = build_doc(10000)
+  let base_ops = source.get_all_ops()
+  let delete_op = try! source.delete(5000)
+  let incoming = try! source.undelete(5000)
+  benchmark_remote_projection(
+    b,
+    "bench: observed Undelete (10000-char warm index)",
+    base_ops,
+    [delete_op],
+    incoming,
+    10000,
+  )
+}
+
+///|
+test "bench: observed Undelete (100000-char warm index)" (b : @bench.T) {
+  let source = build_doc(100000)
+  let base_ops = source.get_all_ops()
+  let delete_op = try! source.delete(50000)
+  let incoming = try! source.undelete(50000)
+  benchmark_remote_projection(
+    b,
+    "bench: observed Undelete (100000-char warm index)",
+    base_ops,
+    [delete_op],
+    incoming,
+    100000,
+  )
+}

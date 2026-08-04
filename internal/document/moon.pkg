@@ -3,6 +3,7 @@ import {
   "dowdiness/event-graph-walker/internal/causal_graph",
   "dowdiness/event-graph-walker/internal/oplog",
   "dowdiness/event-graph-walker/internal/fugue",
+  "dowdiness/event-graph-walker/internal/fugue_projection",
   "dowdiness/event-graph-walker/internal/branch",
   "dowdiness/event-graph-walker/history",
   "dowdiness/rle",
