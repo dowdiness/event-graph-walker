@@ -67,4 +67,4 @@ Background policy: sequential benchmark commands, no intentionally concurrent wo
 
 The table commits every per-process statistic used for the gate. Exact selector commands are frozen in the implementation plan; local detailed logs also record elapsed process time and peak RSS.
 
-Candidate runs must use the same selector map in `docs/plans/2026-08-02-fugue-projection-deepening.md`, compare against the median of all ten baseline process statistics, and use the scenario tolerance above.
+Candidate runs must use the same selector map in `docs/plans/archive/2026-08-02-fugue-projection-deepening.md`, compare against the median of all ten baseline process statistics, and use the scenario tolerance above.

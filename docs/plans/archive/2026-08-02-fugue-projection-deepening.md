@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-02
 
-**Status:** ready
+**Status:** Completed and archived (2026-08-04); implemented by [PR #110](https://github.com/dowdiness/event-graph-walker/pull/110)
 
 **Canonical term:** [Shared document projection](../../CONTEXT.md#shared-document)
 
