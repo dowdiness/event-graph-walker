@@ -1210,14 +1210,15 @@ fn prepare_sync(
 
 ///|
 /// Apply a message after parsing it into a receiver-specific commit plan.
-pub fn SyncSession::apply(
+pub fn SyncSession::apply_with_limits(
   self : SyncSession,
   message : SyncMessage,
+  limits : @sync.Limits,
 ) -> SyncReport raise TextError {
   let prepared = map_sync_failure(fn() raise @sync.Failure {
     prepare_sync(
       message,
-      self.doc.sync_limits,
+      limits,
       self.doc.inner.get_all_ops(),
       self.doc.pending_sync_records.copy(),
     )
@@ -1231,6 +1232,15 @@ pub fn SyncSession::apply(
   }
   self.doc.pending_sync_records = prepared.pending
   prepared.report()
+}
+
+///|
+/// Apply a message using the limits configured when the document was created.
+pub fn SyncSession::apply(
+  self : SyncSession,
+  message : SyncMessage,
+) -> SyncReport raise TextError {
+  self.apply_with_limits(message, self.doc.sync_limits)
 }
 
 ///|
