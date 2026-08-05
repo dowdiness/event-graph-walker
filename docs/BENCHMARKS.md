@@ -278,34 +278,56 @@ These are raw release observations, not cross-machine thresholds or an
 attribution claim. Re-run both targets under comparable conditions before
 using the matrix to select a representation.
 
-## Fugue projection paired matrix runner
+## One-command Fugue projection benchmark gate
 
-The accepted Fugue projection performance gate is persisted in
-`scripts/run-fugue-projection-bench.py` and
-`scripts/summarize-fugue-projection-bench.py`. The selector map is frozen at
-B1–B5 and D1–D12, as defined in the implementation plan; do not substitute
-benchmark names or indexes. The runner executes one Moon process at a time,
-runs baseline first for odd pair numbers and candidate first for even pair
-numbers, and writes every stdout/stderr sample plus elapsed seconds and peak
-RSS under the explicitly supplied output directory.
+The primary Fugue projection performance gate is the one-command shell in
+`scripts/fugue-projection-bench.py`. The selector map is frozen at B1–B5 and
+D1–D12; do not substitute benchmark names or indexes. The command runs the
+initial ten-pair matrix, writes `summary.md` after each valid summary, and
+extends only exact `target:key` selectors whose first-ten result is
+`INCONCLUSIVE` (pairs 11–15). Raw logs and `run.json` remain in the explicitly
+supplied output directory when the gate fails.
 
-From the Event Graph Walker worktree, run the initial ten-pair matrix on both
-targets with no implicit worktree or temporary path:
+From the Event Graph Walker worktree, run both targets with no implicit
+worktree or temporary path:
 
 ```bash
-python3 scripts/run-fugue-projection-bench.py \
+python3 scripts/fugue-projection-bench.py gate \
   --baseline-worktree /path/to/baseline/event-graph-walker \
   --candidate-worktree /path/to/candidate/event-graph-walker \
   --output-dir /path/to/evidence/fugue-projection-$(date +%Y%m%d-%H%M%S)
 ```
 
-Use `--target js` or `--target wasm-gc` to restrict targets and
-`--selector B1` (repeatable) or `--selector js:D3` to restrict the initial
-matrix. The summarized gate requires exactly 10 initial pairs. The runner
-records the frozen map, commands, worktree revisions, environment, and
-pre-run provenance in `run.json`. It resolves the exact `--moon` executable
-and records its version and the actual Moon/moonc/moonrun toolchain. It also
-captures the exact output of `<resolved moon executable> version --all`,
+Use repeatable `--target js` or `--target wasm-gc` and `--selector B1` or
+`--selector js:D3` to restrict the initial matrix. Noise controls are
+available as `--cpu-affinity`, `--load-average-max` with its timeout/poll
+controls, `--cooldown-seconds`, and `--moon`. The gate returns 0 for all
+`PASS`, 1 for a gate `FAIL` or remaining `INCONCLUSIVE`, 2 for runner,
+summarizer, or tooling errors, and 130 when interrupted.
+
+The low-level runner and summarizer remain available as diagnostic and advanced
+interfaces. The runner executes one Moon process at a time, runs baseline
+first for odd pair numbers and candidate first for even pair numbers, and
+writes every stdout/stderr sample plus elapsed seconds and peak RSS under the
+explicitly supplied output directory. Use them to inspect retained evidence
+or operate the two stages manually:
+
+```bash
+python3 scripts/run-fugue-projection-bench.py \
+  --baseline-worktree /path/to/baseline/event-graph-walker \
+  --candidate-worktree /path/to/candidate/event-graph-walker \
+  --output-dir /path/to/evidence/fugue-projection-YYYYMMDD-HHMMSS
+```
+
+A partial initial or extension invocation is not resumable in place. Keep its
+raw logs for diagnosis, then start the complete gate again with a new empty
+output directory.
+
+The runner records the frozen map, commands, worktree revisions, environment,
+and pre-run provenance in `run.json`. It rejects baseline and candidate paths
+that resolve to the same worktree, resolves the exact `--moon`
+executable and records its version and the actual Moon/moonc/moonrun toolchain.
+It also captures the exact output of `<resolved moon executable> version --all`,
 including feature flags, and fingerprints that output as part of provenance.
 Provenance also includes the revision, SHA-256 of the exact `git diff HEAD --binary`,
 staged status, SHA-256 values for every untracked `.mbt`/`.mbti`/Moon manifest,

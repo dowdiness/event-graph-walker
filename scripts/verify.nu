@@ -35,6 +35,10 @@ def find-internal-imports [files: list<string>] {
 let repo_root = ($env.FILE_PWD | path dirname | path expand)
 cd $repo_root
 
+run-checked "Fugue projection benchmark tooling tests" {
+  ^python3 -m unittest scripts/test_fugue_projection_bench.py
+}
+
 run-checked "MoonBit check" {
   ^moon check --target all --fmt --deny-warn --frozen
 }
