@@ -60,6 +60,7 @@ pub(all) struct SyncSession {
   // private fields
 }
 pub fn SyncSession::apply(Self, SyncMessage) -> SyncReport raise TextError
+pub fn SyncSession::apply_with_limits(Self, SyncMessage, @sync.Limits) -> SyncReport raise TextError
 pub fn SyncSession::clear_pending_sync(Self) -> Unit
 pub fn SyncSession::current_version(Self) -> Version
 pub fn SyncSession::decode_json(Self, String) -> SyncMessage raise TextError

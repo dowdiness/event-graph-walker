@@ -1,4 +1,40 @@
 ///|
+test "SyncSession admission uses per-call limits atomically" {
+  let source = try! TextState::new("source")
+  try! source.insert(Pos::at(0), "A")
+  let message = try! source.sync().export_all()
+  let encoded_size = @utf8.encode(message.to_json_string()).length()
+  let receiver = try! TextState::new("receiver")
+  let exact = try! @sync.Limits::Limits(max_encoded_bytes=encoded_size)
+  let admitted = try! receiver.sync().apply_with_limits(message, exact)
+  inspect(admitted.applied_operations(), content="1")
+  inspect(receiver.text(), content="A")
+
+  let before_text = receiver.text()
+  let before_version = receiver.version()
+  let before_pending = receiver.sync().pending_sync_count()
+  let over = try! @sync.Limits::Limits(max_encoded_bytes=encoded_size - 1)
+  try receiver.sync().apply_with_limits(message, over) catch {
+    TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::EncodedBytes,
+        limit=_,
+        actual=_
+      )
+    ) => ()
+    _ => fail("expected per-call encoded byte limit")
+  } noraise {
+    _ => fail("over-limit admission must reject")
+  }
+  inspect(receiver.text(), content=before_text)
+  inspect(receiver.version() == before_version, content="true")
+  inspect(
+    receiver.sync().pending_sync_count() == before_pending,
+    content="true",
+  )
+}
+
+///|
 test "text sync rejects conflicting duplicate identities in one message atomically" {
   let receiver = try! TextState::new("receiver")
   let before_version = receiver.version()
@@ -47,10 +83,54 @@ test "text sync retains authoritative pending payload after identity conflict" {
   let authoritative = try! SyncMessage::from_json_string(
     "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
-  let admitted = try! receiver.sync().apply(authoritative)
+  let admitted = try! receiver
+    .sync()
+    .apply_with_limits(authoritative, @sync.Limits::default())
   inspect(admitted.applied_operations(), content="2")
+  inspect(admitted.duplicate_operations(), content="1")
+  inspect(admitted.pending_operations(), content="0")
   inspect(receiver.text(), content="AB")
   inspect(receiver.sync().pending_sync_count(), content="0")
+
+  let duplicate = try! receiver
+    .sync()
+    .apply_with_limits(authoritative, @sync.Limits::default())
+  inspect(duplicate.applied_operations(), content="0")
+  inspect(duplicate.duplicate_operations(), content="2")
+  inspect(duplicate.pending_operations(), content="0")
+
+  let pending_receiver = try! TextState::new("pending-receiver")
+  let pending_limits = try! @sync.Limits::Limits(max_pending_operations=1)
+  let pending_report = try! pending_receiver
+    .sync()
+    .apply_with_limits(future, pending_limits)
+  inspect(pending_report.applied_operations(), content="0")
+  inspect(pending_report.duplicate_operations(), content="0")
+  inspect(pending_report.pending_operations(), content="1")
+
+  let strict_receiver = try! TextState::new("strict-pending-receiver")
+  let before_text = strict_receiver.text()
+  let before_version = strict_receiver.version()
+  let before_pending = strict_receiver.sync().pending_sync_count()
+  let strict_limits = try! @sync.Limits::Limits(max_pending_operations=0)
+  try strict_receiver.sync().apply_with_limits(future, strict_limits) catch {
+    TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(
+        kind=@sync.LimitKind::PendingOperations,
+        limit=0,
+        actual=1
+      )
+    ) => ()
+    _ => fail("expected pending-operation limit")
+  } noraise {
+    _ => fail("over-limit pending admission must reject")
+  }
+  inspect(strict_receiver.text(), content=before_text)
+  inspect(strict_receiver.version() == before_version, content="true")
+  inspect(
+    strict_receiver.sync().pending_sync_count() == before_pending,
+    content="true",
+  )
 }
 
 ///|
@@ -265,9 +345,9 @@ test "resent decidable malformed pending operation does not poison later sync" {
 test "decode accepts structurally valid JSON and apply enforces receiver limits" {
   let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
-  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  let receiver = try! TextState::new("receiver")
   let message = try! receiver.sync().decode_json(json)
-  try receiver.sync().apply(message) catch {
+  try receiver.sync().apply_with_limits(message, limits) catch {
     TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
@@ -313,11 +393,8 @@ test "receiver-specific decoder honors raised parent limits in validation" {
     "],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
   let message = try! SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
-  let strict = try! TextState::new_with_sync_limits(
-    "strict",
-    @sync.Limits::default(),
-  )
-  try strict.sync().apply(message) catch {
+  let strict = try! TextState::new("strict")
+  try strict.sync().apply_with_limits(message, @sync.Limits::default()) catch {
     TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
@@ -341,11 +418,9 @@ test "duplicate-heavy decoded operation limit counts wire operations" {
     "],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
   let message = try! SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
-  let receiver = try! TextState::new_with_sync_limits(
-    "duplicate-limit",
-    @sync.Limits(max_decoded_operations=1),
-  )
-  try receiver.sync().apply(message) catch {
+  let receiver = try! TextState::new("duplicate-limit")
+  let limits = try! @sync.Limits::Limits(max_decoded_operations=1)
+  try receiver.sync().apply_with_limits(message, limits) catch {
     TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::DecodedOperations,
