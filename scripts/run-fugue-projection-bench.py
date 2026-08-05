@@ -374,24 +374,30 @@ def controls(args: argparse.Namespace, affinity: list[int] | None, moon_executab
     }
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Run the frozen B1-B5/D1-D12 Fugue projection matrix as alternating baseline/candidate processes. Raw logs are never deleted."
-    )
+def add_initial_run_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    """Add the worktree, matrix-selection, and noise-control arguments."""
     parser.add_argument("--baseline-worktree", type=Path, required=True, help="baseline Event Graph Walker worktree")
     parser.add_argument("--candidate-worktree", type=Path, required=True, help="candidate Event Graph Walker worktree")
     parser.add_argument("--output-dir", type=Path, required=True, help="directory for run.json, provenance, and raw logs (always explicitly supplied)")
     parser.add_argument("--target", choices=TARGETS, action="append", dest="targets", help="target to run; repeatable (default: js and wasm-gc)")
     parser.add_argument("--selector", action="append", help="initial selector key, or target:key; repeatable (default: all frozen selectors)")
-    parser.add_argument("--extension-selector", "--extend-selector", "--extend", action="append", help="append pairs for target:key (or key for all selected targets); repeatable")
-    parser.add_argument("--pair-count", type=int, default=10, help="initial number of pairs (default: 10)")
-    parser.add_argument("--pair-range", type=parse_pair_range, help="extension pair range; extensions require exactly 11-15")
     parser.add_argument("--cpu-affinity", help="optional CPUs for every child, e.g. 2 or 2-3; fail if unavailable")
     parser.add_argument("--load-average-max", type=float, help="optional maximum 1-minute load average before each process")
     parser.add_argument("--load-average-timeout", type=float, default=300.0, help="load wait timeout in seconds (default: 300)")
     parser.add_argument("--load-average-poll", type=float, default=1.0, help="load wait polling interval in seconds (default: 1)")
     parser.add_argument("--cooldown-seconds", type=float, default=0.0, help="sleep between sequential processes (default: 0)")
     parser.add_argument("--moon", default="moon", help="Moon executable (default: moon)")
+    return parser
+
+
+def make_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run the frozen B1-B5/D1-D12 Fugue projection matrix as alternating baseline/candidate processes. Raw logs are never deleted."
+    )
+    add_initial_run_arguments(parser)
+    parser.add_argument("--extension-selector", "--extend-selector", "--extend", action="append", help="append pairs for target:key (or key for all selected targets); repeatable")
+    parser.add_argument("--pair-count", type=int, default=10, help="initial number of pairs (default: 10)")
+    parser.add_argument("--pair-range", type=parse_pair_range, help="extension pair range; extensions require exactly 11-15")
     parser.add_argument("--dry-run", action="store_true", help="validate and print the planned commands without running them or writing logs")
     return parser
 
@@ -489,6 +495,8 @@ def run(args: argparse.Namespace) -> int:
     output_dir = args.output_dir.resolve()
     if not baseline.is_dir() or not candidate.is_dir():
         raise RunnerError("both worktree arguments must be existing directories")
+    if baseline == candidate:
+        raise RunnerError("baseline and candidate worktrees must be distinct")
     targets = args.targets or list(TARGETS)
     extension = bool(args.extension_selector)
     if extension:
