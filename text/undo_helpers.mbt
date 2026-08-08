@@ -86,13 +86,10 @@ pub fn TextState::delete_range_and_record(
     return
   }
   let items = self.inner.get_visible_items()
-  self.inner.delete_range(start, end) catch {
-    err => {
-      self.invalidate_cached_version()
-      raise TextError::from_document_error(err, doc_len)
-    }
-  }
   self.invalidate_cached_version()
+  self.inner.delete_range(start, end) catch {
+    err => raise TextError::from_document_error(err, doc_len)
+  }
   let agent = self.inner.agent_id()
   for i = start; i < end; i = i + 1 {
     let (target_lv, item) = items[i]

@@ -143,6 +143,48 @@ fn Version::advance(
 }
 
 ///|
+/// Explicit cache state keeps invalidation and lazy rebuilding in one place.
+priv enum VersionCache {
+  Ready(Version)
+  Invalid
+}
+
+///|
+fn VersionCache::empty() -> VersionCache {
+  Ready(Version::empty())
+}
+
+///|
+fn VersionCache::advance(self : VersionCache, op : @core.Op) -> VersionCache {
+  match self {
+    Ready(version) => Ready(version.advance(op.agent(), op.seq()))
+    Invalid => Invalid
+  }
+}
+
+///|
+fn VersionCache::invalidate(self : VersionCache) -> VersionCache {
+  match self {
+    Ready(_) | Invalid => Invalid
+  }
+}
+
+///|
+/// Read the cached version, rebuilding only after an explicit invalidation.
+fn VersionCache::read(
+  self : VersionCache,
+  ops : Array[@core.Op],
+) -> (VersionCache, Version) {
+  match self {
+    Ready(version) => (Ready(version), version)
+    Invalid => {
+      let version = Version::from_ops(ops)
+      (Ready(version), version)
+    }
+  }
+}
+
+///|
 fn Version::includes(
   self : Version,
   replica_id : String,

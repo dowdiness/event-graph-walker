@@ -37,7 +37,7 @@ pub(all) struct TextState {
   priv inner : @document.Document
   priv sync_limits : @sync.Limits
   priv mut pending_sync_records : Array[StructuralOp]
-  priv mut cached_version : Version?
+  priv mut cached_version : VersionCache
 }
 
 ///|
@@ -64,22 +64,18 @@ pub fn TextState::new_with_sync_limits(
     inner: @document.Document::new(agent_id),
     sync_limits: limits,
     pending_sync_records: [],
-    cached_version: Some(Version::empty()),
+    cached_version: VersionCache::empty(),
   }
 }
 
 ///|
 fn TextState::advance_cached_version(self : TextState, op : @core.Op) -> Unit {
-  match self.cached_version {
-    Some(version) =>
-      self.cached_version = Some(version.advance(op.agent(), op.seq()))
-    None => ()
-  }
+  self.cached_version = self.cached_version.advance(op)
 }
 
 ///|
 fn TextState::invalidate_cached_version(self : TextState) -> Unit {
-  self.cached_version = None
+  self.cached_version = self.cached_version.invalidate()
 }
 
 ///|
@@ -163,14 +159,11 @@ pub fn TextState::delete_range(
 ) -> Unit raise TextError {
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
-  self.inner.delete_range(start, end) catch {
-    err => {
-      self.invalidate_cached_version()
-      raise TextError::from_document_error(err, doc_len)
-    }
-  }
   if start != end {
     self.invalidate_cached_version()
+  }
+  self.inner.delete_range(start, end) catch {
+    err => raise TextError::from_document_error(err, doc_len)
   }
 }
 
@@ -184,45 +177,21 @@ pub fn TextState::replace_range(
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
   let plan = plan_insert(start, text, doc_len)
-  if start == end && plan.text.length() > 0 {
-    // Mirror Document::replace_range so its cursor reset remains observable.
-    self.inner.delete_range(start, end) catch {
-      err => {
-        self.invalidate_cached_version()
-        raise TextError::from_document_error(err, doc_len)
-      }
-    }
-    let op = self.inner.insert(start, plan.text) catch {
-      err => {
-        self.invalidate_cached_version()
-        raise TextError::from_document_error(err, doc_len)
-      }
-    }
-    self.advance_cached_version(op)
-    return
-  }
-  self.inner.replace_range(start, end, plan.text) catch {
-    err => {
-      self.invalidate_cached_version()
-      raise TextError::from_document_error(err, doc_len)
-    }
-  }
   if start != end || plan.text.length() > 0 {
     self.invalidate_cached_version()
+  }
+  // Keep replacement and cursor-reset semantics owned by Document.
+  self.inner.replace_range(start, end, plan.text) catch {
+    err => raise TextError::from_document_error(err, doc_len)
   }
 }
 
 ///|
 /// Get the current version of the document
 pub fn TextState::version(self : TextState) -> Version {
-  match self.cached_version {
-    Some(version) => version
-    None => {
-      let version = Version::from_ops(self.inner.get_all_ops())
-      self.cached_version = Some(version)
-      version
-    }
-  }
+  let (cache, version) = self.cached_version.read(self.inner.get_all_ops())
+  self.cached_version = cache
+  version
 }
 
 ///|
