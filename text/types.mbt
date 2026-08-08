@@ -170,21 +170,6 @@ fn VersionCache::invalidate(self : VersionCache) -> VersionCache {
 }
 
 ///|
-/// Read the cached version, rebuilding only after an explicit invalidation.
-fn VersionCache::read(
-  self : VersionCache,
-  ops : Array[@core.Op],
-) -> (VersionCache, Version) {
-  match self {
-    Ready(version) => (Ready(version), version)
-    Invalid => {
-      let version = Version::from_ops(ops)
-      (Ready(version), version)
-    }
-  }
-}
-
-///|
 fn Version::includes(
   self : Version,
   replica_id : String,

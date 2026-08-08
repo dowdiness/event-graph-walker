@@ -189,9 +189,14 @@ pub fn TextState::replace_range(
 ///|
 /// Get the current version of the document
 pub fn TextState::version(self : TextState) -> Version {
-  let (cache, version) = self.cached_version.read(self.inner.get_all_ops())
-  self.cached_version = cache
-  version
+  match self.cached_version {
+    VersionCache::Ready(version) => version
+    VersionCache::Invalid => {
+      let version = Version::from_ops(self.inner.get_all_ops())
+      self.cached_version = VersionCache::Ready(version)
+      version
+    }
+  }
 }
 
 ///|
