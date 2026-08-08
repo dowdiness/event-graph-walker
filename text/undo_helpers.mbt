@@ -12,8 +12,12 @@ fn TextState::commit_insert_plan_and_record(
   for ch in plan.text {
     let ch_text = ch.to_string()
     let op = self.inner.insert(plan.position + offset, ch_text) catch {
-      err => raise TextError::from_document_error(err, self.len())
+      err => {
+        self.invalidate_cached_version()
+        raise TextError::from_document_error(err, self.len())
+      }
     }
+    self.advance_cached_version(op)
     mgr.record_insert(op.lv(), op.agent(), timestamp_ms, content=Some(ch_text))
     offset = offset + 1
   }
@@ -52,8 +56,12 @@ pub fn TextState::delete_and_record(
     None
   }
   let op = self.inner.delete(pos_val) catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => {
+      self.invalidate_cached_version()
+      raise TextError::from_document_error(err, doc_len)
+    }
   }
+  self.advance_cached_version(op)
   match op.get_delete_target() {
     Some(raw) =>
       match self.inner.raw_to_lv(raw) {
@@ -79,8 +87,12 @@ pub fn TextState::delete_range_and_record(
   }
   let items = self.inner.get_visible_items()
   self.inner.delete_range(start, end) catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => {
+      self.invalidate_cached_version()
+      raise TextError::from_document_error(err, doc_len)
+    }
   }
+  self.invalidate_cached_version()
   let agent = self.inner.agent_id()
   for i = start; i < end; i = i + 1 {
     let (target_lv, item) = items[i]
