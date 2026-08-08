@@ -118,6 +118,73 @@ fn Version::from_ops(ops : Array[@core.Op]) -> Version {
 }
 
 ///|
+/// Advance one cached version-vector entry without rescanning the operation log.
+///
+/// The copied array keeps `Version` values immutable to callers. The linear
+/// scan is over replica entries rather than operations, which is the hot-path
+/// trade-off for local edits.
+fn Version::advance(
+  self : Version,
+  replica_id : String,
+  sequence : Int,
+) -> Version {
+  let entries = self.entries.copy()
+  for i = 0; i < entries.length(); i = i + 1 {
+    if entries[i].replica_id == replica_id {
+      if sequence > entries[i].sequence {
+        entries[i] = { replica_id, sequence }
+      }
+      return Version(entries)
+    }
+  }
+  entries.push({ replica_id, sequence })
+  entries.sort_by((a, b) => a.replica_id.compare(b.replica_id))
+  Version(entries)
+}
+
+///|
+/// Explicit cache state keeps invalidation and lazy rebuilding in one place.
+priv enum VersionCache {
+  Ready(Version)
+  Invalid
+}
+
+///|
+fn VersionCache::empty() -> VersionCache {
+  Ready(Version::empty())
+}
+
+///|
+fn VersionCache::advance(self : VersionCache, op : @core.Op) -> VersionCache {
+  match self {
+    Ready(version) => Ready(version.advance(op.agent(), op.seq()))
+    Invalid => Invalid
+  }
+}
+
+///|
+fn VersionCache::invalidate(self : VersionCache) -> VersionCache {
+  match self {
+    Ready(_) | Invalid => Invalid
+  }
+}
+
+///|
+/// Read the cached version, rebuilding only after an explicit invalidation.
+fn VersionCache::read(
+  self : VersionCache,
+  ops : Array[@core.Op],
+) -> (VersionCache, Version) {
+  match self {
+    Ready(version) => (Ready(version), version)
+    Invalid => {
+      let version = Version::from_ops(ops)
+      (Ready(version), version)
+    }
+  }
+}
+
+///|
 fn Version::includes(
   self : Version,
   replica_id : String,

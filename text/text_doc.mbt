@@ -37,6 +37,7 @@ pub(all) struct TextState {
   priv inner : @document.Document
   priv sync_limits : @sync.Limits
   priv mut pending_sync_records : Array[StructuralOp]
+  priv mut cached_version : VersionCache
 }
 
 ///|
@@ -63,7 +64,18 @@ pub fn TextState::new_with_sync_limits(
     inner: @document.Document::new(agent_id),
     sync_limits: limits,
     pending_sync_records: [],
+    cached_version: VersionCache::empty(),
   }
+}
+
+///|
+fn TextState::advance_cached_version(self : TextState, op : @core.Op) -> Unit {
+  self.cached_version = self.cached_version.advance(op)
+}
+
+///|
+fn TextState::invalidate_cached_version(self : TextState) -> Unit {
+  self.cached_version = self.cached_version.invalidate()
 }
 
 ///|
@@ -110,9 +122,13 @@ pub fn TextState::insert(
     return
   }
   try {
-    let _ = self.inner.insert(plan.position, plan.text)
+    let op = self.inner.insert(plan.position, plan.text)
+    self.advance_cached_version(op)
   } catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => {
+      self.invalidate_cached_version()
+      raise TextError::from_document_error(err, doc_len)
+    }
   }
 }
 
@@ -125,9 +141,13 @@ pub fn TextState::delete(self : TextState, pos : Pos) -> Unit raise TextError {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
   try {
-    let _ = self.inner.delete(pos_val)
+    let op = self.inner.delete(pos_val)
+    self.advance_cached_version(op)
   } catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => {
+      self.invalidate_cached_version()
+      raise TextError::from_document_error(err, doc_len)
+    }
   }
 }
 
@@ -139,6 +159,9 @@ pub fn TextState::delete_range(
 ) -> Unit raise TextError {
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
+  if start != end {
+    self.invalidate_cached_version()
+  }
   self.inner.delete_range(start, end) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
@@ -154,6 +177,10 @@ pub fn TextState::replace_range(
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
   let plan = plan_insert(start, text, doc_len)
+  if start != end || plan.text.length() > 0 {
+    self.invalidate_cached_version()
+  }
+  // Keep replacement and cursor-reset semantics owned by Document.
   self.inner.replace_range(start, end, plan.text) catch {
     err => raise TextError::from_document_error(err, doc_len)
   }
@@ -162,7 +189,9 @@ pub fn TextState::replace_range(
 ///|
 /// Get the current version of the document
 pub fn TextState::version(self : TextState) -> Version {
-  Version::from_ops(self.inner.get_all_ops())
+  let (cache, version) = self.cached_version.read(self.inner.get_all_ops())
+  self.cached_version = cache
+  version
 }
 
 ///|
