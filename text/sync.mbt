@@ -1223,6 +1223,11 @@ pub fn SyncSession::apply_with_limits(
       self.doc.pending_sync_records.copy(),
     )
   })
+  // Invalidate before admission so partial remote mutation cannot leave a
+  // stale cached version behind.
+  if !prepared.applicable.is_empty() {
+    self.doc.invalidate_cached_version()
+  }
   // Imperative shell: PreparedSync is only constructible after complete
   // preflight, so protocol failures cannot occur after the first mutation.
   for parsed_op in prepared.applicable {

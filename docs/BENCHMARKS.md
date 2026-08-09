@@ -428,7 +428,7 @@ moon bench --release
 moon bench --package internal/causal_graph --release
 moon bench --package internal/branch --release
 moon bench --package internal/oplog --release
-# Merge benchmarks live in the branch package (see section 4 below)
+# Merge benchmarks live in the branch package (see section 5 below)
 
 # Run specific benchmark test
 moon bench --package internal/causal_graph --release -f "walker - linear history"
@@ -547,7 +547,76 @@ Tests version vector operations for efficient frontier representation.
 - [ ] Bloom filters for quick includes checks
 - [ ] Cached frontier conversions
 
-### 4. Merge Performance (`internal/branch/branch_merge_benchmark.mbt`)
+### 4. Text Version Cache Performance (`text/version_cache_benchmark_wbtest.mbt`)
+
+Tests the cost of cached version reads against the reconstruction oracle. Setup builds 1,000/10,000/100,000 local operations outside the timed closure, warms the cache, and the timed closure only performs `TextState::version()` plus `b.keep`. The reconstruction and lazy-rebuild oracles remain 1,000-operation comparison baselines.
+
+The `Version::advance` benchmarks construct a `Version` with `replica_count` entries and measure the cost of advancing one replica's sequence number.
+
+**Reproducible commands** (from `event-graph-walker/`):
+
+```bash
+# JS (primary deployed target)
+moon bench --release --target js \
+  -p dowdiness/event-graph-walker/text \
+  -f version_cache_benchmark_wbtest.mbt
+
+# wasm-gc (comparison target)
+moon bench --release --target wasm-gc \
+  -p dowdiness/event-graph-walker/text \
+  -f version_cache_benchmark_wbtest.mbt
+
+# Native (reference baseline)
+moon bench --release --target native \
+  -p dowdiness/event-graph-walker/text \
+  -f version_cache_benchmark_wbtest.mbt
+```
+
+**Raw release-mode output from one run:**
+
+Cached version reads (1k, 10k, 100k operations):
+
+| Backend | 1k mean | 10k mean | 100k mean |
+| --- | ---: | ---: | ---: |
+| Native | 17.08 ns | 16.49 ns | 15.48 ns |
+| JS | 11.05 ns | 10.46 ns | 9.27 ns |
+| wasm-gc | 11.40 ns | 26.86 ns | 11.66 ns |
+
+Version reconstruction and lazy rebuild oracles (1000 operations only):
+
+| Backend | Reconstruction mean | Lazy rebuild mean |
+| --- | ---: | ---: |
+| Native | 205.35 µs | 240.43 µs |
+| JS | 70.25 µs | 75.60 µs |
+| wasm-gc | 155.87 µs | 156.79 µs |
+
+`Version::advance` means by replica count (1, 8, 32 replicas):
+
+| Backend | 1 replica | 8 replicas | 32 replicas |
+| --- | ---: | ---: | ---: |
+| Native | 73.26 ns | 139.59 ns | 387.95 ns |
+| JS | 34.35 ns | 84.38 ns | 265.34 ns |
+| wasm-gc | 47.34 ns | 165.90 ns | 458.33 ns |
+
+**Cautious interpretation:**
+
+The cached version reads remain in the same nanosecond range as operation count grows from 1k to 100k across all three backends. These stable warmed-cache timings are consistent with subsequent `TextState::version()` calls returning the cached value without reconstructing from operations. They do not measure cache invalidation or lazy-rebuild correctness; see `text/version_cache_wbtest.mbt` for those cases.
+
+The wasm-gc 10k measurement has high run-to-run variance, so these numbers are directional observations rather than universal thresholds. The 1k and 100k measurements are more stable.
+
+The reconstruction oracle (`Version::from_ops`) and lazy rebuild (invalidate + rebuild) remain available as 1k-operation comparison baselines for measuring cache-miss costs. Both paths traverse the operation log, so their cost is expected to grow with history length; this section does not claim 10k/100k rebuild measurements. Invalidation and lazy-rebuild correctness are covered by `text/version_cache_wbtest.mbt`.
+
+The `Version::advance` measurements show linear growth with replica count, consistent with the O(replicas) scan to find and update the target entry.
+
+**Key Metrics:**
+- Cached read latency: nanoseconds per `TextState::version()` call
+- Cache state: warmed hit (not a production hit-rate measurement)
+- Reconstruction cost: microseconds for full `Version::from_ops` scan
+- Advance cost: nanoseconds per `Version::advance` call, scales with replica count
+
+These measurements are raw release-mode observations only and make no claim about attribution or end-to-end browser latency.
+
+### 5. Merge Performance (`internal/branch/branch_merge_benchmark.mbt`)
 
 Tests the three-phase retreat-advance-apply merge algorithm.
 
@@ -588,7 +657,7 @@ Tests the three-phase retreat-advance-apply merge algorithm.
 - [ ] Lazy conflict resolution
 - [ ] Smart retreat (avoid unnecessary undo)
 
-### 5. OpLog Performance (`internal/oplog/oplog_benchmark.mbt`)
+### 6. OpLog Performance (`internal/oplog/oplog_benchmark.mbt`)
 
 Tests operation log storage and retrieval performance.
 
@@ -641,7 +710,7 @@ Tests operation log storage and retrieval performance.
 - [ ] Operation pooling/reuse
 - [ ] Lazy operation materialization
 
-### 6. Frontier Canonicalization Performance (`internal/core/frontier_benchmark.mbt`)
+### 7. Frontier Canonicalization Performance (`internal/core/frontier_benchmark.mbt`)
 
 Tests frontier deduplication and normalization during canonicalization.
 
