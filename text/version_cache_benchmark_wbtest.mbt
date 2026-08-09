@@ -1,7 +1,7 @@
 ///|
-fn version_cache_benchmark_doc() -> TextState {
+fn version_cache_benchmark_doc(operation_count : Int) -> TextState {
   let doc = try! TextState::new("alice")
-  for i = 0; i < 1000; i = i + 1 {
+  for i = 0; i < operation_count; i = i + 1 {
     let _ = try! doc.insert(Pos::at(doc.len()), "x")
   }
   doc
@@ -34,21 +34,37 @@ fn bench_version_advance(
 }
 
 ///|
-test "perf: TextState cached version read (1000 ops)" (b : @bench.T) {
-  let doc = version_cache_benchmark_doc()
+/// Measure only a warm cache hit after building the requested operation log.
+fn bench_cached_version_read(b : @bench.T, operation_count : Int) -> Unit {
+  let doc = version_cache_benchmark_doc(operation_count)
   ignore(doc.version())
   b.bench(() => b.keep(doc.version()))
 }
 
 ///|
+test "perf: TextState cached version read (1000 ops)" (b : @bench.T) {
+  bench_cached_version_read(b, 1000)
+}
+
+///|
+test "perf: TextState cached version read (10000 ops)" (b : @bench.T) {
+  bench_cached_version_read(b, 10000)
+}
+
+///|
+test "perf: TextState cached version read (100000 ops)" (b : @bench.T) {
+  bench_cached_version_read(b, 100000)
+}
+
+///|
 test "perf: TextState version reconstruction oracle (1000 ops)" (b : @bench.T) {
-  let doc = version_cache_benchmark_doc()
+  let doc = version_cache_benchmark_doc(1000)
   b.bench(() => b.keep(Version::from_ops(doc.inner.get_all_ops())))
 }
 
 ///|
 test "perf: TextState lazy version rebuild (1000 ops)" (b : @bench.T) {
-  let doc = version_cache_benchmark_doc()
+  let doc = version_cache_benchmark_doc(1000)
   b.bench(() => {
     doc.invalidate_cached_version()
     b.keep(doc.version())
