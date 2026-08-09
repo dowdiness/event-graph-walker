@@ -600,11 +600,11 @@ Version reconstruction and lazy rebuild oracles (1000 operations only):
 
 **Cautious interpretation:**
 
-The cached version reads remain in the same nanosecond range as operation count grows from 1k to 100k across all three backends. This suggests the cache invalidation and rebuild logic is working as intended: once warmed, subsequent `TextState::version()` calls return the cached value without reconstructing from operations.
+The cached version reads remain in the same nanosecond range as operation count grows from 1k to 100k across all three backends. These stable warmed-cache timings are consistent with subsequent `TextState::version()` calls returning the cached value without reconstructing from operations. They do not measure cache invalidation or lazy-rebuild correctness; see `text/version_cache_wbtest.mbt` for those cases.
 
 The wasm-gc 10k measurement has high run-to-run variance, so these numbers are directional observations rather than universal thresholds. The 1k and 100k measurements are more stable.
 
-The reconstruction oracle (`Version::from_ops`) and lazy rebuild (invalidate + rebuild) remain available as 1k-operation comparison baselines for validating cache correctness and measuring the cost of cache misses. Both paths traverse the operation log, so their cost is expected to grow with history length; this section does not claim 10k/100k rebuild measurements.
+The reconstruction oracle (`Version::from_ops`) and lazy rebuild (invalidate + rebuild) remain available as 1k-operation comparison baselines for measuring cache-miss costs. Both paths traverse the operation log, so their cost is expected to grow with history length; this section does not claim 10k/100k rebuild measurements. Invalidation and lazy-rebuild correctness are covered by `text/version_cache_wbtest.mbt`.
 
 The `Version::advance` measurements show linear growth with replica count, consistent with the O(replicas) scan to find and update the target entry.
 
