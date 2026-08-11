@@ -1,0 +1,12 @@
+import {
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/document",
+  "dowdiness/event-graph-walker/internal/branch",
+  "dowdiness/event-graph-walker/internal/fugue",
+  "dowdiness/event-graph-walker/internal/oplog",
+  "moonbitlang/core/bench",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "executable")

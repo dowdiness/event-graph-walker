@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/prototype/checkpoint_restore_js"
+
+// Values
+
+// Errors
+
+// Types and methods
+type PrototypeCheckpoint
+
+type PrototypeFixture
+
+type PrototypeRestored
+
+type PrototypeTimingSummary
+
+// Type aliases
+
+// Traits
+
