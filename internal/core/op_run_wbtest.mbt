@@ -43,6 +43,70 @@ test "roundtrip: insert op -> OpRun -> Op" {
 }
 
 ///|
+test "roundtrip: empty insert op -> OpRun -> Op" {
+  let op = Op::new_insert(0, [], "legacy", 0, "", None, None)
+  let run = OpRun::from_op(op)
+  let decompressed = run.decompress(0)
+  guard decompressed is Some(d) else { fail("expected Some") }
+  inspect(d.content(), content="Insert(\"\")")
+}
+
+///|
+test "multi-character singleton insert roundtrips without truncation" {
+  let op = Op::new_insert(0, [], "multi", 0, "ab", None, None)
+  let run = OpRun::from_op(op)
+  let decompressed = run.decompress(0)
+  guard decompressed is Some(d) else { fail("expected Some") }
+  inspect(d.content(), content="Insert(\"ab\")")
+}
+
+///|
+test "empty insert runs do not merge with non-empty insert runs" {
+  let empty = OpRun::from_op(Op::new_insert(0, [], "legacy", 0, "", None, None))
+  let next = OpRun::from_op(
+    Op::new_insert(
+      1,
+      [RawVersion::new("legacy", 0)],
+      "legacy",
+      1,
+      "x",
+      Some(RawVersion::new("legacy", 0)),
+      None,
+    ),
+  )
+  inspect(@rle.Mergeable::can_merge(empty, next), content="false")
+  inspect(@rle.Mergeable::can_merge(next, empty), content="false")
+}
+
+///|
+test "delete runs do not merge when origin_right differs" {
+  let left = RawVersion::new("left", 0)
+  let first = OpRun::from_op(
+    Op::new_from_parts(
+      lv=0,
+      parents=[],
+      agent="delete",
+      seq=0,
+      content=Delete,
+      origin_left=Some(left),
+      origin_right=Some(RawVersion::new("right-a", 0)),
+    ),
+  )
+  let second = OpRun::from_op(
+    Op::new_from_parts(
+      lv=1,
+      parents=[RawVersion::new("delete", 0)],
+      agent="delete",
+      seq=1,
+      content=Delete,
+      origin_left=Some(RawVersion::new("delete-target", 1)),
+      origin_right=Some(RawVersion::new("right-b", 0)),
+    ),
+  )
+  inspect(@rle.Mergeable::can_merge(first, second), content="false")
+}
+
+///|
 test "roundtrip: delete op -> OpRun -> Op" {
   let op = Op::new_delete(
     10,

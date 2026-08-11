@@ -43,7 +43,7 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
   assert_eq(oplog.get_frontier(), before_frontier)
   assert_true(oplog.has_pending())
   assert_eq(pending_branch.get_frontier(), before_frontier)
-  assert_eq(pending_branch.to_text(), "s")
+  assert_eq(pending_branch.to_text(), "seed")
 
   // The retained pending payload, not the conflicting retransmission, drains.
   let parent = @core.Op::new_insert(

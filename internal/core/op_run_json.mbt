@@ -129,7 +129,7 @@ pub impl @json.FromJson for OpRun with fn from_json(json, path) {
       }
       match content {
         Inserts(chars) =>
-          if chars.length() != count {
+          if count != 1 && chars.length() != count {
             raise @json.JsonDecodeError(
               (
                 path.add_key("content"),
