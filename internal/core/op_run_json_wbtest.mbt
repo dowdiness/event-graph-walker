@@ -42,6 +42,44 @@ test "OpRun insert run JSON roundtrip" {
 }
 
 ///|
+test "OpRun multi-character singleton JSON roundtrip" {
+  let run : OpRun = {
+    start_lv: 0,
+    agent: "multi",
+    start_seq: 0,
+    content: Inserts(['a', 'b']),
+    parents: [],
+    origin_left: None,
+    origin_right: None,
+    count: 1,
+  }
+  let decoded : OpRun = @json.from_json(run.to_json())
+  inspect(decoded == run, content="true")
+  let decompressed = decoded.decompress(0)
+  guard decompressed is Some(op) else { fail("expected Some") }
+  inspect(op.content(), content="Insert(\"ab\")")
+}
+
+///|
+test "OpRun empty insert JSON roundtrip" {
+  let run : OpRun = {
+    start_lv: 0,
+    agent: "legacy",
+    start_seq: 0,
+    content: Inserts([]),
+    parents: [],
+    origin_left: None,
+    origin_right: None,
+    count: 1,
+  }
+  let decoded : OpRun = @json.from_json(run.to_json())
+  inspect(decoded == run, content="true")
+  let decompressed = decoded.decompress(0)
+  guard decompressed is Some(op) else { fail("expected Some") }
+  inspect(op.content(), content="Insert(\"\")")
+}
+
+///|
 test "OpRun delete run JSON roundtrip" {
   let run : OpRun = {
     start_lv: 5,

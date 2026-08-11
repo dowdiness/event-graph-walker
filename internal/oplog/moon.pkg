@@ -11,6 +11,9 @@ import {
 
 import {
   "moonbitlang/core/debug",
+  "moonbitlang/core/hashmap",
+  "moonbitlang/core/immut/hashmap" @immut/hashmap,
+  "moonbitlang/core/immut/hashset" @immut/hashset,
   "moonbitlang/core/quickcheck",
   "moonbitlang/core/quickcheck/splitmix",
   "moonbitlang/quickcheck" @qc,

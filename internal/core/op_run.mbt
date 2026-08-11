@@ -76,7 +76,12 @@ pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
   }
   let origin_right = self.origin_right
   let content = match self.content {
-    Inserts(chars) => Insert("\{chars[offset]}")
+    Inserts(chars) =>
+      if self.count == 1 {
+        Insert(String::from_array(chars))
+      } else {
+        Insert("\{chars[offset]}")
+      }
     Deletes => Delete
     Undeletes => Undelete
   }
@@ -121,7 +126,15 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
     return false
   }
   match (a.content, b.content) {
-    (Inserts(_), Inserts(_)) => {
+    (Inserts(chars_a), Inserts(chars_b)) => {
+      // A multi-character or empty insert is a singleton logical operation.
+      // Do not merge it: ordinary typing runs have one character per op.
+      if chars_a.length() != a.count ||
+        chars_b.length() != b.count ||
+        chars_a.length() == 0 ||
+        chars_b.length() == 0 {
+        return false
+      }
       let expected_origin_left = Some(
         RawVersion::new(a.agent, a.start_seq + a.count - 1),
       )
@@ -139,13 +152,13 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
       let expected_origin_left = Some(
         RawVersion::new(a.agent, a.start_seq + a.count - 1),
       )
-      b.origin_left == expected_origin_left
+      b.origin_left == expected_origin_left && a.origin_right == b.origin_right
     }
     (Undeletes, Undeletes) => {
       let expected_origin_left = Some(
         RawVersion::new(a.agent, a.start_seq + a.count - 1),
       )
-      b.origin_left == expected_origin_left
+      b.origin_left == expected_origin_left && a.origin_right == b.origin_right
     }
     _ => false
   }
@@ -155,11 +168,13 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
 pub impl @rle.Mergeable for OpRun with fn merge(a : OpRun, b : OpRun) -> OpRun {
   let content = match (a.content, b.content) {
     (Inserts(chars_a), Inserts(chars_b)) => {
-      // Mutate a's array in place (a is consumed by merge)
+      // Copy before extending so a returned OpRun cannot mutate a run that is
+      // still retained by an OpLog through shared array storage.
+      let chars = chars_a.copy()
       for ch in chars_b {
-        chars_a.push(ch)
+        chars.push(ch)
       }
-      Inserts(chars_a)
+      Inserts(chars)
     }
     (Deletes, Deletes) => Deletes
     (Undeletes, Undeletes) => Undeletes
