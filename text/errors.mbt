@@ -135,6 +135,26 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="delete operation missing origin",
         ),
       )
+    SequenceAncestryViolation(raw~) =>
+      TextError::SyncFailed(
+        @sync.Failure::MalformedMessage(
+          detail="operation does not causally descend from its replica predecessor: \{raw}",
+        ),
+      )
+    OriginTargetNotInsert(operation~, target~) =>
+      TextError::SyncFailed(
+        @sync.Failure::MalformedMessage(
+          detail="operation origin must identify an insert operation: \{operation} -> \{target}",
+        ),
+      )
+    PendingLimitExceeded(limit~, actual~) =>
+      TextError::SyncFailed(
+        @sync.Failure::LimitExceeded(
+          kind=@sync.LimitKind::PendingOperations,
+          limit~,
+          actual~,
+        ),
+      )
     MissingRemoteParent(raw~) =>
       TextError::SyncFailed(
         @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),

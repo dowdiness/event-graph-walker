@@ -13,6 +13,9 @@ import {
 pub(all) suberror OpLogError {
   MissingLocalVersion(lv~ : Int)
   MissingOrigin
+  SequenceAncestryViolation(raw~ : @core.RawVersion)
+  OriginTargetNotInsert(operation~ : @core.RawVersion, target~ : @core.RawVersion)
+  PendingLimitExceeded(limit~ : Int, actual~ : Int)
   MissingRemoteParent(raw~ : @core.RawVersion)
   MissingRemoteFrontier(raw~ : @core.RawVersion)
   DuplicateOperation(raw~ : @core.RawVersion)
@@ -47,6 +50,7 @@ pub fn OpLog::new(String) -> Self
 pub fn OpLog::op_count(Self) -> Int
 pub fn OpLog::plan_remote(Self, Array[@core.Op]) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::prepare_remote(Self, Array[@core.Op]) -> RemoteAdmissionPlan raise OpLogError
+pub fn OpLog::prepare_remote_with_limit(Self, Array[@core.Op], Int) -> RemoteAdmissionPlan raise OpLogError
 pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
 pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]

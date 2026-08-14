@@ -9,6 +9,16 @@ pub(all) suberror OpLogError {
   /// Contrast with BranchError::MissingOrigin and DocumentError::MissingOrigin
   /// which carry the RawVersion and indicate missing graph entries.
   MissingOrigin
+  /// A non-initial replica operation does not causally descend from its
+  /// same-agent predecessor through declared parents.
+  SequenceAncestryViolation(raw~ : @core.RawVersion)
+  /// An operation origin or delete/undelete target names a non-Insert.
+  OriginTargetNotInsert(
+    operation~ : @core.RawVersion,
+    target~ : @core.RawVersion
+  )
+  /// The prepared transition would retain more pending operations than allowed.
+  PendingLimitExceeded(limit~ : Int, actual~ : Int)
   /// Remote op refers to a parent not present locally or in the batch.
   MissingRemoteParent(raw~ : @core.RawVersion)
   /// Remote frontier references an op not present locally or in the batch.

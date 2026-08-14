@@ -12,7 +12,7 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
     11,
     [missing_parent],
     "document-pending",
-    1,
+    0,
     "a",
     None,
     None,
@@ -26,7 +26,7 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
     23,
     [missing_parent],
     "document-pending",
-    1,
+    0,
     "b",
     None,
     None,
@@ -39,7 +39,7 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
   }
   match result {
     Err(DocumentError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))) =>
-      assert_eq(raw, @core.RawVersion::new("document-pending", 1))
+      assert_eq(raw, @core.RawVersion::new("document-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }
   assert_eq(doc.causal_snapshot().op_count(), before.op_count())
@@ -90,9 +90,16 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
     e => Err(e)
   }
   match result {
-    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(id~))) =>
-      inspect(id, content="Lv(1)")
-    _ => fail("expected graph-only target error")
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
+      )
+    ) => {
+      inspect(operation.agent, content="remote")
+      inspect(target.agent, content="local")
+      inspect(target.seq, content="1")
+    }
+    _ => fail("expected core origin-target error")
   }
   inspect(doc.causal_snapshot().op_count() == before_op_count, content="true")
   inspect(doc.causal_snapshot().frontier() == before_frontier, content="true")
@@ -126,8 +133,16 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
     e => Err(e)
   }
   match result {
-    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(_))) => ()
-    _ => fail("expected graph-only target error")
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
+      )
+    ) => {
+      inspect(operation.agent, content="remote")
+      inspect(target.agent, content="local")
+      inspect(target.seq, content="1")
+    }
+    _ => fail("expected core origin-target error")
   }
   inspect(
     doc.causal_snapshot().op_count() == before_snapshot.op_count(),
@@ -170,8 +185,16 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
       e => Err(e)
     }
     match result {
-      Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(_))) => ()
-      _ => fail("expected graph-only origin error")
+      Err(
+        DocumentError::OpLog(
+          @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
+        )
+      ) => {
+        inspect(operation.agent, content="remote")
+        inspect(target.agent, content="local")
+        inspect(target.seq, content="1")
+      }
+      _ => fail("expected core origin-target error")
     }
   }
   inspect(
@@ -215,8 +238,16 @@ test "apply_remote validates an unready incoming origin before pending" {
     e => Err(e)
   }
   match result {
-    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(_))) => ()
-    _ => fail("expected graph-only origin error")
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
+      )
+    ) => {
+      inspect(operation.agent, content="remote")
+      inspect(target.agent, content="local")
+      inspect(target.seq, content="1")
+    }
+    _ => fail("expected core origin-target error")
   }
   inspect(
     doc.causal_snapshot().op_count() == before_snapshot.op_count(),
@@ -249,8 +280,16 @@ test "merge_remote rejects graph-only target before oplog mutation" {
     e => Err(e)
   }
   match result {
-    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(_))) => ()
-    _ => fail("expected graph-only target error")
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
+      )
+    ) => {
+      inspect(operation.agent, content="remote")
+      inspect(target.agent, content="local")
+      inspect(target.seq, content="1")
+    }
+    _ => fail("expected core origin-target error")
   }
   inspect(
     doc.causal_snapshot().op_count() == before_snapshot.op_count(),
@@ -271,29 +310,29 @@ test "merge_remote accepts a valid insert-delete batch" {
 }
 
 ///|
-test "apply_remote preflights pending graph-only targets before drain" {
+test "core admission discards pending graph-only targets and dependents" {
   let doc = Document::new("local")
   let _ = try! doc.insert(0, "x")
-  let target_raw = @core.RawVersion::new("remote", 1)
+  let target_raw = @core.RawVersion::new("remote-target", 0)
   let pending_delete = @core.Op::new_delete(
     -1,
     [target_raw],
-    "remote",
-    2,
+    "pending-delete",
+    0,
     Some(target_raw),
   )
   let pending_delete_2 = @core.Op::new_delete(
     -1,
     [target_raw],
-    "remote",
-    3,
+    "pending-delete-2",
+    0,
     Some(target_raw),
   )
   let pending_child = @core.Op::new_insert(
     -1,
-    [@core.RawVersion::new("remote", 2)],
-    "remote",
-    4,
+    [@core.RawVersion::new("pending-delete", 0)],
+    "pending-child",
+    0,
     "z",
     None,
     None,
@@ -301,39 +340,21 @@ test "apply_remote preflights pending graph-only targets before drain" {
   try! doc.apply_remote(pending_delete)
   try! doc.apply_remote(pending_delete_2)
   try! doc.apply_remote(pending_child)
-  let before_snapshot = doc.causal_snapshot()
-  let before_frontier = before_snapshot.frontier()
-  let before_export = doc.get_all_ops().map(op => op.lv())
-
+  inspect(doc.get_all_ops().length(), content="1")
   let target_delete = @core.Op::new_delete(
     -1,
     [],
-    "remote",
-    1,
+    "remote-target",
+    0,
     Some(@core.RawVersion::new("local", 0)),
   )
-  let result : Result[Unit, DocumentError] = try {
-    doc.apply_remote(target_delete)
-    Ok(())
-  } catch {
-    e => Err(e)
-  }
-  match result {
-    Err(DocumentError::MissingOrigin(raw~)) =>
-      inspect(raw == @core.RawVersion::new("remote", 1), content="true")
-    _ => fail("expected pending graph-only target error")
-  }
-  inspect(
-    doc.causal_snapshot().op_count() == before_snapshot.op_count(),
-    content="true",
-  )
-  inspect(doc.causal_snapshot().frontier() == before_frontier, content="true")
-  inspect(doc.get_all_ops().map(op => op.lv()) == before_export, content="true")
-  inspect(doc.to_text(), content="x")
-
-  // All invalid pending operations were discarded; the valid target op can retry.
   try! doc.apply_remote(target_delete)
+  inspect(doc.get_all_ops().length(), content="2")
+  inspect(doc.causal_snapshot().op_count(), content="2")
   inspect(doc.to_text(), content="")
+
+  // The target is now an ordinary duplicate; unrelated valid admission works.
+  try! doc.apply_remote(target_delete)
   let valid_insert = @core.Op::new_insert(-1, [], "other", 0, "y", None, None)
   try! doc.apply_remote(valid_insert)
   inspect(doc.to_text(), content="y")

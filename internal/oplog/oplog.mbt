@@ -328,13 +328,63 @@ fn OpLog::preflight_remote_identities(
 }
 
 ///|
+/// Look up an admitted operation without expanding the resident history.
+fn OpLog::admitted_op(self : OpLog, raw : @core.RawVersion) -> @core.Op? {
+  match self.graph.raw_to_lv(raw) {
+    Some(lv) => self.get_op(lv)
+    None => None
+  }
+}
+
+///|
+/// Build the core semantic view without giving the planner graph ownership.
+fn OpLog::remote_admission_semantics(self : OpLog) -> RemoteAdmissionSemantics {
+  { op_of: raw => self.admitted_op(raw) }
+}
+
+///|
 /// Prepare a remote admission without changing graph, log, or planner state.
 pub fn OpLog::prepare_remote(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> RemoteAdmissionPlan raise OpLogError {
+  self.prepare_remote_internal(incoming, None)
+}
+
+///|
+/// Prepare a remote admission with a core-owned retained-pending budget.
+pub fn OpLog::prepare_remote_with_limit(
+  self : OpLog,
+  incoming : Array[@core.Op],
+  max_pending : Int,
+) -> RemoteAdmissionPlan raise OpLogError {
+  self.prepare_remote_internal(incoming, Some(max_pending))
+}
+
+///|
+/// Shared preparation shell for the unbounded compatibility API and the
+/// bounded core-owned admission path.
+fn OpLog::prepare_remote_internal(
+  self : OpLog,
+  incoming : Array[@core.Op],
+  max_pending : Int?,
+) -> RemoteAdmissionPlan raise OpLogError {
   self.preflight_remote_identities(incoming)
-  self.planner.prepare(incoming, raw => self.graph.raw_to_lv(raw) is Some(_))
+  let plan = self.planner.prepare_with_semantics(
+    incoming,
+    raw => self.graph.raw_to_lv(raw) is Some(_),
+    Some(self.remote_admission_semantics()),
+  )
+  match max_pending {
+    Some(limit) => {
+      let actual = plan.remaining_raws(self.planner).length()
+      if actual > limit {
+        raise OpLogError::PendingLimitExceeded(limit~, actual~)
+      }
+    }
+    None => ()
+  }
+  plan
 }
 
 ///|
@@ -381,7 +431,11 @@ fn OpLog::begin_remote_plan(
   plan : RemoteAdmissionPlan,
 ) -> Unit raise OpLogError {
   match
-    self.planner.begin_plan(plan, raw => self.graph.raw_to_lv(raw) is Some(_)) {
+    self.planner.begin_plan_with_semantics(
+      plan,
+      raw => self.graph.raw_to_lv(raw) is Some(_),
+      Some(self.remote_admission_semantics()),
+    ) {
     RemoteAdmissionBeginResult::Applied => ()
     RemoteAdmissionBeginResult::Stale =>
       raise OpLogError::StaleRemoteAdmissionPlan

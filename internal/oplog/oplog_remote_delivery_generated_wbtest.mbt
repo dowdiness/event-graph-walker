@@ -693,7 +693,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     11,
     [missing_parent],
     "generated-pending",
-    1,
+    0,
     "authoritative",
     None,
     None,
@@ -707,7 +707,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     12,
     [missing_parent],
     "generated-pending",
-    1,
+    0,
     "authoritative",
     None,
     None,
@@ -726,7 +726,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     13,
     [missing_parent],
     "generated-pending",
-    1,
+    0,
     "conflict",
     None,
     None,
@@ -738,7 +738,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   }
   match pending_result {
     Err(OpLogError::ConflictingIdentity(raw~)) =>
-      assert_eq(raw, @core.RawVersion::new("generated-pending", 1))
+      assert_eq(raw, @core.RawVersion::new("generated-pending", 0))
     _ => fail("expected pending identity conflict")
   }
   assert_eq(pending_target.op_count(), 0)
@@ -790,7 +790,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     100,
     [missing_parent],
     "generated-pending",
-    1,
+    0,
     "conflict",
     None,
     None,
@@ -802,7 +802,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   }
   match admitted_result {
     Err(OpLogError::ConflictingIdentity(raw~)) =>
-      assert_eq(raw, @core.RawVersion::new("generated-pending", 1))
+      assert_eq(raw, @core.RawVersion::new("generated-pending", 0))
     _ => fail("expected admitted identity conflict")
   }
   assert_eq(pending_target.op_count(), 2)
