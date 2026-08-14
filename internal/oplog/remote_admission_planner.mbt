@@ -243,6 +243,34 @@ fn remote_admission_is_ready(
 }
 
 ///|
+/// Return whether the operation's content and origin fields have a canonical
+/// shape before any dependency or semantic admission decision is attempted.
+fn remote_admission_origin_shape_is_valid(op : @core.Op) -> Bool {
+  match op.content() {
+    @core.Insert(_) => true
+    @core.Delete | @core.Undelete =>
+      op.origin_left() is Some(_) && op.origin_right() is None
+  }
+}
+
+///|
+/// Preserve the existing malformed delete/undelete boundary.
+fn remote_admission_validate_origin_shape(
+  op : @core.Op,
+) -> Unit raise OpLogError {
+  match op.content() {
+    @core.Insert(_) => ()
+    @core.Delete | @core.Undelete =>
+      match (op.origin_left(), op.origin_right()) {
+        (None, _) => raise OpLogError::MissingOrigin
+        (Some(_), Some(_)) =>
+          raise OpLogError::InvalidOriginShape(raw=remote_admission_raw(op))
+        (Some(_), None) => ()
+      }
+  }
+}
+
+///|
 /// Preserve the existing malformed delete/undelete boundary.
 fn remote_admission_validate(op : @core.Op) -> Unit raise OpLogError {
   // Keep the isolated Commit 2 entry points reachable to the warning checker
@@ -281,9 +309,7 @@ fn remote_admission_validate(op : @core.Op) -> Unit raise OpLogError {
     Consumed => ()
     Conflict => ()
   }
-  if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
-    raise OpLogError::MissingOrigin
-  }
+  remote_admission_validate_origin_shape(op)
 }
 
 ///|
@@ -1170,7 +1196,7 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
         if is_admitted(raw) ||
           seen_raws.contains(raw) ||
           !remote_admission_is_ready(op, seen_raws, is_admitted, semantics) ||
-          ((op.is_delete() || op.is_undelete()) && op.origin_left() is None) {
+          !remote_admission_origin_shape_is_valid(op) {
           return RemoteAdmissionBeginResult::Conflict
         }
         let dependencies = remote_admission_dependencies_for(op, semantics)
@@ -1280,10 +1306,7 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
           !seen_raws.add_and_check(raw) ||
           self.pending.contains(raw) ||
           node.arrival != self.next_arrival + index ||
-          (
-            (node.op.is_delete() || node.op.is_undelete()) &&
-            node.op.origin_left() is None
-          ) ||
+          !remote_admission_origin_shape_is_valid(node.op) ||
           node.dependencies !=
           remote_admission_dependencies_for(node.op, semantics) {
           return RemoteAdmissionBeginResult::Conflict
@@ -1434,8 +1457,15 @@ fn RemoteAdmissionPlanner::maybe_compact(
   is_admitted : (@core.RawVersion) -> Bool,
 ) -> Bool {
   let live = self.pending.length()
-  let stale_limit = (live * 2).max(1024)
-  if self.stale_count() >= stale_limit {
+  let stale = self.stale_count()
+  // Compare against max(1024, 2 * live) without multiplying a large live
+  // count, so policy checks cannot overflow before compaction is considered.
+  let exceeds_limit = if live > 512 {
+    stale >= live && stale - live >= live
+  } else {
+    stale >= 1024
+  }
+  if exceeds_limit {
     self.compact(is_admitted)
     true
   } else {

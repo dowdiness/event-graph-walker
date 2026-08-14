@@ -148,6 +148,42 @@ fn validate_sequence_descent(
 }
 
 ///|
+/// Reject an origin whose target is already known to be non-Insert.
+///
+/// This intentionally ignores unknown targets: dependency readiness still
+/// decides whether the operation is deferred. The early known-target check is
+/// applied only to a new current-message candidate so retained pending records
+/// keep their deferred provenance until their dependencies are decidable.
+fn validate_known_origin_targets(
+  op : @core.Op,
+  known_ops : Map[String, @core.Op],
+) -> Unit raise @sync.Failure {
+  fn require_known_insert(
+    origin : @core.RawVersion?,
+    known_ops : Map[String, @core.Op],
+  ) -> Unit raise @sync.Failure {
+    match origin {
+      None => ()
+      Some(raw) =>
+        match known_ops.get(raw_key(raw)) {
+          Some(target) =>
+            match target.content() {
+              @core.Insert(_) => ()
+              @core.Delete | @core.Undelete =>
+                raise @sync.Failure::MalformedMessage(
+                  detail="operation origin must identify an insert operation",
+                )
+            }
+          None => ()
+        }
+    }
+  }
+
+  require_known_insert(op.origin_left(), known_ops)
+  require_known_insert(op.origin_right(), known_ops)
+}
+
+///|
 /// Require every Fugue origin to identify an Insert operation.
 ///
 /// Dependency resolution only proves that an origin exists in the causal
@@ -1166,6 +1202,16 @@ fn prepare_sync(
   }
   for candidate in all_candidates {
     known_ops[raw_key(op_identity(candidate.raw()))] = candidate.raw()
+  }
+  // Match core admission's provenance-aware early check: a new current
+  // candidate with a known non-Insert target is malformed even when an
+  // unrelated dependency is still missing. Retained candidates remain
+  // deferred until dependency readiness makes their full semantic decision.
+  for candidate in candidates.values() {
+    match candidate {
+      FromMessage(op) => validate_known_origin_targets(op.raw(), known_ops)
+      FromPending(_) | FromPendingAndMessage(_) => ()
+    }
   }
   let raw_candidates : Array[@core.Op] = []
   let candidate_by_key : Map[String, StructuralOp] = Map([])

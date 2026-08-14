@@ -103,6 +103,42 @@ test "P0 core rejects non-insert origin before mutation" {
 }
 
 ///|
+test "P0 rejects delete right-origin shape before mutation" {
+  let receiver = OpLog::new("receiver")
+  let raw = p0_raw("target", 0)
+  let normal_delete = @core.Op::new_delete(
+    -1,
+    [],
+    "normal-delete",
+    0,
+    Some(raw),
+  )
+  let malformed = @core.Op::new_from_parts(
+    lv=-1,
+    parents=[],
+    agent="remote",
+    seq=0,
+    content=normal_delete.content(),
+    origin_left=Some(raw),
+    origin_right=Some(raw),
+  )
+  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    receiver.prepare_remote([malformed]),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(InvalidOriginShape(raw~)) => {
+      inspect(raw.agent, content="remote")
+      inspect(raw.seq, content="0")
+    }
+    _ => fail("expected invalid delete origin shape")
+  }
+  inspect(receiver.op_count(), content="0")
+  inspect(receiver.has_pending(), content="false")
+}
+
+///|
 test "P0 known invalid origin rejects despite unrelated missing parent" {
   let receiver = OpLog::new("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
@@ -160,11 +196,61 @@ test "P0 retained invalid pending root and dependents are discarded" {
   ignore(try! receiver.commit_remote(dependent_plan))
   inspect(receiver.has_pending(), content="true")
 
-  let recovery = try! receiver.prepare_remote([root, target])
+  let recovery = try! receiver.prepare_remote([root, target, invalid_root])
   let committed = try! receiver.commit_remote(recovery)
   inspect(committed.length(), content="2")
   inspect(receiver.op_count(), content="2")
   inspect(receiver.has_pending(), content="false")
+}
+
+///|
+test "P0 semantic prepare is fully nonmutating and repeatable" {
+  let receiver = OpLog::new("receiver")
+  let invalid_root = p0_insert(
+    "bob",
+    0,
+    [p0_raw("alice", 1)],
+    "B",
+    Some(p0_raw("alice", 1)),
+  )
+  ignore(
+    try! receiver.commit_remote(try! receiver.prepare_remote([invalid_root])),
+  )
+  let root = p0_insert("alice", 0, [], "A", None)
+  let target = p0_delete("alice", 1, [p0_raw("alice", 0)], p0_raw("alice", 0))
+  let before = planner_lifecycle_snapshot(receiver.planner, false)
+  let before_count = receiver.op_count()
+  let before_frontier = try! receiver.get_frontier_raw()
+  let first = try! receiver.prepare_remote([root, target])
+  let after_first = planner_lifecycle_snapshot(receiver.planner, false)
+  inspect(planner_lifecycle_same_snapshot(before, after_first), content="true")
+  inspect(receiver.op_count(), content="0")
+  assert_eq(receiver.op_count(), before_count)
+  assert_eq(try! receiver.get_frontier_raw(), before_frontier)
+
+  let second = try! receiver.prepare_remote([root, target])
+  let after_second = planner_lifecycle_snapshot(receiver.planner, false)
+  inspect(planner_lifecycle_same_snapshot(before, after_second), content="true")
+  inspect(
+    planner_lifecycle_same_ops(first.operations(), second.operations()),
+    content="true",
+  )
+  inspect(
+    planner_lifecycle_same_raws(
+      first.remaining_raws(receiver.planner),
+      second.remaining_raws(receiver.planner),
+    ),
+    content="true",
+  )
+  assert_eq(first.discard_roots, second.discard_roots)
+  let first_discarded = @hashset.HashSet(first.discarded_staged)
+  let second_discarded = @hashset.HashSet(second.discarded_staged)
+  assert_eq(first_discarded.length(), second_discarded.length())
+  for raw in first_discarded {
+    inspect(second_discarded.contains(raw), content="true")
+  }
+  assert_eq(first.next_arrival, second.next_arrival)
+  assert_eq(first.generation, second.generation)
 }
 
 ///|
@@ -193,7 +279,71 @@ test "P0 core pending limit rejects without state mutation" {
   inspect(receiver.has_pending(), content="false")
 
   let allowed = try! receiver.prepare_remote_with_limit([future], 1)
+  inspect(allowed.operations().length(), content="0")
   ignore(try! receiver.commit_remote(allowed))
   inspect(receiver.op_count(), content="0")
   inspect(receiver.has_pending(), content="true")
+
+  let duplicate = try! receiver.prepare_remote_with_limit([future], 1)
+  inspect(duplicate.operations().length(), content="0")
+  ignore(try! receiver.commit_remote(duplicate))
+  inspect(receiver.has_pending(), content="true")
+
+  let negative : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+    receiver.prepare_remote_with_limit([], -1),
+  ) catch {
+    error => Err(error)
+  }
+  match negative {
+    Err(PendingLimitExceeded(limit~, actual~)) => {
+      inspect(limit, content="-1")
+      inspect(actual, content="1")
+    }
+    _ => fail("negative pending limit must reject")
+  }
+  inspect(receiver.has_pending(), content="true")
+
+  let ready_receiver = OpLog::new("ready-receiver")
+  let ready = p0_insert("ready", 0, [], "R", None)
+  let ready_plan = try! ready_receiver.prepare_remote_with_limit([ready], 0)
+  inspect(ready_plan.operations().length(), content="1")
+  ignore(try! ready_receiver.commit_remote(ready_plan))
+  inspect(ready_receiver.op_count(), content="1")
+  inspect(ready_receiver.has_pending(), content="false")
+
+  let discard_receiver = OpLog::new("discard-receiver")
+  let invalid_root = p0_insert(
+    "bob",
+    0,
+    [p0_raw("alice", 1)],
+    "B",
+    Some(p0_raw("alice", 1)),
+  )
+  ignore(
+    try! discard_receiver.commit_remote(
+      try! discard_receiver.prepare_remote([invalid_root]),
+    ),
+  )
+  let alice_root = p0_insert("alice", 0, [], "A", None)
+  let alice_delete = p0_delete(
+    "alice",
+    1,
+    [p0_raw("alice", 0)],
+    p0_raw("alice", 0),
+  )
+  let discard_plan = try! discard_receiver.prepare_remote_with_limit(
+    [alice_root, alice_delete],
+    0,
+  )
+  inspect(discard_plan.operations().length(), content="2")
+  ignore(try! discard_receiver.commit_remote(discard_plan))
+  inspect(discard_receiver.op_count(), content="2")
+  inspect(discard_receiver.has_pending(), content="false")
+
+  let large_receiver = OpLog::new("large-limit")
+  let large_plan = try! large_receiver.prepare_remote_with_limit(
+    [p0_insert("large", 0, [], "L", None)],
+    2147483647,
+  )
+  inspect(large_plan.operations().length(), content="1")
 }

@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: proposed
 ---
 
 # Core-owned batch remote admission over legacy operations

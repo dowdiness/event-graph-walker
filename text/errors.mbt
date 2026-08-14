@@ -147,6 +147,12 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="operation origin must identify an insert operation: \{operation} -> \{target}",
         ),
       )
+    InvalidOriginShape(raw~) =>
+      TextError::SyncFailed(
+        @sync.Failure::MalformedMessage(
+          detail="delete or undelete has an invalid origin shape: \{raw}",
+        ),
+      )
     PendingLimitExceeded(limit~, actual~) =>
       TextError::SyncFailed(
         @sync.Failure::LimitExceeded(

@@ -17,6 +17,8 @@ pub(all) suberror OpLogError {
     operation~ : @core.RawVersion,
     target~ : @core.RawVersion
   )
+  /// A delete or undelete carries the insert-only right-origin field.
+  InvalidOriginShape(raw~ : @core.RawVersion)
   /// The prepared transition would retain more pending operations than allowed.
   PendingLimitExceeded(limit~ : Int, actual~ : Int)
   /// Remote op refers to a parent not present locally or in the batch.
