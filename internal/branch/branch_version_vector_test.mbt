@@ -2,7 +2,7 @@
 
 ///|
 test "branch get_version_vector - empty" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   let branch = Branch::new(oplog)
   let vv = branch.get_version_vector()
   inspect(vv.0.is_empty(), content="true")
@@ -10,7 +10,7 @@ test "branch get_version_vector - empty" {
 
 ///|
 test "branch get_version_vector - single agent" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("x", -1, -1))
   ignore(try! oplog.insert("y", 0, -1))
   ignore(try! oplog.insert("z", 1, -1))
@@ -26,12 +26,12 @@ test "branch get_version_vector - single agent" {
 
 ///|
 test "branch get_version_vector - multiple agents" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("a", -1, -1))
   ignore(try! oplog.insert("c", 0, -1))
 
   // Simulate bob's operations
-  let oplog_bob = @oplog.OpLog::new("bob")
+  let oplog_bob = @oplog.OpLog("bob")
   ignore(try! oplog_bob.insert("b", -1, -1))
   ignore(try! oplog_bob.insert("d", 0, -1))
 
@@ -56,7 +56,7 @@ test "branch get_version_vector - multiple agents" {
 
 ///|
 test "branch at_version_vector - true" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("a", -1, -1))
   let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
   let vv = @causal_graph.VersionVector::new().set("alice", 0)
@@ -65,7 +65,7 @@ test "branch at_version_vector - true" {
 
 ///|
 test "branch at_version_vector - false" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("a", -1, -1))
   let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
   let vv = @causal_graph.VersionVector::new().set("alice", 1)
@@ -74,7 +74,7 @@ test "branch at_version_vector - false" {
 
 ///|
 test "branch checkout_version_vector" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("h", -1, -1))
   ignore(try! oplog.insert("e", 0, -1))
   ignore(try! oplog.insert("l", 1, -1))
@@ -89,7 +89,7 @@ test "branch checkout_version_vector" {
 
 ///|
 test "branch advance_to_version_vector" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("h", -1, -1))
   ignore(try! oplog.insert("e", 0, -1))
 
@@ -111,7 +111,7 @@ test "branch advance_to_version_vector" {
 
 ///|
 test "version vector roundtrip with branch" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("a", -1, -1))
   ignore(try! oplog.insert("b", 0, -1))
   ignore(try! oplog.insert("c", 1, -1))
@@ -130,7 +130,7 @@ test "version vector roundtrip with branch" {
 
 ///|
 test "version vector efficiency - many operations from same agent" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
 
   // Add 100 operations from same agent
   let mut last_lv = -1
@@ -157,14 +157,14 @@ test "version vector efficiency - many operations from same agent" {
 
 ///|
 test "version vector with concurrent operations" {
-  let oplog = @oplog.OpLog::new("alice")
+  let oplog = @oplog.OpLog("alice")
 
   // Alice makes some operations
   ignore(try! oplog.insert("a", -1, -1))
   ignore(try! oplog.insert("b", 0, -1))
 
   // Bob makes concurrent operations (starting from empty)
-  let oplog2 = @oplog.OpLog::new("bob")
+  let oplog2 = @oplog.OpLog("bob")
   ignore(try! oplog2.insert("x", -1, -1))
   ignore(try! oplog2.insert("y", 0, -1))
 

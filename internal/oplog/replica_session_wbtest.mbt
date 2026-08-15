@@ -2,7 +2,7 @@
 
 ///|
 test "prototype: sessions use fresh writer identities over one authority" {
-  let authority = OpLog::new("coordinator")
+  let authority = OpLog("coordinator")
   let page_a = ReplicaSession::attach(authority, "page-a")
   let first = try! page_a.insert("a", None, None)
   assert_eq(first.agent(), "page-a")
@@ -13,7 +13,7 @@ test "prototype: sessions use fresh writer identities over one authority" {
   let second = try! page_b.insert("b", None, None)
   assert_eq(second.agent(), "page-b")
   assert_eq(second.seq(), 0)
-  assert_eq(second.parents(), [@core.RawVersion::new("page-a", 0)])
+  assert_eq(second.parents(), [@core.RawVersion("page-a", 0)])
   assert_eq(authority.op_count(), 2)
 
   let delta = page_a.pull()
@@ -26,9 +26,9 @@ test "prototype: sessions use fresh writer identities over one authority" {
 
 ///|
 test "prototype: pending delivery becomes visible only after admission" {
-  let authority = OpLog::new("coordinator-pending")
+  let authority = OpLog("coordinator-pending")
   let page = ReplicaSession::attach(authority, "page-pending")
-  let peer = OpLog::new("peer-pending")
+  let peer = OpLog("peer-pending")
   let parent = try! peer.insert("p", -1, -1)
   let child = try! peer.insert("c", 0, -1)
 
@@ -45,9 +45,9 @@ test "prototype: pending delivery becomes visible only after admission" {
 
 ///|
 test "prototype: duplicate delivery does not advance a session twice" {
-  let authority = OpLog::new("coordinator-duplicate")
+  let authority = OpLog("coordinator-duplicate")
   let page = ReplicaSession::attach(authority, "page-duplicate")
-  let peer = OpLog::new("peer-duplicate")
+  let peer = OpLog("peer-duplicate")
   let operation = try! peer.insert("x", -1, -1)
 
   ignore(try! authority.apply_remote(operation))
@@ -59,7 +59,7 @@ test "prototype: duplicate delivery does not advance a session twice" {
 
 ///|
 test "prototype: concurrent peer branches converge at a fresh session frontier" {
-  let authority = OpLog::new("coordinator-merge")
+  let authority = OpLog("coordinator-merge")
   let left = ReplicaSession::attach(authority, "peer-left")
   let right = ReplicaSession::attach(authority, "peer-right")
   ignore(try! left.insert("l", None, None))
@@ -82,9 +82,9 @@ test "prototype: concurrent peer branches converge at a fresh session frontier" 
 
 ///|
 test "prototype: partial admission exposes only the committed prefix" {
-  let authority = OpLog::new("coordinator-partial")
+  let authority = OpLog("coordinator-partial")
   let page = ReplicaSession::attach(authority, "page-partial")
-  let first = @core.Op::new_insert(
+  let first = @core.Op::insert(
     -1,
     [],
     "partial-first-session",
@@ -93,7 +93,7 @@ test "prototype: partial admission exposes only the committed prefix" {
     None,
     None,
   )
-  let failed = @core.Op::new_insert(
+  let failed = @core.Op::insert(
     -1,
     [],
     "partial-failed-session",
@@ -102,7 +102,7 @@ test "prototype: partial admission exposes only the committed prefix" {
     None,
     None,
   )
-  let suffix = @core.Op::new_insert(
+  let suffix = @core.Op::insert(
     -1,
     [],
     "partial-suffix-session",

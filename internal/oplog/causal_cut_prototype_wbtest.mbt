@@ -34,7 +34,7 @@ fn CausalCut::new() -> CausalCut {
 
 ///|
 fn CausalCut::append(self : CausalCut, operation : @core.Op) -> Unit {
-  let raw = @core.RawVersion::new(operation.agent(), operation.seq())
+  let raw = @core.RawVersion(operation.agent(), operation.seq())
   match self.nodes.get(raw) {
     Some(existing) => {
       guard remote_admission_same_logical_operation(

@@ -6,7 +6,7 @@
 
 ///|
 fn benchmark_linear_operations(count : Int) -> Array[@core.Op] {
-  let source = OpLog::new("admission-source")
+  let source = OpLog("admission-source")
   let mut previous = -1
   for _ in 0..<count {
     let operation = try! source.insert("x", previous, -1)
@@ -29,7 +29,7 @@ fn benchmark_reverse_operations(
 ///|
 fn benchmark_local_admission(b : @bench.T, count : Int) -> Unit {
   b.bench(fn() {
-    let target = OpLog::new("local-admission")
+    let target = OpLog("local-admission")
     let mut previous = -1
     for _ in 0..<count {
       let operation = try! target.insert("x", previous, -1)
@@ -45,7 +45,7 @@ fn benchmark_remote_admission(
   operations : Array[@core.Op],
 ) -> Unit {
   b.bench(fn() {
-    let target = OpLog::new("remote-admission")
+    let target = OpLog("remote-admission")
     for operation in operations {
       ignore(try! target.apply_remote(operation))
     }
@@ -57,7 +57,7 @@ fn benchmark_remote_admission(
 fn benchmark_pending_drain(b : @bench.T, operations : Array[@core.Op]) -> Unit {
   let reversed = benchmark_reverse_operations(operations)
   b.bench(fn() {
-    let target = OpLog::new("pending-admission")
+    let target = OpLog("pending-admission")
     for operation in reversed {
       ignore(try! target.apply_remote(operation))
     }

@@ -1,6 +1,6 @@
 ///|
 test "DeleteIndex - build and lookup" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
 
   // Insert "AB"
   let op_a = try! oplog.insert("A", -1, -1)
@@ -12,8 +12,8 @@ test "DeleteIndex - build and lookup" {
   let _ = op_b
 
   let index = @branch.DeleteIndex::build(oplog)
-  let raw_a = @core.RawVersion::new(op_a.agent(), op_a.seq())
-  let raw_b = @core.RawVersion::new(op_b.agent(), op_b.seq())
+  let raw_a = @core.RawVersion(op_a.agent(), op_a.seq())
+  let raw_b = @core.RawVersion(op_b.agent(), op_b.seq())
 
   // op_a should have 1 delete op targeting it
   let ops = index.get_delete_ops(raw_a)
@@ -26,12 +26,12 @@ test "DeleteIndex - build and lookup" {
 
 ///|
 test "DeleteIndex - recompute_winner" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let op_a = try! oplog.insert("A", -1, -1)
   let _ = try! oplog.delete(op_a.lv())
 
   let index = @branch.DeleteIndex::build(oplog)
-  let raw_a = @core.RawVersion::new(op_a.agent(), op_a.seq())
+  let raw_a = @core.RawVersion(op_a.agent(), op_a.seq())
 
   // Recompute winner excluding nothing (empty retreat set)
   let empty_retreat : @rle.Rle[@core.LvRange] = @rle.Rle::Rle()

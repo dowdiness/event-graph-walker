@@ -145,7 +145,7 @@ fn prop_malformed_sync_content_rejected(seed : Int) -> Bool {
   // Build a legacy sync payload that includes a malformed insert op.
   // A lone surrogate should be rejected as malformed UTF-16.
   let malformed_char = Int::unsafe_to_char(0xD800).to_string()
-  let bad_op = @core.Op::new_insert(
+  let bad_op = @core.Op::insert(
     seed,
     [],
     "malicious",

@@ -16,16 +16,16 @@ fn resolve_origin_lv(
 
 ///|
 fn resolve_op_lv(oplog : @oplog.OpLog, op : @core.Op) -> Int? {
-  let raw = @core.RawVersion::new(op.agent(), op.seq())
+  let raw = @core.RawVersion(op.agent(), op.seq())
   oplog.causal_graph().raw_to_lv(raw)
 }
 
 ///|
 test "merge_remote_ops - basic concurrent inserts" {
   // Create two agents
-  let oplog_a = @oplog.OpLog::new("agent_a")
+  let oplog_a = @oplog.OpLog("agent_a")
   let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  let oplog_b = @oplog.OpLog::new("agent_b")
+  let oplog_b = @oplog.OpLog("agent_b")
   let tree_b : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Agent A inserts "He"
@@ -85,9 +85,9 @@ test "merge_remote_ops - basic concurrent inserts" {
 
 ///|
 test "merge_remote_ops - insert and delete" {
-  let oplog_a = @oplog.OpLog::new("agent_a")
+  let oplog_a = @oplog.OpLog("agent_a")
   let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  let oplog_b = @oplog.OpLog::new("agent_b")
+  let oplog_b = @oplog.OpLog("agent_b")
   let tree_b : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Agent A inserts "ABC"
@@ -147,7 +147,7 @@ test "merge_remote_ops - insert and delete" {
 
 ///|
 test "merge - simple merge using graph_diff" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "Hello"
@@ -240,7 +240,7 @@ test "merge - simple merge using graph_diff" {
 ///|
 /// Test: MergeContext::apply_operations with invalid LV raises MissingOp
 test "merge error - missing op during apply" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert one valid operation
@@ -273,7 +273,7 @@ test "merge error - missing op during apply" {
 ///|
 /// Test: apply_operations with valid op works, demonstrates error path exists
 test "merge error - apply operations succeeds for valid ops" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert first operation
@@ -321,7 +321,7 @@ test "merge error - apply operations succeeds for valid ops" {
 ///|
 /// Test: Capture state before failed merge, verify unchanged after
 test "merge error - state unchanged after failure" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Build initial state "ABC"
@@ -387,7 +387,7 @@ test "merge error - state unchanged after failure" {
 ///|
 /// Test: Retreat then apply with missing item propagates Fugue error
 test "retreat then apply with missing item" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "AB"
@@ -430,9 +430,9 @@ test "retreat then apply with missing item" {
 
 ///|
 test "merge - concurrent delete retreat convergence" {
-  let oplog_a = @oplog.OpLog::new("agent_a")
+  let oplog_a = @oplog.OpLog("agent_a")
   let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  let oplog_b = @oplog.OpLog::new("agent_b")
+  let oplog_b = @oplog.OpLog("agent_b")
   let tree_b : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Both agents start with "ABC"
@@ -476,7 +476,7 @@ test "merge - concurrent delete retreat convergence" {
 
   // Agent B also deletes "B" concurrently
   let b_lv_for_op2 = match
-    oplog_b.causal_graph().raw_to_lv(@core.RawVersion::new("agent_a", 1)) {
+    oplog_b.causal_graph().raw_to_lv(@core.RawVersion("agent_a", 1)) {
     Some(lv) => lv
     None => fail("missing op2 in B")
   }
@@ -498,7 +498,7 @@ test "merge - concurrent delete retreat convergence" {
 /// Agent A has "ABC" + delete "B". We merge from A's current frontier back to
 /// the pre-delete frontier, which retreats the delete and restores "B".
 test "merge - frontier retreat exercises two-count path" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "ABC"
@@ -546,7 +546,7 @@ test "merge - frontier retreat exercises two-count path" {
 
 ///|
 test "merge - retreat insert hides items correctly" {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "ABCDE"

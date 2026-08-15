@@ -60,8 +60,8 @@ pub impl Show for RawVersion with fn output(self, logger) {
 }
 
 ///|
-/// Create a new RawVersion
-pub fn RawVersion::new(agent : String, seq : Int) -> RawVersion {
+/// Construct a RawVersion value.
+pub fn RawVersion::RawVersion(agent : String, seq : Int) -> RawVersion {
   { agent, seq }
 }
 

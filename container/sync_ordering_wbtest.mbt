@@ -2,11 +2,11 @@
 test "10k sequential container records have linear preparation comparisons" {
   let records : Array[SyncOpRecord] = []
   for sequence = 0; sequence < 10_000; sequence = sequence + 1 {
-    let version = @core.RawVersion::new("alice", sequence)
+    let version = @core.RawVersion("alice", sequence)
     let parents = if sequence == 0 {
       []
     } else {
-      [@core.RawVersion::new("alice", sequence - 1)]
+      [@core.RawVersion("alice", sequence - 1)]
     }
     records.push(
       Tree({
@@ -33,7 +33,7 @@ test "10k sequential container records have linear preparation comparisons" {
 ///|
 test "text ordering uses block-create sequence instead of node counter" {
   let alice_predecessor = SyncOpRecord::Tree({
-    version: @core.RawVersion::new("alice", 0),
+    version: @core.RawVersion("alice", 0),
     parents: [],
     op: @mt.Move({
       timestamp: 0,
@@ -44,7 +44,7 @@ test "text ordering uses block-create sequence instead of node counter" {
     }),
   })
   let ghost_prior_create = SyncOpRecord::Tree({
-    version: @core.RawVersion::new("ghost", 0),
+    version: @core.RawVersion("ghost", 0),
     parents: [],
     op: @mt.Move({
       timestamp: 0,
@@ -55,8 +55,8 @@ test "text ordering uses block-create sequence instead of node counter" {
     }),
   })
   let ghost_prior_property = SyncOpRecord::Tree({
-    version: @core.RawVersion::new("ghost", 1),
-    parents: [@core.RawVersion::new("ghost", 0)],
+    version: @core.RawVersion("ghost", 1),
+    parents: [@core.RawVersion("ghost", 0)],
     op: @mt.SetProperty({
       timestamp: 1,
       target: { agent: "ghost", counter: 99 },
@@ -66,8 +66,8 @@ test "text ordering uses block-create sequence instead of node counter" {
     }),
   })
   let block_create = SyncOpRecord::Tree({
-    version: @core.RawVersion::new("ghost", 2),
-    parents: [@core.RawVersion::new("ghost", 1)],
+    version: @core.RawVersion("ghost", 2),
+    parents: [@core.RawVersion("ghost", 1)],
     op: @mt.Move({
       timestamp: 2,
       target: { agent: "ghost", counter: 0 },
@@ -77,11 +77,11 @@ test "text ordering uses block-create sequence instead of node counter" {
     }),
   })
   let text = SyncOpRecord::Text({
-    version: @core.RawVersion::new("alice", 1),
-    parents: [@core.RawVersion::new("alice", 0)],
+    version: @core.RawVersion("alice", 1),
+    parents: [@core.RawVersion("alice", 0)],
     block: { agent: "ghost", counter: 0 },
     op: Insert({
-      id: @core.RawVersion::new("alice", 1),
+      id: @core.RawVersion("alice", 1),
       origin_left: None,
       origin_right: None,
       content: "A",
@@ -103,10 +103,10 @@ test "text ordering uses block-create sequence instead of node counter" {
   let mut block_index = -1
   let mut text_index = -1
   for index, record in ordered {
-    if sync_record_version(record) == @core.RawVersion::new("ghost", 2) {
+    if sync_record_version(record) == @core.RawVersion("ghost", 2) {
       block_index = index
     }
-    if sync_record_version(record) == @core.RawVersion::new("alice", 1) {
+    if sync_record_version(record) == @core.RawVersion("alice", 1) {
       text_index = index
     }
   }

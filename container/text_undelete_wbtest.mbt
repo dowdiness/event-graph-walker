@@ -14,7 +14,7 @@ fn find_insert_id(doc : Document, content : String) -> @core.RawVersion {
       _ => ()
     }
   }
-  @core.RawVersion::new("", -1)
+  @core.RawVersion("", -1)
 }
 
 ///|

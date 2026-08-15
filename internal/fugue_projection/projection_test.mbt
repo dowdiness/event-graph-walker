@@ -1,13 +1,13 @@
 ///|
 fn target_raw() -> @core.RawVersion {
-  @core.RawVersion::new("target", 0)
+  @core.RawVersion("target", 0)
 }
 
 ///|
 fn target_fixture() -> (@causal_graph.CausalGraph, @core.Op) {
   let graph = @causal_graph.CausalGraph::new()
   let lv = try! graph.add_version_with_seq([], "target", 0)
-  let op = @core.Op::new_insert(lv, [], "target", 0, "A", None, None)
+  let op = @core.Op::insert(lv, [], "target", 0, "A", None, None)
   (graph, op)
 }
 
@@ -65,7 +65,7 @@ fn capture_observed(
 test "insert returns visible change" {
   let graph = @causal_graph.CausalGraph::new()
   let lv = try! graph.add_version_with_seq([], "agent", 0)
-  let op = @core.Op::new_insert(lv, [], "agent", 0, "A", None, None)
+  let op = @core.Op::insert(lv, [], "agent", 0, "A", None, None)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   let change = try! apply_with_visible_change(tree, op, graph)
@@ -77,7 +77,7 @@ test "insert returns visible change" {
 test "insert resolves a present origin before mutation" {
   let (graph, first) = target_fixture()
   let second_lv = try! graph.add_version_with_seq([0], "second", 0)
-  let second = @core.Op::new_insert(
+  let second = @core.Op::insert(
     second_lv,
     [target_raw()],
     "second",
@@ -111,7 +111,7 @@ test "apply and observed insert have identical tree effects" {
 test "apply and observed preserve delete and undelete effects" {
   let (graph, insert) = target_fixture()
   let delete_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     delete_lv,
     [target_raw()],
     "deleter",
@@ -119,7 +119,7 @@ test "apply and observed preserve delete and undelete effects" {
     Some(target_raw()),
   )
   let undelete_lv = try! graph.add_version_with_seq([delete_lv], "reviver", 0)
-  let undelete = @core.Op::new_undelete(
+  let undelete = @core.Op::undelete(
     undelete_lv,
     [target_raw()],
     "reviver",
@@ -146,7 +146,7 @@ test "apply and observed preserve delete and undelete effects" {
 test "delete of visible target becomes hidden" {
   let (graph, insert) = target_fixture()
   let delete_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     delete_lv,
     [target_raw()],
     "deleter",
@@ -165,7 +165,7 @@ test "delete of visible target becomes hidden" {
 test "winning delete of invisible target is unchanged" {
   let (graph, insert) = target_fixture()
   let first_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let first = @core.Op::new_delete(
+  let first = @core.Op::delete(
     first_lv,
     [target_raw()],
     "deleter",
@@ -173,7 +173,7 @@ test "winning delete of invisible target is unchanged" {
     Some(target_raw()),
   )
   let second_lv = try! graph.add_version_with_seq([first_lv], "deleter", 1)
-  let second = @core.Op::new_delete(
+  let second = @core.Op::delete(
     second_lv,
     [target_raw()],
     "deleter",
@@ -193,7 +193,7 @@ test "winning delete of invisible target is unchanged" {
 test "losing delete leaves visibility unchanged" {
   let (graph, insert) = target_fixture()
   let winner_lv = try! graph.add_version_with_seq([0], "winner", 0)
-  let winner = @core.Op::new_delete(
+  let winner = @core.Op::delete(
     winner_lv,
     [target_raw()],
     "winner",
@@ -201,7 +201,7 @@ test "losing delete leaves visibility unchanged" {
     Some(target_raw()),
   )
   let loser_lv = try! graph.add_version_with_seq([0], "loser", 0)
-  let loser = @core.Op::new_delete(
+  let loser = @core.Op::delete(
     loser_lv,
     [target_raw()],
     "loser",
@@ -221,7 +221,7 @@ test "losing delete leaves visibility unchanged" {
 test "winning undelete of invisible target becomes visible with content" {
   let (graph, insert) = target_fixture()
   let delete_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     delete_lv,
     [target_raw()],
     "deleter",
@@ -229,7 +229,7 @@ test "winning undelete of invisible target becomes visible with content" {
     Some(target_raw()),
   )
   let undelete_lv = try! graph.add_version_with_seq([delete_lv], "reviver", 0)
-  let undelete = @core.Op::new_undelete(
+  let undelete = @core.Op::undelete(
     undelete_lv,
     [target_raw()],
     "reviver",
@@ -249,7 +249,7 @@ test "winning undelete of invisible target becomes visible with content" {
 test "equal-timestamp undelete wins when delete arrives first" {
   let (graph, insert) = target_fixture()
   let delete_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     delete_lv,
     [target_raw()],
     "deleter",
@@ -257,7 +257,7 @@ test "equal-timestamp undelete wins when delete arrives first" {
     Some(target_raw()),
   )
   let undelete_lv = try! graph.add_version_with_seq([0], "reviver", 0)
-  let undelete = @core.Op::new_undelete(
+  let undelete = @core.Op::undelete(
     undelete_lv,
     [target_raw()],
     "reviver",
@@ -277,7 +277,7 @@ test "equal-timestamp undelete wins when delete arrives first" {
 test "equal-timestamp undelete wins when undelete arrives first" {
   let (graph, insert) = target_fixture()
   let delete_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     delete_lv,
     [target_raw()],
     "deleter",
@@ -285,7 +285,7 @@ test "equal-timestamp undelete wins when undelete arrives first" {
     Some(target_raw()),
   )
   let undelete_lv = try! graph.add_version_with_seq([0], "reviver", 0)
-  let undelete = @core.Op::new_undelete(
+  let undelete = @core.Op::undelete(
     undelete_lv,
     [target_raw()],
     "reviver",
@@ -305,7 +305,7 @@ test "equal-timestamp undelete wins when undelete arrives first" {
 test "undelete of visible target and losing undelete are unchanged" {
   let (graph, insert) = target_fixture()
   let visible_lv = try! graph.add_version_with_seq([0], "reviver", 0)
-  let visible = @core.Op::new_undelete(
+  let visible = @core.Op::undelete(
     visible_lv,
     [target_raw()],
     "reviver",
@@ -318,7 +318,7 @@ test "undelete of visible target and losing undelete are unchanged" {
   assert_unchanged(visible_change)
 
   let winner_lv = try! graph.add_version_with_seq([0], "winner", 1)
-  let winner = @core.Op::new_undelete(
+  let winner = @core.Op::undelete(
     winner_lv,
     [target_raw()],
     "winner",
@@ -326,7 +326,7 @@ test "undelete of visible target and losing undelete are unchanged" {
     Some(target_raw()),
   )
   let loser_lv = try! graph.add_version_with_seq([0], "loser", 1)
-  let loser = @core.Op::new_undelete(
+  let loser = @core.Op::undelete(
     loser_lv,
     [target_raw()],
     "loser",
@@ -342,8 +342,8 @@ test "undelete of visible target and losing undelete are unchanged" {
 ///|
 test "targetless delete and undelete are no-ops without causal entries" {
   let graph = @causal_graph.CausalGraph::new()
-  let delete = @core.Op::new_delete(99, [], "missing", 0, None)
-  let undelete = @core.Op::new_undelete(100, [], "missing", 1, None)
+  let delete = @core.Op::delete(99, [], "missing", 0, None)
+  let undelete = @core.Op::undelete(100, [], "missing", 1, None)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   try! apply(tree, delete, graph)
@@ -359,8 +359,8 @@ test "targetless delete and undelete are no-ops without causal entries" {
 test "missing right insert origin is reported before mutation" {
   let graph = @causal_graph.CausalGraph::new()
   let lv = try! graph.add_version_with_seq([], "agent", 0)
-  let missing = @core.RawVersion::new("missing", 0)
-  let op = @core.Op::new_insert(lv, [], "agent", 0, "A", None, Some(missing))
+  let missing = @core.RawVersion("missing", 0)
+  let op = @core.Op::insert(lv, [], "agent", 0, "A", None, Some(missing))
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   match capture_apply(tree, op, graph) {
@@ -373,7 +373,7 @@ test "missing right insert origin is reported before mutation" {
 ///|
 test "missing causal entry is reported before insert or targeted mutation" {
   let graph = @causal_graph.CausalGraph::new()
-  let insert = @core.Op::new_insert(0, [], "agent", 0, "A", None, None)
+  let insert = @core.Op::insert(0, [], "agent", 0, "A", None, None)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   match capture_observed(tree, insert, graph) {
     Err(FugueProjectionError::MissingCausalEntry(lv~)) => assert_eq(lv, 0)
@@ -384,7 +384,7 @@ test "missing causal entry is reported before insert or targeted mutation" {
   let (graph_with_target, target) = target_fixture()
   let target_tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   try! apply(target_tree, target, graph_with_target)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     99,
     [target_raw()],
     "deleter",
@@ -401,7 +401,7 @@ test "missing causal entry is reported before insert or targeted mutation" {
 ///|
 test "missing causal entry is reported before targeted undelete" {
   let (graph, _) = target_fixture()
-  let undelete = @core.Op::new_undelete(
+  let undelete = @core.Op::undelete(
     99,
     [target_raw()],
     "reviver",
@@ -421,7 +421,7 @@ test "missing causal entry is reported before targeted undelete" {
 test "missing Fugue target is reported before mutation" {
   let (graph, _) = target_fixture()
   let delete_lv = try! graph.add_version_with_seq([0], "deleter", 0)
-  let delete = @core.Op::new_delete(
+  let delete = @core.Op::delete(
     delete_lv,
     [target_raw()],
     "deleter",
@@ -444,7 +444,7 @@ test "missing Fugue target is reported before mutation" {
 test "missing Fugue target is reported before undelete mutation" {
   let (graph, _) = target_fixture()
   let undelete_lv = try! graph.add_version_with_seq([0], "reviver", 0)
-  let undelete = @core.Op::new_undelete(
+  let undelete = @core.Op::undelete(
     undelete_lv,
     [target_raw()],
     "reviver",
@@ -472,12 +472,12 @@ test "a later projection failure preserves the earlier successful prefix" {
     "deleter",
     0,
   )
-  let bad_delete = @core.Op::new_delete(
+  let bad_delete = @core.Op::delete(
     bad_delete_lv,
-    [@core.RawVersion::new("missing", 0)],
+    [@core.RawVersion("missing", 0)],
     "deleter",
     0,
-    Some(@core.RawVersion::new("missing", 0)),
+    Some(@core.RawVersion("missing", 0)),
   )
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 

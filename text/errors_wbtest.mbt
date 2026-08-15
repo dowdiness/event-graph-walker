@@ -2,9 +2,7 @@
 /// Text mapping seam: lower typed conflicts become the existing shared failure.
 test "TextError maps OpLog ConflictingIdentity to sync failure" {
   let err = TextError::from_oplog_error(
-    @oplog.OpLogError::ConflictingIdentity(
-      raw=@core.RawVersion::new("alice", 0),
-    ),
+    @oplog.OpLogError::ConflictingIdentity(raw=@core.RawVersion("alice", 0)),
   )
   match err {
     TextError::SyncFailed(

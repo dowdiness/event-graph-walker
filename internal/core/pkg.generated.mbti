@@ -50,21 +50,20 @@ pub struct Op {
 } derive(ToJson, @debug.Debug)
 pub fn Op::agent(Self) -> String
 pub fn Op::content(Self) -> OpContent
+pub fn Op::delete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
 pub fn Op::get_delete_target(Self) -> RawVersion?
 pub fn Op::get_insert_text(Self) -> String?
+pub fn Op::insert(Int, Array[RawVersion], String, Int, String, RawVersion?, RawVersion?) -> Self
 pub fn Op::is_delete(Self) -> Bool
 pub fn Op::is_insert(Self) -> Bool
 pub fn Op::is_undelete(Self) -> Bool
 pub fn Op::lv(Self) -> Int
-pub fn Op::new_delete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
-pub fn Op::new_from_parts(lv~ : Int, parents~ : Array[RawVersion], agent~ : String, seq~ : Int, content~ : OpContent, origin_left~ : RawVersion?, origin_right~ : RawVersion?) -> Self
-pub fn Op::new_insert(Int, Array[RawVersion], String, Int, String, RawVersion?, RawVersion?) -> Self
-pub fn Op::new_undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
 pub fn Op::origin_left(Self) -> RawVersion?
 pub fn Op::origin_right(Self) -> RawVersion?
 pub fn Op::parents(Self) -> Array[RawVersion]
 pub fn Op::parents_iter(Self) -> Iter[RawVersion]
 pub fn Op::seq(Self) -> Int
+pub fn Op::undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
 pub impl Show for Op
 
 pub enum OpContent {
@@ -105,7 +104,7 @@ pub struct RawVersion {
   agent : String
   seq : Int
 } derive(Compare, Eq, ToJson, @debug.Debug)
-pub fn RawVersion::new(String, Int) -> Self
+pub fn RawVersion::RawVersion(String, Int) -> Self
 pub fn RawVersion::to_string(Self) -> String
 pub impl Hash for RawVersion
 pub impl Show for RawVersion

@@ -25,7 +25,7 @@ fn verify_compression_equivalence(oplog : OpLog) -> Unit raise {
 
 ///|
 test "property: single-user linear typing (maximum compression)" {
-  let oplog = OpLog::new("alice")
+  let oplog = OpLog("alice")
   let _ = try! oplog.insert("h", -1, -1)
   let _ = try! oplog.insert("e", 0, -1)
   let _ = try! oplog.insert("l", 1, -1)
@@ -39,7 +39,7 @@ test "property: single-user linear typing (maximum compression)" {
 
 ///|
 test "property: insert then delete (2+ runs)" {
-  let oplog = OpLog::new("alice")
+  let oplog = OpLog("alice")
   let _ = try! oplog.insert("a", -1, -1)
   let _ = try! oplog.insert("b", 0, -1)
   let _ = try! oplog.delete(0)
@@ -49,9 +49,9 @@ test "property: insert then delete (2+ runs)" {
 
 ///|
 test "property: interleaved agents (no compression)" {
-  let oplog = OpLog::new("alice")
+  let oplog = OpLog("alice")
   let _ = try! oplog.insert("a", -1, -1)
-  let bob_op = @core.Op::new_insert(-1, [], "bob", 0, "b", None, None)
+  let bob_op = @core.Op::insert(-1, [], "bob", 0, "b", None, None)
   let _ = try! oplog.apply_remote(bob_op)
   inspect(oplog.op_count(), content="2")
   inspect(oplog.operations.length(), content="2")
@@ -60,7 +60,7 @@ test "property: interleaved agents (no compression)" {
 
 ///|
 test "property: longer typing session" {
-  let oplog = OpLog::new("alice")
+  let oplog = OpLog("alice")
   let text = "the quick brown fox"
   let mut prev_lv = -1
   for ch in text {

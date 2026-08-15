@@ -1404,7 +1404,7 @@ fn Document::export_sync_message_since(
 ) -> SyncMessage raise DocumentError {
   for agent in vv.agents() {
     let sequence = vv.sequence_for(agent).unwrap()
-    if self.graph.raw_to_lv(@core.RawVersion::new(agent, sequence)) is None {
+    if self.graph.raw_to_lv(@core.RawVersion(agent, sequence)) is None {
       raise DocumentError::SyncFailed(
         @sync.Failure::MissingDependency(replica_id=agent, sequence~),
       )

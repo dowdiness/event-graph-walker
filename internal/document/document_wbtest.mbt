@@ -469,7 +469,7 @@ test "apply_remote_with projects a partial committed prefix exactly once" {
   assert_true(doc.indexed_state.is_ready())
   let warm_cache = doc.indexed_state.cache
   let mut commit_saw_detached_cache = false
-  let incoming = @core.Op::new_insert(-1, [], "remote", 0, "r", None, None)
+  let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
   let result : Result[Unit, DocumentError] = try {
     doc.apply_remote_with(incoming, _ => {
       commit_saw_detached_cache = doc.indexed_state.cache is None
@@ -520,18 +520,18 @@ test "apply_remote_with rethrows stale admission without projection" {
   assert_true(doc.indexed_state.is_ready())
   let warm_cache = doc.indexed_state.cache
   let mut commit_saw_detached_cache = false
-  let incoming = @core.Op::new_insert(-1, [], "remote", 0, "r", None, None)
+  let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
   let result : Result[Unit, DocumentError] = try {
     doc.apply_remote_with(incoming, _ => {
       commit_saw_detached_cache = doc.indexed_state.cache is None
-      raise @oplog.OpLogError::StaleRemoteAdmissionPlan
+      raise @oplog.OpLogError::StaleAdmission
     })
     Ok(())
   } catch {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleRemoteAdmissionPlan)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
     _ => fail("expected unchanged stale admission error")
   }
   // The stale commit did not touch Fugue, and the exact warm cache was put
@@ -551,7 +551,7 @@ test "merge_remote_with advances a partial prefix exactly once" {
   let _ = try! doc.insert(0, "base")
   ignore(doc.to_text())
   assert_true(doc.indexed_state.is_ready())
-  let incoming = @core.Op::new_insert(-1, [], "remote", 0, "r", None, None)
+  let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
   let result : Result[Unit, DocumentError] = try {
     doc.merge_remote_with([incoming], [], _ => {
       let committed = try! doc.oplog.insert("p", -1, -1)

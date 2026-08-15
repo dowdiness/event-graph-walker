@@ -81,23 +81,23 @@ impl @quickcheck.Arbitrary for CompatibleOpRunPair with fn arbitrary(
   let agent = oprun_agent(rs.next_uint64().to_int().abs())
 
   let first_parents = if rs.next_uint64().to_int().abs() % 2 == 0 {
-    [RawVersion::new("seed", 0)]
+    [RawVersion("seed", 0)]
   } else {
     []
   }
   let first_origin_left = if rs.next_uint64().to_int().abs() % 2 == 0 {
-    Some(RawVersion::new("seed", 0))
+    Some(RawVersion("seed", 0))
   } else {
     None
   }
   let shared_origin_right = if kind == 0 &&
     rs.next_uint64().to_int().abs() % 2 == 0 {
-    Some(RawVersion::new("edge", 0))
+    Some(RawVersion("edge", 0))
   } else {
     None
   }
   let link_seq = start_seq + count_a - 1
-  let chain = RawVersion::new(agent, link_seq)
+  let chain = RawVersion(agent, link_seq)
 
   let first = make_op_run(
     agent,
@@ -154,18 +154,18 @@ impl @quickcheck.Arbitrary for CompatibleOpRunTriple with fn arbitrary(
   let agent = oprun_agent(rs.next_uint64().to_int().abs())
   let shared_origin_right = if kind == 0 &&
     rs.next_uint64().to_int().abs() % 2 == 0 {
-    Some(RawVersion::new("edge", 0))
+    Some(RawVersion("edge", 0))
   } else {
     None
   }
 
   let first_parents = if rs.next_uint64().to_int().abs() % 2 == 0 {
-    [RawVersion::new("seed", 0)]
+    [RawVersion("seed", 0)]
   } else {
     []
   }
-  let link_a = RawVersion::new(agent, start_seq + count_a - 1)
-  let link_b = RawVersion::new(agent, start_seq + count_a + count_b - 1)
+  let link_a = RawVersion(agent, start_seq + count_a - 1)
+  let link_b = RawVersion(agent, start_seq + count_a + count_b - 1)
 
   let first = make_op_run(
     agent,
@@ -240,17 +240,17 @@ impl @quickcheck.Arbitrary for OpRunSingle with fn arbitrary(
     count,
     kind,
     if rs.next_uint64().to_int().abs() % 2 == 0 {
-      [RawVersion::new("seed", prior_seq)]
+      [RawVersion("seed", prior_seq)]
     } else {
       []
     },
     if rs.next_uint64().to_int().abs() % 2 == 0 {
-      Some(RawVersion::new("seed", prior_seq))
+      Some(RawVersion("seed", prior_seq))
     } else {
       None
     },
     if kind == 0 && rs.next_uint64().to_int().abs() % 2 == 0 {
-      Some(RawVersion::new("edge", 0))
+      Some(RawVersion("edge", 0))
     } else {
       None
     },
@@ -386,12 +386,12 @@ fn prop_oprun_decompress_chain_metadata(sample : OpRunSingle) -> Bool {
         let expected_parents = if offset == 0 {
           run.parents
         } else {
-          [RawVersion::new(run.agent, run.start_seq + offset - 1)]
+          [RawVersion(run.agent, run.start_seq + offset - 1)]
         }
         let expected_origin_left = if offset == 0 {
           run.origin_left
         } else {
-          Some(RawVersion::new(run.agent, run.start_seq + offset - 1))
+          Some(RawVersion(run.agent, run.start_seq + offset - 1))
         }
         let expected_text = String::from_array([chars[offset]])
         if op.lv() != run.start_lv + offset {
@@ -424,12 +424,12 @@ fn prop_oprun_decompress_chain_metadata(sample : OpRunSingle) -> Bool {
         let expected_parents = if offset == 0 {
           run.parents
         } else {
-          [RawVersion::new(run.agent, run.start_seq + offset - 1)]
+          [RawVersion(run.agent, run.start_seq + offset - 1)]
         }
         let expected_origin_left = if offset == 0 {
           run.origin_left
         } else {
-          Some(RawVersion::new(run.agent, run.start_seq + offset - 1))
+          Some(RawVersion(run.agent, run.start_seq + offset - 1))
         }
         if op.lv() != run.start_lv + offset {
           return false
@@ -461,12 +461,12 @@ fn prop_oprun_decompress_chain_metadata(sample : OpRunSingle) -> Bool {
         let expected_parents = if offset == 0 {
           run.parents
         } else {
-          [RawVersion::new(run.agent, run.start_seq + offset - 1)]
+          [RawVersion(run.agent, run.start_seq + offset - 1)]
         }
         let expected_origin_left = if offset == 0 {
           run.origin_left
         } else {
-          Some(RawVersion::new(run.agent, run.start_seq + offset - 1))
+          Some(RawVersion(run.agent, run.start_seq + offset - 1))
         }
         if op.lv() != run.start_lv + offset {
           return false

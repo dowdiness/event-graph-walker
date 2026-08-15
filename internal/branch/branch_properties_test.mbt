@@ -64,7 +64,7 @@ fn generate_agent_ops(
   op_count : Int,
   rs : @splitmix.RandomState,
 ) -> Array[@core.Op] {
-  let oplog = @oplog.OpLog::new(agent)
+  let oplog = @oplog.OpLog(agent)
   let inserted_lvs : Array[Int] = []
   let ops : Array[@core.Op] = []
   for i in 0..<op_count {
@@ -131,7 +131,7 @@ fn interleave_agent_ops(
 
 ///|
 fn replay_ops(ops : Array[@core.Op]) -> @oplog.OpLog {
-  let oplog = @oplog.OpLog::new("branch-trace-collector")
+  let oplog = @oplog.OpLog("branch-trace-collector")
   for op in ops {
     ignore(try! oplog.apply_remote(op))
   }
@@ -202,7 +202,7 @@ fn add_extra_snapshots(
 fn replay_with_snapshots(
   ops : Array[@core.Op],
 ) -> (@oplog.OpLog, Array[TraceSnapshot]) {
-  let oplog = @oplog.OpLog::new("branch-trace-collector")
+  let oplog = @oplog.OpLog("branch-trace-collector")
   let snapshots : Array[TraceSnapshot] = [snapshot_current(oplog)]
   for op in ops {
     ignore(try! oplog.apply_remote(op))

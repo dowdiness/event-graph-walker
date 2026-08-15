@@ -4,7 +4,7 @@
 ///|
 /// Benchmark: Checkout small document (10 operations)
 test "branch - checkout (10 ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
 
   // Insert "Hello"
   let _op1 = try! oplog.insert("H", -1, -1)
@@ -27,7 +27,7 @@ test "branch - checkout (10 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Checkout medium document (100 operations)
 test "branch - checkout (100 ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Insert 100 characters
@@ -45,7 +45,7 @@ test "branch - checkout (100 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Checkout large document (1000 operations)
 test "branch - checkout (1000 ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Insert 1000 characters
@@ -63,7 +63,7 @@ test "branch - checkout (1000 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Advance with small delta (10 new ops)
 test "branch - advance (10 new ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 100 operations
@@ -89,7 +89,7 @@ test "branch - advance (10 new ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Advance with large delta (100 new ops)
 test "branch - advance (100 new ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 100 operations
@@ -115,8 +115,8 @@ test "branch - advance (100 new ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Checkout with concurrent branches (2 agents)
 test "branch - checkout with concurrent branches" (b : @bench.T) {
-  let oplog_a = @oplog.OpLog::new("agent_a")
-  let oplog_b = @oplog.OpLog::new("agent_b")
+  let oplog_a = @oplog.OpLog("agent_a")
+  let oplog_b = @oplog.OpLog("agent_b")
 
   // Agent A: 50 operations
   let mut prev_a = -1
@@ -143,7 +143,7 @@ test "branch - checkout with concurrent branches" (b : @bench.T) {
 ///|
 /// Benchmark: Checkout with deletes (50% delete rate)
 test "branch - checkout with deletes" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
   let lvs = []
 
@@ -174,7 +174,7 @@ test "branch - checkout with deletes" (b : @bench.T) {
 ///
 /// Expected: Low variance (< 10%), stable performance across iterations
 test "branch - repeated advance steady-state (10 iterations)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 50 operations BEFORE benchmark
@@ -220,7 +220,7 @@ test "branch - repeated advance steady-state (10 iterations)" (b : @bench.T) {
 test "branch - repeated advance with oplog mutations (10 iterations)" (
   b : @bench.T,
 ) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 50 operations
@@ -244,7 +244,7 @@ test "branch - repeated advance with oplog mutations (10 iterations)" (
 ///|
 /// Benchmark: to_text conversion (100 characters)
 test "branch - to_text (100 chars)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Insert 100 characters
@@ -262,7 +262,7 @@ test "branch - to_text (100 chars)" (b : @bench.T) {
 ///|
 /// Benchmark: to_text conversion (1000 characters)
 test "branch - to_text (1000 chars)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Insert 1000 characters
@@ -283,7 +283,7 @@ test "branch - to_text (1000 chars)" (b : @bench.T) {
 /// Measures the cost of a single advance() operation with small delta (1 new op).
 /// This is closer to real-time typing performance.
 test "branch - single advance (1 new op)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 100 operations
@@ -309,7 +309,7 @@ test "branch - single advance (1 new op)" (b : @bench.T) {
 /// Measures the cost of a single advance() operation with large delta (50 new ops).
 /// This tests performance for batch updates.
 test "branch - single advance (50 new ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 100 operations
@@ -340,7 +340,7 @@ test "branch - single advance (50 new ops)" (b : @bench.T) {
 ///
 /// Measures: Average time per character insertion in editing workflow
 test "branch - realistic typing (50 chars)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("user_alice")
+  let oplog = @oplog.OpLog("user_alice")
   let mut branch = Branch::new(oplog)
   let mut prev = -1
 
@@ -373,7 +373,7 @@ test "branch - realistic typing (50 chars)" (b : @bench.T) {
 /// Simulates two users typing concurrently and then merging branches.
 /// Measures performance of advance() with complex frontier transitions.
 test "branch - concurrent merge scenario" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("user_alice")
+  let oplog = @oplog.OpLog("user_alice")
   let mut branch = Branch::new(oplog)
   let mut prev_alice = -1
 

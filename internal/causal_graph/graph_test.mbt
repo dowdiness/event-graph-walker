@@ -39,7 +39,7 @@ test "lv to raw version conversion" {
 test "raw to lv version conversion" {
   let graph = CausalGraph::new()
   ignore(try! graph.add_version([], "agent1"))
-  let raw = @core.RawVersion::new("agent1", 0)
+  let raw = @core.RawVersion("agent1", 0)
   match graph.raw_to_lv(raw) {
     Some(lv_result) => inspect(lv_result, content="0")
     None => fail("Expected Some(LV)")

@@ -2,7 +2,7 @@
 
 ///|
 fn benchmark_causal_cut_operations(count : Int) -> Array[@core.Op] {
-  let log = OpLog::new("causal-cut-benchmark")
+  let log = OpLog("causal-cut-benchmark")
   let mut previous = -1
   for _ in 0..<count {
     let operation = try! log.insert("x", previous, -1)
@@ -30,7 +30,7 @@ test "bench: causal cut equality (1000 operations)" (b : @bench.T) {
 
 ///|
 test "bench: explicit causal cut capture (1000 operations)" (b : @bench.T) {
-  let log = OpLog::new("causal-cut-maintained-benchmark")
+  let log = OpLog("causal-cut-maintained-benchmark")
   let mut previous = -1
   for _ in 0..<1000 {
     let operation = try! log.insert("x", previous, -1)

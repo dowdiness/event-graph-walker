@@ -68,7 +68,7 @@ fn op_payload_key(op : @core.Op) -> String {
 
 ///|
 fn op_identity(op : @core.Op) -> @core.RawVersion {
-  @core.RawVersion::new(op.agent(), op.seq())
+  @core.RawVersion(op.agent(), op.seq())
 }
 
 ///|
@@ -83,7 +83,7 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
     None => ()
   }
   if op.seq() > 0 {
-    deps.push(@core.RawVersion::new(op.agent(), op.seq() - 1))
+    deps.push(@core.RawVersion(op.agent(), op.seq() - 1))
   }
   let by_key : Map[String, @core.RawVersion] = Map([])
   for dep in deps {
@@ -139,12 +139,48 @@ fn validate_sequence_descent(
   if op.seq() == 0 {
     return
   }
-  let predecessor = @core.RawVersion::new(op.agent(), op.seq() - 1)
+  let predecessor = @core.RawVersion(op.agent(), op.seq() - 1)
   if !parents_reach_identity(op.parents(), predecessor, known_ops) {
     raise @sync.Failure::MalformedMessage(
       detail="operation does not causally descend from its replica predecessor",
     )
   }
+}
+
+///|
+/// Reject an origin whose target is already known to be non-Insert.
+///
+/// This intentionally ignores unknown targets: dependency readiness still
+/// decides whether the operation is deferred. The early known-target check is
+/// applied only to a new current-message candidate so retained pending records
+/// keep their deferred provenance until their dependencies are decidable.
+fn validate_known_origin_targets(
+  op : @core.Op,
+  known_ops : Map[String, @core.Op],
+) -> Unit raise @sync.Failure {
+  fn require_known_insert(
+    origin : @core.RawVersion?,
+    known_ops : Map[String, @core.Op],
+  ) -> Unit raise @sync.Failure {
+    match origin {
+      None => ()
+      Some(raw) =>
+        match known_ops.get(raw_key(raw)) {
+          Some(target) =>
+            match target.content() {
+              @core.Insert(_) => ()
+              @core.Delete | @core.Undelete =>
+                raise @sync.Failure::MalformedMessage(
+                  detail="operation origin must identify an insert operation",
+                )
+            }
+          None => ()
+        }
+    }
+  }
+
+  require_known_insert(op.origin_left(), known_ops)
+  require_known_insert(op.origin_right(), known_ops)
 }
 
 ///|
@@ -794,7 +830,7 @@ fn decode_identity(json : Json) -> @core.RawVersion raise {
   guard wire.replica_id != "" && wire.sequence >= 0 else {
     fail("identity is invalid")
   }
-  @core.RawVersion::new(wire.replica_id, wire.sequence)
+  @core.RawVersion(wire.replica_id, wire.sequence)
 }
 
 ///|
@@ -936,7 +972,7 @@ fn decode_op(json : Json) -> @core.Op raise {
   match wire.kind {
     "insert" => {
       let content : String = @json.from_json(wire.content)
-      @core.Op::new_insert(
+      @core.Op::insert(
         0,
         parents,
         id.agent,
@@ -950,13 +986,13 @@ fn decode_op(json : Json) -> @core.Op raise {
       guard wire.content is Json::Null && origin_right is None else {
         fail("delete fields are invalid")
       }
-      @core.Op::new_delete(0, parents, id.agent, id.seq, origin_left)
+      @core.Op::delete(0, parents, id.agent, id.seq, origin_left)
     }
     "undelete" => {
       guard wire.content is Json::Null && origin_right is None else {
         fail("undelete fields are invalid")
       }
-      @core.Op::new_undelete(0, parents, id.agent, id.seq, origin_left)
+      @core.Op::undelete(0, parents, id.agent, id.seq, origin_left)
     }
     _ => fail("unknown operation kind")
   }
@@ -1166,6 +1202,16 @@ fn prepare_sync(
   }
   for candidate in all_candidates {
     known_ops[raw_key(op_identity(candidate.raw()))] = candidate.raw()
+  }
+  // Match core admission's provenance-aware early check: a new current
+  // candidate with a known non-Insert target is malformed even when an
+  // unrelated dependency is still missing. Retained candidates remain
+  // deferred until dependency readiness makes their full semantic decision.
+  for candidate in candidates.values() {
+    match candidate {
+      FromMessage(op) => validate_known_origin_targets(op.raw(), known_ops)
+      FromPending(_) | FromPendingAndMessage(_) => ()
+    }
   }
   let raw_candidates : Array[@core.Op] = []
   let candidate_by_key : Map[String, StructuralOp] = Map([])

@@ -63,7 +63,7 @@ A future internal prepared-local-mutation design is the preferred research direc
 
 This research direction must inspect whether existing private stamping and undo machinery can stage closure-free local mutation descriptions safely. It must not introduce a generic application command abstraction or make replica identity itself a write capability.
 
-`RemoteAdmissionPlan` remains semantically distinct. It prepares already-stamped remote operations for dependency and semantic admission under the canonical pending owner; it does not allocate local operation identity or predict local encoded history (ADR 0004). Issue [#72](https://github.com/dowdiness/event-graph-walker/issues/72) continues to own generic commit receipts and local/remote report unification.
+`PreparedAdmission` remains semantically distinct. It prepares already-stamped remote operations for dependency and semantic admission under the canonical pending owner; it does not allocate local operation identity or predict local encoded history (ADR 0004). Issue [#72](https://github.com/dowdiness/event-graph-walker/issues/72) continues to own generic commit receipts and local/remote report unification.
 
 ## Alternatives
 

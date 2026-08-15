@@ -20,9 +20,9 @@ fn resolve_origin_lv(
 /// Benchmark: Merge small concurrent edits (2 agents, 10 ops each)
 test "merge - concurrent edits (2 agents x 10)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog_a = @oplog.OpLog::new("agent_a")
+    let oplog_a = @oplog.OpLog("agent_a")
     let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-    let oplog_b = @oplog.OpLog::new("agent_b")
+    let oplog_b = @oplog.OpLog("agent_b")
 
     // Agent A inserts 10 characters
     let mut prev_a = -1
@@ -58,9 +58,9 @@ test "merge - concurrent edits (2 agents x 10)" (b : @bench.T) {
 /// Benchmark: Merge medium concurrent edits (2 agents, 50 ops each)
 test "merge - concurrent edits (2 agents x 50)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog_a = @oplog.OpLog::new("agent_a")
+    let oplog_a = @oplog.OpLog("agent_a")
     let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-    let oplog_b = @oplog.OpLog::new("agent_b")
+    let oplog_b = @oplog.OpLog("agent_b")
 
     // Agent A inserts 50 characters
     let mut prev_a = -1
@@ -96,9 +96,9 @@ test "merge - concurrent edits (2 agents x 50)" (b : @bench.T) {
 /// Benchmark: Merge large concurrent edits (2 agents, 200 ops each)
 test "merge - concurrent edits (2 agents x 200)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog_a = @oplog.OpLog::new("agent_a")
+    let oplog_a = @oplog.OpLog("agent_a")
     let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-    let oplog_b = @oplog.OpLog::new("agent_b")
+    let oplog_b = @oplog.OpLog("agent_b")
 
     // Agent A inserts 200 characters
     let mut prev_a = -1
@@ -134,7 +134,7 @@ test "merge - concurrent edits (2 agents x 200)" (b : @bench.T) {
 /// Benchmark: Merge with many agents (5 agents, 20 ops each)
 test "merge - many agents (5 agents x 20)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog_main = @oplog.OpLog::new("agent_main")
+    let oplog_main = @oplog.OpLog("agent_main")
     let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
     // Main agent: 20 operations
@@ -155,7 +155,7 @@ test "merge - many agents (5 agents x 20)" (b : @bench.T) {
     // 4 concurrent agents, each with 20 operations
     let agents = ["agent_a", "agent_b", "agent_c", "agent_d"]
     for agent in agents {
-      let oplog_remote = @oplog.OpLog::new(agent)
+      let oplog_remote = @oplog.OpLog(agent)
       let mut prev_remote = -1
       let ops = []
       for i = 0; i < 20; i = i + 1 {
@@ -183,9 +183,9 @@ test "merge - many agents (5 agents x 20)" (b : @bench.T) {
 /// Benchmark: Merge with deletes (50 inserts, 25 deletes)
 test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog_a = @oplog.OpLog::new("agent_a")
+    let oplog_a = @oplog.OpLog("agent_a")
     let tree_a : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-    let oplog_b = @oplog.OpLog::new("agent_b")
+    let oplog_b = @oplog.OpLog("agent_b")
 
     // Agent A: 50 inserts
     let mut prev_a = -1
@@ -210,7 +210,7 @@ test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
     // Agent B: 25 deletes of A's characters
     let ops_from_b = []
     for i = 0; i < 25; i = i + 1 {
-      let raw = @core.RawVersion::new(ops_a[i * 2].agent(), ops_a[i * 2].seq())
+      let raw = @core.RawVersion(ops_a[i * 2].agent(), ops_a[i * 2].seq())
       let target_lv = match oplog_b.causal_graph().raw_to_lv(raw) {
         Some(lv) => lv
         None => continue
@@ -229,7 +229,7 @@ test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
 /// Benchmark: Merge using graph_diff (advance 20 ops)
 test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = @oplog.OpLog::new("agent_a")
+    let oplog = @oplog.OpLog("agent_a")
     let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
     // Build base: 50 operations
@@ -302,9 +302,9 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
 /// Benchmark: Repeated small merges (simulate real-time collaboration)
 test "merge - repeated small (10 iterations x 5 ops)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog_a = @oplog.OpLog::new("agent_a")
+    let oplog_a = @oplog.OpLog("agent_a")
     let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-    let oplog_b = @oplog.OpLog::new("agent_b")
+    let oplog_b = @oplog.OpLog("agent_b")
 
     // Build base
     let mut prev_a = -1
@@ -340,7 +340,7 @@ test "merge - repeated small (10 iterations x 5 ops)" (b : @bench.T) {
 /// Benchmark: retreat with concurrent deletes.
 test "merge - retreat concurrent deletes (500 items, 50 deletes)" (b : @bench.T) {
   // Setup: 500-item document with 50 deletes
-  let oplog_a = @oplog.OpLog::new("agent_a")
+  let oplog_a = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert 500 chars
@@ -406,7 +406,7 @@ test "merge - retreat concurrent deletes (500 items, 50 deletes)" (b : @bench.T)
 ///|
 /// Benchmark: Merge context creation and application
 test "merge - context apply operations (50 ops)" (b : @bench.T) {
-  let oplog = @oplog.OpLog::new("agent_a")
+  let oplog = @oplog.OpLog("agent_a")
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Create 50 operations

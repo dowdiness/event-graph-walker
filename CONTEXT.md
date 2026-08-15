@@ -58,16 +58,16 @@ _Avoid_: dependency check, readiness check
 A remote operation admission attempt that failed preflight. The affected pending operations are removed, but the operation identity is not permanently blacklisted and may be evaluated again if received later.
 _Avoid_: rejected identity, invalid tombstone
 
-**Remote admission plan**:
-A non-mutating prospective ordering of pending and incoming remote operations used for complete preflight before admission. A plan is not itself an admission.
-_Avoid_: transaction, committed batch
+**Prepared admission**:
+A non-mutating, semantically validated admission value that fixes the pending and incoming remote operations eligible for one commit. It is not itself a committed admission.
+_Avoid_: plan, transaction, committed batch
 
 **Remote operation admission**:
 The local acceptance of a dependency-ready remote CRDT operation into shared causal history after preflight. Once admitted, it is not rolled back by a later internal projection failure.
 _Avoid_: remote apply, merge commit
 
 **Partial remote admission failure**:
-An internal failure after a prepared plan has already admitted a valid prefix. The admitted prefix remains committed and must be projected before the failure propagates; the failed operation and later operations remain pending.
+An internal failure after a prepared admission has already admitted a valid prefix. The admitted prefix remains committed and must be projected before the failure propagates; the failed operation and later operations remain pending.
 _Avoid_: batch rollback, partial success
 
 **Document Convergence**:

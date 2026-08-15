@@ -3,16 +3,16 @@
 ///|
 /// Branch wrapping seam: a pending identity conflict leaves every projection stable.
 test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
-  let oplog = @oplog.OpLog::new("local")
-  let seed = @core.Op::new_insert(-1, [], "local", 0, "seed", None, None)
+  let oplog = @oplog.OpLog("local")
+  let seed = @core.Op::insert(-1, [], "local", 0, "seed", None, None)
   ignore(try! oplog.apply_remote(seed))
   let branch = try! Branch::checkout(oplog, oplog.get_frontier())
-  let missing_parent = @core.RawVersion::new("branch-parent", 0)
-  let pending = @core.Op::new_insert(
+  let missing_parent = @core.RawVersion("branch-parent", 0)
+  let pending = @core.Op::insert(
     11,
     [missing_parent],
     "branch-pending",
-    1,
+    0,
     "a",
     None,
     None,
@@ -20,11 +20,11 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
   let pending_branch = try! branch.merge_remote_ops([pending])
   let before_frontier = pending_branch.get_frontier()
   let before_count = oplog.op_count()
-  let conflict = @core.Op::new_insert(
+  let conflict = @core.Op::insert(
     23,
     [missing_parent],
     "branch-pending",
-    1,
+    0,
     "b",
     None,
     None,
@@ -36,7 +36,7 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
   }
   match result {
     Err(BranchError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))) =>
-      assert_eq(raw, @core.RawVersion::new("branch-pending", 1))
+      assert_eq(raw, @core.RawVersion("branch-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }
   assert_eq(oplog.op_count(), before_count)
@@ -46,7 +46,7 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
   assert_eq(pending_branch.to_text(), "seed")
 
   // The retained pending payload, not the conflicting retransmission, drains.
-  let parent = @core.Op::new_insert(
+  let parent = @core.Op::insert(
     -1,
     [],
     missing_parent.agent,
@@ -76,7 +76,7 @@ fn insert_string(oplog : @oplog.OpLog, text : String, start_lv : Int) -> Int {
 
 ///|
 test "create empty branch" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
   let branch = Branch::new(oplog)
   inspect(branch.to_text(), content="")
   inspect(branch.get_frontier().length(), content="0")
@@ -84,7 +84,7 @@ test "create empty branch" {
 
 ///|
 test "checkout with single insert" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Insert "hello" character-by-character
   let _ = insert_string(oplog, "hello", -1)
@@ -98,7 +98,7 @@ test "checkout with single insert" {
 
 ///|
 test "checkout with multiple inserts" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Insert "hello"
   let last_lv = insert_string(oplog, "hello", -1)
@@ -112,7 +112,7 @@ test "checkout with multiple inserts" {
 
 ///|
 test "checkout with delete" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Insert "hello" character-by-character
   let _ = insert_string(oplog, "hello", -1)
@@ -126,7 +126,7 @@ test "checkout with delete" {
 
 ///|
 test "advance branch with new operations" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Insert "hello"
   let last_lv = insert_string(oplog, "hello", -1)
@@ -147,7 +147,7 @@ test "advance branch with new operations" {
 
 ///|
 test "checkout at different frontiers" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Insert "a"
   let lv1 = try! oplog.insert("a", -1, -1).lv()
@@ -172,7 +172,7 @@ test "checkout at different frontiers" {
 
 ///|
 test "at_frontier check" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
   let _ = insert_string(oplog, "hello", -1)
   let frontier1 = oplog.get_frontier()
   let branch = try! Branch::checkout(oplog, frontier1)
@@ -186,11 +186,11 @@ test "at_frontier check" {
 
 ///|
 test "at_frontier rejects canonical duplicate input" {
-  let remote_a = @oplog.OpLog::new("agent-a")
-  let remote_b = @oplog.OpLog::new("agent-b")
+  let remote_a = @oplog.OpLog("agent-a")
+  let remote_b = @oplog.OpLog("agent-b")
   let op_a = try! remote_a.insert("A", -1, -1)
   let op_b = try! remote_b.insert("B", -1, -1)
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
   ignore(try! oplog.apply_remote(op_a))
   ignore(try! oplog.apply_remote(op_b))
   let frontier = oplog.get_frontier()
@@ -207,17 +207,17 @@ test "at_frontier rejects canonical duplicate input" {
 ///|
 test "concurrent inserts converge" {
   // Agent 1 creates operations
-  let oplog1 = @oplog.OpLog::new("agent-1")
+  let oplog1 = @oplog.OpLog("agent-1")
   let _op1a = try! oplog1.insert("A", -1, -1)
 
   // Agent 2 creates operations
-  let oplog2 = @oplog.OpLog::new("agent-2")
+  let oplog2 = @oplog.OpLog("agent-2")
   let _op2a = try! oplog2.insert("B", -1, -1)
 
   // Simulate merge: agent1 receives agent2's operation
   // (In real implementation, this would go through network)
   // For now, we manually add to the same oplog
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
   let _ = try! oplog.insert("A", -1, -1)
   let _ = try! oplog.insert("B", -1, -1)
 
@@ -236,7 +236,7 @@ test "concurrent inserts converge" {
 
 ///|
 test "advance with no changes" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
   let _ = insert_string(oplog, "hello", -1)
   let frontier = oplog.get_frontier()
   let branch1 = try! Branch::checkout(oplog, frontier)
@@ -247,7 +247,7 @@ test "advance with no changes" {
 
 ///|
 test "checkout empty oplog" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
   let frontier = oplog.get_frontier()
   let branch = try! Branch::checkout(oplog, frontier)
   inspect(branch.to_text(), content="")
@@ -256,7 +256,7 @@ test "checkout empty oplog" {
 
 ///|
 test "multiple advances" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Insert "a"
   let lv1 = try! oplog.insert("a", -1, -1).lv()
@@ -281,7 +281,7 @@ test "multiple advances" {
 
 ///|
 test "branch with complex operations" {
-  let oplog = @oplog.OpLog::new("agent-1")
+  let oplog = @oplog.OpLog("agent-1")
 
   // Build "hello world" with inserts and deletes
   let hello_last = insert_string(oplog, "hello", -1)

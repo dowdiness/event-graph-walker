@@ -324,6 +324,83 @@ test "non-insert origin is rejected before any receiver mutation" {
 }
 
 ///|
+test "known non-insert origin rejects before unrelated dependency defer" {
+  let receiver = try! TextState::new("receiver")
+  try! receiver.insert(Pos::at(0), "X")
+  try! receiver.delete(Pos::at(0))
+  let before_text = receiver.text()
+  let before_version = receiver.version()
+  let message = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
+  )
+  try receiver.sync().apply(message) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
+    _ => fail("known invalid origin must reject before unrelated defer")
+  } noraise {
+    _ => fail("known invalid origin must be atomic")
+  }
+  inspect(receiver.text(), content=before_text)
+  inspect(receiver.version() == before_version, content="true")
+  inspect(receiver.sync().pending_sync_count(), content="0")
+}
+
+///|
+test "core and text reject known invalid origin with the same atomic meaning" {
+  let text_receiver = try! TextState::new("receiver")
+  try! text_receiver.insert(Pos::at(0), "X")
+  try! text_receiver.delete(Pos::at(0))
+  let before_text = text_receiver.text()
+  let before_version = text_receiver.version()
+  let bad = @core.Op::insert(
+    -1,
+    [@core.RawVersion("missing", 0)],
+    "remote",
+    0,
+    "A",
+    Some(@core.RawVersion("receiver", 1)),
+    None,
+  )
+  let message = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
+  )
+  try text_receiver.sync().apply(message) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
+    _ => fail("text path must classify known invalid origin as malformed")
+  } noraise {
+    _ => fail("text path must reject known invalid origin atomically")
+  }
+
+  let core_receiver = @oplog.OpLog("receiver")
+  let root = @core.Op::insert(-1, [], "receiver", 0, "X", None, None)
+  let delete = @core.Op::delete(
+    -1,
+    [@core.RawVersion("receiver", 0)],
+    "receiver",
+    1,
+    Some(@core.RawVersion("receiver", 0)),
+  )
+  ignore(
+    try! core_receiver.commit_remote(
+      try! core_receiver.prepare_remote([root, delete]),
+    ),
+  )
+  let core_before_count = core_receiver.op_count()
+  let core_before_frontier = try! core_receiver.get_frontier_raw()
+  try core_receiver.prepare_remote([bad]) catch {
+    @oplog.OpLogError::OriginTargetNotInsert(operation=_, target=_) => ()
+    _ =>
+      fail("core path must classify known invalid origin as non-insert target")
+  } noraise {
+    _ => fail("core path must reject known invalid origin atomically")
+  }
+  inspect(text_receiver.text(), content=before_text)
+  inspect(text_receiver.version() == before_version, content="true")
+  inspect(text_receiver.sync().pending_sync_count(), content="0")
+  assert_eq(core_receiver.op_count(), core_before_count)
+  assert_eq(try! core_receiver.get_frontier_raw(), core_before_frontier)
+}
+
+///|
 test "resent decidable malformed pending operation does not poison later sync" {
   let receiver = try! TextState::new("receiver")
   let malformed_future = try! SyncMessage::from_json_string(

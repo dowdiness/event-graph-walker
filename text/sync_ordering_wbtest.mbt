@@ -5,14 +5,14 @@ test "10k sequential text records have linear preparation comparisons" {
     let previous = if sequence == 0 {
       None
     } else {
-      Some(@core.RawVersion::new("alice", sequence - 1))
+      Some(@core.RawVersion("alice", sequence - 1))
     }
     let parents = match previous {
       Some(value) => [value]
       None => []
     }
     operations.push(
-      @core.Op::new_insert(0, parents, "alice", sequence, "x", previous, None),
+      @core.Op::insert(0, parents, "alice", sequence, "x", previous, None),
     )
   }
   let (ordered, comparisons) = try! canonical_order_counted(operations.rev())

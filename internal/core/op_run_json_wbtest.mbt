@@ -33,7 +33,7 @@ test "OpRun insert run JSON roundtrip" {
     content: Inserts(['a', 'b', 'c']),
     parents: [],
     origin_left: None,
-    origin_right: Some(RawVersion::new("bob", 0)),
+    origin_right: Some(RawVersion("bob", 0)),
     count: 3,
   }
   let json = run.to_json()
@@ -86,8 +86,8 @@ test "OpRun delete run JSON roundtrip" {
     agent: "bob",
     start_seq: 3,
     content: Deletes,
-    parents: [RawVersion::new("alice", 4)],
-    origin_left: Some(RawVersion::new("alice", 2)),
+    parents: [RawVersion("alice", 4)],
+    origin_left: Some(RawVersion("alice", 2)),
     origin_right: None,
     count: 2,
   }
@@ -140,9 +140,9 @@ test "OpRun JSON roundtrip protects nested identities" {
     agent: "alice",
     start_seq: 11,
     content: Inserts(['a', 'b']),
-    parents: [RawVersion::new("parent", 4)],
-    origin_left: Some(RawVersion::new("left", 5)),
-    origin_right: Some(RawVersion::new("right", 6)),
+    parents: [RawVersion("parent", 4)],
+    origin_left: Some(RawVersion("left", 5)),
+    origin_right: Some(RawVersion("right", 6)),
     count: 2,
   }
   let decoded : OpRun = @json.from_json(run.to_json())

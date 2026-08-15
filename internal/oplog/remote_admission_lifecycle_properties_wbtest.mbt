@@ -278,7 +278,7 @@ fn planner_lifecycle_same_raw_membership(
 fn planner_lifecycle_fixture(
   trace : PlannerLifecycleTrace,
 ) -> PlannerLifecycleFixture {
-  let malformed_probe = @core.Op::new_insert(
+  let malformed_probe = @core.Op::insert(
     -1,
     [],
     "generated-malformed-probe",
@@ -287,7 +287,7 @@ fn planner_lifecycle_fixture(
     None,
     None,
   )
-  let stale_probe = @core.Op::new_insert(
+  let stale_probe = @core.Op::insert(
     -1,
     [],
     "generated-stale-probe",
@@ -296,7 +296,7 @@ fn planner_lifecycle_fixture(
     None,
     None,
   )
-  let external_admission = @core.Op::new_insert(
+  let external_admission = @core.Op::insert(
     -1,
     [],
     "generated-external-admission",
@@ -305,7 +305,7 @@ fn planner_lifecycle_fixture(
     None,
     None,
   )
-  let blocker = @core.Op::new_insert(
+  let blocker = @core.Op::insert(
     -1,
     [],
     "generated-lifecycle-blocker",
@@ -314,7 +314,7 @@ fn planner_lifecycle_fixture(
     None,
     None,
   )
-  let unrelated_blocker = @core.Op::new_insert(
+  let unrelated_blocker = @core.Op::insert(
     -1,
     [],
     "generated-unrelated-blocker",
@@ -323,7 +323,7 @@ fn planner_lifecycle_fixture(
     None,
     None,
   )
-  let unrelated_waiter = @core.Op::new_insert(
+  let unrelated_waiter = @core.Op::insert(
     -1,
     [oracle_raw(unrelated_blocker)],
     "generated-unrelated-waiter",
@@ -340,7 +340,7 @@ fn planner_lifecycle_fixture(
       oracle_raw(component[i - 1])
     }
     component.push(
-      @core.Op::new_insert(
+      @core.Op::insert(
         -1,
         [dependency],
         "generated-lifecycle-chain",
@@ -654,7 +654,7 @@ fn planner_lifecycle_matches_model(
 ///|
 fn planner_lifecycle_plan_matches_model(
   planner : RemoteAdmissionPlanner,
-  actual : RemoteAdmissionPlan,
+  actual : PreparedAdmission,
   expected : PlannerLifecycleModelPlan,
 ) -> Bool {
   planner_lifecycle_same_ops(actual.operations(), expected.planned) &&
@@ -670,7 +670,7 @@ fn planner_lifecycle_prepare_checked(
   planner : RemoteAdmissionPlanner,
   model : PlannerLifecycleModel,
   incoming : Array[@core.Op],
-) -> (RemoteAdmissionPlan, PlannerLifecycleModelPlan)? raise OpLogError {
+) -> (PreparedAdmission, PlannerLifecycleModelPlan)? raise OpLogError {
   let before = planner_lifecycle_snapshot(planner, false)
   let expected = model.prepare(incoming)
   let actual = planner.prepare(incoming, raw => model.is_admitted(raw))
@@ -713,7 +713,7 @@ fn planner_lifecycle_waiter_state_matches_suffix(
 
 ///|
 fn planner_lifecycle_ready_retry_is_safe(trace : PlannerLifecycleTrace) -> Bool {
-  let root = @core.Op::new_insert(
+  let root = @core.Op::insert(
     -1,
     [],
     "generated-ready-retry-root",
@@ -722,7 +722,7 @@ fn planner_lifecycle_ready_retry_is_safe(trace : PlannerLifecycleTrace) -> Bool 
     None,
     None,
   )
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [oracle_raw(root)],
     "generated-ready-retry-child",
@@ -812,7 +812,7 @@ fn prop_remote_admission_planner_lifecycle(
   let planner = RemoteAdmissionPlanner()
   let model = PlannerLifecycleModel()
   let original_arrivals : Map[@core.RawVersion, Int] = Map::default()
-  let mut active_plan : RemoteAdmissionPlan? = None
+  let mut active_plan : PreparedAdmission? = None
   let mut active_model_plan : PlannerLifecycleModelPlan? = None
   let mut drain_operations : Array[@core.Op] = []
 

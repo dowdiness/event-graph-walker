@@ -135,6 +135,32 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="delete operation missing origin",
         ),
       )
+    SequenceAncestryViolation(raw~) =>
+      TextError::SyncFailed(
+        @sync.Failure::MalformedMessage(
+          detail="operation does not causally descend from its replica predecessor: \{raw}",
+        ),
+      )
+    OriginTargetNotInsert(operation~, target~) =>
+      TextError::SyncFailed(
+        @sync.Failure::MalformedMessage(
+          detail="operation origin must identify an insert operation: \{operation} -> \{target}",
+        ),
+      )
+    InvalidOriginShape(raw~) =>
+      TextError::SyncFailed(
+        @sync.Failure::MalformedMessage(
+          detail="delete or undelete has an invalid origin shape: \{raw}",
+        ),
+      )
+    PendingForecastExceeded(limit~, predicted~) =>
+      TextError::SyncFailed(
+        @sync.Failure::LimitExceeded(
+          kind=@sync.LimitKind::PendingOperations,
+          limit~,
+          actual=predicted,
+        ),
+      )
     MissingRemoteParent(raw~) =>
       TextError::SyncFailed(
         @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),
@@ -156,12 +182,10 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           sequence=raw.seq,
         ),
       )
-    StaleRemoteAdmissionPlan =>
-      TextError::Internal(detail="stale remote admission plan")
-    ConsumedRemoteAdmissionPlan =>
-      TextError::Internal(detail="consumed remote admission plan")
-    InvalidRemoteAdmissionPlan =>
-      TextError::Internal(detail="invalid remote admission plan")
+    StaleAdmission => TextError::Internal(detail="stale prepared admission")
+    ConsumedAdmission =>
+      TextError::Internal(detail="consumed prepared admission")
+    InvalidAdmission => TextError::Internal(detail="invalid prepared admission")
     PartialRemoteAdmission(committed=_, error~) =>
       TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~))
     CausalGraphError(error~) =>
