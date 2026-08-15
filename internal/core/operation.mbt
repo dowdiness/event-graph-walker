@@ -82,7 +82,15 @@ pub fn Op::new_insert(
   origin_left : RawVersion?,
   origin_right : RawVersion?,
 ) -> Op {
-  { lv, parents, agent, seq, content: Insert(text), origin_left, origin_right }
+  {
+    lv,
+    parents: parents.copy(),
+    agent,
+    seq,
+    content: Insert(text),
+    origin_left,
+    origin_right,
+  }
 }
 
 ///|
@@ -99,7 +107,15 @@ pub fn Op::new_delete(
   seq : Int,
   origin_left : RawVersion?,
 ) -> Op {
-  { lv, parents, agent, seq, content: Delete, origin_left, origin_right: None }
+  {
+    lv,
+    parents: parents.copy(),
+    agent,
+    seq,
+    content: Delete,
+    origin_left,
+    origin_right: None,
+  }
 }
 
 ///|
@@ -113,7 +129,7 @@ pub fn Op::new_undelete(
 ) -> Op {
   {
     lv,
-    parents,
+    parents: parents.copy(),
     agent,
     seq,
     content: Undelete,
@@ -179,5 +195,13 @@ pub fn Op::new_from_parts(
   origin_left~ : RawVersion?,
   origin_right~ : RawVersion?,
 ) -> Op {
-  { lv, parents, agent, seq, content, origin_left, origin_right }
+  {
+    lv,
+    parents: parents.copy(),
+    agent,
+    seq,
+    content,
+    origin_left,
+    origin_right,
+  }
 }

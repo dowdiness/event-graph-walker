@@ -510,3 +510,52 @@ test "P0 pending limit is a complete-transition forecast across partial admissio
   assert_eq(retried.length(), 1)
   assert_eq(receiver.has_pending(), false)
 }
+
+///|
+test "P0 prepared plan owns operation parent payload" {
+  let receiver = OpLog::new("prepared-parent-alias")
+  let alice = p0_insert("prepared-alice", 0, [], "A", None)
+  let bob = p0_insert("prepared-bob", 0, [], "B", None)
+  ignore(
+    try! receiver.commit_remote(try! receiver.prepare_remote([alice, bob])),
+  )
+
+  let alice_raw = p0_raw("prepared-alice", 0)
+  let bob_raw = p0_raw("prepared-bob", 0)
+  let parents = [alice_raw]
+  let next = p0_insert("prepared-alice", 1, parents, "C", None)
+  let plan = try! receiver.prepare_remote([next])
+  parents[0] = bob_raw
+
+  let committed = try! receiver.commit_remote(plan)
+  assert_eq(committed.length(), 1)
+  assert_eq(committed[0].parents(), [alice_raw])
+}
+
+///|
+test "P0 retained pending owns operation parent payload" {
+  let receiver = OpLog::new("retained-parent-alias")
+  let missing = p0_raw("retained-parent", 0)
+  let alternate = p0_raw("retained-alternate", 0)
+  let parents = [missing]
+  let pending = p0_insert("retained-child", 0, parents, "P", None)
+  ignore(try! receiver.commit_remote(try! receiver.prepare_remote([pending])))
+  inspect(receiver.has_pending(), content="true")
+  parents[0] = alternate
+
+  let parent = p0_insert("retained-parent", 0, [], "R", None)
+  let committed = try! receiver.commit_remote(
+    try! receiver.prepare_remote([parent]),
+  )
+  assert_eq(committed.length(), 2)
+  assert_eq(receiver.has_pending(), false)
+  let pending_raw = remote_admission_raw(pending)
+  match
+    receiver
+    .get_all_ops()
+    .iter()
+    .find_first(op => remote_admission_raw(op) == pending_raw) {
+    Some(admitted) => assert_eq(admitted.parents(), [missing])
+    None => fail("expected retained pending operation to be admitted")
+  }
+}
