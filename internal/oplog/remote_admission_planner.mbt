@@ -75,7 +75,8 @@ pub struct RemoteAdmissionPlan {
   priv planned : Array[@core.Op]
   priv storage : RemoteAdmissionPlanStorage
   priv discard_roots : Array[@core.RawVersion]
-  priv discarded_staged : Array[@core.RawVersion]
+  priv discarded_pending : @hashset.HashSet[@core.RawVersion]
+  priv discarded_staged : @hashset.HashSet[@core.RawVersion]
   priv next_arrival : Int
   priv generation : Int
   priv mut consumed : Bool
@@ -122,6 +123,13 @@ priv struct RemoteAdmissionOverlay {
   ready_rounds : Map[@core.RawVersion, Int]
   ready : @priority_queue.PriorityQueue[RemoteAdmissionReady]
   planned_operations : Array[@core.Op]
+}
+
+///|
+/// One unified rejection closure partitioned by canonical ownership.
+priv struct RemoteAdmissionRejectionClosure {
+  discarded_pending : @hashset.HashSet[@core.RawVersion]
+  discarded_staged : @hashset.HashSet[@core.RawVersion]
 }
 
 ///|
@@ -656,14 +664,13 @@ fn RemoteAdmissionPlanner::pending_rejection_closure(
 }
 
 ///|
-/// Remove invalid pending roots and all pending operations that depend on them.
-fn RemoteAdmissionPlanner::reject_pending_dependents(
+/// Remove exactly one previously computed pending rejection membership.
+fn RemoteAdmissionPlanner::reject_pending_members(
   self : RemoteAdmissionPlanner,
-  roots : Array[@core.RawVersion],
+  rejected : @hashset.HashSet[@core.RawVersion],
 ) -> Unit {
-  let work = self.pending_rejection_closure(roots)
   let mut changed = false
-  for raw in work {
+  for raw in rejected {
     if self.remove_canonical(raw) {
       changed = true
     }
@@ -671,6 +678,17 @@ fn RemoteAdmissionPlanner::reject_pending_dependents(
   if changed {
     self.generation += 1
   }
+}
+
+///|
+/// Remove invalid pending roots and all pending operations that depend on them.
+fn RemoteAdmissionPlanner::reject_pending_dependents(
+  self : RemoteAdmissionPlanner,
+  roots : Array[@core.RawVersion],
+) -> Unit {
+  self.reject_pending_members(
+    @hashset.HashSet(self.pending_rejection_closure(roots)),
+  )
 }
 
 ///|
@@ -715,28 +733,58 @@ fn RemoteAdmissionOverlay::add_waiter(
 }
 
 ///|
-/// Close invalid pending roots over the disposable staged reverse index.
-fn RemoteAdmissionOverlay::discarded_staged(
+/// Traverse canonical and staged reverse edges as one rejection closure.
+fn RemoteAdmissionOverlay::rejection_closure(
   self : RemoteAdmissionOverlay,
-) -> @hashset.HashSet[@core.RawVersion] {
-  let discarded = @hashset.HashSet(self.discard_roots)
+  planner : RemoteAdmissionPlanner,
+) -> RemoteAdmissionRejectionClosure {
+  let rejected = @hashset.HashSet(self.discard_roots)
   let work = self.discard_roots.copy()
   let mut cursor = 0
   while cursor < work.length() {
     let dependency = work[cursor]
     cursor += 1
+    match planner.waiters.get(dependency) {
+      Some(waiters) =>
+        for waiter in waiters {
+          match planner.pending.get(waiter.raw) {
+            Some(node) =>
+              if node.arrival == waiter.arrival &&
+                rejected.add_and_check(waiter.raw) {
+                work.push(waiter.raw)
+              }
+            None => ()
+          }
+        }
+      None => ()
+    }
     match self.waiter_edges.get(dependency) {
       Some(waiters) =>
         for waiter in waiters {
-          if self.staged.get(waiter.raw) is Some(_) &&
-            discarded.add_and_check(waiter.raw) {
-            work.push(waiter.raw)
+          match self.staged.get(waiter.raw) {
+            Some(node) =>
+              if node.arrival == waiter.arrival &&
+                rejected.add_and_check(waiter.raw) {
+                work.push(waiter.raw)
+              }
+            None => ()
           }
         }
       None => ()
     }
   }
-  discarded
+  let discarded_pending : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([],
+  )
+  let discarded_staged : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for raw in work {
+    if planner.pending.contains(raw) {
+      discarded_pending.add(raw)
+    }
+    if self.staged.contains(raw) {
+      discarded_staged.add(raw)
+    }
+  }
+  { discarded_pending, discarded_staged }
 }
 
 ///|
@@ -909,7 +957,8 @@ fn RemoteAdmissionPlanner::prepare_fast(
     planned,
     storage: DeferredFast,
     discard_roots: [],
-    discarded_staged: [],
+    discarded_pending: @hashset.HashSet([]),
+    discarded_staged: @hashset.HashSet([]),
     next_arrival,
     generation: self.generation,
     consumed: false,
@@ -1099,11 +1148,11 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
     }
     overlay.resolve_waiters(self, entry.raw, node.arrival, -entry.round_key)
   }
-  let discarded_staged = overlay.discarded_staged()
+  let rejection = overlay.rejection_closure(self)
   let staged_nodes : Array[RemoteAdmissionPreparedNode] = []
   let mut next_arrival = self.next_arrival
   for raw in overlay.staged_order {
-    if discarded_staged.contains(raw) {
+    if rejection.discarded_staged.contains(raw) {
       continue
     }
     match overlay.staged.get(raw) {
@@ -1128,7 +1177,8 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
       planned_count=overlay.planned_operations.length(),
     ),
     discard_roots: overlay.discard_roots,
-    discarded_staged: discarded_staged.to_array(),
+    discarded_pending: rejection.discarded_pending,
+    discarded_staged: rejection.discarded_staged,
     next_arrival,
     generation: self.generation,
     consumed: false,
@@ -1221,9 +1271,9 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
         )
         seen_raws.add(raw)
       }
-      if !plan.discard_roots.is_empty() {
-        self.reject_pending_dependents(plan.discard_roots)
-      }
+      // Remove the exact pending partition computed by preparation before
+      // registering the accepted temporary nodes.
+      self.reject_pending_members(plan.discarded_pending)
       // The complete temporary node array exists before registration starts.
       for raw_node in prepared {
         let (raw, node) = raw_node
@@ -1322,9 +1372,9 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
           return RemoteAdmissionBeginResult::Conflict
         }
       }
-      if !plan.discard_roots.is_empty() {
-        self.reject_pending_dependents(plan.discard_roots)
-      }
+      // Remove the exact pending partition computed by preparation before
+      // registering the accepted temporary nodes.
+      self.reject_pending_members(plan.discarded_pending)
 
       // All validation completes before canonical registration starts.
       for node in nodes {
@@ -1510,12 +1560,6 @@ fn RemoteAdmissionPlan::remaining_raws(
 ) -> Array[@core.RawVersion] {
   let remaining : Array[@core.RawVersion] = []
   let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  let discarded_raws = @hashset.HashSet(
-    planner.pending_rejection_closure(self.discard_roots),
-  )
-  for raw in self.discarded_staged {
-    discarded_raws.add(raw)
-  }
   for op in self.planned {
     planned_raws.add(remote_admission_raw(op))
   }
@@ -1526,7 +1570,7 @@ fn RemoteAdmissionPlan::remaining_raws(
     match planner.pending.get(entry.raw) {
       Some(_) =>
         if !planned_raws.contains(entry.raw) &&
-          !discarded_raws.contains(entry.raw) {
+          !self.discarded_pending.contains(entry.raw) {
           remaining.push(entry.raw)
         }
       None => ()
@@ -1537,7 +1581,7 @@ fn RemoteAdmissionPlan::remaining_raws(
     ImmediateGeneral(nodes, planned_count=_) =>
       for node in nodes {
         if !planned_raws.contains(node.raw) &&
-          !discarded_raws.contains(node.raw) &&
+          !self.discarded_staged.contains(node.raw) &&
           !planner.pending.contains(node.raw) {
           remaining.push(node.raw)
         }

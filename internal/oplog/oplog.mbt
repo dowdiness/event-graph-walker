@@ -352,13 +352,19 @@ pub fn OpLog::prepare_remote(
 }
 
 ///|
-/// Prepare a remote admission with a core-owned retained-pending budget.
+/// Prepare a remote admission with a complete-transition pending forecast.
+///
+/// The limit applies to the predicted retained membership after the prepared
+/// transition completes. It is not a hard post-partial bound: if commit-time
+/// admission acknowledges a prefix and returns PartialRemoteAdmission, the
+/// uncommitted suffix remains pending and may exceed this forecast. A hard
+/// complete/partial budget invariant belongs to the P1 transition value.
 pub fn OpLog::prepare_remote_with_limit(
   self : OpLog,
   incoming : Array[@core.Op],
-  max_pending : Int,
+  max_pending_after_complete : Int,
 ) -> RemoteAdmissionPlan raise OpLogError {
-  self.prepare_remote_internal(incoming, Some(max_pending))
+  self.prepare_remote_internal(incoming, Some(max_pending_after_complete))
 }
 
 ///|
@@ -367,7 +373,7 @@ pub fn OpLog::prepare_remote_with_limit(
 fn OpLog::prepare_remote_internal(
   self : OpLog,
   incoming : Array[@core.Op],
-  max_pending : Int?,
+  max_pending_after_complete : Int?,
 ) -> RemoteAdmissionPlan raise OpLogError {
   self.preflight_remote_identities(incoming)
   let plan = self.planner.prepare_with_semantics(
@@ -375,11 +381,11 @@ fn OpLog::prepare_remote_internal(
     raw => self.graph.raw_to_lv(raw) is Some(_),
     Some(self.remote_admission_semantics()),
   )
-  match max_pending {
+  match max_pending_after_complete {
     Some(limit) => {
-      let actual = plan.remaining_raws(self.planner).length()
-      if actual > limit {
-        raise OpLogError::PendingLimitExceeded(limit~, actual~)
+      let predicted_pending = plan.remaining_raws(self.planner).length()
+      if predicted_pending > limit {
+        raise OpLogError::PendingLimitExceeded(limit~, actual=predicted_pending)
       }
     }
     None => ()

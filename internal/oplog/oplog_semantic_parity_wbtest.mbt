@@ -243,11 +243,13 @@ test "P0 semantic prepare is fully nonmutating and repeatable" {
     content="true",
   )
   assert_eq(first.discard_roots, second.discard_roots)
-  let first_discarded = @hashset.HashSet(first.discarded_staged)
-  let second_discarded = @hashset.HashSet(second.discarded_staged)
-  assert_eq(first_discarded.length(), second_discarded.length())
-  for raw in first_discarded {
-    inspect(second_discarded.contains(raw), content="true")
+  assert_eq(first.discarded_pending.length(), second.discarded_pending.length())
+  for raw in first.discarded_pending {
+    inspect(second.discarded_pending.contains(raw), content="true")
+  }
+  assert_eq(first.discarded_staged.length(), second.discarded_staged.length())
+  for raw in first.discarded_staged {
+    inspect(second.discarded_staged.contains(raw), content="true")
   }
   assert_eq(first.next_arrival, second.next_arrival)
   assert_eq(first.generation, second.generation)
@@ -346,4 +348,165 @@ test "P0 core pending limit rejects without state mutation" {
     2147483647,
   )
   inspect(large_plan.operations().length(), content="1")
+}
+
+///|
+test "P0 rejection closure crosses retained pending into staged dependents" {
+  let receiver = OpLog::new("closure-retained-staged")
+  let missing_target = p0_raw("closure-target", 1)
+  let invalid_root = p0_insert(
+    "closure-root",
+    0,
+    [missing_target],
+    "R",
+    Some(missing_target),
+  )
+  let retained_dependent = p0_insert(
+    "closure-retained",
+    0,
+    [p0_raw("closure-root", 0)],
+    "P",
+    Some(p0_raw("closure-root", 0)),
+  )
+  ignore(
+    try! receiver.commit_remote(try! receiver.prepare_remote([invalid_root])),
+  )
+  ignore(
+    try! receiver.commit_remote(
+      try! receiver.prepare_remote([retained_dependent]),
+    ),
+  )
+  inspect(receiver.has_pending(), content="true")
+
+  let root = p0_insert("closure-target", 0, [], "A", None)
+  let target = p0_delete(
+    "closure-target",
+    1,
+    [p0_raw("closure-target", 0)],
+    p0_raw("closure-target", 0),
+  )
+  let staged_dependent = p0_insert(
+    "closure-staged",
+    0,
+    [p0_raw("closure-retained", 0)],
+    "S",
+    Some(p0_raw("closure-retained", 0)),
+  )
+  let before = planner_lifecycle_snapshot(receiver.planner, false)
+  let plan = try! receiver.prepare_remote([
+    root, target, invalid_root, staged_dependent,
+  ])
+  let after = planner_lifecycle_snapshot(receiver.planner, false)
+  inspect(planner_lifecycle_same_snapshot(before, after), content="true")
+  inspect(plan.operations().length(), content="2")
+  inspect(plan.remaining_raws(receiver.planner).is_empty(), content="true")
+
+  let committed = try! receiver.commit_remote(plan)
+  inspect(committed.length(), content="2")
+  inspect(receiver.op_count(), content="2")
+  inspect(receiver.has_pending(), content="false")
+}
+
+///|
+test "P0 rejection closure crosses alternating retained and staged dependents" {
+  let receiver = OpLog::new("closure-alternating")
+  let missing_target = p0_raw("alternating-target", 1)
+  let invalid_root = p0_insert(
+    "alternating-root",
+    0,
+    [missing_target],
+    "R",
+    Some(missing_target),
+  )
+  let staged_middle = p0_insert(
+    "alternating-staged-middle",
+    0,
+    [p0_raw("alternating-root", 0)],
+    "S1",
+    Some(p0_raw("alternating-root", 0)),
+  )
+  let retained_middle = p0_insert(
+    "alternating-retained-middle",
+    0,
+    [p0_raw("alternating-staged-middle", 0)],
+    "P2",
+    Some(p0_raw("alternating-staged-middle", 0)),
+  )
+  let staged_leaf = p0_insert(
+    "alternating-staged-leaf",
+    0,
+    [p0_raw("alternating-retained-middle", 0)],
+    "S2",
+    Some(p0_raw("alternating-retained-middle", 0)),
+  )
+  ignore(
+    try! receiver.commit_remote(try! receiver.prepare_remote([invalid_root])),
+  )
+  ignore(
+    try! receiver.commit_remote(try! receiver.prepare_remote([retained_middle])),
+  )
+
+  let root = p0_insert("alternating-target", 0, [], "A", None)
+  let target = p0_delete(
+    "alternating-target",
+    1,
+    [p0_raw("alternating-target", 0)],
+    p0_raw("alternating-target", 0),
+  )
+  let before = planner_lifecycle_snapshot(receiver.planner, false)
+  let plan = try! receiver.prepare_remote([
+    root, target, invalid_root, staged_middle, staged_leaf,
+  ])
+  let after = planner_lifecycle_snapshot(receiver.planner, false)
+  inspect(planner_lifecycle_same_snapshot(before, after), content="true")
+  inspect(plan.operations().length(), content="2")
+  inspect(plan.remaining_raws(receiver.planner).is_empty(), content="true")
+
+  let committed = try! receiver.commit_remote(plan)
+  inspect(committed.length(), content="2")
+  inspect(receiver.op_count(), content="2")
+  inspect(receiver.has_pending(), content="false")
+}
+
+///|
+test "P0 pending limit is a complete-transition forecast across partial admission" {
+  let receiver = OpLog::new("partial-limit")
+  let first = p0_insert("partial-limit-first", 0, [], "A", None)
+  let failed = p0_insert("partial-limit-failed", 0, [], "B", None)
+  let plan = try! receiver.prepare_remote_with_limit([first, failed], 0)
+  inspect(plan.operations().length(), content="2")
+
+  let failed_raw = remote_admission_raw(failed)
+  let result : Result[Array[@core.Op], OpLogError] = Ok(
+    receiver.commit_remote_with(plan, op => {
+      if remote_admission_raw(op) == failed_raw {
+        raise OpLogError::CausalGraphError(
+          error=@causal_graph.CausalGraphError::MissingParent(lv=-97),
+        )
+      }
+      receiver.commit_one_remote(op)
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::PartialRemoteAdmission(committed~, error~)) => {
+      assert_eq(committed.length(), 1)
+      match error {
+        @causal_graph.CausalGraphError::MissingParent(lv~) => assert_eq(lv, -97)
+        _ => fail("expected injected causal graph failure")
+      }
+    }
+    _ => fail("expected partial remote admission")
+  }
+  // The limit predicts the pending membership after a complete transition.
+  // A partial prefix leaves its uncommitted suffix pending until retry.
+  assert_eq(receiver.planner.pending_raws(), [failed_raw])
+  assert_eq(receiver.planner.pending_raws().length(), 1)
+
+  let retried = try! receiver.commit_remote(
+    try! receiver.prepare_remote_with_limit([failed], 0),
+  )
+  assert_eq(retried.length(), 1)
+  assert_eq(receiver.has_pending(), false)
 }

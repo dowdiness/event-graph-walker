@@ -1,4 +1,6 @@
-/// Release benchmarks for the P0 semantic same-agent ancestry guard.
+/// Release regression guards for large incoming ancestry batches in P0.
+/// These prepare an empty OpLog; they do not measure resident-history H with
+/// an incoming M=1 operation or claim a production H/M performance result.
 
 ///|
 fn p0_ancestry_direct_ops(n : Int) -> Array[@core.Op] {
