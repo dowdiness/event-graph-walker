@@ -354,34 +354,34 @@ pub fn OpLog::prepare_remote(
   self : OpLog,
   incoming : Array[@core.Op],
   max_pending_after_complete? : Int,
-) -> RemoteAdmissionPlan raise OpLogError {
+) -> PreparedAdmission raise OpLogError {
   self.preflight_remote_identities(incoming)
-  let plan = self.planner.prepare_with_semantics(
+  let prepared = self.planner.prepare_with_semantics(
     incoming,
     raw => self.graph.raw_to_lv(raw) is Some(_),
     Some(self.remote_admission_semantics()),
   )
   match max_pending_after_complete {
     Some(limit) => {
-      let predicted = plan.remaining_raws(self.planner).length()
+      let predicted = prepared.remaining_raws(self.planner).length()
       if predicted > limit {
         raise OpLogError::PendingForecastExceeded(limit~, predicted~)
       }
     }
     None => ()
   }
-  plan
+  prepared
 }
 
 ///|
-/// Plan the operations that remote application would drain without mutating
+/// Preview the operations that remote application would drain without mutating
 /// the causal graph or pending planner. The result preserves drain order.
 pub fn OpLog::plan_remote(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> Array[@core.Op] raise OpLogError {
-  let plan = self.prepare_remote(incoming)
-  plan.operations().to_owned()
+  let prepared = self.prepare_remote(incoming)
+  prepared.operations().to_owned()
 }
 
 ///|
@@ -397,7 +397,7 @@ pub fn OpLog::discard_pending_dependents(
 }
 
 ///|
-/// Apply a remote operation through the prepared-plan compatibility wrapper.
+/// Apply a remote operation through the prepared-admission compatibility wrapper.
 pub fn OpLog::apply_remote(
   self : OpLog,
   op : @core.Op,
@@ -406,42 +406,39 @@ pub fn OpLog::apply_remote(
   if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
     raise OpLogError::MissingOrigin
   }
-  let plan = self.prepare_remote([op])
-  self.commit_remote(plan)
+  let prepared = self.prepare_remote([op])
+  self.commit_remote(prepared)
 }
 
 ///|
 /// Translate planner lifecycle failures to the public OpLog error boundary.
-fn OpLog::begin_remote_plan(
+fn OpLog::begin_admission(
   self : OpLog,
-  plan : RemoteAdmissionPlan,
+  prepared : PreparedAdmission,
 ) -> Unit raise OpLogError {
   match
     self.planner.begin_plan_with_semantics(
-      plan,
+      prepared,
       raw => self.graph.raw_to_lv(raw) is Some(_),
       Some(self.remote_admission_semantics()),
     ) {
     RemoteAdmissionBeginResult::Applied => ()
-    RemoteAdmissionBeginResult::Stale =>
-      raise OpLogError::StaleRemoteAdmissionPlan
-    RemoteAdmissionBeginResult::Consumed =>
-      raise OpLogError::ConsumedRemoteAdmissionPlan
-    RemoteAdmissionBeginResult::Conflict =>
-      raise OpLogError::InvalidRemoteAdmissionPlan
+    RemoteAdmissionBeginResult::Stale => raise OpLogError::StaleAdmission
+    RemoteAdmissionBeginResult::Consumed => raise OpLogError::ConsumedAdmission
+    RemoteAdmissionBeginResult::Conflict => raise OpLogError::InvalidAdmission
   }
 }
 
 ///|
-/// Commit a prepared remote plan with an injectable single-operation shell.
+/// Commit a prepared remote admission with an injectable single-operation shell.
 fn OpLog::commit_remote_with(
   self : OpLog,
-  plan : RemoteAdmissionPlan,
+  prepared : PreparedAdmission,
   commit_one : (@core.Op) -> @core.Op raise OpLogError,
 ) -> Array[@core.Op] raise OpLogError {
-  self.begin_remote_plan(plan)
+  self.begin_admission(prepared)
   let committed : Array[@core.Op] = []
-  for op in plan.operations() {
+  for op in prepared.operations() {
     let result : Result[@core.Op, OpLogError] = Ok(commit_one(op)) catch {
       error => Err(error)
     }
@@ -490,9 +487,9 @@ fn OpLog::commit_one_remote(
 /// Commit a prepared remote admission exactly once.
 pub fn OpLog::commit_remote(
   self : OpLog,
-  plan : RemoteAdmissionPlan,
+  prepared : PreparedAdmission,
 ) -> Array[@core.Op] raise OpLogError {
-  self.commit_remote_with(plan, op => self.commit_one_remote(op))
+  self.commit_remote_with(prepared, op => self.commit_one_remote(op))
 }
 
 ///|

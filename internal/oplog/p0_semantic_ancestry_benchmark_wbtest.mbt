@@ -59,7 +59,7 @@ fn p0_benchmark_invalid_ancestry(b : @bench.T, ops : Array[@core.Op]) -> Unit {
   b.bench(
     fn() {
       let oplog = OpLog("benchmark")
-      let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+      let result : Result[PreparedAdmission, OpLogError] = Ok(
         oplog.prepare_remote(ops),
       ) catch {
         error => Err(error)

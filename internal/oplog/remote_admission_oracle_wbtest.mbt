@@ -661,7 +661,7 @@ test "oracle differentially covers the public remote admission lifecycle" {
       oracle_raws(oracle_remaining),
     )
 
-    // A later prepared plan supplies the missing root and drains the retained
+    // A later prepared admission supplies the missing root and drains the retained
     // component in the same fixed-point order.
     let missing_root = @core.Op::insert(
       -1,

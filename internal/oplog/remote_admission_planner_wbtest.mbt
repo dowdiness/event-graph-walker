@@ -144,7 +144,7 @@ test "remote admission fast staging raises conflicting identity" {
   let first = @core.Op::insert(-1, [], "fast-conflict", 0, "a", None, None)
   let second = @core.Op::insert(-1, [], "fast-conflict", 0, "b", None, None)
   let planner = RemoteAdmissionPlanner()
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     planner.prepare([first, second], _ => false),
   ) catch {
     error => Err(error)
@@ -164,7 +164,7 @@ test "remote admission fast staging compares admitted repeated payloads" {
   let second = @core.Op::insert(-1, [], "admitted-repeat", 0, "b", None, None)
   let expected_raw = remote_admission_raw(first)
   let planner = RemoteAdmissionPlanner()
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     planner.prepare([first, second], candidate => candidate == expected_raw),
   ) catch {
     error => Err(error)
@@ -200,7 +200,7 @@ test "remote admission canonical pending raises conflicting identity" {
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(pending, _ => false)
   let before = planner.pending_operations()
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     planner.prepare([incoming], _ => false),
   ) catch {
     error => Err(error)
@@ -239,7 +239,7 @@ test "remote admission overlay staging raises conflicting identity" {
     None,
   )
   let planner = RemoteAdmissionPlanner()
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     planner.prepare([first, second], _ => false),
   ) catch {
     error => Err(error)
@@ -893,7 +893,7 @@ test "remote admission fast plan begins and is consumed exactly once" {
 }
 
 ///|
-test "remote admission acknowledgement always invalidates prepared plans" {
+test "remote admission acknowledgement always invalidates prepared admissions" {
   let incoming = @core.Op::insert(
     -1,
     [],
@@ -910,7 +910,7 @@ test "remote admission acknowledgement always invalidates prepared plans" {
   assert_eq(planner.generation(), generation_before + 1)
   match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Stale => ()
-    _ => fail("every graph admission must invalidate a prepared plan")
+    _ => fail("every graph admission must invalidate a prepared admission")
   }
 }
 
@@ -1077,7 +1077,7 @@ test "remote admission planner preserves an unacknowledged successful prefix rem
 }
 
 ///|
-test "remote admission planner rejects stale plans before mutation" {
+test "remote admission planner rejects stale prepared admissions before mutation" {
   let first = @core.Op::insert(-1, [], "stale-first", 0, "x", None, None)
   let second = @core.Op::insert(-1, [], "stale-second", 0, "x", None, None)
   let planner = RemoteAdmissionPlanner()

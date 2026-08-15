@@ -32,7 +32,7 @@ Classification has two outcomes:
 - matching logical payload: omit the retransmission without admission, pending membership, or diagnostic;
 - differing logical payload: raise a typed conflict for the shared `RawVersion` and reject the complete attempt.
 
-Every comparison completes before `begin_remote_plan`:
+Every comparison completes before `begin_admission`:
 
 - OpLog compares repeated batch entries and graph-admitted identities;
 - the graph-agnostic planner compares overlay-staged and canonical-pending identities;

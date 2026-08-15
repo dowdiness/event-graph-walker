@@ -31,12 +31,12 @@ pub(all) suberror OpLogError {
   DuplicateOperation(raw~ : @core.RawVersion)
   /// A RawVersion was reused for a different logical operation payload.
   ConflictingIdentity(raw~ : @core.RawVersion)
-  /// A prepared remote admission plan was invalidated by another admission.
-  StaleRemoteAdmissionPlan
-  /// A prepared remote admission plan was committed or rejected already.
-  ConsumedRemoteAdmissionPlan
-  /// A prepared remote admission plan failed its internal consistency checks.
-  InvalidRemoteAdmissionPlan
+  /// A prepared admission was invalidated by another admission.
+  StaleAdmission
+  /// A prepared admission was committed or rejected already.
+  ConsumedAdmission
+  /// A prepared admission failed its internal consistency checks.
+  InvalidAdmission
   /// A remote admission committed a prefix before a causal graph failure.
   PartialRemoteAdmission(
     committed~ : Array[@core.Op],

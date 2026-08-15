@@ -654,7 +654,7 @@ fn planner_lifecycle_matches_model(
 ///|
 fn planner_lifecycle_plan_matches_model(
   planner : RemoteAdmissionPlanner,
-  actual : RemoteAdmissionPlan,
+  actual : PreparedAdmission,
   expected : PlannerLifecycleModelPlan,
 ) -> Bool {
   planner_lifecycle_same_ops(actual.operations(), expected.planned) &&
@@ -670,7 +670,7 @@ fn planner_lifecycle_prepare_checked(
   planner : RemoteAdmissionPlanner,
   model : PlannerLifecycleModel,
   incoming : Array[@core.Op],
-) -> (RemoteAdmissionPlan, PlannerLifecycleModelPlan)? raise OpLogError {
+) -> (PreparedAdmission, PlannerLifecycleModelPlan)? raise OpLogError {
   let before = planner_lifecycle_snapshot(planner, false)
   let expected = model.prepare(incoming)
   let actual = planner.prepare(incoming, raw => model.is_admitted(raw))
@@ -812,7 +812,7 @@ fn prop_remote_admission_planner_lifecycle(
   let planner = RemoteAdmissionPlanner()
   let model = PlannerLifecycleModel()
   let original_arrivals : Map[@core.RawVersion, Int] = Map::default()
-  let mut active_plan : RemoteAdmissionPlan? = None
+  let mut active_plan : PreparedAdmission? = None
   let mut active_model_plan : PlannerLifecycleModelPlan? = None
   let mut drain_operations : Array[@core.Op] = []
 

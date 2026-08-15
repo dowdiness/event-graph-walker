@@ -4,7 +4,7 @@ test "merge_remote_ops preserves a retained branch after partial admission" {
   let base = try! oplog.insert("b", -1, -1)
   let branch = try! Branch::checkout(oplog, oplog.get_frontier())
   let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
-  let commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError = _plan => {
+  let commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError = _plan => {
     let committed = try! oplog.insert("p", base.lv(), -1)
     raise @oplog.OpLogError::PartialRemoteAdmission(
       committed=[committed],

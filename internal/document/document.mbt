@@ -438,7 +438,7 @@ fn Document::preflight_remote_origin(
 }
 
 ///|
-/// Validate remote Fugue origins for the complete pending-drain plan before
+/// Validate remote Fugue origins for the complete pending-drain admission before
 /// the OpLog can allocate any of its local versions.
 fn Document::preflight_remote_targets(
   self : Document,
@@ -604,11 +604,11 @@ priv enum RemoteAdmissionOutcome {
 
 ///|
 /// Translate only partial admission into a projection-ready outcome.
-fn commit_remote_plan(
-  plan : @oplog.RemoteAdmissionPlan,
-  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+fn commit_prepared_admission(
+  prepared : @oplog.PreparedAdmission,
+  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> RemoteAdmissionOutcome raise DocumentError {
-  try commit(plan) catch {
+  try commit(prepared) catch {
     @oplog.OpLogError::PartialRemoteAdmission(committed~, error~) =>
       RemoteAdmissionOutcome::Partial(committed, error)
     error => raise DocumentError::OpLog(error)
@@ -678,27 +678,27 @@ fn Document::project_remote_ops(
 }
 
 ///|
-/// Apply a remote operation with an injectable prepared-plan commit shell.
+/// Apply a remote operation with an injectable prepared-admission commit shell.
 fn Document::apply_remote_with(
   self : Document,
   op : @core.Op,
-  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> Unit raise DocumentError {
   self.cursor = None
   // Validate Insert content before touching the oplog so malformed peer ops
   // can't persist (issue #31).
   validate_remote_ops([op][:])
-  let plan = self.oplog.prepare_remote([op]) catch {
+  let prepared = self.oplog.prepare_remote([op]) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.preflight_remote_targets(plan.operations())
+  self.preflight_remote_targets(prepared.operations())
   // Check the incoming operation independently so an unready operation with
   // a graph-known but structurally missing origin is rejected before pending.
   self.preflight_remote_targets([op][:])
   // Detach before admission so a fallible commit cannot observe a stale
   // canonical cache. The exact cache is restored once the outcome is known.
   let detached_cache = self.indexed_state.take_cache()
-  let outcome = try commit_remote_plan(plan, commit) catch {
+  let outcome = try commit_prepared_admission(prepared, commit) catch {
     error => {
       self.indexed_state.restore_cache(detached_cache)
       raise error
@@ -727,16 +727,16 @@ pub fn Document::apply_remote(
   self : Document,
   op : @core.Op,
 ) -> Unit raise DocumentError {
-  self.apply_remote_with(op, plan => self.oplog.commit_remote(plan))
+  self.apply_remote_with(op, prepared => self.oplog.commit_remote(prepared))
 }
 
 ///|
-/// Merge remote operations with an injectable prepared-plan commit shell.
+/// Merge remote operations with an injectable prepared-admission commit shell.
 fn Document::merge_remote_with(
   self : Document,
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
-  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> Unit raise DocumentError {
   self.cursor = None
   // Validate the complete batch before touching state, so malformed content
@@ -745,17 +745,17 @@ fn Document::merge_remote_with(
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }
-  let plan = self.oplog.prepare_remote(remote_ops) catch {
+  let prepared = self.oplog.prepare_remote(remote_ops) catch {
     e => raise DocumentError::OpLog(e)
   }
-  self.preflight_remote_targets(plan.operations())
+  self.preflight_remote_targets(prepared.operations())
   // Retain the pre-commit frontier. Branch advances this shared tree once
-  // admission has committed the prepared plan.
+  // admission has committed the prepared admission.
   let branch = @branch.Branch::from_tree_and_oplog(self.tree, self.oplog)
   // Invalidate before merge so admission and partial-merge failures cannot
   // leave a stale position cache behind.
   self.invalidate_cache()
-  let outcome = commit_remote_plan(plan, commit)
+  let outcome = commit_prepared_admission(prepared, commit)
   match outcome {
     RemoteAdmissionOutcome::Complete(_) => {
       let _ = branch.advance(self.oplog.get_frontier()) catch {
@@ -780,8 +780,8 @@ pub fn Document::merge_remote(
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
-  self.merge_remote_with(remote_ops, remote_frontier, plan => {
-    self.oplog.commit_remote(plan)
+  self.merge_remote_with(remote_ops, remote_frontier, prepared => {
+    self.oplog.commit_remote(prepared)
   })
 }
 

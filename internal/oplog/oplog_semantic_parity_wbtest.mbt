@@ -31,7 +31,7 @@ test "P0 core rejects sequence fork before mutation" {
   let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let fork = p0_insert("alice", 1, [], "B", Some(p0_raw("alice", 0)))
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     receiver.prepare_remote([root, fork]),
   ) catch {
     error => Err(error)
@@ -84,7 +84,7 @@ test "P0 core rejects non-insert origin before mutation" {
     "B",
     Some(p0_raw("alice", 1)),
   )
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     receiver.prepare_remote([root, delete, malformed]),
   ) catch {
     error => Err(error)
@@ -116,7 +116,7 @@ test "P0 rejects delete right-origin shape before mutation" {
     Some(op) => op
     None => fail("expected malformed operation from OpRun")
   }
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     receiver.prepare_remote([malformed]),
   ) catch {
     error => Err(error)
@@ -147,7 +147,7 @@ test "P0 known invalid origin rejects despite unrelated missing parent" {
     "B",
     Some(p0_raw("alice", 1)),
   )
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     receiver.prepare_remote([malformed]),
   ) catch {
     error => Err(error)
@@ -259,7 +259,7 @@ test "P0 core pending limit rejects without state mutation" {
     "B",
     Some(p0_raw("alice", 0)),
   )
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     receiver.prepare_remote([future], max_pending_after_complete=0),
   ) catch {
     error => Err(error)
@@ -291,7 +291,7 @@ test "P0 core pending limit rejects without state mutation" {
   ignore(try! receiver.commit_remote(duplicate))
   inspect(receiver.has_pending(), content="true")
 
-  let negative : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let negative : Result[PreparedAdmission, OpLogError] = Ok(
     receiver.prepare_remote([], max_pending_after_complete=-1),
   ) catch {
     error => Err(error)
@@ -518,7 +518,7 @@ test "P0 pending limit is a complete-transition forecast across partial admissio
 }
 
 ///|
-test "P0 prepared plan owns operation parent payload" {
+test "P0 prepared admission owns operation parent payload" {
   let receiver = OpLog("prepared-parent-alias")
   let alice = p0_insert("prepared-alice", 0, [], "A", None)
   let bob = p0_insert("prepared-bob", 0, [], "B", None)

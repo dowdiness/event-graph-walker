@@ -222,12 +222,12 @@ pub fn Branch::checkout_version_vector(
 fn Branch::merge_remote_ops_with(
   self : Branch,
   remote_ops : Array[@core.Op],
-  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> Branch raise BranchError {
-  let plan = self.oplog.prepare_remote(remote_ops) catch {
+  let prepared = self.oplog.prepare_remote(remote_ops) catch {
     e => raise BranchError::OpLog(e)
   }
-  let outcome = commit_remote_plan(plan, commit)
+  let outcome = commit_prepared_admission(prepared, commit)
   match outcome {
     BranchRemoteAdmissionOutcome::Complete => self.advance_to_current()
     BranchRemoteAdmissionOutcome::Partial(committed, error) => {
@@ -248,11 +248,11 @@ priv enum BranchRemoteAdmissionOutcome {
 
 ///|
 /// Catch only a typed partial admission; unknown OpLog failures propagate.
-fn commit_remote_plan(
-  plan : @oplog.RemoteAdmissionPlan,
-  commit : (@oplog.RemoteAdmissionPlan) -> Array[@core.Op] raise @oplog.OpLogError,
+fn commit_prepared_admission(
+  prepared : @oplog.PreparedAdmission,
+  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> BranchRemoteAdmissionOutcome raise BranchError {
-  try commit(plan) catch {
+  try commit(prepared) catch {
     @oplog.OpLogError::PartialRemoteAdmission(committed~, error~) =>
       BranchRemoteAdmissionOutcome::Partial(committed, error)
     error => raise BranchError::OpLog(error)
@@ -270,5 +270,7 @@ pub fn Branch::merge_remote_ops(
   self : Branch,
   remote_ops : Array[@core.Op],
 ) -> Branch raise BranchError {
-  self.merge_remote_ops_with(remote_ops, plan => self.oplog.commit_remote(plan))
+  self.merge_remote_ops_with(remote_ops, prepared => {
+    self.oplog.commit_remote(prepared)
+  })
 }

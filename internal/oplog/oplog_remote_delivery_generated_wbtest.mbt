@@ -667,7 +667,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
   )
   let conflict_target = OpLog("generated-conflicting")
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     conflict_target.prepare_remote([root, conflicting]),
   ) catch {
     error => Err(error)
@@ -723,7 +723,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let pending_result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let pending_result : Result[PreparedAdmission, OpLogError] = Ok(
     pending_target.prepare_remote([pending_conflict]),
   ) catch {
     error => Err(error)
@@ -787,7 +787,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let admitted_result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let admitted_result : Result[PreparedAdmission, OpLogError] = Ok(
     pending_target.prepare_remote([admitted_conflict]),
   ) catch {
     error => Err(error)

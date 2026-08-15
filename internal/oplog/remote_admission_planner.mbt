@@ -56,7 +56,7 @@ priv struct RemoteAdmissionPreparedNode {
 
 ///|
 /// Private representation of staged capability data.
-priv enum RemoteAdmissionPlanStorage {
+priv enum PreparedAdmissionStorage {
   DeferredFast
   ImmediateGeneral(Array[RemoteAdmissionPreparedNode], planned_count~ : Int)
 }
@@ -70,10 +70,10 @@ priv struct RemoteAdmissionReady {
 } derive(Eq, Compare)
 
 ///|
-/// Non-mutating preparation result. Its fields are private to this package.
-pub struct RemoteAdmissionPlan {
+/// Non-mutating admission prepared for one commit. Its fields are private to this package.
+pub struct PreparedAdmission {
   priv planned : Array[@core.Op]
-  priv storage : RemoteAdmissionPlanStorage
+  priv storage : PreparedAdmissionStorage
   priv discard_roots : Array[@core.RawVersion]
   priv discarded_pending : @hashset.HashSet[@core.RawVersion]
   priv discarded_staged : @hashset.HashSet[@core.RawVersion]
@@ -290,14 +290,14 @@ fn remote_admission_validate(op : @core.Op) -> Unit raise OpLogError {
   ignore(RemoteAdmissionPlanner::acknowledge_admitted)
   ignore(RemoteAdmissionPlanner::reject_pending_dependents)
   ignore(RemoteAdmissionPlanner::prepare)
-  ignore(RemoteAdmissionPlan::planned_operations)
-  ignore(RemoteAdmissionPlan::operations)
+  ignore(PreparedAdmission::planned_operations)
+  ignore(PreparedAdmission::operations)
   ignore(RemoteAdmissionPlanner::pending_operations)
   ignore(RemoteAdmissionPlanner::has_pending)
-  ignore(RemoteAdmissionPlan::remaining_raws)
+  ignore(PreparedAdmission::remaining_raws)
   ignore(RemoteAdmissionPlanner::pending_raws)
   ignore(RemoteAdmissionPlanner::generation)
-  ignore(RemoteAdmissionPlan::generation)
+  ignore(PreparedAdmission::generation)
   ignore(RemoteAdmissionPlanner::arrival_of)
   ignore(RemoteAdmissionPlanner::begin)
   ignore(RemoteAdmissionPlanner::begin_plan)
@@ -463,11 +463,11 @@ fn remote_admission_raise_semantic(
 ) -> Unit raise OpLogError {
   match result {
     Valid => ()
-    Undecidable => raise OpLogError::InvalidRemoteAdmissionPlan
+    Undecidable => raise OpLogError::InvalidAdmission
     Sequence(raw~) => raise OpLogError::SequenceAncestryViolation(raw~)
     Origin(operation~, target~) =>
       raise OpLogError::OriginTargetNotInsert(operation~, target~)
-    Invalid => raise OpLogError::InvalidRemoteAdmissionPlan
+    Invalid => raise OpLogError::InvalidAdmission
   }
 }
 
@@ -911,7 +911,7 @@ fn RemoteAdmissionPlanner::prepare_fast(
   incoming : Array[@core.Op],
   is_admitted : (@core.RawVersion) -> Bool,
   semantics : RemoteAdmissionSemantics?,
-) -> RemoteAdmissionPlan? raise OpLogError {
+) -> PreparedAdmission? raise OpLogError {
   if !self.pending.is_empty() {
     return None
   }
@@ -945,7 +945,7 @@ fn RemoteAdmissionPlanner::prepare_fast(
           Sequence(raw~) => raise OpLogError::SequenceAncestryViolation(raw~)
           Origin(operation~, target~) =>
             raise OpLogError::OriginTargetNotInsert(operation~, target~)
-          Undecidable | Invalid => raise OpLogError::InvalidRemoteAdmissionPlan
+          Undecidable | Invalid => raise OpLogError::InvalidAdmission
         }
       None => ()
     }
@@ -972,7 +972,7 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
   incoming : Array[@core.Op],
   is_admitted : (@core.RawVersion) -> Bool,
   semantics : RemoteAdmissionSemantics?,
-) -> RemoteAdmissionPlan raise OpLogError {
+) -> PreparedAdmission raise OpLogError {
   match self.prepare_fast(incoming, is_admitted, semantics) {
     Some(plan) => return plan
     None => ()
@@ -1140,7 +1140,7 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
         } else {
           raise OpLogError::OriginTargetNotInsert(operation~, target~)
         }
-      Undecidable | Invalid => raise OpLogError::InvalidRemoteAdmissionPlan
+      Undecidable | Invalid => raise OpLogError::InvalidAdmission
     }
     overlay.planned.add(entry.raw)
     if !is_admitted(entry.raw) {
@@ -1191,7 +1191,7 @@ fn RemoteAdmissionPlanner::prepare(
   self : RemoteAdmissionPlanner,
   incoming : Array[@core.Op],
   is_admitted : (@core.RawVersion) -> Bool,
-) -> RemoteAdmissionPlan raise OpLogError {
+) -> PreparedAdmission raise OpLogError {
   self.prepare_with_semantics(incoming, is_admitted, None)
 }
 
@@ -1200,7 +1200,7 @@ fn RemoteAdmissionPlanner::prepare(
 /// Generation and consumed checks happen before any canonical mutation.
 fn RemoteAdmissionPlanner::begin_with_semantics(
   self : RemoteAdmissionPlanner,
-  plan : RemoteAdmissionPlan,
+  plan : PreparedAdmission,
   is_admitted : (@core.RawVersion) -> Bool,
   semantics : RemoteAdmissionSemantics?,
 ) -> RemoteAdmissionBeginResult {
@@ -1399,17 +1399,17 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
 /// Preserve the graph-agnostic planner entry point for existing callers.
 fn RemoteAdmissionPlanner::begin(
   self : RemoteAdmissionPlanner,
-  plan : RemoteAdmissionPlan,
+  plan : PreparedAdmission,
   is_admitted : (@core.RawVersion) -> Bool,
 ) -> RemoteAdmissionBeginResult {
   self.begin_with_semantics(plan, is_admitted, None)
 }
 
 ///|
-/// Name the lifecycle transition for callers that emphasize plan ownership.
+/// Name the lifecycle transition for callers that emphasize admission ownership.
 fn RemoteAdmissionPlanner::begin_plan_with_semantics(
   self : RemoteAdmissionPlanner,
-  plan : RemoteAdmissionPlan,
+  plan : PreparedAdmission,
   is_admitted : (@core.RawVersion) -> Bool,
   semantics : RemoteAdmissionSemantics?,
 ) -> RemoteAdmissionBeginResult {
@@ -1420,7 +1420,7 @@ fn RemoteAdmissionPlanner::begin_plan_with_semantics(
 /// Preserve the graph-agnostic planner entry point for existing callers.
 fn RemoteAdmissionPlanner::begin_plan(
   self : RemoteAdmissionPlanner,
-  plan : RemoteAdmissionPlan,
+  plan : PreparedAdmission,
   is_admitted : (@core.RawVersion) -> Bool,
 ) -> RemoteAdmissionBeginResult {
   self.begin_plan_with_semantics(plan, is_admitted, None)
@@ -1524,9 +1524,9 @@ fn RemoteAdmissionPlanner::maybe_compact(
 }
 
 ///|
-/// Find a staged operation retained by this plan's general storage.
-fn RemoteAdmissionPlan::staged_operation(
-  self : RemoteAdmissionPlan,
+/// Find a staged operation retained by this prepared admission's general storage.
+fn PreparedAdmission::staged_operation(
+  self : PreparedAdmission,
   raw : @core.RawVersion,
 ) -> @core.Op? {
   match self.storage {
@@ -1538,24 +1538,24 @@ fn RemoteAdmissionPlan::staged_operation(
 
 ///|
 /// Read-only compatibility-ordered operations in this admission plan.
-pub fn RemoteAdmissionPlan::operations(
-  self : RemoteAdmissionPlan,
+pub fn PreparedAdmission::operations(
+  self : PreparedAdmission,
 ) -> ArrayView[@core.Op] {
   self.planned[:]
 }
 
 ///|
 /// Planned operations, copied for white-box tests and future package users.
-fn RemoteAdmissionPlan::planned_operations(
-  self : RemoteAdmissionPlan,
+fn PreparedAdmission::planned_operations(
+  self : PreparedAdmission,
 ) -> Array[@core.Op] {
   self.operations().to_owned()
 }
 
 ///|
 /// Remaining canonical and staged operation identities in arrival order.
-fn RemoteAdmissionPlan::remaining_raws(
-  self : RemoteAdmissionPlan,
+fn PreparedAdmission::remaining_raws(
+  self : PreparedAdmission,
   planner : RemoteAdmissionPlanner,
 ) -> Array[@core.RawVersion] {
   let remaining : Array[@core.RawVersion] = []
@@ -1629,8 +1629,8 @@ fn RemoteAdmissionPlanner::pending_operations(
 }
 
 ///|
-/// Generation captured by this plan for future stale-plan validation.
-fn RemoteAdmissionPlan::generation(self : RemoteAdmissionPlan) -> Int {
+/// Generation captured by this prepared admission for future stale-admission validation.
+fn PreparedAdmission::generation(self : PreparedAdmission) -> Int {
   self.generation
 }
 

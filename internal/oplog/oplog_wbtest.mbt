@@ -148,7 +148,7 @@ test "get_ops_rle expands a middle slice from a compressed run" {
 }
 
 ///|
-test "remote admission plan is opaque, read-only, and single use" {
+test "prepared admission is opaque, read-only, and single use" {
   let oplog = OpLog("local")
   let first = @core.Op::insert(-1, [], "opaque-first", 0, "a", None, None)
   let second = @core.Op::insert(-1, [], "opaque-second", 0, "b", None, None)
@@ -166,13 +166,13 @@ test "remote admission plan is opaque, read-only, and single use" {
     error => Err(error)
   }
   match reused {
-    Err(OpLogError::ConsumedRemoteAdmissionPlan) => ()
-    _ => fail("expected consumed remote admission plan")
+    Err(OpLogError::ConsumedAdmission) => ()
+    _ => fail("expected consumed prepared admission")
   }
 }
 
 ///|
-test "remote admission rejects stale plans before local mutation" {
+test "prepared admission rejects stale values before local mutation" {
   let oplog = OpLog("local")
   let incoming = @core.Op::insert(-1, [], "stale-incoming", 0, "r", None, None)
   let plan = try! oplog.prepare_remote([incoming])
@@ -184,8 +184,8 @@ test "remote admission rejects stale plans before local mutation" {
     error => Err(error)
   }
   match result {
-    Err(OpLogError::StaleRemoteAdmissionPlan) => ()
-    _ => fail("expected stale remote admission plan")
+    Err(OpLogError::StaleAdmission) => ()
+    _ => fail("expected stale prepared admission")
   }
   assert_eq(oplog.op_count(), count_before)
   assert_eq(oplog.has_pending(), false)
@@ -219,8 +219,8 @@ test "remote admission rejects generation mismatch after remote admission" {
     error => Err(error)
   }
   match result {
-    Err(OpLogError::StaleRemoteAdmissionPlan) => ()
-    _ => fail("expected stale remote admission plan")
+    Err(OpLogError::StaleAdmission) => ()
+    _ => fail("expected stale prepared admission")
   }
 
   assert_eq(oplog.op_count(), count_after)
@@ -258,8 +258,8 @@ test "remote admission begin rejects internal conflicts atomically" {
     error => Err(error)
   }
   match result {
-    Err(OpLogError::InvalidRemoteAdmissionPlan) => ()
-    _ => fail("expected invalid remote admission plan")
+    Err(OpLogError::InvalidAdmission) => ()
+    _ => fail("expected invalid prepared admission")
   }
   assert_eq(oplog.op_count(), 0)
   assert_eq(oplog.has_pending(), false)

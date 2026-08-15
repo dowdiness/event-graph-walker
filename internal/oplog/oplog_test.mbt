@@ -347,7 +347,7 @@ test "prepare_remote rejects conflict before ready prefix admission" {
   let oplog = @oplog.OpLog("ready-prefix")
   let ready = @core.Op::insert(-1, [], "ready-prefix-op", 0, "a", None, None)
   let conflict = @core.Op::insert(5, [], "ready-prefix-op", 0, "b", None, None)
-  let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
+  let result : Result[PreparedAdmission, OpLogError] = Ok(
     oplog.prepare_remote([ready, conflict]),
   ) catch {
     error => Err(error)

@@ -524,14 +524,14 @@ test "apply_remote_with rethrows stale admission without projection" {
   let result : Result[Unit, DocumentError] = try {
     doc.apply_remote_with(incoming, _ => {
       commit_saw_detached_cache = doc.indexed_state.cache is None
-      raise @oplog.OpLogError::StaleRemoteAdmissionPlan
+      raise @oplog.OpLogError::StaleAdmission
     })
     Ok(())
   } catch {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleRemoteAdmissionPlan)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
     _ => fail("expected unchanged stale admission error")
   }
   // The stale commit did not touch Fugue, and the exact warm cache was put
