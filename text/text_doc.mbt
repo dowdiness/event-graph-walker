@@ -213,7 +213,7 @@ pub fn TextState::checkout(
 ) -> TextView raise TextError {
   let frontier : Array[Int] = []
   for entry in version.entries {
-    let raw = @core.RawVersion::new(entry.replica_id, entry.sequence)
+    let raw = @core.RawVersion(entry.replica_id, entry.sequence)
     match self.inner.raw_to_lv(raw) {
       Some(lv) => frontier.push(lv)
       None => raise TextError::VersionNotFound

@@ -65,7 +65,7 @@ pub fn OpLog::get_ops_rle(
 ### Replay All Operations
 
 ```moonbit
-let oplog = OpLog::new("agent-1")
+let oplog = OpLog("agent-1")
 
 // Create some operations
 let _op1 = oplog.insert("h", -1, -1)

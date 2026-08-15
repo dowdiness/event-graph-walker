@@ -5,7 +5,7 @@
 fn benchmark_raw_versions(n : Int) -> Array[@core.RawVersion] {
   let raws : Array[@core.RawVersion] = []
   for i in 0..<n {
-    raws.push(@core.RawVersion::new("bench", i))
+    raws.push(@core.RawVersion("bench", i))
   }
   raws
 }
@@ -39,12 +39,8 @@ test "oplog - mutable hashset build (1000 raw versions)" (b : @bench.T) {
 fn benchmark_remote_chain(n : Int) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<n {
-    let parents = if i == 0 {
-      []
-    } else {
-      [@core.RawVersion::new("remote", i - 1)]
-    }
-    ops.push(@core.Op::new_insert(-1, parents, "remote", i, "x", None, None))
+    let parents = if i == 0 { [] } else { [@core.RawVersion("remote", i - 1)] }
+    ops.push(@core.Op::insert(-1, parents, "remote", i, "x", None, None))
   }
   ops
 }
@@ -55,7 +51,7 @@ fn benchmark_remote_live_planner(
 ) -> RemoteAdmissionPlanner raise OpLogError {
   let planner = RemoteAdmissionPlanner()
   for i in 0..<n {
-    let op = @core.Op::new_insert(
+    let op = @core.Op::insert(
       -1,
       [],
       "compact-benchmark-live",
@@ -76,15 +72,7 @@ fn benchmark_remote_compaction_planner(
   let planner = RemoteAdmissionPlanner()
   let rejected : Array[@core.RawVersion] = []
   for i in 0..<n {
-    let op = @core.Op::new_insert(
-      -1,
-      [],
-      "compact-benchmark",
-      i,
-      "x",
-      None,
-      None,
-    )
+    let op = @core.Op::insert(-1, [], "compact-benchmark", i, "x", None, None)
     planner.register_pending(op, _ => false)
     if i % 2 == 0 {
       rejected.push(remote_admission_raw(op))
@@ -151,13 +139,13 @@ fn benchmark_retained_ready_planner(
 ) -> RemoteAdmissionPlanner raise OpLogError {
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(
-    @core.Op::new_insert(-1, [], "retained-ready-live", 0, "x", None, None),
+    @core.Op::insert(-1, [], "retained-ready-live", 0, "x", None, None),
     _ => false,
   )
   planner.register_pending(
-    @core.Op::new_insert(
+    @core.Op::insert(
       -1,
-      [@core.RawVersion::new("retained-ready-missing", 0)],
+      [@core.RawVersion("retained-ready-missing", 0)],
       "retained-ready-unresolved",
       0,
       "x",
@@ -167,7 +155,7 @@ fn benchmark_retained_ready_planner(
     _ => false,
   )
   for i in 0..<stale_ready_entries {
-    let op = @core.Op::new_insert(
+    let op = @core.Op::insert(
       -1,
       [],
       "retained-ready-stale",
@@ -324,9 +312,9 @@ test "oplog - retained stale ready above policy, unresolved prepare x100 (513 st
 /// One unresolved operation keeps canonical pending membership live while
 /// independent remote deliveries pass through the production OpLog lifecycle.
 fn benchmark_remote_stream_blocker() -> @core.Op {
-  @core.Op::new_insert(
+  @core.Op::insert(
     -1,
-    [@core.RawVersion::new("incidence-missing", 0)],
+    [@core.RawVersion("incidence-missing", 0)],
     "incidence-blocked",
     0,
     "blocked",
@@ -344,7 +332,7 @@ fn benchmark_remote_stream_lifecycle(
   retain_unresolved : Bool,
   batched : Bool,
 ) -> OpLog raise OpLogError {
-  let oplog = OpLog::new("incidence-local")
+  let oplog = OpLog("incidence-local")
   if retain_unresolved {
     ignore(oplog.apply_remote(benchmark_remote_stream_blocker()))
   }
@@ -366,7 +354,7 @@ fn benchmark_remote_stream_lifecycle(
 fn benchmark_remote_stream_incidence(
   ready_ops : Array[@core.Op],
 ) -> (Int, Int, Int, Int, Int, Int) raise OpLogError {
-  let oplog = OpLog::new("incidence-evidence")
+  let oplog = OpLog("incidence-evidence")
   ignore(oplog.apply_remote(benchmark_remote_stream_blocker()))
   let mut prepares_with_stale_ready = 0
   let mut max_stale_ready = 0
@@ -479,7 +467,7 @@ fn benchmark_fixed_point_oracle(
     progress = false
     let remaining : Array[@core.Op] = []
     for op in candidates {
-      let raw = @core.RawVersion::new(op.agent(), op.seq())
+      let raw = @core.RawVersion(op.agent(), op.seq())
       if known_raws.contains(raw) || planned_raws.contains(raw) {
         progress = true
         continue
@@ -528,7 +516,7 @@ fn benchmark_fixed_point_oracle(
 ///|
 fn benchmark_raws(ops : Array[@core.Op]) -> Array[@core.RawVersion] {
   [
-    for op in ops => @core.RawVersion::new(op.agent(), op.seq())
+    for op in ops => @core.RawVersion(op.agent(), op.seq())
   ]
 }
 
@@ -547,7 +535,7 @@ fn benchmark_assert_raws(
 fn benchmark_production_plan(
   ops : Array[@core.Op],
 ) -> (Array[@core.Op], Array[@core.RawVersion]) raise OpLogError {
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   let plan = oplog.prepare_remote(ops)
   (plan.operations().to_owned(), plan.remaining_raws(oplog.planner))
 }
@@ -558,7 +546,7 @@ fn benchmark_production_plan(
 fn benchmark_production_planned(
   ops : Array[@core.Op],
 ) -> Array[@core.Op] raise OpLogError {
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   oplog.plan_remote(ops)
 }
 
@@ -614,7 +602,7 @@ test "oplog - reverse dependency chain apply (100 ops)" (b : @bench.T) {
   let ops = benchmark_remote_chain(100)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
+      let oplog = OpLog("local")
       try! benchmark_apply_reverse_chain(oplog, ops)
       b.keep(oplog.op_count())
     },
@@ -627,7 +615,7 @@ test "oplog - reverse dependency chain apply (1000 ops)" (b : @bench.T) {
   let ops = benchmark_remote_chain(1000)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
+      let oplog = OpLog("local")
       try! benchmark_apply_reverse_chain(oplog, ops)
       b.keep(oplog.op_count())
     },
@@ -640,7 +628,7 @@ test "oplog - reverse dependency chain apply (10000 ops)" (b : @bench.T) {
   let ops = benchmark_remote_chain(10000)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
+      let oplog = OpLog("local")
       try! benchmark_apply_reverse_chain(oplog, ops)
       b.keep(oplog.op_count())
     },
@@ -756,18 +744,10 @@ fn benchmark_remote_branches(depth : Int) -> Array[@core.Op] {
       let parents = if level == 0 {
         []
       } else {
-        [@core.RawVersion::new(agents[branch], level - 1)]
+        [@core.RawVersion(agents[branch], level - 1)]
       }
       ops.push(
-        @core.Op::new_insert(
-          -1,
-          parents,
-          agents[branch],
-          level,
-          "x",
-          None,
-          None,
-        ),
+        @core.Op::insert(-1, parents, agents[branch], level, "x", None, None),
       )
     }
   }
@@ -779,7 +759,7 @@ test "oplog - reverse branching dependencies apply (4 x 250 ops)" (b : @bench.T)
   let ops = benchmark_remote_branches(250)
   b.bench(
     fn() {
-      let oplog = OpLog::new("local")
+      let oplog = OpLog("local")
       try! benchmark_apply_reverse_chain(oplog, ops)
       b.keep(oplog.op_count())
     },
@@ -824,7 +804,7 @@ test "oplog - production reverse branching dependencies plan batch (4 x 250 ops)
 fn benchmark_all_ready_batch(n : Int) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<n {
-    ops.push(@core.Op::new_insert(-1, [], "ready", i, "x", None, None))
+    ops.push(@core.Op::insert(-1, [], "ready", i, "x", None, None))
   }
   ops
 }
@@ -1022,7 +1002,7 @@ test "oplog - production lifecycle reverse chain (10000 ops)" (b : @bench.T) {
 ///|
 test "oplog - insert (100 ops)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     let mut prev = -1
     for i = 0; i < 100; i = i + 1 {
       let op = try! oplog.insert("a", prev, -1)
@@ -1036,7 +1016,7 @@ test "oplog - insert (100 ops)" (b : @bench.T) {
 /// Benchmark: Insert operations (linear, 1000 ops)
 test "oplog - insert (1000 ops)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     let mut prev = -1
     for i = 0; i < 1000; i = i + 1 {
       let op = try! oplog.insert("a", prev, -1)
@@ -1050,7 +1030,7 @@ test "oplog - insert (1000 ops)" (b : @bench.T) {
 /// Benchmark: Insert and delete mix (50% delete rate)
 test "oplog - insert and delete mix (100 ops)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     let mut prev = -1
     let lvs = []
 
@@ -1074,7 +1054,7 @@ test "oplog - insert and delete mix (100 ops)" (b : @bench.T) {
 /// Benchmark: Apply remote operations (50 ops)
 test "oplog - apply_remote (50 ops)" (b : @bench.T) {
   // Pre-create remote operations
-  let remote_oplog = OpLog::new("agent_b")
+  let remote_oplog = OpLog("agent_b")
   let mut prev = -1
   let remote_ops = []
   for i = 0; i < 50; i = i + 1 {
@@ -1083,7 +1063,7 @@ test "oplog - apply_remote (50 ops)" (b : @bench.T) {
     prev = op.lv()
   }
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     for op in remote_ops {
       ignore(try! oplog.apply_remote(op))
     }
@@ -1094,7 +1074,7 @@ test "oplog - apply_remote (50 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Get operation by LV (from 1000 ops)
 test "oplog - get_op (1000 ops)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_a")
+  let oplog = OpLog("agent_a")
   let mut prev = -1
   for i = 0; i < 1000; i = i + 1 {
     let op = try! oplog.insert("a", prev, -1)
@@ -1112,7 +1092,7 @@ test "oplog - get_op (1000 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Get frontier (single agent)
 test "oplog - get_frontier (single agent)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_a")
+  let oplog = OpLog("agent_a")
   let mut prev = -1
   for i = 0; i < 100; i = i + 1 {
     let op = try! oplog.insert("a", prev, -1)
@@ -1127,12 +1107,12 @@ test "oplog - get_frontier (single agent)" (b : @bench.T) {
 ///|
 /// Benchmark: Get frontier (multiple agents merged)
 test "oplog - get_frontier (5 agents)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_main")
+  let oplog = OpLog("agent_main")
 
   // Merge operations from 5 agents
   let agents = ["agent_a", "agent_b", "agent_c", "agent_d", "agent_e"]
   for agent in agents {
-    let remote_oplog = OpLog::new(agent)
+    let remote_oplog = OpLog(agent)
     let mut prev = -1
     for i = 0; i < 20; i = i + 1 {
       let op = try! remote_oplog.insert(agent, prev, -1)
@@ -1149,7 +1129,7 @@ test "oplog - get_frontier (5 agents)" (b : @bench.T) {
 ///|
 /// Benchmark: Walk and collect operations (100 ops)
 test "oplog - walk_and_collect (100 ops)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_a")
+  let oplog = OpLog("agent_a")
   let mut prev = -1
   for i = 0; i < 100; i = i + 1 {
     let op = try! oplog.insert("a", prev, -1)
@@ -1165,17 +1145,17 @@ test "oplog - walk_and_collect (100 ops)" (b : @bench.T) {
 ///|
 /// Benchmark: Walk and collect with concurrent branches
 test "oplog - walk_and_collect (concurrent)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_main")
+  let oplog = OpLog("agent_main")
 
   // Create two concurrent branches
-  let oplog_a = OpLog::new("agent_a")
+  let oplog_a = OpLog("agent_a")
   let mut prev_a = -1
   for i = 0; i < 50; i = i + 1 {
     let op = try! oplog_a.insert("a", prev_a, -1)
     ignore(try! oplog.apply_remote(op))
     prev_a = op.lv()
   }
-  let oplog_b = OpLog::new("agent_b")
+  let oplog_b = OpLog("agent_b")
   let mut prev_b = -1
   for i = 0; i < 50; i = i + 1 {
     let op = try! oplog_b.insert("b", prev_b, -1)
@@ -1192,7 +1172,7 @@ test "oplog - walk_and_collect (concurrent)" (b : @bench.T) {
 ///|
 /// Benchmark: Diff and collect (advance 20 ops)
 test "oplog - diff_and_collect (advance 20)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_a")
+  let oplog = OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 100 operations
@@ -1217,7 +1197,7 @@ test "oplog - diff_and_collect (advance 20)" (b : @bench.T) {
 ///|
 /// Benchmark: Walk filtered (filter inserts only)
 test "oplog - walk_filtered (inserts only)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_a")
+  let oplog = OpLog("agent_a")
   let mut prev = -1
   let lvs = []
 
@@ -1249,7 +1229,7 @@ test "oplog - walk_filtered (inserts only)" (b : @bench.T) {
 /// Benchmark: Sequential inserts (simulate typing, 500 chars)
 test "oplog - sequential typing (500 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     let mut prev = -1
 
     // Simulate typing a 500-character document
@@ -1265,7 +1245,7 @@ test "oplog - sequential typing (500 chars)" (b : @bench.T) {
 /// Benchmark: Random position inserts (simulate editing)
 test "oplog - random position inserts (100 ops)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     let lvs = []
 
     // Insert at various positions
@@ -1286,7 +1266,7 @@ test "oplog - random position inserts (100 ops)" (b : @bench.T) {
 /// Benchmark: Sequential typing (100000 chars) - simulate typing a large document
 test "oplog - sequential typing (100000 chars)" (b : @bench.T) {
   b.bench(fn() {
-    let oplog = OpLog::new("agent_a")
+    let oplog = OpLog("agent_a")
     let mut prev = -1
 
     // Simulate typing a 100,000-character document
@@ -1302,7 +1282,7 @@ test "oplog - sequential typing (100000 chars)" (b : @bench.T) {
 /// Benchmark: Diff and collect (100000 ops advance)
 /// Tests performance of computing delta from an old frontier to current
 test "oplog - diff_and_collect (100000 ops advance)" (b : @bench.T) {
-  let oplog = OpLog::new("agent_a")
+  let oplog = OpLog("agent_a")
   let mut prev = -1
 
   // Build base: 100 operations

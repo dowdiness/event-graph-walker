@@ -2,14 +2,14 @@
 
 ///|
 test "roundtrip: insert op -> OpRun -> Op" {
-  let op = Op::new_insert(
+  let op = Op::insert(
     5,
-    [RawVersion::new("alice", 3)],
+    [RawVersion("alice", 3)],
     "alice",
     4,
     "x",
-    Some(RawVersion::new("alice", 3)),
-    Some(RawVersion::new("bob", 0)),
+    Some(RawVersion("alice", 3)),
+    Some(RawVersion("bob", 0)),
   )
   let run = OpRun::from_op(op)
   inspect(run.count, content="1")
@@ -44,7 +44,7 @@ test "roundtrip: insert op -> OpRun -> Op" {
 
 ///|
 test "roundtrip: empty insert op -> OpRun -> Op" {
-  let op = Op::new_insert(0, [], "legacy", 0, "", None, None)
+  let op = Op::insert(0, [], "legacy", 0, "", None, None)
   let run = OpRun::from_op(op)
   let decompressed = run.decompress(0)
   guard decompressed is Some(d) else { fail("expected Some") }
@@ -53,7 +53,7 @@ test "roundtrip: empty insert op -> OpRun -> Op" {
 
 ///|
 test "multi-character singleton insert roundtrips without truncation" {
-  let op = Op::new_insert(0, [], "multi", 0, "ab", None, None)
+  let op = Op::insert(0, [], "multi", 0, "ab", None, None)
   let run = OpRun::from_op(op)
   let decompressed = run.decompress(0)
   guard decompressed is Some(d) else { fail("expected Some") }
@@ -62,15 +62,15 @@ test "multi-character singleton insert roundtrips without truncation" {
 
 ///|
 test "empty insert runs do not merge with non-empty insert runs" {
-  let empty = OpRun::from_op(Op::new_insert(0, [], "legacy", 0, "", None, None))
+  let empty = OpRun::from_op(Op::insert(0, [], "legacy", 0, "", None, None))
   let next = OpRun::from_op(
-    Op::new_insert(
+    Op::insert(
       1,
-      [RawVersion::new("legacy", 0)],
+      [RawVersion("legacy", 0)],
       "legacy",
       1,
       "x",
-      Some(RawVersion::new("legacy", 0)),
+      Some(RawVersion("legacy", 0)),
       None,
     ),
   )
@@ -80,27 +80,27 @@ test "empty insert runs do not merge with non-empty insert runs" {
 
 ///|
 test "delete runs do not merge when origin_right differs" {
-  let left = RawVersion::new("left", 0)
+  let left = RawVersion("left", 0)
   let first = OpRun::from_op(
-    Op::new_from_parts(
+    Op(
       lv=0,
       parents=[],
       agent="delete",
       seq=0,
       content=Delete,
       origin_left=Some(left),
-      origin_right=Some(RawVersion::new("right-a", 0)),
+      origin_right=Some(RawVersion("right-a", 0)),
     ),
   )
   let second = OpRun::from_op(
-    Op::new_from_parts(
+    Op(
       lv=1,
-      parents=[RawVersion::new("delete", 0)],
+      parents=[RawVersion("delete", 0)],
       agent="delete",
       seq=1,
       content=Delete,
-      origin_left=Some(RawVersion::new("delete-target", 1)),
-      origin_right=Some(RawVersion::new("right-b", 0)),
+      origin_left=Some(RawVersion("delete-target", 1)),
+      origin_right=Some(RawVersion("right-b", 0)),
     ),
   )
   inspect(@rle.Mergeable::can_merge(first, second), content="false")
@@ -108,12 +108,12 @@ test "delete runs do not merge when origin_right differs" {
 
 ///|
 test "roundtrip: delete op -> OpRun -> Op" {
-  let op = Op::new_delete(
+  let op = Op::delete(
     10,
-    [RawVersion::new("bob", 5)],
+    [RawVersion("bob", 5)],
     "bob",
     6,
-    Some(RawVersion::new("alice", 2)),
+    Some(RawVersion("alice", 2)),
   )
   let run = OpRun::from_op(op)
   let decompressed = run.decompress(0)
@@ -133,12 +133,12 @@ test "roundtrip: delete op -> OpRun -> Op" {
 
 ///|
 test "roundtrip: undelete op -> OpRun -> Op" {
-  let op = Op::new_undelete(
+  let op = Op::undelete(
     20,
-    [RawVersion::new("carol", 10)],
+    [RawVersion("carol", 10)],
     "carol",
     11,
-    Some(RawVersion::new("alice", 5)),
+    Some(RawVersion("alice", 5)),
   )
   let run = OpRun::from_op(op)
   let decompressed = run.decompress(0)
@@ -155,7 +155,7 @@ test "roundtrip: undelete op -> OpRun -> Op" {
 
 ///|
 test "decompress: offset out of bounds returns None" {
-  let op = Op::new_insert(0, [], "a", 0, "x", None, None)
+  let op = Op::insert(0, [], "a", 0, "x", None, None)
   let run = OpRun::from_op(op)
   inspect(run.decompress(-1) is None, content="true")
   inspect(run.decompress(1) is None, content="true")
@@ -164,25 +164,17 @@ test "decompress: offset out of bounds returns None" {
 ///|
 test "can_merge: linear insert typing run merges" {
   let run_a = OpRun::from_op(
-    Op::new_insert(
-      0,
-      [],
-      "alice",
-      0,
-      "a",
-      None,
-      Some(RawVersion::new("bob", 0)),
-    ),
+    Op::insert(0, [], "alice", 0, "a", None, Some(RawVersion("bob", 0))),
   )
   let run_b = OpRun::from_op(
-    Op::new_insert(
+    Op::insert(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "alice",
       1,
       "b",
-      Some(RawVersion::new("alice", 0)),
-      Some(RawVersion::new("bob", 0)),
+      Some(RawVersion("alice", 0)),
+      Some(RawVersion("bob", 0)),
     ),
   )
   inspect(@rle.Mergeable::can_merge(run_a, run_b), content="true")
@@ -200,15 +192,15 @@ test "can_merge: linear insert typing run merges" {
 
 ///|
 test "can_merge: different agents do not merge" {
-  let run_a = OpRun::from_op(Op::new_insert(0, [], "alice", 0, "a", None, None))
+  let run_a = OpRun::from_op(Op::insert(0, [], "alice", 0, "a", None, None))
   let run_b = OpRun::from_op(
-    Op::new_insert(
+    Op::insert(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "bob",
       0,
       "b",
-      Some(RawVersion::new("alice", 0)),
+      Some(RawVersion("alice", 0)),
       None,
     ),
   )
@@ -217,15 +209,15 @@ test "can_merge: different agents do not merge" {
 
 ///|
 test "can_merge: non-sequential seq does not merge" {
-  let run_a = OpRun::from_op(Op::new_insert(0, [], "alice", 0, "a", None, None))
+  let run_a = OpRun::from_op(Op::insert(0, [], "alice", 0, "a", None, None))
   let run_b = OpRun::from_op(
-    Op::new_insert(
+    Op::insert(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "alice",
       2,
       "b",
-      Some(RawVersion::new("alice", 0)),
+      Some(RawVersion("alice", 0)),
       None,
     ),
   )
@@ -234,14 +226,14 @@ test "can_merge: non-sequential seq does not merge" {
 
 ///|
 test "can_merge: different content types do not merge" {
-  let run_a = OpRun::from_op(Op::new_insert(0, [], "alice", 0, "a", None, None))
+  let run_a = OpRun::from_op(Op::insert(0, [], "alice", 0, "a", None, None))
   let run_b = OpRun::from_op(
-    Op::new_delete(
+    Op::delete(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "alice",
       1,
-      Some(RawVersion::new("bob", 0)),
+      Some(RawVersion("bob", 0)),
     ),
   )
   inspect(@rle.Mergeable::can_merge(run_a, run_b), content="false")
@@ -250,25 +242,17 @@ test "can_merge: different content types do not merge" {
 ///|
 test "can_merge: insert with different origin_right does not merge" {
   let run_a = OpRun::from_op(
-    Op::new_insert(
-      0,
-      [],
-      "alice",
-      0,
-      "a",
-      None,
-      Some(RawVersion::new("bob", 0)),
-    ),
+    Op::insert(0, [], "alice", 0, "a", None, Some(RawVersion("bob", 0))),
   )
   let run_b = OpRun::from_op(
-    Op::new_insert(
+    Op::insert(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "alice",
       1,
       "b",
-      Some(RawVersion::new("alice", 0)),
-      Some(RawVersion::new("carol", 0)),
+      Some(RawVersion("alice", 0)),
+      Some(RawVersion("carol", 0)),
     ),
   )
   inspect(@rle.Mergeable::can_merge(run_a, run_b), content="false")
@@ -276,15 +260,15 @@ test "can_merge: insert with different origin_right does not merge" {
 
 ///|
 test "can_merge: multiple parents does not merge" {
-  let run_a = OpRun::from_op(Op::new_insert(0, [], "alice", 0, "a", None, None))
+  let run_a = OpRun::from_op(Op::insert(0, [], "alice", 0, "a", None, None))
   let run_b = OpRun::from_op(
-    Op::new_insert(
+    Op::insert(
       1,
-      [RawVersion::new("alice", 0), RawVersion::new("bob", 0)],
+      [RawVersion("alice", 0), RawVersion("bob", 0)],
       "alice",
       1,
       "b",
-      Some(RawVersion::new("alice", 0)),
+      Some(RawVersion("alice", 0)),
       None,
     ),
   )
@@ -295,16 +279,16 @@ test "can_merge: multiple parents does not merge" {
 test "can_merge: consecutive deletes with sequential origin_left merge" {
   // Deletes of consecutive items (origin_left chains sequentially)
   let run_a = OpRun::from_op(
-    Op::new_delete(0, [], "alice", 0, Some(RawVersion::new("bob", 0))),
+    Op::delete(0, [], "alice", 0, Some(RawVersion("bob", 0))),
   )
   // origin_left must be RawVersion("alice", 0) — the previous op in the run
   let run_b = OpRun::from_op(
-    Op::new_delete(
+    Op::delete(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "alice",
       1,
-      Some(RawVersion::new("alice", 0)),
+      Some(RawVersion("alice", 0)),
     ),
   )
   inspect(@rle.Mergeable::can_merge(run_a, run_b), content="true")
@@ -314,15 +298,15 @@ test "can_merge: consecutive deletes with sequential origin_left merge" {
 test "can_merge: consecutive deletes with non-sequential origin_left do not merge" {
   // Undo deletes target different items — origin_left doesn't chain
   let run_a = OpRun::from_op(
-    Op::new_delete(0, [], "alice", 0, Some(RawVersion::new("bob", 0))),
+    Op::delete(0, [], "alice", 0, Some(RawVersion("bob", 0))),
   )
   let run_b = OpRun::from_op(
-    Op::new_delete(
+    Op::delete(
       1,
-      [RawVersion::new("alice", 0)],
+      [RawVersion("alice", 0)],
       "alice",
       1,
-      Some(RawVersion::new("bob", 1)),
+      Some(RawVersion("bob", 1)),
     ),
   )
   inspect(@rle.Mergeable::can_merge(run_a, run_b), content="false")
@@ -335,9 +319,9 @@ test "decompress: multi-op insert run at various offsets" {
     agent: "alice",
     start_seq: 5,
     content: Inserts(['a', 'b', 'c']),
-    parents: [RawVersion::new("bob", 3)],
-    origin_left: Some(RawVersion::new("bob", 3)),
-    origin_right: Some(RawVersion::new("carol", 0)),
+    parents: [RawVersion("bob", 3)],
+    origin_left: Some(RawVersion("bob", 3)),
+    origin_right: Some(RawVersion("carol", 0)),
     count: 3,
   }
   let d0 = run.decompress(0)
@@ -414,23 +398,15 @@ test "decompress: multi-op insert run at various offsets" {
 ///|
 test "Rle[OpRun]: append auto-merges linear typing" {
   let rle : @rle.Rle[OpRun] = @rle.Rle::Rle()
-  let op0 = Op::new_insert(
-    0,
-    [],
-    "alice",
-    0,
-    "h",
-    None,
-    Some(RawVersion::new("bob", 0)),
-  )
-  let op1 = Op::new_insert(
+  let op0 = Op::insert(0, [], "alice", 0, "h", None, Some(RawVersion("bob", 0)))
+  let op1 = Op::insert(
     1,
-    [RawVersion::new("alice", 0)],
+    [RawVersion("alice", 0)],
     "alice",
     1,
     "i",
-    Some(RawVersion::new("alice", 0)),
-    Some(RawVersion::new("bob", 0)),
+    Some(RawVersion("alice", 0)),
+    Some(RawVersion("bob", 0)),
   )
   let _ = rle.append(OpRun::from_op(op0))
   let _ = rle.append(OpRun::from_op(op1))
@@ -441,8 +417,8 @@ test "Rle[OpRun]: append auto-merges linear typing" {
 ///|
 test "Rle[OpRun]: non-mergeable ops stay separate" {
   let rle : @rle.Rle[OpRun] = @rle.Rle::Rle()
-  let op0 = Op::new_insert(0, [], "alice", 0, "a", None, None)
-  let op1 = Op::new_insert(1, [], "bob", 0, "b", None, None)
+  let op0 = Op::insert(0, [], "alice", 0, "a", None, None)
+  let op1 = Op::insert(1, [], "bob", 0, "b", None, None)
   let _ = rle.append(OpRun::from_op(op0))
   let _ = rle.append(OpRun::from_op(op1))
   inspect(rle.length(), content="2")

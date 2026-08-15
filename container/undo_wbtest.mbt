@@ -9,7 +9,7 @@
 /// the presence of a record in the buffer / stack.
 fn dummy_undo_item() -> UndoItem {
   let id : @mt.TreeNodeId = { agent: "test", counter: 0 }
-  TextInsert(block=id, id=@core.RawVersion::new("test", 42))
+  TextInsert(block=id, id=@core.RawVersion("test", 42))
 }
 
 ///|

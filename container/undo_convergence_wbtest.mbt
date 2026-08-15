@@ -166,7 +166,7 @@ test "undo convergence: same-ts Undelete beats Delete (add-wins)" {
   alice.insert_text(block, 0, "x")
   // Recover the LV of "x" from the text-op log.
   let x_id = {
-    let mut id = @core.RawVersion::new("", -1)
+    let mut id = @core.RawVersion("", -1)
     for op in alice.text_ops.copy() {
       match op.op {
         Insert(ins) => if ins.content == "x" { id = ins.id }

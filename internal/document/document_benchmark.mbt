@@ -15,12 +15,8 @@ fn build_doc(n : Int) -> Document {
 fn build_remote_chain(n : Int) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<n {
-    let parents = if i == 0 {
-      []
-    } else {
-      [@core.RawVersion::new("remote", i - 1)]
-    }
-    ops.push(@core.Op::new_insert(-1, parents, "remote", i, "x", None, None))
+    let parents = if i == 0 { [] } else { [@core.RawVersion("remote", i - 1)] }
+    ops.push(@core.Op::insert(-1, parents, "remote", i, "x", None, None))
   }
   ops
 }
@@ -50,18 +46,10 @@ fn build_remote_branches(depth : Int) -> Array[@core.Op] {
       let parents = if level == 0 {
         []
       } else {
-        [@core.RawVersion::new(agents[branch], level - 1)]
+        [@core.RawVersion(agents[branch], level - 1)]
       }
       ops.push(
-        @core.Op::new_insert(
-          -1,
-          parents,
-          agents[branch],
-          level,
-          "x",
-          None,
-          None,
-        ),
+        @core.Op::insert(-1, parents, agents[branch], level, "x", None, None),
       )
     }
   }

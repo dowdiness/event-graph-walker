@@ -22,7 +22,7 @@ pub(all) suberror OpLogError {
   /// The complete prepared transition would retain more pending operations
   /// than the requested forecast allows. A partial commit suffix may exceed
   /// this forecast until the suffix is retried or discarded.
-  PendingLimitExceeded(limit~ : Int, actual~ : Int)
+  PendingForecastExceeded(limit~ : Int, predicted~ : Int)
   /// Remote op refers to a parent not present locally or in the batch.
   MissingRemoteParent(raw~ : @core.RawVersion)
   /// Remote frontier references an op not present locally or in the batch.

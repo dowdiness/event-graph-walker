@@ -121,7 +121,7 @@ fn compression_snapshots(ops : Array[@core.Op]) -> Array[CompressionExpectedOp] 
 
 ///|
 fn CompressionTrace::replay(self : CompressionTrace) -> CompressionReplay {
-  let oplog = OpLog::new("generated-local")
+  let oplog = OpLog("generated-local")
   let expected : Array[CompressionExpectedOp] = []
   let inserted_lvs : Array[Int] = []
   for edit in self.edits() {

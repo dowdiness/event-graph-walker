@@ -30,7 +30,7 @@ pub struct Document {
 ///|
 /// Create a new document for an agent
 pub fn Document::new(agent_id : String) -> Document {
-  let oplog = @oplog.OpLog::new(agent_id)
+  let oplog = @oplog.OpLog(agent_id)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   { tree, oplog, agent_id, indexed_state: IndexedState::new(), cursor: None }
 }
@@ -449,7 +449,7 @@ fn Document::preflight_remote_targets(
   let planned_noninserts : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([],
   )
   for op in ops {
-    let raw = @core.RawVersion::new(op.agent(), op.seq())
+    let raw = @core.RawVersion(op.agent(), op.seq())
     match op.content() {
       @core.Insert(_) => planned_inserts.add(raw)
       @core.Delete | @core.Undelete => planned_noninserts.add(raw)
@@ -458,7 +458,7 @@ fn Document::preflight_remote_targets(
   let mut failure : DocumentError? = None
   let invalid_roots : Array[@core.RawVersion] = []
   for op in ops {
-    let raw = @core.RawVersion::new(op.agent(), op.seq())
+    let raw = @core.RawVersion(op.agent(), op.seq())
     for origin in [op.origin_left(), op.origin_right()] {
       match origin {
         None => ()

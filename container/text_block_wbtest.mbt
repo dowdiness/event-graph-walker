@@ -11,7 +11,7 @@ fn apply_insert(
 ) -> Unit raise DocumentError {
   let op = block.make_insert_op_at(
     pos,
-    @core.RawVersion::new(agent, lv),
+    @core.RawVersion(agent, lv),
     content,
     timestamp,
     agent,
@@ -110,7 +110,7 @@ test "text_block: replayable ops reconstruct block text" {
   let source = TextBlock::new()
   let op_a = source.make_insert_op_at(
     0,
-    @core.RawVersion::new("alice", 0),
+    @core.RawVersion("alice", 0),
     "A",
     1,
     "alice",
@@ -118,7 +118,7 @@ test "text_block: replayable ops reconstruct block text" {
   source.apply_op(op_a)
   let op_b = source.make_insert_op_at(
     1,
-    @core.RawVersion::new("alice", 1),
+    @core.RawVersion("alice", 1),
     "B",
     2,
     "alice",
@@ -126,7 +126,7 @@ test "text_block: replayable ops reconstruct block text" {
   source.apply_op(op_b)
   let op_c = source.make_insert_op_at(
     2,
-    @core.RawVersion::new("alice", 2),
+    @core.RawVersion("alice", 2),
     "C",
     3,
     "alice",

@@ -487,7 +487,7 @@ if mgr.undo(doc) {
 
 **Phase 2 (synced undo/redo):** ✅ Complete
 - ✅ `OpContent::Undelete` variant added to `oplog/operation.mbt`
-- ✅ `Op::new_undelete`, `Op::is_undelete`, `Op::get_delete_target` added
+- ✅ `Op::undelete`, `Op::is_undelete`, `Op::get_delete_target` added
 - ✅ `Document::undelete`, `Document::delete_by_lv` added (return ops)
 - ✅ `Document::apply_remote` handles `Undelete` ops
 - ✅ `Undoable` trait methods return `CompensatingEditResult` (not operation payloads)
@@ -504,7 +504,7 @@ if mgr.undo(doc) {
 | Step | File | Status |
 |------|------|--------|
 | 1. Add `Undelete` variant | `internal/core/operation.mbt` | ✅ |
-| 2. Add `Op::new_undelete` | `internal/core/operation.mbt` | ✅ |
+| 2. Add `Op::undelete` | `internal/core/operation.mbt` | ✅ |
 | 3. Add `Op::is_undelete`, `Op::get_delete_target` | `internal/core/operation.mbt` | ✅ |
 | 4. `Document::undelete`, `Document::delete_by_lv` | `internal/document/document.mbt` | ✅ |
 | 5. Handle in `apply_remote` | `internal/document/document.mbt` | ✅ |

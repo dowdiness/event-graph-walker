@@ -351,13 +351,13 @@ test "core and text reject known invalid origin with the same atomic meaning" {
   try! text_receiver.delete(Pos::at(0))
   let before_text = text_receiver.text()
   let before_version = text_receiver.version()
-  let bad = @core.Op::new_insert(
+  let bad = @core.Op::insert(
     -1,
-    [@core.RawVersion::new("missing", 0)],
+    [@core.RawVersion("missing", 0)],
     "remote",
     0,
     "A",
-    Some(@core.RawVersion::new("receiver", 1)),
+    Some(@core.RawVersion("receiver", 1)),
     None,
   )
   let message = try! SyncMessage::from_json_string(
@@ -370,14 +370,14 @@ test "core and text reject known invalid origin with the same atomic meaning" {
     _ => fail("text path must reject known invalid origin atomically")
   }
 
-  let core_receiver = @oplog.OpLog::new("receiver")
-  let root = @core.Op::new_insert(-1, [], "receiver", 0, "X", None, None)
-  let delete = @core.Op::new_delete(
+  let core_receiver = @oplog.OpLog("receiver")
+  let root = @core.Op::insert(-1, [], "receiver", 0, "X", None, None)
+  let delete = @core.Op::delete(
     -1,
-    [@core.RawVersion::new("receiver", 0)],
+    [@core.RawVersion("receiver", 0)],
     "receiver",
     1,
-    Some(@core.RawVersion::new("receiver", 0)),
+    Some(@core.RawVersion("receiver", 0)),
   )
   ignore(
     try! core_receiver.commit_remote(

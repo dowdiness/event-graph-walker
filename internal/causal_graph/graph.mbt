@@ -83,7 +83,7 @@ pub fn CausalGraph::lv_to_raw(
     return None
   }
   let entry = self.entries[lv]
-  Some(@core.RawVersion::new(entry.agent, entry.seq))
+  Some(@core.RawVersion(entry.agent, entry.seq))
 }
 
 ///|
@@ -136,7 +136,7 @@ fn CausalGraph::add_version_inner(
   for p in parents {
     self.children[p].push(lv)
   }
-  self.version_map = self.version_map.add(@core.RawVersion::new(agent, seq), lv)
+  self.version_map = self.version_map.add(@core.RawVersion(agent, seq), lv)
   self.next_lv = lv + 1
   self.update_frontier(lv, parents)
   lv

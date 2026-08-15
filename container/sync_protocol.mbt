@@ -123,7 +123,7 @@ fn sync_record_dependencies(record : SyncOpRecord) -> Array[@core.RawVersion] {
   let id = sync_record_version(record)
   let dependencies = sync_record_parents(record)
   if id.seq > 0 {
-    dependencies.push(@core.RawVersion::new(id.agent, id.seq - 1))
+    dependencies.push(@core.RawVersion(id.agent, id.seq - 1))
   }
   match record {
     Tree(_) => ()
@@ -262,7 +262,7 @@ fn validate_sync_sequence_descent(
   if id.seq == 0 {
     return
   }
-  let predecessor = @core.RawVersion::new(id.agent, id.seq - 1)
+  let predecessor = @core.RawVersion(id.agent, id.seq - 1)
   if !sync_parents_reach_identity(
       sync_record_parents(record),
       predecessor,
@@ -284,7 +284,7 @@ fn validate_sync_lamport_descent(
   let id = sync_record_version(record)
   let dependencies = sync_record_parents(record)
   if id.seq > 0 {
-    dependencies.push(@core.RawVersion::new(id.agent, id.seq - 1))
+    dependencies.push(@core.RawVersion(id.agent, id.seq - 1))
   }
   let timestamp = sync_record_timestamp(record)
   let checked : Map[String, Bool] = Map([])
@@ -755,7 +755,7 @@ fn decode_container_identity(json : Json) -> @core.RawVersion raise {
     object.get("sequence").unwrap_or(Json::null()),
   )
   guard replica_id != "" && sequence >= 0 else { fail("invalid identity") }
-  @core.RawVersion::new(replica_id, sequence)
+  @core.RawVersion(replica_id, sequence)
 }
 
 ///|

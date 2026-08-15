@@ -67,12 +67,12 @@ pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
   let parents = if offset == 0 {
     self.parents.copy()
   } else {
-    [RawVersion::new(self.agent, self.start_seq + offset - 1)]
+    [RawVersion(self.agent, self.start_seq + offset - 1)]
   }
   let origin_left = if offset == 0 {
     self.origin_left
   } else {
-    Some(RawVersion::new(self.agent, self.start_seq + offset - 1))
+    Some(RawVersion(self.agent, self.start_seq + offset - 1))
   }
   let origin_right = self.origin_right
   let content = match self.content {
@@ -86,7 +86,7 @@ pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
     Undeletes => Undelete
   }
   Some(
-    Op::new_from_parts(
+    Op(
       lv~,
       parents~,
       agent=self.agent,
@@ -121,7 +121,7 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
   if a.start_lv + a.count != b.start_lv {
     return false
   }
-  let expected_parent = RawVersion::new(a.agent, a.start_seq + a.count - 1)
+  let expected_parent = RawVersion(a.agent, a.start_seq + a.count - 1)
   if b.parents.length() != 1 || b.parents[0] != expected_parent {
     return false
   }
@@ -136,7 +136,7 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
         return false
       }
       let expected_origin_left = Some(
-        RawVersion::new(a.agent, a.start_seq + a.count - 1),
+        RawVersion(a.agent, a.start_seq + a.count - 1),
       )
       if b.origin_left != expected_origin_left {
         return false
@@ -150,13 +150,13 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
       // Delete origin_left is the target item being deleted — only merge
       // when targets chain sequentially (consecutive item deletions).
       let expected_origin_left = Some(
-        RawVersion::new(a.agent, a.start_seq + a.count - 1),
+        RawVersion(a.agent, a.start_seq + a.count - 1),
       )
       b.origin_left == expected_origin_left && a.origin_right == b.origin_right
     }
     (Undeletes, Undeletes) => {
       let expected_origin_left = Some(
-        RawVersion::new(a.agent, a.start_seq + a.count - 1),
+        RawVersion(a.agent, a.start_seq + a.count - 1),
       )
       b.origin_left == expected_origin_left && a.origin_right == b.origin_right
     }

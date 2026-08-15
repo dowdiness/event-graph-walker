@@ -95,7 +95,7 @@ test "β1 #31: apply_remote rejects lone high surrogate with ContentError" {
   let high = lone_code_unit(0xD83D)
   inspect(high.length(), content="1")
   let doc = Document::new("peer_a")
-  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, high, None, None)
+  let op0 = @core.Op::insert(-1, [], "peer_a", 0, high, None, None)
   let result : Result[Unit, DocumentError] = try {
     doc.apply_remote(op0)
     Ok(())
@@ -119,7 +119,7 @@ test "β2 #31: apply_remote rejects lone low surrogate with ContentError" {
   let low = lone_code_unit(0xDE00)
   inspect(low.length(), content="1")
   let doc = Document::new("peer_a")
-  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, low, None, None)
+  let op0 = @core.Op::insert(-1, [], "peer_a", 0, low, None, None)
   let result : Result[Unit, DocumentError] = try {
     doc.apply_remote(op0)
     Ok(())
@@ -138,7 +138,7 @@ test "β2 #31: apply_remote rejects lone low surrogate with ContentError" {
 /// produces such ops, but a malicious / buggy peer could send one.
 test "β #31: apply_remote rejects multi-codepoint Insert content" {
   let doc = Document::new("peer_a")
-  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, "ab", None, None)
+  let op0 = @core.Op::insert(-1, [], "peer_a", 0, "ab", None, None)
   let result : Result[Unit, DocumentError] = try {
     doc.apply_remote(op0)
     Ok(())
@@ -158,7 +158,7 @@ test "β #31: apply_remote rejects multi-codepoint Insert content" {
 /// pass-through; new code paths never produce empty Ops.
 test "β #31: apply_remote accepts empty Insert content (backward compat)" {
   let doc = Document::new("peer_a")
-  let op0 = @core.Op::new_insert(-1, [], "peer_a", 0, "", None, None)
+  let op0 = @core.Op::insert(-1, [], "peer_a", 0, "", None, None)
   try! doc.apply_remote(op0)
   // Empty op leaves the visible document unchanged.
   inspect(doc.to_text(), content="")
@@ -173,19 +173,11 @@ test "β4 #31: concurrent insert next to atomic emoji op cannot split surrogates
   let doc = Document::new("peer_a")
   // Local insert produces one atomic Op for "😀".
   let _ = try! doc.insert(0, "😀")
-  let op0_raw = @core.RawVersion::new("peer_a", 0)
+  let op0_raw = @core.RawVersion("peer_a", 0)
   // Concurrent peer "aaa" inserts "X" with origin_left=op0 (i.e., "right
   // after op0" from aaa's perspective). agent_id "aaa" wins the tiebreak,
   // but op0's content is "😀" — there's nowhere "between" for X to land.
-  let opX = @core.Op::new_insert(
-    -1,
-    [op0_raw],
-    "aaa",
-    0,
-    "X",
-    Some(op0_raw),
-    None,
-  )
+  let opX = @core.Op::insert(-1, [op0_raw], "aaa", 0, "X", Some(op0_raw), None)
   try! doc.apply_remote(opX)
   let text = doc.to_text()
   // Either "😀X" or "X😀" depending on how FugueMax tiebreaks at the

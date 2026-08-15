@@ -151,7 +151,7 @@ fn RemoteAdmissionPlanner::RemoteAdmissionPlanner() -> RemoteAdmissionPlanner {
 ///|
 /// Return the operation identity.
 fn remote_admission_raw(op : @core.Op) -> @core.RawVersion {
-  @core.RawVersion::new(op.agent(), op.seq())
+  @core.RawVersion(op.agent(), op.seq())
 }
 
 ///|
@@ -191,7 +191,7 @@ fn remote_admission_dependencies_for(
   match semantics {
     Some(_) =>
       if op.seq() > 0 {
-        let predecessor = @core.RawVersion::new(op.agent(), op.seq() - 1)
+        let predecessor = @core.RawVersion(op.agent(), op.seq() - 1)
         if !dependencies.contains(predecessor) {
           dependencies.push(predecessor)
         }
@@ -416,7 +416,7 @@ fn RemoteAdmissionPlanner::validate_semantics(
     result => return result
   }
   if op.seq() > 0 {
-    let predecessor = @core.RawVersion::new(op.agent(), op.seq() - 1)
+    let predecessor = @core.RawVersion(op.agent(), op.seq() - 1)
     let (reached, unknown) = remote_admission_parents_reach(
       op.parents(),
       predecessor,

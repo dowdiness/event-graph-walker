@@ -439,7 +439,7 @@ pub fn VersionVector::to_frontier(
 
   // For each agent in version vector, find the LV for that (agent, seq)
   self.0.each((agent, seq) => {
-    let raw_version = @core.RawVersion::new(agent, seq)
+    let raw_version = @core.RawVersion(agent, seq)
     if graph.raw_to_lv(raw_version) is Some(lv) {
       result.push(lv)
     }

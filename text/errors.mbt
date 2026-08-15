@@ -153,12 +153,12 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="delete or undelete has an invalid origin shape: \{raw}",
         ),
       )
-    PendingLimitExceeded(limit~, actual~) =>
+    PendingForecastExceeded(limit~, predicted~) =>
       TextError::SyncFailed(
         @sync.Failure::LimitExceeded(
           kind=@sync.LimitKind::PendingOperations,
           limit~,
-          actual~,
+          actual=predicted,
         ),
       )
     MissingRemoteParent(raw~) =>

@@ -3,9 +3,9 @@
 ///|
 /// OpLog primary seam: logical identity comparison is structural and LV-free.
 test "OpLog logical operation equality ignores destination LV and parent order" {
-  let left = @core.RawVersion::new("left", 1)
-  let right = @core.RawVersion::new("right", 2)
-  let first = @core.Op::new_insert(
+  let left = @core.RawVersion("left", 1)
+  let right = @core.RawVersion("right", 2)
+  let first = @core.Op::insert(
     7,
     [right, left, right],
     "agent",
@@ -14,7 +14,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
     Some(right),
   )
-  let reordered = @core.Op::new_insert(
+  let reordered = @core.Op::insert(
     99,
     [left, right, right],
     "agent",
@@ -25,7 +25,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
   )
   assert_true(remote_admission_same_logical_operation(first, reordered))
 
-  let parent_conflict = @core.Op::new_insert(
+  let parent_conflict = @core.Op::insert(
     99,
     [left, right, left],
     "agent",
@@ -35,7 +35,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(right),
   )
   assert_true(!remote_admission_same_logical_operation(first, parent_conflict))
-  let content_conflict = @core.Op::new_insert(
+  let content_conflict = @core.Op::insert(
     99,
     [left, right, right],
     "agent",
@@ -45,7 +45,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(right),
   )
   assert_true(!remote_admission_same_logical_operation(first, content_conflict))
-  let left_origin_conflict = @core.Op::new_insert(
+  let left_origin_conflict = @core.Op::insert(
     99,
     [left, right, right],
     "agent",
@@ -57,7 +57,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
   assert_true(
     !remote_admission_same_logical_operation(first, left_origin_conflict),
   )
-  let right_origin_conflict = @core.Op::new_insert(
+  let right_origin_conflict = @core.Op::insert(
     99,
     [left, right, right],
     "agent",
@@ -69,7 +69,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
   assert_true(
     !remote_admission_same_logical_operation(first, right_origin_conflict),
   )
-  let delete_conflict = @core.Op::new_delete(
+  let delete_conflict = @core.Op::delete(
     99,
     [left, right, right],
     "agent",
@@ -77,7 +77,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
   )
   assert_true(!remote_admission_same_logical_operation(first, delete_conflict))
-  let agent_conflict = @core.Op::new_insert(
+  let agent_conflict = @core.Op::insert(
     99,
     [left, right, right],
     "other",
@@ -87,7 +87,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(right),
   )
   assert_true(!remote_admission_same_logical_operation(first, agent_conflict))
-  let seq_conflict = @core.Op::new_insert(
+  let seq_conflict = @core.Op::insert(
     99,
     [left, right, right],
     "agent",
@@ -101,7 +101,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
 
 ///|
 test "add_op auto-merges contiguous insert ops" {
-  let oplog = OpLog::new("test")
+  let oplog = OpLog("test")
   let _ = try! oplog.insert("a", -1, -1)
   let _ = try! oplog.insert("b", 0, -1)
 
@@ -112,14 +112,14 @@ test "add_op auto-merges contiguous insert ops" {
 
 ///|
 test "op_count returns total ops across all runs" {
-  let oplog = OpLog::new("test")
+  let oplog = OpLog("test")
   let _ = try! oplog.insert("a", -1, -1)
   inspect(oplog.op_count(), content="1")
 }
 
 ///|
 test "get_all_ops expands runs back to individual ops" {
-  let oplog = OpLog::new("test")
+  let oplog = OpLog("test")
   let _ = try! oplog.insert("h", -1, -1)
   let _ = try! oplog.insert("i", 0, -1)
   let all = oplog.get_all_ops()
@@ -128,7 +128,7 @@ test "get_all_ops expands runs back to individual ops" {
 
 ///|
 test "get_ops_rle expands a middle slice from a compressed run" {
-  let oplog = OpLog::new("test")
+  let oplog = OpLog("test")
   let mut prev = -1
   for ch in ["a", "b", "c", "d"] {
     let op = try! oplog.insert(ch, prev, -1)
@@ -149,9 +149,9 @@ test "get_ops_rle expands a middle slice from a compressed run" {
 
 ///|
 test "remote admission plan is opaque, read-only, and single use" {
-  let oplog = OpLog::new("local")
-  let first = @core.Op::new_insert(-1, [], "opaque-first", 0, "a", None, None)
-  let second = @core.Op::new_insert(-1, [], "opaque-second", 0, "b", None, None)
+  let oplog = OpLog("local")
+  let first = @core.Op::insert(-1, [], "opaque-first", 0, "a", None, None)
+  let second = @core.Op::insert(-1, [], "opaque-second", 0, "b", None, None)
   let plan = try! oplog.prepare_remote([first, second])
   let view = plan.operations()
   assert_eq(view.length(), 2)
@@ -173,16 +173,8 @@ test "remote admission plan is opaque, read-only, and single use" {
 
 ///|
 test "remote admission rejects stale plans before local mutation" {
-  let oplog = OpLog::new("local")
-  let incoming = @core.Op::new_insert(
-    -1,
-    [],
-    "stale-incoming",
-    0,
-    "r",
-    None,
-    None,
-  )
+  let oplog = OpLog("local")
+  let incoming = @core.Op::insert(-1, [], "stale-incoming", 0, "r", None, None)
   let plan = try! oplog.prepare_remote([incoming])
   ignore(try! oplog.insert("local", -1, -1))
   let count_before = oplog.op_count()
@@ -201,9 +193,9 @@ test "remote admission rejects stale plans before local mutation" {
 
 ///|
 test "remote admission rejects generation mismatch after remote admission" {
-  let oplog = OpLog::new("local")
-  let stale = @core.Op::new_insert(-1, [], "stale-remote", 0, "s", None, None)
-  let independent = @core.Op::new_insert(
+  let oplog = OpLog("local")
+  let stale = @core.Op::insert(-1, [], "stale-remote", 0, "s", None, None)
+  let independent = @core.Op::insert(
     -1,
     [],
     "intervening-remote",
@@ -255,17 +247,9 @@ test "remote admission rejects generation mismatch after remote admission" {
 
 ///|
 test "remote admission begin rejects internal conflicts atomically" {
-  let oplog = OpLog::new("local")
-  let first = @core.Op::new_insert(-1, [], "conflict-first", 0, "a", None, None)
-  let second = @core.Op::new_insert(
-    -1,
-    [],
-    "conflict-second",
-    0,
-    "b",
-    None,
-    None,
-  )
+  let oplog = OpLog("local")
+  let first = @core.Op::insert(-1, [], "conflict-first", 0, "a", None, None)
+  let second = @core.Op::insert(-1, [], "conflict-second", 0, "b", None, None)
   let plan = try! oplog.prepare_remote([first, second])
   plan.planned[1] = plan.planned[0]
   let result : Result[Array[@core.Op], OpLogError] = Ok(
@@ -283,9 +267,9 @@ test "remote admission begin rejects internal conflicts atomically" {
 
 ///|
 test "remote admission duplicate pending identities remain one node" {
-  let oplog = OpLog::new("local")
-  let parent_raw = @core.RawVersion::new("duplicate-parent", 0)
-  let child = @core.Op::new_insert(
+  let oplog = OpLog("local")
+  let parent_raw = @core.RawVersion("duplicate-parent", 0)
+  let child = @core.Op::insert(
     -1,
     [parent_raw],
     "duplicate-child",
@@ -294,15 +278,7 @@ test "remote admission duplicate pending identities remain one node" {
     None,
     None,
   )
-  let parent = @core.Op::new_insert(
-    -1,
-    [],
-    "duplicate-parent",
-    0,
-    "p",
-    None,
-    None,
-  )
+  let parent = @core.Op::insert(-1, [], "duplicate-parent", 0, "p", None, None)
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
   assert_eq(oplog.planner.pending_operations().length(), 1)
@@ -313,18 +289,18 @@ test "remote admission duplicate pending identities remain one node" {
 
 ///|
 test "remote admission discard removes dependents and permits retry" {
-  let oplog = OpLog::new("local")
-  let root_raw = @core.RawVersion::new("discard-root", 0)
-  let root = @core.Op::new_insert(
+  let oplog = OpLog("local")
+  let root_raw = @core.RawVersion("discard-root", 0)
+  let root = @core.Op::insert(
     -1,
-    [@core.RawVersion::new("missing-root", 0)],
+    [@core.RawVersion("missing-root", 0)],
     "discard-root",
     0,
     "r",
     None,
     None,
   )
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [root_raw],
     "discard-child",
@@ -337,44 +313,20 @@ test "remote admission discard removes dependents and permits retry" {
   ignore(try! oplog.apply_remote(root))
   oplog.discard_pending_dependents([root_raw])
   assert_eq(oplog.has_pending(), false)
-  let retry = @core.Op::new_insert(
-    -1,
-    [],
-    "discard-root",
-    0,
-    "retry",
-    None,
-    None,
-  )
+  let retry = @core.Op::insert(-1, [], "discard-root", 0, "retry", None, None)
   assert_eq((try! oplog.apply_remote(retry)).length(), 1)
   assert_eq(oplog.has_pending(), false)
 }
 
 ///|
 test "remote admission preserves committed prefix on injected graph failure" {
-  let oplog = OpLog::new("local")
-  let first = @core.Op::new_insert(-1, [], "partial-first", 0, "a", None, None)
-  let failed = @core.Op::new_insert(
-    -1,
-    [],
-    "partial-failed",
-    0,
-    "b",
-    None,
-    None,
-  )
-  let suffix = @core.Op::new_insert(
-    -1,
-    [],
-    "partial-suffix",
-    0,
-    "c",
-    None,
-    None,
-  )
-  let missing = @core.RawVersion::new("partial-compaction-missing", 0)
+  let oplog = OpLog("local")
+  let first = @core.Op::insert(-1, [], "partial-first", 0, "a", None, None)
+  let failed = @core.Op::insert(-1, [], "partial-failed", 0, "b", None, None)
+  let suffix = @core.Op::insert(-1, [], "partial-suffix", 0, "c", None, None)
+  let missing = @core.RawVersion("partial-compaction-missing", 0)
   for i in 0..<512 {
-    let stale = @core.Op::new_insert(
+    let stale = @core.Op::insert(
       -1,
       [missing],
       "partial-compaction-stale",
@@ -426,7 +378,7 @@ test "remote admission preserves committed prefix on injected graph failure" {
 
 ///|
 test "get_ops_rle preserves range order for retreat-style ranges" {
-  let oplog = OpLog::new("test")
+  let oplog = OpLog("test")
   let mut prev = -1
   for ch in ["a", "b", "c"] {
     let op = try! oplog.insert(ch, prev, -1)
@@ -444,7 +396,7 @@ test "get_ops_rle preserves range order for retreat-style ranges" {
 
 ///|
 test "get_ops_rle keeps clamped invalid-LV behavior" {
-  let oplog = OpLog::new("test")
+  let oplog = OpLog("test")
   let _ = try! oplog.insert("a", -1, -1)
   let _ = try! oplog.insert("b", 0, -1)
   let ranges : @rle.Rle[@core.LvRange] = @rle.Rle::from_array([

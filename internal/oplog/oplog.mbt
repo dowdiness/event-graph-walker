@@ -10,8 +10,8 @@ pub struct OpLog {
 }
 
 ///|
-/// Create a new OpLog
-pub fn OpLog::new(agent_id : String) -> OpLog {
+/// Construct an OpLog for one replica identity.
+pub fn OpLog::OpLog(agent_id : String) -> OpLog {
   {
     operations: @rle.Rle::Rle(),
     planner: RemoteAdmissionPlanner(),
@@ -65,7 +65,7 @@ pub fn OpLog::insert(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let op = @core.Op::new_insert(
+  let op = @core.Op::insert(
     lv,
     parents_raw,
     self.agent_id,
@@ -75,7 +75,7 @@ pub fn OpLog::insert(
     origin_right_raw,
   )
   self.add_op(op)
-  self.planner.acknowledge_admitted(@core.RawVersion::new(op.agent(), op.seq()))
+  self.planner.acknowledge_admitted(@core.RawVersion(op.agent(), op.seq()))
   ignore(
     self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
   )
@@ -106,7 +106,7 @@ pub fn OpLog::delete(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let op = @core.Op::new_delete(
+  let op = @core.Op::delete(
     lv,
     parents_raw,
     self.agent_id,
@@ -114,7 +114,7 @@ pub fn OpLog::delete(
     Some(origin_left_raw),
   )
   self.add_op(op)
-  self.planner.acknowledge_admitted(@core.RawVersion::new(op.agent(), op.seq()))
+  self.planner.acknowledge_admitted(@core.RawVersion(op.agent(), op.seq()))
   ignore(
     self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
   )
@@ -145,7 +145,7 @@ pub fn OpLog::undelete(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let op = @core.Op::new_undelete(
+  let op = @core.Op::undelete(
     lv,
     parents_raw,
     self.agent_id,
@@ -153,7 +153,7 @@ pub fn OpLog::undelete(
     Some(origin_left_raw),
   )
   self.add_op(op)
-  self.planner.acknowledge_admitted(@core.RawVersion::new(op.agent(), op.seq()))
+  self.planner.acknowledge_admitted(@core.RawVersion(op.agent(), op.seq()))
   ignore(
     self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
   )
@@ -276,7 +276,7 @@ pub fn OpLog::validate_remote_batch(
 ) -> Unit raise OpLogError {
   let batch : Map[@core.RawVersion, @core.Op] = Map::default()
   for op in remote_ops {
-    let raw = @core.RawVersion::new(op.agent(), op.seq())
+    let raw = @core.RawVersion(op.agent(), op.seq())
     match batch.get(raw) {
       Some(previous) =>
         if !remote_admission_same_logical_operation(previous, op) {
@@ -344,36 +344,16 @@ fn OpLog::remote_admission_semantics(self : OpLog) -> RemoteAdmissionSemantics {
 
 ///|
 /// Prepare a remote admission without changing graph, log, or planner state.
+///
+/// When `max_pending_after_complete` is supplied, it limits the predicted
+/// retained membership after a complete transition. It is not a hard
+/// post-partial bound: a commit that acknowledges a prefix may leave its
+/// uncommitted suffix pending above this forecast. The hard complete/partial
+/// budget invariant belongs to the P1 transition value.
 pub fn OpLog::prepare_remote(
   self : OpLog,
   incoming : Array[@core.Op],
-) -> RemoteAdmissionPlan raise OpLogError {
-  self.prepare_remote_internal(incoming, None)
-}
-
-///|
-/// Prepare a remote admission with a complete-transition pending forecast.
-///
-/// The limit applies to the predicted retained membership after the prepared
-/// transition completes. It is not a hard post-partial bound: if commit-time
-/// admission acknowledges a prefix and returns PartialRemoteAdmission, the
-/// uncommitted suffix remains pending and may exceed this forecast. A hard
-/// complete/partial budget invariant belongs to the P1 transition value.
-pub fn OpLog::prepare_remote_with_limit(
-  self : OpLog,
-  incoming : Array[@core.Op],
-  max_pending_after_complete : Int,
-) -> RemoteAdmissionPlan raise OpLogError {
-  self.prepare_remote_internal(incoming, Some(max_pending_after_complete))
-}
-
-///|
-/// Shared preparation shell for the unbounded compatibility API and the
-/// bounded core-owned admission path.
-fn OpLog::prepare_remote_internal(
-  self : OpLog,
-  incoming : Array[@core.Op],
-  max_pending_after_complete : Int?,
+  max_pending_after_complete? : Int,
 ) -> RemoteAdmissionPlan raise OpLogError {
   self.preflight_remote_identities(incoming)
   let plan = self.planner.prepare_with_semantics(
@@ -383,9 +363,9 @@ fn OpLog::prepare_remote_internal(
   )
   match max_pending_after_complete {
     Some(limit) => {
-      let predicted_pending = plan.remaining_raws(self.planner).length()
-      if predicted_pending > limit {
-        raise OpLogError::PendingLimitExceeded(limit~, actual=predicted_pending)
+      let predicted = plan.remaining_raws(self.planner).length()
+      if predicted > limit {
+        raise OpLogError::PendingForecastExceeded(limit~, predicted~)
       }
     }
     None => ()
@@ -560,7 +540,7 @@ fn OpLog::try_apply_remote(
   self : OpLog,
   op : @core.Op,
 ) -> (Bool, @core.Op?) raise OpLogError {
-  let raw = @core.RawVersion::new(op.agent(), op.seq())
+  let raw = @core.RawVersion(op.agent(), op.seq())
   match self.graph.raw_to_lv(raw) {
     Some(_) => return (false, None)
     None => ()
@@ -596,7 +576,7 @@ fn OpLog::try_apply_remote(
   }
   let local_op = match content {
     @core.Insert(text) =>
-      @core.Op::new_insert(
+      @core.Op::insert(
         local_lv,
         raw_parents,
         op.agent(),
@@ -606,15 +586,9 @@ fn OpLog::try_apply_remote(
         origin_right,
       )
     @core.Delete =>
-      @core.Op::new_delete(
-        local_lv,
-        raw_parents,
-        op.agent(),
-        op.seq(),
-        origin_left,
-      )
+      @core.Op::delete(local_lv, raw_parents, op.agent(), op.seq(), origin_left)
     @core.Undelete =>
-      @core.Op::new_undelete(
+      @core.Op::undelete(
         local_lv,
         raw_parents,
         op.agent(),

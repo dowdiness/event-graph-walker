@@ -60,12 +60,12 @@ fn planner_chain(size : Int) -> Array[@core.Op] {
 
 ///|
 test "remote admission planner matches adversarial and reverse order" {
-  let parent = @core.RawVersion::new("parent", 0)
+  let parent = @core.RawVersion("parent", 0)
   let candidates = [
-    @core.Op::new_insert(-1, [parent], "child-before", 0, "x", None, None),
-    @core.Op::new_insert(-1, [], "independent", 0, "x", None, None),
-    @core.Op::new_insert(-1, [], "parent", 0, "x", None, None),
-    @core.Op::new_insert(-1, [parent], "child-after", 0, "x", None, None),
+    @core.Op::insert(-1, [parent], "child-before", 0, "x", None, None),
+    @core.Op::insert(-1, [], "independent", 0, "x", None, None),
+    @core.Op::insert(-1, [], "parent", 0, "x", None, None),
+    @core.Op::insert(-1, [parent], "child-after", 0, "x", None, None),
   ]
   planner_compare(candidates, 0, [])
   for size in [1, 2, 3, 5, 8, 13, 32] {
@@ -76,10 +76,10 @@ test "remote admission planner matches adversarial and reverse order" {
 
 ///|
 test "remote admission dependencies preserve first occurrence order" {
-  let first = @core.RawVersion::new("dependency-first", 0)
-  let second = @core.RawVersion::new("dependency-second", 0)
-  let third = @core.RawVersion::new("dependency-third", 0)
-  let parent_origin_overlap = @core.Op::new_insert(
+  let first = @core.RawVersion("dependency-first", 0)
+  let second = @core.RawVersion("dependency-second", 0)
+  let third = @core.RawVersion("dependency-third", 0)
+  let parent_origin_overlap = @core.Op::insert(
     -1,
     [first, second, first],
     "parent-origin-overlap",
@@ -91,7 +91,7 @@ test "remote admission dependencies preserve first occurrence order" {
   planner_assert_raws(remote_admission_dependencies(parent_origin_overlap), [
     first, second, third,
   ])
-  let repeated_origins = @core.Op::new_insert(
+  let repeated_origins = @core.Op::insert(
     -1,
     [first],
     "repeated-origins",
@@ -107,9 +107,9 @@ test "remote admission dependencies preserve first occurrence order" {
 
 ///|
 test "remote admission planner matches joins and repeated origin edges" {
-  let left = @core.RawVersion::new("left", 0)
-  let right = @core.RawVersion::new("right", 0)
-  let join = @core.Op::new_insert(
+  let left = @core.RawVersion("left", 0)
+  let right = @core.RawVersion("right", 0)
+  let join = @core.Op::insert(
     -1,
     [left, right, left, right],
     "join",
@@ -120,19 +120,19 @@ test "remote admission planner matches joins and repeated origin edges" {
   )
   let candidates = [
     join,
-    @core.Op::new_insert(-1, [], "left", 0, "l", None, None),
-    @core.Op::new_insert(-1, [], "right", 0, "r", None, None),
+    @core.Op::insert(-1, [], "left", 0, "l", None, None),
+    @core.Op::insert(-1, [], "right", 0, "r", None, None),
   ]
   planner_compare(candidates, 0, [])
-  let target = @core.RawVersion::new("target", 0)
-  let delete = @core.Op::new_delete(-1, [], "delete", 0, Some(target))
-  let target_op = @core.Op::new_insert(-1, [], "target", 0, "t", None, None)
+  let target = @core.RawVersion("target", 0)
+  let delete = @core.Op::delete(-1, [], "delete", 0, Some(target))
+  let target_op = @core.Op::insert(-1, [], "target", 0, "t", None, None)
   planner_compare([delete, target_op], 0, [])
 }
 
 ///|
 test "remote admission planner suppresses identical pending and admitted duplicates" {
-  let duplicate = @core.Op::new_insert(-1, [], "duplicate", 0, "x", None, None)
+  let duplicate = @core.Op::insert(-1, [], "duplicate", 0, "x", None, None)
   planner_compare([duplicate, duplicate], 0, [])
   planner_compare([duplicate, duplicate], 1, [])
   planner_compare([duplicate], 0, [remote_admission_raw(duplicate)])
@@ -141,8 +141,8 @@ test "remote admission planner suppresses identical pending and admitted duplica
 ///|
 /// Planner preparation seam: fast staging rejects a conflicting repeat atomically.
 test "remote admission fast staging raises conflicting identity" {
-  let first = @core.Op::new_insert(-1, [], "fast-conflict", 0, "a", None, None)
-  let second = @core.Op::new_insert(-1, [], "fast-conflict", 0, "b", None, None)
+  let first = @core.Op::insert(-1, [], "fast-conflict", 0, "a", None, None)
+  let second = @core.Op::insert(-1, [], "fast-conflict", 0, "b", None, None)
   let planner = RemoteAdmissionPlanner()
   let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
     planner.prepare([first, second], _ => false),
@@ -160,24 +160,8 @@ test "remote admission fast staging raises conflicting identity" {
 ///|
 /// Planner preparation seam: incoming full operations remain comparable under admission hints.
 test "remote admission fast staging compares admitted repeated payloads" {
-  let first = @core.Op::new_insert(
-    -1,
-    [],
-    "admitted-repeat",
-    0,
-    "a",
-    None,
-    None,
-  )
-  let second = @core.Op::new_insert(
-    -1,
-    [],
-    "admitted-repeat",
-    0,
-    "b",
-    None,
-    None,
-  )
+  let first = @core.Op::insert(-1, [], "admitted-repeat", 0, "a", None, None)
+  let second = @core.Op::insert(-1, [], "admitted-repeat", 0, "b", None, None)
   let expected_raw = remote_admission_raw(first)
   let planner = RemoteAdmissionPlanner()
   let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
@@ -195,18 +179,18 @@ test "remote admission fast staging compares admitted repeated payloads" {
 ///|
 /// Planner preparation seam: canonical pending payload remains authoritative.
 test "remote admission canonical pending raises conflicting identity" {
-  let pending = @core.Op::new_insert(
+  let pending = @core.Op::insert(
     -1,
-    [@core.RawVersion::new("pending-unknown", 0)],
+    [@core.RawVersion("pending-unknown", 0)],
     "canonical-conflict",
     0,
     "authoritative",
     None,
     None,
   )
-  let incoming = @core.Op::new_insert(
+  let incoming = @core.Op::insert(
     41,
-    [@core.RawVersion::new("pending-unknown", 0)],
+    [@core.RawVersion("pending-unknown", 0)],
     "canonical-conflict",
     0,
     "different",
@@ -235,8 +219,8 @@ test "remote admission canonical pending raises conflicting identity" {
 ///|
 /// Planner preparation seam: an overlay repeat is checked before readiness.
 test "remote admission overlay staging raises conflicting identity" {
-  let missing = @core.RawVersion::new("overlay-missing", 0)
-  let first = @core.Op::new_insert(
+  let missing = @core.RawVersion("overlay-missing", 0)
+  let first = @core.Op::insert(
     -1,
     [missing],
     "overlay-conflict",
@@ -245,7 +229,7 @@ test "remote admission overlay staging raises conflicting identity" {
     None,
     None,
   )
-  let second = @core.Op::new_insert(
+  let second = @core.Op::insert(
     -1,
     [missing],
     "overlay-conflict",
@@ -270,34 +254,18 @@ test "remote admission overlay staging raises conflicting identity" {
 
 ///|
 test "remote admission planner preserves unknown pending dependencies" {
-  let unknown = @core.RawVersion::new("unknown", 0)
-  let waiting = @core.Op::new_insert(
-    -1,
-    [unknown],
-    "waiting",
-    0,
-    "w",
-    None,
-    None,
-  )
-  let independent = @core.Op::new_insert(
-    -1,
-    [],
-    "independent",
-    0,
-    "i",
-    None,
-    None,
-  )
+  let unknown = @core.RawVersion("unknown", 0)
+  let waiting = @core.Op::insert(-1, [unknown], "waiting", 0, "w", None, None)
+  let independent = @core.Op::insert(-1, [], "independent", 0, "i", None, None)
   planner_compare([waiting, independent], 1, [])
-  let parent = @core.Op::new_insert(-1, [], "unknown", 0, "u", None, None)
+  let parent = @core.Op::insert(-1, [], "unknown", 0, "u", None, None)
   planner_compare([waiting, parent], 1, [])
 }
 
 ///|
 test "remote admission planner handles graph-known dependencies" {
-  let known = @core.RawVersion::new("known", 0)
-  let known_child = @core.Op::new_insert(
+  let known = @core.RawVersion("known", 0)
+  let known_child = @core.Op::insert(
     -1,
     [known],
     "known-child",
@@ -307,17 +275,17 @@ test "remote admission planner handles graph-known dependencies" {
     Some(known),
   )
   planner_compare([known_child], 0, [known])
-  let admitted = @core.Op::new_insert(-1, [], "known", 0, "s", None, None)
+  let admitted = @core.Op::insert(-1, [], "known", 0, "s", None, None)
   planner_compare([admitted], 0, [known])
 }
 
 ///|
 test "remote admission planner rejection closure is attempt scoped" {
-  let root = @core.RawVersion::new("root", 0)
-  let child = @core.RawVersion::new("child", 0)
-  let root_op = @core.Op::new_insert(-1, [], "root", 0, "r", None, None)
-  let child_op = @core.Op::new_insert(-1, [root], "child", 0, "c", None, None)
-  let grandchild_op = @core.Op::new_insert(
+  let root = @core.RawVersion("root", 0)
+  let child = @core.RawVersion("child", 0)
+  let root_op = @core.Op::insert(-1, [], "root", 0, "r", None, None)
+  let child_op = @core.Op::insert(-1, [root], "child", 0, "c", None, None)
+  let grandchild_op = @core.Op::insert(
     -1,
     [child],
     "grandchild",
@@ -341,7 +309,7 @@ test "remote admission planner rejection closure is attempt scoped" {
   })
   planner.reject_pending_dependents([root])
   assert_eq(planner.pending_raws().length(), 0)
-  let retry_root = @core.Op::new_insert(-1, [], "root", 0, "retry", None, None)
+  let retry_root = @core.Op::insert(-1, [], "root", 0, "retry", None, None)
   planner.register_pending(retry_root, raw => {
     ignore(raw)
     false
@@ -374,17 +342,9 @@ test "remote admission planner prepare is non-mutating" {
 
 ///|
 test "remote admission planner does not depend on map insertion order" {
-  let parent = @core.RawVersion::new("map-parent", 0)
-  let child = @core.Op::new_insert(
-    -1,
-    [parent],
-    "map-child",
-    0,
-    "c",
-    None,
-    None,
-  )
-  let independent = @core.Op::new_insert(
+  let parent = @core.RawVersion("map-parent", 0)
+  let child = @core.Op::insert(-1, [parent], "map-child", 0, "c", None, None)
+  let independent = @core.Op::insert(
     -1,
     [],
     "map-independent",
@@ -393,14 +353,14 @@ test "remote admission planner does not depend on map insertion order" {
     None,
     None,
   )
-  let parent_op = @core.Op::new_insert(-1, [], "map-parent", 0, "p", None, None)
+  let parent_op = @core.Op::insert(-1, [], "map-parent", 0, "p", None, None)
   let candidates = [child, independent, parent_op]
   let planner_a = RemoteAdmissionPlanner()
   for op in candidates {
     planner_a.register_pending(op, _ => false)
   }
   let planner_b = RemoteAdmissionPlanner()
-  let scratch = @core.Op::new_insert(-1, [], "scratch", 0, "s", None, None)
+  let scratch = @core.Op::insert(-1, [], "scratch", 0, "s", None, None)
   planner_b.register_pending(scratch, _ => false)
   planner_b.reject_pending_dependents([remote_admission_raw(scratch)])
   for op in candidates {
@@ -430,10 +390,10 @@ test "remote admission planner matches multiple branching sizes" {
 
 ///|
 test "remote admission planner accumulates multi-dependency rounds" {
-  let left_raw = @core.RawVersion::new("round-left", 0)
-  let right_raw = @core.RawVersion::new("round-right", 0)
-  let seed_raw = @core.RawVersion::new("round-seed", 0)
-  let join = @core.Op::new_insert(
+  let left_raw = @core.RawVersion("round-left", 0)
+  let right_raw = @core.RawVersion("round-right", 0)
+  let seed_raw = @core.RawVersion("round-seed", 0)
+  let join = @core.Op::insert(
     -1,
     [left_raw, right_raw],
     "round-join",
@@ -442,17 +402,9 @@ test "remote admission planner accumulates multi-dependency rounds" {
     None,
     None,
   )
-  let left = @core.Op::new_insert(
-    -1,
-    [seed_raw],
-    "round-left",
-    0,
-    "l",
-    None,
-    None,
-  )
-  let right = @core.Op::new_insert(-1, [], "round-right", 0, "r", None, None)
-  let seed = @core.Op::new_insert(-1, [], "round-seed", 0, "s", None, None)
+  let left = @core.Op::insert(-1, [seed_raw], "round-left", 0, "l", None, None)
+  let right = @core.Op::insert(-1, [], "round-right", 0, "r", None, None)
+  let seed = @core.Op::insert(-1, [], "round-seed", 0, "s", None, None)
   let candidates = [join, left, right, seed]
   let (expected, expected_remaining) = oracle_plan_remote_candidates(
     candidates.copy(),
@@ -460,21 +412,21 @@ test "remote admission planner accumulates multi-dependency rounds" {
   )
   planner_compare(candidates, 0, [])
   planner_assert_raws(planner_raws(expected), [
-    @core.RawVersion::new("round-right", 0),
-    @core.RawVersion::new("round-seed", 0),
-    @core.RawVersion::new("round-left", 0),
-    @core.RawVersion::new("round-join", 0),
+    @core.RawVersion("round-right", 0),
+    @core.RawVersion("round-seed", 0),
+    @core.RawVersion("round-left", 0),
+    @core.RawVersion("round-join", 0),
   ])
   assert_eq(expected_remaining.length(), 0)
 }
 
 ///|
 test "remote admission planner rejects and retries with fresh waiter identities" {
-  let root_raw = @core.RawVersion::new("retry-root", 0)
-  let child_raw = @core.RawVersion::new("retry-child", 0)
-  let grandchild_raw = @core.RawVersion::new("retry-grandchild", 0)
-  let root = @core.Op::new_insert(-1, [], "retry-root", 0, "r", None, None)
-  let child = @core.Op::new_insert(
+  let root_raw = @core.RawVersion("retry-root", 0)
+  let child_raw = @core.RawVersion("retry-child", 0)
+  let grandchild_raw = @core.RawVersion("retry-grandchild", 0)
+  let root = @core.Op::insert(-1, [], "retry-root", 0, "r", None, None)
+  let child = @core.Op::insert(
     -1,
     [root_raw],
     "retry-child",
@@ -483,7 +435,7 @@ test "remote admission planner rejects and retries with fresh waiter identities"
     None,
     None,
   )
-  let grandchild = @core.Op::new_insert(
+  let grandchild = @core.Op::insert(
     -1,
     [child_raw],
     "retry-grandchild",
@@ -492,7 +444,7 @@ test "remote admission planner rejects and retries with fresh waiter identities"
     None,
     None,
   )
-  let unrelated = @core.Op::new_insert(
+  let unrelated = @core.Op::insert(
     -1,
     [],
     "retry-unrelated",
@@ -509,7 +461,7 @@ test "remote admission planner rejects and retries with fresh waiter identities"
   planner.register_pending(root, _ => false)
   planner.reject_pending_dependents([root_raw])
   planner.register_pending(unrelated, _ => false)
-  let retry_root = @core.Op::new_insert(
+  let retry_root = @core.Op::insert(
     -1,
     [],
     "retry-root",
@@ -547,9 +499,9 @@ test "remote admission planner rejects and retries with fresh waiter identities"
 
 ///|
 test "remote admission planner ignores reversed dependency insertion order" {
-  let left = @core.RawVersion::new("order-left", 0)
-  let right = @core.RawVersion::new("order-right", 0)
-  let forward = @core.Op::new_insert(
+  let left = @core.RawVersion("order-left", 0)
+  let right = @core.RawVersion("order-right", 0)
+  let forward = @core.Op::insert(
     -1,
     [left, right, left, right],
     "order-join",
@@ -558,7 +510,7 @@ test "remote admission planner ignores reversed dependency insertion order" {
     Some(right),
     Some(left),
   )
-  let reverse = @core.Op::new_insert(
+  let reverse = @core.Op::insert(
     -1,
     [right, left, right, left],
     "order-join",
@@ -567,8 +519,8 @@ test "remote admission planner ignores reversed dependency insertion order" {
     Some(left),
     Some(right),
   )
-  let left_op = @core.Op::new_insert(-1, [], "order-left", 0, "l", None, None)
-  let right_op = @core.Op::new_insert(-1, [], "order-right", 0, "r", None, None)
+  let left_op = @core.Op::insert(-1, [], "order-left", 0, "l", None, None)
+  let right_op = @core.Op::insert(-1, [], "order-right", 0, "r", None, None)
   let forward_candidates = [forward, left_op, right_op]
   let reverse_candidates = [reverse, left_op, right_op]
   let (expected, expected_remaining) = oracle_plan_remote_candidates(
@@ -579,24 +531,16 @@ test "remote admission planner ignores reversed dependency insertion order" {
   planner_compare(reverse_candidates, 0, [])
   assert_eq(expected_remaining.length(), 0)
   planner_assert_raws(planner_raws(expected), [
-    @core.RawVersion::new("order-left", 0),
-    @core.RawVersion::new("order-right", 0),
-    @core.RawVersion::new("order-join", 0),
+    @core.RawVersion("order-left", 0),
+    @core.RawVersion("order-right", 0),
+    @core.RawVersion("order-join", 0),
   ])
 }
 
 ///|
 test "remote admission acknowledgement wakes a child after external parent admission" {
-  let parent = @core.RawVersion::new("ack-parent", 0)
-  let child = @core.Op::new_insert(
-    -1,
-    [parent],
-    "ack-child",
-    0,
-    "c",
-    None,
-    None,
-  )
+  let parent = @core.RawVersion("ack-parent", 0)
+  let child = @core.Op::insert(-1, [parent], "ack-child", 0, "c", None, None)
   let known : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(child, raw => known.contains(raw))
@@ -619,7 +563,7 @@ test "remote admission acknowledgement wakes a child after external parent admis
 
 ///|
 test "remote admission acknowledgement removes an admitted pending duplicate" {
-  let parent = @core.Op::new_insert(
+  let parent = @core.Op::insert(
     -1,
     [],
     "ack-duplicate-parent",
@@ -629,7 +573,7 @@ test "remote admission acknowledgement removes an admitted pending duplicate" {
     None,
   )
   let parent_raw = remote_admission_raw(parent)
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [parent_raw],
     "ack-duplicate-child",
@@ -662,8 +606,8 @@ test "remote admission acknowledgement removes an admitted pending duplicate" {
 
 ///|
 test "remote admission acknowledgement invalidates an earlier plan generation" {
-  let parent = @core.RawVersion::new("ack-stale-parent", 0)
-  let child = @core.Op::new_insert(
+  let parent = @core.RawVersion("ack-stale-parent", 0)
+  let child = @core.Op::insert(
     -1,
     [parent],
     "ack-stale-child",
@@ -699,9 +643,9 @@ test "remote admission acknowledgement invalidates an earlier plan generation" {
 
 ///|
 test "remote admission planner retry acknowledgement tombstones stay nonnegative" {
-  let root = @core.Op::new_insert(-1, [], "tombstone-root", 0, "r", None, None)
+  let root = @core.Op::insert(-1, [], "tombstone-root", 0, "r", None, None)
   let root_raw = remote_admission_raw(root)
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [root_raw],
     "tombstone-child",
@@ -711,7 +655,7 @@ test "remote admission planner retry acknowledgement tombstones stay nonnegative
     None,
   )
   let child_raw = remote_admission_raw(child)
-  let grandchild = @core.Op::new_insert(
+  let grandchild = @core.Op::insert(
     -1,
     [child_raw],
     "tombstone-grandchild",
@@ -729,7 +673,7 @@ test "remote admission planner retry acknowledgement tombstones stay nonnegative
   assert_true(planner.stale_count() >= 0)
   assert_true(planner.stale_count() > 0)
 
-  let retry_root = @core.Op::new_insert(
+  let retry_root = @core.Op::insert(
     -1,
     [],
     "tombstone-root",
@@ -762,8 +706,8 @@ test "remote admission planner retry acknowledgement tombstones stay nonnegative
 
 ///|
 test "remote admission planner selects fast and general preparation exactly" {
-  let admitted_parent = @core.RawVersion::new("fast-admitted-parent", 0)
-  let admitted = @core.Op::new_insert(
+  let admitted_parent = @core.RawVersion("fast-admitted-parent", 0)
+  let admitted = @core.Op::insert(
     -1,
     [],
     "fast-admitted-parent",
@@ -772,9 +716,9 @@ test "remote admission planner selects fast and general preparation exactly" {
     None,
     None,
   )
-  let parent = @core.Op::new_insert(-1, [], "fast-parent", 0, "p", None, None)
+  let parent = @core.Op::insert(-1, [], "fast-parent", 0, "p", None, None)
   let parent_raw = remote_admission_raw(parent)
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [parent_raw, parent_raw],
     "fast-child",
@@ -808,8 +752,8 @@ test "remote admission planner selects fast and general preparation exactly" {
     ImmediateGeneral(_, planned_count=_) => ()
   }
 
-  let missing = @core.RawVersion::new("fast-pending-missing", 0)
-  let pending = @core.Op::new_insert(
+  let missing = @core.RawVersion("fast-pending-missing", 0)
+  let pending = @core.Op::insert(
     -1,
     [missing],
     "fast-pending",
@@ -829,7 +773,7 @@ test "remote admission planner selects fast and general preparation exactly" {
 
 ///|
 test "remote admission general lifecycle preserves pending-first fixed-point order" {
-  let parent = @core.Op::new_insert(
+  let parent = @core.Op::insert(
     -1,
     [],
     "pending-first-parent",
@@ -838,7 +782,7 @@ test "remote admission general lifecycle preserves pending-first fixed-point ord
     None,
     None,
   )
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [remote_admission_raw(parent)],
     "pending-first-child",
@@ -870,8 +814,8 @@ test "remote admission general lifecycle preserves pending-first fixed-point ord
 
 ///|
 test "remote admission general begin registers unresolved nodes" {
-  let unknown = @core.RawVersion::new("begin-unresolved-unknown", 0)
-  let child = @core.Op::new_insert(
+  let unknown = @core.RawVersion("begin-unresolved-unknown", 0)
+  let child = @core.Op::insert(
     -1,
     [unknown],
     "begin-unresolved-child",
@@ -896,16 +840,8 @@ test "remote admission general begin registers unresolved nodes" {
 
 ///|
 test "remote admission fast begin rejects reordered dependencies atomically" {
-  let parent = @core.Op::new_insert(
-    -1,
-    [],
-    "fast-begin-parent",
-    0,
-    "p",
-    None,
-    None,
-  )
-  let child = @core.Op::new_insert(
+  let parent = @core.Op::insert(-1, [], "fast-begin-parent", 0, "p", None, None)
+  let child = @core.Op::insert(
     -1,
     [remote_admission_raw(parent)],
     "fast-begin-child",
@@ -935,7 +871,7 @@ test "remote admission fast begin rejects reordered dependencies atomically" {
 
 ///|
 test "remote admission fast plan begins and is consumed exactly once" {
-  let op = @core.Op::new_insert(-1, [], "fast-consumed", 0, "x", None, None)
+  let op = @core.Op::insert(-1, [], "fast-consumed", 0, "x", None, None)
   let planner = RemoteAdmissionPlanner()
   let plan = planner.prepare([op], _ => false)
   match plan.storage {
@@ -958,7 +894,7 @@ test "remote admission fast plan begins and is consumed exactly once" {
 
 ///|
 test "remote admission acknowledgement always invalidates prepared plans" {
-  let incoming = @core.Op::new_insert(
+  let incoming = @core.Op::insert(
     -1,
     [],
     "ack-unrelated-incoming",
@@ -970,9 +906,7 @@ test "remote admission acknowledgement always invalidates prepared plans" {
   let planner = RemoteAdmissionPlanner()
   let plan = planner.prepare([incoming], _ => false)
   let generation_before = planner.generation()
-  planner.acknowledge_admitted(
-    @core.RawVersion::new("ack-unrelated-admitted", 0),
-  )
+  planner.acknowledge_admitted(@core.RawVersion("ack-unrelated-admitted", 0))
   assert_eq(planner.generation(), generation_before + 1)
   match planner.begin(plan, _ => false) {
     RemoteAdmissionBeginResult::Stale => ()
@@ -982,8 +916,8 @@ test "remote admission acknowledgement always invalidates prepared plans" {
 
 ///|
 test "remote admission planner begins staged nodes exactly once" {
-  let parent = @core.Op::new_insert(-1, [], "begin-parent", 0, "p", None, None)
-  let child = @core.Op::new_insert(
+  let parent = @core.Op::insert(-1, [], "begin-parent", 0, "p", None, None)
+  let child = @core.Op::insert(
     -1,
     [remote_admission_raw(parent)],
     "begin-child",
@@ -992,7 +926,7 @@ test "remote admission planner begins staged nodes exactly once" {
     None,
     None,
   )
-  let independent = @core.Op::new_insert(
+  let independent = @core.Op::insert(
     -1,
     [],
     "begin-independent",
@@ -1045,7 +979,7 @@ test "remote admission planner begins staged nodes exactly once" {
 
 ///|
 test "remote admission planner assigns post-staging arrivals on begin" {
-  let parent = @core.Op::new_insert(
+  let parent = @core.Op::insert(
     -1,
     [],
     "begin-order-parent",
@@ -1054,7 +988,7 @@ test "remote admission planner assigns post-staging arrivals on begin" {
     None,
     None,
   )
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [remote_admission_raw(parent)],
     "begin-order-child",
@@ -1063,7 +997,7 @@ test "remote admission planner assigns post-staging arrivals on begin" {
     None,
     None,
   )
-  let independent = @core.Op::new_insert(
+  let independent = @core.Op::insert(
     -1,
     [],
     "begin-order-independent",
@@ -1072,7 +1006,7 @@ test "remote admission planner assigns post-staging arrivals on begin" {
     None,
     None,
   )
-  let direct = @core.Op::new_insert(
+  let direct = @core.Op::insert(
     -1,
     [],
     "begin-order-direct",
@@ -1144,8 +1078,8 @@ test "remote admission planner preserves an unacknowledged successful prefix rem
 
 ///|
 test "remote admission planner rejects stale plans before mutation" {
-  let first = @core.Op::new_insert(-1, [], "stale-first", 0, "x", None, None)
-  let second = @core.Op::new_insert(-1, [], "stale-second", 0, "x", None, None)
+  let first = @core.Op::insert(-1, [], "stale-first", 0, "x", None, None)
+  let second = @core.Op::insert(-1, [], "stale-second", 0, "x", None, None)
   let planner = RemoteAdmissionPlanner()
   let stale_plan = planner.prepare([first], _ => false)
   planner.register_pending(second, _ => false)
@@ -1170,17 +1104,9 @@ test "remote admission planner rejects stale plans before mutation" {
 
 ///|
 test "remote admission planner rejects duplicate staged arrivals before mutation" {
-  let live = @core.Op::new_insert(-1, [], "conflict-live", 0, "l", None, None)
-  let staged = @core.Op::new_insert(
-    -1,
-    [],
-    "conflict-staged",
-    0,
-    "s",
-    None,
-    None,
-  )
-  let staged_other = @core.Op::new_insert(
+  let live = @core.Op::insert(-1, [], "conflict-live", 0, "l", None, None)
+  let staged = @core.Op::insert(-1, [], "conflict-staged", 0, "s", None, None)
+  let staged_other = @core.Op::insert(
     -1,
     [],
     "conflict-staged-other",
@@ -1226,9 +1152,9 @@ test "remote admission planner rejects duplicate staged arrivals before mutation
 
 ///|
 test "remote admission planner rejects gapped staged arrivals atomically" {
-  let live = @core.Op::new_insert(-1, [], "gap-live", 0, "l", None, None)
-  let first = @core.Op::new_insert(-1, [], "gap-first", 0, "f", None, None)
-  let second = @core.Op::new_insert(-1, [], "gap-second", 0, "s", None, None)
+  let live = @core.Op::insert(-1, [], "gap-live", 0, "l", None, None)
+  let first = @core.Op::insert(-1, [], "gap-first", 0, "f", None, None)
+  let second = @core.Op::insert(-1, [], "gap-second", 0, "s", None, None)
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(live, _ => false)
   let plan = planner.prepare([first, second], _ => false)
@@ -1270,10 +1196,10 @@ test "remote admission planner rejects gapped staged arrivals atomically" {
 
 ///|
 test "remote admission planner rejects staged payload mismatch atomically" {
-  let live = @core.Op::new_insert(-1, [], "raw-live", 0, "l", None, None)
-  let first = @core.Op::new_insert(-1, [], "raw-first", 0, "f", None, None)
-  let second = @core.Op::new_insert(-1, [], "raw-second", 0, "s", None, None)
-  let mismatch = @core.Op::new_insert(
+  let live = @core.Op::insert(-1, [], "raw-live", 0, "l", None, None)
+  let first = @core.Op::insert(-1, [], "raw-first", 0, "f", None, None)
+  let second = @core.Op::insert(-1, [], "raw-second", 0, "s", None, None)
+  let mismatch = @core.Op::insert(
     -1,
     [],
     "raw-second",
@@ -1323,7 +1249,7 @@ test "remote admission planner rejects staged payload mismatch atomically" {
 
 ///|
 test "remote admission planner rejects pending planned payload mismatch atomically" {
-  let pending = @core.Op::new_insert(
+  let pending = @core.Op::insert(
     -1,
     [],
     "planned-payload",
@@ -1332,7 +1258,7 @@ test "remote admission planner rejects pending planned payload mismatch atomical
     None,
     None,
   )
-  let changed = @core.Op::new_insert(
+  let changed = @core.Op::insert(
     -1,
     [],
     "planned-payload",
@@ -1361,7 +1287,7 @@ test "remote admission planner rejects pending planned payload mismatch atomical
 
 ///|
 test "remote admission planner rejects reordered and injected planned entries" {
-  let parent = @core.Op::new_insert(
+  let parent = @core.Op::insert(
     -1,
     [],
     "planned-order-parent",
@@ -1370,7 +1296,7 @@ test "remote admission planner rejects reordered and injected planned entries" {
     None,
     None,
   )
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [remote_admission_raw(parent)],
     "planned-order-child",
@@ -1393,7 +1319,7 @@ test "remote admission planner rejects reordered and injected planned entries" {
   assert_eq(reordered_planner.next_arrival, 0)
   assert_true(!reordered_plan.consumed)
 
-  let first_ready = @core.Op::new_insert(
+  let first_ready = @core.Op::insert(
     -1,
     [],
     "planned-order-first-ready",
@@ -1402,7 +1328,7 @@ test "remote admission planner rejects reordered and injected planned entries" {
     None,
     None,
   )
-  let second_ready = @core.Op::new_insert(
+  let second_ready = @core.Op::insert(
     -1,
     [],
     "planned-order-second-ready",
@@ -1411,10 +1337,10 @@ test "remote admission planner rejects reordered and injected planned entries" {
     None,
     None,
   )
-  let arrival_blocker_dependency = @core.RawVersion::new(
+  let arrival_blocker_dependency = @core.RawVersion(
     "planned-order-arrival-blocker", 0,
   )
-  let arrival_blocker = @core.Op::new_insert(
+  let arrival_blocker = @core.Op::insert(
     -1,
     [arrival_blocker_dependency],
     "planned-order-arrival-pending",
@@ -1443,8 +1369,8 @@ test "remote admission planner rejects reordered and injected planned entries" {
   assert_eq(arrival_planner.next_arrival, arrival_next_before)
   assert_true(!arrival_plan.consumed)
 
-  let unknown = @core.RawVersion::new("planned-injected-unknown", 0)
-  let ready = @core.Op::new_insert(
+  let unknown = @core.RawVersion("planned-injected-unknown", 0)
+  let ready = @core.Op::insert(
     -1,
     [],
     "planned-injected-ready",
@@ -1453,7 +1379,7 @@ test "remote admission planner rejects reordered and injected planned entries" {
     None,
     None,
   )
-  let blocked = @core.Op::new_insert(
+  let blocked = @core.Op::insert(
     -1,
     [unknown],
     "planned-injected-blocked",
@@ -1478,7 +1404,7 @@ test "remote admission planner rejects reordered and injected planned entries" {
 
 ///|
 test "remote admission planner rejects newly admitted staged raw atomically" {
-  let staged = @core.Op::new_insert(
+  let staged = @core.Op::insert(
     -1,
     [],
     "newly-admitted-staged",
@@ -1506,8 +1432,8 @@ test "remote admission planner rejects newly admitted staged raw atomically" {
 
 ///|
 test "remote admission planner rejects inconsistent waiting metadata atomically" {
-  let dependency = @core.RawVersion::new("waiting-metadata-dependency", 0)
-  let staged = @core.Op::new_insert(
+  let dependency = @core.RawVersion("waiting-metadata-dependency", 0)
+  let staged = @core.Op::insert(
     -1,
     [dependency],
     "waiting-metadata-staged",
@@ -1569,7 +1495,7 @@ test "remote admission planner rejects inconsistent waiting metadata atomically"
 
 ///|
 test "remote admission operation copy cannot mutate prepared storage" {
-  let original = @core.Op::new_insert(
+  let original = @core.Op::insert(
     -1,
     [],
     "operation-copy",
@@ -1578,7 +1504,7 @@ test "remote admission operation copy cannot mutate prepared storage" {
     None,
     None,
   )
-  let replacement = @core.Op::new_insert(
+  let replacement = @core.Op::insert(
     -1,
     [],
     "operation-copy",
@@ -1588,8 +1514,8 @@ test "remote admission operation copy cannot mutate prepared storage" {
     None,
   )
   let planner = RemoteAdmissionPlanner()
-  let blocker_dependency = @core.RawVersion::new("operation-copy-blocker", 0)
-  let blocker = @core.Op::new_insert(
+  let blocker_dependency = @core.RawVersion("operation-copy-blocker", 0)
+  let blocker = @core.Op::insert(
     -1,
     [blocker_dependency],
     "operation-copy-pending",
@@ -1616,10 +1542,10 @@ test "remote admission operation copy cannot mutate prepared storage" {
 
 ///|
 test "remote admission ready snapshot pins stale-to-live selection boundary" {
-  let missing = @core.RawVersion::new("snapshot-missing", 0)
+  let missing = @core.RawVersion("snapshot-missing", 0)
   let selected = RemoteAdmissionPlanner()
   selected.register_pending(
-    @core.Op::new_insert(
+    @core.Op::insert(
       -1,
       [missing],
       "snapshot-selected-unresolved",
@@ -1632,7 +1558,7 @@ test "remote admission ready snapshot pins stale-to-live selection boundary" {
   )
   let selected_ready : Array[@core.RawVersion] = []
   for i in 0..<3 {
-    let op = @core.Op::new_insert(
+    let op = @core.Op::insert(
       -1,
       [],
       "snapshot-selected-ready",
@@ -1645,7 +1571,7 @@ test "remote admission ready snapshot pins stale-to-live selection boundary" {
     selected_ready.push(remote_admission_raw(op))
   }
   for i in 0..<64 {
-    let op = @core.Op::new_insert(
+    let op = @core.Op::insert(
       -1,
       [],
       "snapshot-selected-stale",
@@ -1672,7 +1598,7 @@ test "remote admission ready snapshot pins stale-to-live selection boundary" {
 
   let copied = RemoteAdmissionPlanner()
   copied.register_pending(
-    @core.Op::new_insert(
+    @core.Op::insert(
       -1,
       [missing],
       "snapshot-copied-unresolved",
@@ -1685,12 +1611,12 @@ test "remote admission ready snapshot pins stale-to-live selection boundary" {
   )
   for i in 0..<4 {
     copied.register_pending(
-      @core.Op::new_insert(-1, [], "snapshot-copied-ready", i, "r", None, None),
+      @core.Op::insert(-1, [], "snapshot-copied-ready", i, "r", None, None),
       _ => false,
     )
   }
   for i in 0..<64 {
-    let op = @core.Op::new_insert(
+    let op = @core.Op::insert(
       -1,
       [],
       "snapshot-copied-stale",
@@ -1707,7 +1633,7 @@ test "remote admission ready snapshot pins stale-to-live selection boundary" {
 
   let empty = RemoteAdmissionPlanner()
   for i in 0..<64 {
-    let op = @core.Op::new_insert(
+    let op = @core.Op::insert(
       -1,
       [],
       "snapshot-empty-stale",
@@ -1725,8 +1651,8 @@ test "remote admission ready snapshot pins stale-to-live selection boundary" {
 
 ///|
 test "remote admission planner compacts stale indexes and preserves live arrivals" {
-  let root = @core.Op::new_insert(-1, [], "compact-root", 0, "r", None, None)
-  let child = @core.Op::new_insert(
+  let root = @core.Op::insert(-1, [], "compact-root", 0, "r", None, None)
+  let child = @core.Op::insert(
     -1,
     [remote_admission_raw(root)],
     "compact-child",
@@ -1735,10 +1661,8 @@ test "remote admission planner compacts stale indexes and preserves live arrival
     None,
     None,
   )
-  let unrelated_dependency = @core.RawVersion::new(
-    "compact-unrelated-dependency", 0,
-  )
-  let unrelated = @core.Op::new_insert(
+  let unrelated_dependency = @core.RawVersion("compact-unrelated-dependency", 0)
+  let unrelated = @core.Op::insert(
     -1,
     [unrelated_dependency],
     "compact-unrelated",
@@ -1747,7 +1671,7 @@ test "remote admission planner compacts stale indexes and preserves live arrival
     None,
     None,
   )
-  let ready = @core.Op::new_insert(-1, [], "compact-ready", 0, "q", None, None)
+  let ready = @core.Op::insert(-1, [], "compact-ready", 0, "q", None, None)
   let planner = RemoteAdmissionPlanner()
   planner.register_pending(child, _ => false)
   planner.register_pending(root, _ => false)
@@ -1789,8 +1713,8 @@ test "remote admission planner compacts stale indexes and preserves live arrival
 
 ///|
 test "remote admission planner filters graph-known nodes during compaction" {
-  let dependency = @core.RawVersion::new("compact-known-dependency", 0)
-  let waiting = @core.Op::new_insert(
+  let dependency = @core.RawVersion("compact-known-dependency", 0)
+  let waiting = @core.Op::insert(
     -1,
     [dependency],
     "compact-known-waiter",
@@ -1799,7 +1723,7 @@ test "remote admission planner filters graph-known nodes during compaction" {
     None,
     None,
   )
-  let known_node = @core.Op::new_insert(
+  let known_node = @core.Op::insert(
     -1,
     [],
     "compact-known-node",
@@ -1828,7 +1752,7 @@ test "remote admission planner filters graph-known nodes during compaction" {
 test "remote admission planner maybe_compact uses bounded stale policy" {
   let planner = RemoteAdmissionPlanner()
   for i in 0..<511 {
-    let op = @core.Op::new_insert(-1, [], "maybe-compact", i, "x", None, None)
+    let op = @core.Op::insert(-1, [], "maybe-compact", i, "x", None, None)
     planner.register_pending(op, _ => false)
     planner.acknowledge_admitted(remote_admission_raw(op))
   }
@@ -1837,7 +1761,7 @@ test "remote admission planner maybe_compact uses bounded stale policy" {
   assert_true(!planner.maybe_compact(_ => false))
   assert_eq(planner.generation(), generation_before)
 
-  let threshold_op = @core.Op::new_insert(
+  let threshold_op = @core.Op::insert(
     -1,
     [],
     "maybe-compact",
@@ -1855,16 +1779,16 @@ test "remote admission planner maybe_compact uses bounded stale policy" {
 
 ///|
 test "remote admission planner maybe_compact pins live ratio boundary" {
-  let missing = @core.RawVersion::new("ratio-missing", 0)
+  let missing = @core.RawVersion("ratio-missing", 0)
   let planner = RemoteAdmissionPlanner()
   for i in 0..<513 {
     planner.register_pending(
-      @core.Op::new_insert(-1, [missing], "ratio-live", i, "x", None, None),
+      @core.Op::insert(-1, [missing], "ratio-live", i, "x", None, None),
       _ => false,
     )
   }
   for i in 0..<512 {
-    let churn = @core.Op::new_insert(-1, [], "ratio-stale", i, "x", None, None)
+    let churn = @core.Op::insert(-1, [], "ratio-stale", i, "x", None, None)
     planner.register_pending(churn, _ => false)
     planner.acknowledge_admitted(remote_admission_raw(churn))
   }
@@ -1872,15 +1796,7 @@ test "remote admission planner maybe_compact pins live ratio boundary" {
   assert_eq(planner.stale_count(), 1024)
   assert_true(!planner.maybe_compact(_ => false))
 
-  let trigger = @core.Op::new_insert(
-    -1,
-    [],
-    "ratio-stale",
-    512,
-    "x",
-    None,
-    None,
-  )
+  let trigger = @core.Op::insert(-1, [], "ratio-stale", 512, "x", None, None)
   planner.register_pending(trigger, _ => false)
   planner.acknowledge_admitted(remote_admission_raw(trigger))
   assert_eq(planner.stale_count(), 1026)

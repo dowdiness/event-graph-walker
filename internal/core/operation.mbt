@@ -72,8 +72,30 @@ pub fn Op::origin_right(self : Op) -> RawVersion? {
 }
 
 ///|
-/// Create a new insert operation
-pub fn Op::new_insert(
+/// Private full constructor. It establishes ownership of every mutable input.
+fn Op::Op(
+  lv~ : Int,
+  parents~ : Array[RawVersion],
+  agent~ : String,
+  seq~ : Int,
+  content~ : OpContent,
+  origin_left~ : RawVersion?,
+  origin_right~ : RawVersion?,
+) -> Op {
+  {
+    lv,
+    parents: parents.copy(),
+    agent,
+    seq,
+    content,
+    origin_left,
+    origin_right,
+  }
+}
+
+///|
+/// Create an insert operation.
+pub fn Op::insert(
   lv : Int,
   parents : Array[RawVersion],
   agent : String,
@@ -82,60 +104,58 @@ pub fn Op::new_insert(
   origin_left : RawVersion?,
   origin_right : RawVersion?,
 ) -> Op {
-  {
-    lv,
-    parents: parents.copy(),
-    agent,
-    seq,
-    content: Insert(text),
-    origin_left,
-    origin_right,
-  }
+  Op(
+    lv~,
+    parents~,
+    agent~,
+    seq~,
+    content=Insert(text),
+    origin_left~,
+    origin_right~,
+  )
 }
 
 ///|
-/// Create a new delete operation.
+/// Create a delete operation.
 ///
-/// The `origin_left` parameter specifies the tombstone ID - the local version
-/// of the item being deleted. This is required to identify which item in the
-/// Fugue tree should be marked as deleted. Callers must always provide a
-/// concrete target ID; `None` is only valid for internal/placeholder use.
-pub fn Op::new_delete(
+/// The `target` parameter specifies the tombstone ID - the local version of
+/// the item being deleted.
+pub fn Op::delete(
   lv : Int,
   parents : Array[RawVersion],
   agent : String,
   seq : Int,
-  origin_left : RawVersion?,
+  target : RawVersion?,
 ) -> Op {
-  {
-    lv,
-    parents: parents.copy(),
-    agent,
-    seq,
-    content: Delete,
-    origin_left,
-    origin_right: None,
-  }
+  Op(
+    lv~,
+    parents~,
+    agent~,
+    seq~,
+    content=Delete,
+    origin_left=target,
+    origin_right=None,
+  )
 }
 
 ///|
-/// Create a new undelete operation
-pub fn Op::new_undelete(
+/// Create an undelete operation.
+pub fn Op::undelete(
   lv : Int,
   parents : Array[RawVersion],
   agent : String,
   seq : Int,
-  origin_left : RawVersion?,
+  target : RawVersion?,
 ) -> Op {
-  {
-    lv,
-    parents: parents.copy(),
-    agent,
-    seq,
-    content: Undelete,
-    origin_left,
-    origin_right: None,
-  }
+  Op(
+    lv~,
+    parents~,
+    agent~,
+    seq~,
+    content=Undelete,
+    origin_left=target,
+    origin_right=None,
+  )
 }
 
 ///|
@@ -180,28 +200,5 @@ pub fn Op::get_insert_text(self : Op) -> String? {
   match self.content {
     Insert(text) => Some(text)
     Delete | Undelete => None
-  }
-}
-
-///|
-/// Internal constructor for Op from all parts.
-/// Used by OpRun::decompress to reconstruct individual operations.
-pub fn Op::new_from_parts(
-  lv~ : Int,
-  parents~ : Array[RawVersion],
-  agent~ : String,
-  seq~ : Int,
-  content~ : OpContent,
-  origin_left~ : RawVersion?,
-  origin_right~ : RawVersion?,
-) -> Op {
-  {
-    lv,
-    parents: parents.copy(),
-    agent,
-    seq,
-    content,
-    origin_left,
-    origin_right,
   }
 }

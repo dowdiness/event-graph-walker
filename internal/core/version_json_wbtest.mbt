@@ -2,7 +2,7 @@
 
 ///|
 test "RawVersion JSON roundtrip preserves wire shape" {
-  let version = RawVersion::new("alice", 7)
+  let version = RawVersion("alice", 7)
   let decoded : RawVersion = @json.from_json(version.to_json())
   inspect(decoded == version, content="true")
   inspect(

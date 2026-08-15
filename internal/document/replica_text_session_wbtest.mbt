@@ -47,7 +47,7 @@ test "prototype: duplicate publish is idempotent" {
 test "prototype: conflicting identity is not silently filtered" {
   let authority = Document::new("authority-conflict")
   let admitted = try! authority.insert(0, "a")
-  let conflict = @core.Op::new_insert(
+  let conflict = @core.Op::insert(
     -1,
     [],
     admitted.agent(),
@@ -151,13 +151,10 @@ fn replica_text_unadmitted_operations(
 ) -> Array[@core.Op] {
   let known : Map[@core.RawVersion, @core.Op] = Map::default()
   for operation in destination.get_all_ops() {
-    known.set(
-      @core.RawVersion::new(operation.agent(), operation.seq()),
-      operation,
-    )
+    known.set(@core.RawVersion(operation.agent(), operation.seq()), operation)
   }
   source_operations.filter(operation => {
-    let raw = @core.RawVersion::new(operation.agent(), operation.seq())
+    let raw = @core.RawVersion(operation.agent(), operation.seq())
     match known.get(raw) {
       None => true
       Some(existing) =>

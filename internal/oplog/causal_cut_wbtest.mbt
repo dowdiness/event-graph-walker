@@ -2,7 +2,7 @@
 
 ///|
 test "prototype: causal cut is immutable and rebuildable" {
-  let source = OpLog::new("source")
+  let source = OpLog("source")
   ignore(try! source.insert("a", -1, -1))
   ignore(try! source.insert("b", 0, -1))
 
@@ -23,11 +23,11 @@ test "prototype: causal cut is immutable and rebuildable" {
 
 ///|
 test "prototype: equivalent causal cuts ignore destination-local LVs" {
-  let source = OpLog::new("source")
+  let source = OpLog("source")
   ignore(try! source.insert("a", -1, -1))
   ignore(try! source.insert("b", 0, -1))
 
-  let replica = OpLog::new("replica")
+  let replica = OpLog("replica")
   for operation in source.get_all_ops() {
     ignore(try! replica.apply_remote(operation))
   }
@@ -39,11 +39,11 @@ test "prototype: equivalent causal cuts ignore destination-local LVs" {
 
 ///|
 test "prototype: concurrent fresh writers converge on one causal cut" {
-  let source = OpLog::new("source")
+  let source = OpLog("source")
   ignore(try! source.insert("a", -1, -1))
   ignore(try! source.insert("b", 0, -1))
 
-  let replica = OpLog::new("replica")
+  let replica = OpLog("replica")
   for operation in source.get_all_ops() {
     ignore(try! replica.apply_remote(operation))
   }
@@ -69,7 +69,7 @@ test "prototype: concurrent fresh writers converge on one causal cut" {
 
 ///|
 test "prototype: legacy empty inserts remain rebuildable" {
-  let log = OpLog::new("legacy-empty")
+  let log = OpLog("legacy-empty")
   ignore(try! log.insert("", -1, -1))
   inspect(log.causal_cut().op_count(), content="1")
   inspect(
@@ -80,10 +80,10 @@ test "prototype: legacy empty inserts remain rebuildable" {
 
 ///|
 test "prototype: pending remote operations enter the cut only after drain" {
-  let source = OpLog::new("pending-source")
+  let source = OpLog("pending-source")
   let parent = try! source.insert("a", -1, -1)
   let child = try! source.insert("b", parent.lv(), -1)
-  let target = OpLog::new("pending-target")
+  let target = OpLog("pending-target")
 
   inspect((try! target.apply_remote(child)).length(), content="0")
   inspect(target.causal_cut().op_count(), content="0")
@@ -97,26 +97,10 @@ test "prototype: pending remote operations enter the cut only after drain" {
 
 ///|
 test "prototype: partial remote admission leaves an exact cut prefix" {
-  let log = OpLog::new("partial-cut")
-  let first = @core.Op::new_insert(-1, [], "partial-first", 0, "a", None, None)
-  let failed = @core.Op::new_insert(
-    -1,
-    [],
-    "partial-failed",
-    0,
-    "b",
-    None,
-    None,
-  )
-  let suffix = @core.Op::new_insert(
-    -1,
-    [],
-    "partial-suffix",
-    0,
-    "c",
-    None,
-    None,
-  )
+  let log = OpLog("partial-cut")
+  let first = @core.Op::insert(-1, [], "partial-first", 0, "a", None, None)
+  let failed = @core.Op::insert(-1, [], "partial-failed", 0, "b", None, None)
+  let suffix = @core.Op::insert(-1, [], "partial-suffix", 0, "c", None, None)
   let plan = try! log.prepare_remote([first, failed, suffix])
   let failed_raw = remote_admission_raw(failed)
   let result : Result[Array[@core.Op], OpLogError] = Ok(

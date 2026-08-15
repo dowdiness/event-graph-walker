@@ -9,10 +9,10 @@ fn benchmark_ready_matrix_planner(
   live_unresolved : Int,
 ) -> RemoteAdmissionPlanner raise OpLogError {
   let planner = RemoteAdmissionPlanner()
-  let missing = @core.RawVersion::new("ready-matrix-missing", 0)
+  let missing = @core.RawVersion("ready-matrix-missing", 0)
   for i in 0..<live_unresolved {
     planner.register_pending(
-      @core.Op::new_insert(
+      @core.Op::insert(
         -1,
         [missing],
         "ready-matrix-unresolved",
@@ -26,20 +26,12 @@ fn benchmark_ready_matrix_planner(
   }
   for i in 0..<live_ready {
     planner.register_pending(
-      @core.Op::new_insert(-1, [], "ready-matrix-live", i, "l", None, None),
+      @core.Op::insert(-1, [], "ready-matrix-live", i, "l", None, None),
       _ => false,
     )
   }
   for i in 0..<stale_ready {
-    let op = @core.Op::new_insert(
-      -1,
-      [],
-      "ready-matrix-stale",
-      i,
-      "s",
-      None,
-      None,
-    )
+    let op = @core.Op::insert(-1, [], "ready-matrix-stale", i, "s", None, None)
     planner.register_pending(op, _ => false)
     planner.acknowledge_admitted(remote_admission_raw(op))
   }

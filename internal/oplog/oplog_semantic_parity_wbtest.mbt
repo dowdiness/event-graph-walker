@@ -2,7 +2,7 @@
 
 ///|
 fn p0_raw(agent : String, seq : Int) -> @core.RawVersion {
-  @core.RawVersion::new(agent, seq)
+  @core.RawVersion(agent, seq)
 }
 
 ///|
@@ -13,7 +13,7 @@ fn p0_insert(
   text : String,
   origin_left : @core.RawVersion?,
 ) -> @core.Op {
-  @core.Op::new_insert(-1, parents, agent, seq, text, origin_left, None)
+  @core.Op::insert(-1, parents, agent, seq, text, origin_left, None)
 }
 
 ///|
@@ -23,12 +23,12 @@ fn p0_delete(
   parents : Array[@core.RawVersion],
   target : @core.RawVersion,
 ) -> @core.Op {
-  @core.Op::new_delete(-1, parents, agent, seq, Some(target))
+  @core.Op::delete(-1, parents, agent, seq, Some(target))
 }
 
 ///|
 test "P0 core rejects sequence fork before mutation" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let fork = p0_insert("alice", 1, [], "B", Some(p0_raw("alice", 0)))
   let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
@@ -49,7 +49,7 @@ test "P0 core rejects sequence fork before mutation" {
 
 ///|
 test "P0 core accepts indirect predecessor ancestry" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let middle = p0_insert(
     "bob",
@@ -74,7 +74,7 @@ test "P0 core accepts indirect predecessor ancestry" {
 
 ///|
 test "P0 core rejects non-insert origin before mutation" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let delete = p0_delete("alice", 1, [p0_raw("alice", 0)], p0_raw("alice", 0))
   let malformed = p0_insert(
@@ -104,24 +104,18 @@ test "P0 core rejects non-insert origin before mutation" {
 
 ///|
 test "P0 rejects delete right-origin shape before mutation" {
-  let receiver = OpLog::new("receiver")
-  let raw = p0_raw("target", 0)
-  let normal_delete = @core.Op::new_delete(
-    -1,
-    [],
-    "normal-delete",
-    0,
-    Some(raw),
+  let receiver = OpLog("receiver")
+  let malformed_run : @core.OpRun = @json.from_json(
+    @json.parse(
+      (
+        #|{"start_lv":0,"agent":"remote","start_seq":0,"content":"Deletes","parents":[],"origin_left":[{"agent":"target","seq":0}],"origin_right":[{"agent":"target","seq":0}],"count":1}
+      ),
+    ),
   )
-  let malformed = @core.Op::new_from_parts(
-    lv=-1,
-    parents=[],
-    agent="remote",
-    seq=0,
-    content=normal_delete.content(),
-    origin_left=Some(raw),
-    origin_right=Some(raw),
-  )
+  let malformed = match malformed_run.decompress(0) {
+    Some(op) => op
+    None => fail("expected malformed operation from OpRun")
+  }
   let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
     receiver.prepare_remote([malformed]),
   ) catch {
@@ -140,7 +134,7 @@ test "P0 rejects delete right-origin shape before mutation" {
 
 ///|
 test "P0 known invalid origin rejects despite unrelated missing parent" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let target = p0_delete("alice", 1, [p0_raw("alice", 0)], p0_raw("alice", 0))
   ignore(
@@ -172,7 +166,7 @@ test "P0 known invalid origin rejects despite unrelated missing parent" {
 
 ///|
 test "P0 retained invalid pending root and dependents are discarded" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let target = p0_delete("alice", 1, [p0_raw("alice", 0)], p0_raw("alice", 0))
   let invalid_root = p0_insert(
@@ -205,7 +199,7 @@ test "P0 retained invalid pending root and dependents are discarded" {
 
 ///|
 test "P0 semantic prepare is fully nonmutating and repeatable" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let invalid_root = p0_insert(
     "bob",
     0,
@@ -257,7 +251,7 @@ test "P0 semantic prepare is fully nonmutating and repeatable" {
 
 ///|
 test "P0 core pending limit rejects without state mutation" {
-  let receiver = OpLog::new("receiver")
+  let receiver = OpLog("receiver")
   let future = p0_insert(
     "alice",
     1,
@@ -266,54 +260,63 @@ test "P0 core pending limit rejects without state mutation" {
     Some(p0_raw("alice", 0)),
   )
   let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
-    receiver.prepare_remote_with_limit([future], 0),
+    receiver.prepare_remote([future], max_pending_after_complete=0),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(PendingLimitExceeded(limit~, actual~)) => {
+    Err(PendingForecastExceeded(limit~, predicted~)) => {
       inspect(limit, content="0")
-      inspect(actual, content="1")
+      inspect(predicted, content="1")
     }
     _ => fail("expected core pending budget rejection")
   }
   inspect(receiver.op_count(), content="0")
   inspect(receiver.has_pending(), content="false")
 
-  let allowed = try! receiver.prepare_remote_with_limit([future], 1)
+  let allowed = try! receiver.prepare_remote(
+    [future],
+    max_pending_after_complete=1,
+  )
   inspect(allowed.operations().length(), content="0")
   ignore(try! receiver.commit_remote(allowed))
   inspect(receiver.op_count(), content="0")
   inspect(receiver.has_pending(), content="true")
 
-  let duplicate = try! receiver.prepare_remote_with_limit([future], 1)
+  let duplicate = try! receiver.prepare_remote(
+    [future],
+    max_pending_after_complete=1,
+  )
   inspect(duplicate.operations().length(), content="0")
   ignore(try! receiver.commit_remote(duplicate))
   inspect(receiver.has_pending(), content="true")
 
   let negative : Result[RemoteAdmissionPlan, OpLogError] = Ok(
-    receiver.prepare_remote_with_limit([], -1),
+    receiver.prepare_remote([], max_pending_after_complete=-1),
   ) catch {
     error => Err(error)
   }
   match negative {
-    Err(PendingLimitExceeded(limit~, actual~)) => {
+    Err(PendingForecastExceeded(limit~, predicted~)) => {
       inspect(limit, content="-1")
-      inspect(actual, content="1")
+      inspect(predicted, content="1")
     }
     _ => fail("negative pending limit must reject")
   }
   inspect(receiver.has_pending(), content="true")
 
-  let ready_receiver = OpLog::new("ready-receiver")
+  let ready_receiver = OpLog("ready-receiver")
   let ready = p0_insert("ready", 0, [], "R", None)
-  let ready_plan = try! ready_receiver.prepare_remote_with_limit([ready], 0)
+  let ready_plan = try! ready_receiver.prepare_remote(
+    [ready],
+    max_pending_after_complete=0,
+  )
   inspect(ready_plan.operations().length(), content="1")
   ignore(try! ready_receiver.commit_remote(ready_plan))
   inspect(ready_receiver.op_count(), content="1")
   inspect(ready_receiver.has_pending(), content="false")
 
-  let discard_receiver = OpLog::new("discard-receiver")
+  let discard_receiver = OpLog("discard-receiver")
   let invalid_root = p0_insert(
     "bob",
     0,
@@ -333,26 +336,26 @@ test "P0 core pending limit rejects without state mutation" {
     [p0_raw("alice", 0)],
     p0_raw("alice", 0),
   )
-  let discard_plan = try! discard_receiver.prepare_remote_with_limit(
+  let discard_plan = try! discard_receiver.prepare_remote(
     [alice_root, alice_delete],
-    0,
+    max_pending_after_complete=0,
   )
   inspect(discard_plan.operations().length(), content="2")
   ignore(try! discard_receiver.commit_remote(discard_plan))
   inspect(discard_receiver.op_count(), content="2")
   inspect(discard_receiver.has_pending(), content="false")
 
-  let large_receiver = OpLog::new("large-limit")
-  let large_plan = try! large_receiver.prepare_remote_with_limit(
+  let large_receiver = OpLog("large-limit")
+  let large_plan = try! large_receiver.prepare_remote(
     [p0_insert("large", 0, [], "L", None)],
-    2147483647,
+    max_pending_after_complete=2147483647,
   )
   inspect(large_plan.operations().length(), content="1")
 }
 
 ///|
 test "P0 rejection closure crosses retained pending into staged dependents" {
-  let receiver = OpLog::new("closure-retained-staged")
+  let receiver = OpLog("closure-retained-staged")
   let missing_target = p0_raw("closure-target", 1)
   let invalid_root = p0_insert(
     "closure-root",
@@ -409,7 +412,7 @@ test "P0 rejection closure crosses retained pending into staged dependents" {
 
 ///|
 test "P0 rejection closure crosses alternating retained and staged dependents" {
-  let receiver = OpLog::new("closure-alternating")
+  let receiver = OpLog("closure-alternating")
   let missing_target = p0_raw("alternating-target", 1)
   let invalid_root = p0_insert(
     "alternating-root",
@@ -470,10 +473,13 @@ test "P0 rejection closure crosses alternating retained and staged dependents" {
 
 ///|
 test "P0 pending limit is a complete-transition forecast across partial admission" {
-  let receiver = OpLog::new("partial-limit")
+  let receiver = OpLog("partial-limit")
   let first = p0_insert("partial-limit-first", 0, [], "A", None)
   let failed = p0_insert("partial-limit-failed", 0, [], "B", None)
-  let plan = try! receiver.prepare_remote_with_limit([first, failed], 0)
+  let plan = try! receiver.prepare_remote(
+    [first, failed],
+    max_pending_after_complete=0,
+  )
   inspect(plan.operations().length(), content="2")
 
   let failed_raw = remote_admission_raw(failed)
@@ -505,7 +511,7 @@ test "P0 pending limit is a complete-transition forecast across partial admissio
   assert_eq(receiver.planner.pending_raws().length(), 1)
 
   let retried = try! receiver.commit_remote(
-    try! receiver.prepare_remote_with_limit([failed], 0),
+    try! receiver.prepare_remote([failed], max_pending_after_complete=0),
   )
   assert_eq(retried.length(), 1)
   assert_eq(receiver.has_pending(), false)
@@ -513,7 +519,7 @@ test "P0 pending limit is a complete-transition forecast across partial admissio
 
 ///|
 test "P0 prepared plan owns operation parent payload" {
-  let receiver = OpLog::new("prepared-parent-alias")
+  let receiver = OpLog("prepared-parent-alias")
   let alice = p0_insert("prepared-alice", 0, [], "A", None)
   let bob = p0_insert("prepared-bob", 0, [], "B", None)
   ignore(
@@ -534,7 +540,7 @@ test "P0 prepared plan owns operation parent payload" {
 
 ///|
 test "P0 retained pending owns operation parent payload" {
-  let receiver = OpLog::new("retained-parent-alias")
+  let receiver = OpLog("retained-parent-alias")
   let missing = p0_raw("retained-parent", 0)
   let alternate = p0_raw("retained-alternate", 0)
   let parents = [missing]

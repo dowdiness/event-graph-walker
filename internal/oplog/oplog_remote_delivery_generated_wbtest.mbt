@@ -155,7 +155,7 @@ fn remote_delivery_seed_source(
   agent : String,
   known : ArrayView[@core.Op],
 ) -> OpLog {
-  let source = OpLog::new(agent)
+  let source = OpLog(agent)
   for op in known {
     let admitted = try! source.apply_remote(op)
     guard admitted.length() == 1 &&
@@ -203,13 +203,13 @@ fn remote_delivery_build_scenario(
   guard trace.suffix_count >= 0 && trace.suffix_count <= 4 else {
     abort("remote delivery trace exceeded its bounded grammar")
   }
-  let left_source = OpLog::new("generated-source-left")
+  let left_source = OpLog("generated-source-left")
   let left = try! left_source.insert(
     remote_delivery_text(trace.source_seed, 0),
     -1,
     -1,
   )
-  let right_source = OpLog::new("generated-source-right")
+  let right_source = OpLog("generated-source-right")
   let right = try! right_source.insert(
     remote_delivery_text(trace.source_seed, 1),
     -1,
@@ -430,10 +430,10 @@ fn remote_delivery_duplicate_before_admission(
   scenario : RemoteDeliveryScenario,
 ) -> Bool {
   let root = scenario.roots[0]
-  let duplicate_target = OpLog::new("generated-duplicate-batch")
+  let duplicate_target = OpLog("generated-duplicate-batch")
   let plan = try! duplicate_target.prepare_remote([root, root])
   let duplicate_admitted = try! duplicate_target.commit_remote(plan)
-  let single_target = OpLog::new("generated-duplicate-single")
+  let single_target = OpLog("generated-duplicate-single")
   let single_admitted = try! single_target.apply_remote(root)
   duplicate_admitted.length() == 1 &&
   single_admitted.length() == 1 &&
@@ -486,7 +486,7 @@ fn remote_delivery_replay(
   trace : RemoteDeliveryTrace,
 ) -> RemoteDeliveryEvidence {
   let scenario = remote_delivery_build_scenario(trace)
-  let target = OpLog::new("generated-delivery-target")
+  let target = OpLog("generated-delivery-target")
   let model = RemoteDeliveryModel::RemoteDeliveryModel()
   let mut valid = true
 
@@ -650,22 +650,14 @@ fn prop_generated_remote_delivery_complete(trace : RemoteDeliveryTrace) -> Bool 
 ///|
 /// PR #92 delivery seam: identity repeats are equal only when their payload is.
 test "generated delivery distinguishes identical and conflicting payloads" {
-  let root = @core.Op::new_insert(
-    -1,
-    [],
-    "generated-identity",
-    0,
-    "a",
-    None,
-    None,
-  )
-  let identical_target = OpLog::new("generated-identical")
+  let root = @core.Op::insert(-1, [], "generated-identity", 0, "a", None, None)
+  let identical_target = OpLog("generated-identical")
   let identical_plan = try! identical_target.prepare_remote([root, root])
   let identical = try! identical_target.commit_remote(identical_plan)
   assert_eq(identical.length(), 1)
   assert_eq(identical_target.op_count(), 1)
 
-  let conflicting = @core.Op::new_insert(
+  let conflicting = @core.Op::insert(
     73,
     [],
     "generated-identity",
@@ -674,7 +666,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let conflict_target = OpLog::new("generated-conflicting")
+  let conflict_target = OpLog("generated-conflicting")
   let result : Result[RemoteAdmissionPlan, OpLogError] = Ok(
     conflict_target.prepare_remote([root, conflicting]),
   ) catch {
@@ -682,14 +674,14 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   }
   match result {
     Err(OpLogError::ConflictingIdentity(raw~)) =>
-      assert_eq(raw, @core.RawVersion::new("generated-identity", 0))
+      assert_eq(raw, @core.RawVersion("generated-identity", 0))
     _ => fail("expected generated identity conflict")
   }
   assert_eq(conflict_target.op_count(), 0)
   assert_eq(conflict_target.has_pending(), false)
 
-  let missing_parent = @core.RawVersion::new("generated-parent", 0)
-  let pending = @core.Op::new_insert(
+  let missing_parent = @core.RawVersion("generated-parent", 0)
+  let pending = @core.Op::insert(
     11,
     [missing_parent],
     "generated-pending",
@@ -698,12 +690,12 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let pending_target = OpLog::new("generated-pending-target")
+  let pending_target = OpLog("generated-pending-target")
   assert_eq(try! pending_target.apply_remote(pending).length(), 0)
   assert_true(pending_target.has_pending())
   assert_eq(pending_target.op_count(), 0)
   let pending_frontier = try! pending_target.get_frontier_raw()
-  let pending_duplicate = @core.Op::new_insert(
+  let pending_duplicate = @core.Op::insert(
     12,
     [missing_parent],
     "generated-pending",
@@ -722,7 +714,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     Delete | Undelete => fail("pending payload changed kind")
   }
 
-  let pending_conflict = @core.Op::new_insert(
+  let pending_conflict = @core.Op::insert(
     13,
     [missing_parent],
     "generated-pending",
@@ -738,7 +730,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   }
   match pending_result {
     Err(OpLogError::ConflictingIdentity(raw~)) =>
-      assert_eq(raw, @core.RawVersion::new("generated-pending", 0))
+      assert_eq(raw, @core.RawVersion("generated-pending", 0))
     _ => fail("expected pending identity conflict")
   }
   assert_eq(pending_target.op_count(), 0)
@@ -750,7 +742,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     Delete | Undelete => fail("pending payload changed kind")
   }
 
-  let parent = @core.Op::new_insert(
+  let parent = @core.Op::insert(
     -1,
     [],
     missing_parent.agent,
@@ -774,7 +766,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     Insert(text) => text
     Delete | Undelete => fail("admitted pending operation changed kind")
   }
-  let admitted_duplicate = @core.Op::new_insert(
+  let admitted_duplicate = @core.Op::insert(
     99,
     admitted_source.parents(),
     admitted_source.agent(),
@@ -786,7 +778,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   assert_eq(try! pending_target.apply_remote(admitted_duplicate).length(), 0)
   assert_eq(pending_target.op_count(), 2)
   assert_eq(try! pending_target.get_frontier_raw(), admitted_frontier)
-  let admitted_conflict = @core.Op::new_insert(
+  let admitted_conflict = @core.Op::insert(
     100,
     [missing_parent],
     "generated-pending",
@@ -802,7 +794,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   }
   match admitted_result {
     Err(OpLogError::ConflictingIdentity(raw~)) =>
-      assert_eq(raw, @core.RawVersion::new("generated-pending", 0))
+      assert_eq(raw, @core.RawVersion("generated-pending", 0))
     _ => fail("expected admitted identity conflict")
   }
   assert_eq(pending_target.op_count(), 2)

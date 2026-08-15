@@ -17,7 +17,7 @@ fn oracle_plan_remote_candidates(
     progress = false
     let remaining : Array[@core.Op] = []
     for op in candidates {
-      let raw = @core.RawVersion::new(op.agent(), op.seq())
+      let raw = @core.RawVersion(op.agent(), op.seq())
       if known_raws.contains(raw) || planned_raws.contains(raw) {
         progress = true
         continue
@@ -65,7 +65,7 @@ fn oracle_plan_remote_candidates(
 
 ///|
 fn oracle_raw(op : @core.Op) -> @core.RawVersion {
-  @core.RawVersion::new(op.agent(), op.seq())
+  @core.RawVersion(op.agent(), op.seq())
 }
 
 ///|
@@ -156,12 +156,8 @@ fn oracle_compare_plan(
 fn oracle_chain(size : Int) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<size {
-    let parents = if i == 0 {
-      []
-    } else {
-      [@core.RawVersion::new("chain", i - 1)]
-    }
-    ops.push(@core.Op::new_insert(-1, parents, "chain", i, "x", None, None))
+    let parents = if i == 0 { [] } else { [@core.RawVersion("chain", i - 1)] }
+    ops.push(@core.Op::insert(-1, parents, "chain", i, "x", None, None))
   }
   ops
 }
@@ -182,18 +178,10 @@ fn oracle_four_branches(depth : Int) -> Array[@core.Op] {
       let parents = if level == 0 {
         []
       } else {
-        [@core.RawVersion::new(agents[branch], level - 1)]
+        [@core.RawVersion(agents[branch], level - 1)]
       }
       ops.push(
-        @core.Op::new_insert(
-          -1,
-          parents,
-          agents[branch],
-          level,
-          "x",
-          None,
-          None,
-        ),
+        @core.Op::insert(-1, parents, agents[branch], level, "x", None, None),
       )
     }
   }
@@ -227,48 +215,48 @@ fn oracle_generated_insert_dag(size : Int, prefix : String) -> Array[@core.Op] {
     let left_parents = if i == 0 {
       []
     } else {
-      [@core.RawVersion::new(left_agent, i - 1)]
+      [@core.RawVersion(left_agent, i - 1)]
     }
     let right_parents = if i == 0 {
       []
     } else {
-      [@core.RawVersion::new(right_agent, i - 1)]
+      [@core.RawVersion(right_agent, i - 1)]
     }
     let left_origin_left = if i == 0 {
       None
     } else {
-      Some(@core.RawVersion::new(left_agent, i - 1))
+      Some(@core.RawVersion(left_agent, i - 1))
     }
     let left_origin_right = if i < 2 {
       None
     } else {
-      Some(@core.RawVersion::new(right_agent, i - 2))
+      Some(@core.RawVersion(right_agent, i - 2))
     }
     let right_origin_left = if i == 0 {
       None
     } else {
-      Some(@core.RawVersion::new(left_agent, i - 1))
+      Some(@core.RawVersion(left_agent, i - 1))
     }
     let right_origin_right = if i < 2 {
       None
     } else {
-      Some(@core.RawVersion::new(left_agent, i - 2))
+      Some(@core.RawVersion(left_agent, i - 2))
     }
     ops.push(
-      @core.Op::new_insert(
+      @core.Op::insert(
         -1, left_parents, left_agent, i, "l", left_origin_left, left_origin_right,
       ),
     )
     ops.push(
-      @core.Op::new_insert(
+      @core.Op::insert(
         -1, right_parents, right_agent, i, "r", right_origin_left, right_origin_right,
       ),
     )
   }
-  let left_last = @core.RawVersion::new(left_agent, size - 1)
-  let right_last = @core.RawVersion::new(right_agent, size - 1)
+  let left_last = @core.RawVersion(left_agent, size - 1)
+  let right_last = @core.RawVersion(right_agent, size - 1)
   let origin_agent = "\{prefix}-origin"
-  let origin = @core.Op::new_insert(
+  let origin = @core.Op::insert(
     -1,
     [],
     origin_agent,
@@ -279,13 +267,13 @@ fn oracle_generated_insert_dag(size : Int, prefix : String) -> Array[@core.Op] {
   )
   ops.push(origin)
   ops.push(
-    @core.Op::new_insert(
+    @core.Op::insert(
       -1,
       [left_last, right_last],
       "\{prefix}-join",
       0,
       "j",
-      Some(@core.RawVersion::new(origin_agent, 0)),
+      Some(@core.RawVersion(origin_agent, 0)),
       Some(left_last),
     ),
   )
@@ -294,8 +282,8 @@ fn oracle_generated_insert_dag(size : Int, prefix : String) -> Array[@core.Op] {
 
 ///|
 test "oracle matches current adversarial before and after parent order" {
-  let parent = @core.RawVersion::new("parent", 0)
-  let child_before = @core.Op::new_insert(
+  let parent = @core.RawVersion("parent", 0)
+  let child_before = @core.Op::insert(
     -1,
     [parent],
     "child-before",
@@ -304,17 +292,9 @@ test "oracle matches current adversarial before and after parent order" {
     None,
     None,
   )
-  let independent = @core.Op::new_insert(
-    -1,
-    [],
-    "independent",
-    0,
-    "x",
-    None,
-    None,
-  )
-  let parent_op = @core.Op::new_insert(-1, [], "parent", 0, "x", None, None)
-  let child_after = @core.Op::new_insert(
+  let independent = @core.Op::insert(-1, [], "independent", 0, "x", None, None)
+  let parent_op = @core.Op::insert(-1, [], "parent", 0, "x", None, None)
+  let child_after = @core.Op::insert(
     -1,
     [parent],
     "child-after",
@@ -324,7 +304,7 @@ test "oracle matches current adversarial before and after parent order" {
     None,
   )
   let incoming = [child_before, independent, parent_op, child_after]
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   try! oracle_compare_plan(oplog, incoming, [])
   let planned = try! oplog.plan_remote(incoming)
   oracle_assert_agents(planned, [
@@ -336,7 +316,7 @@ test "oracle matches current adversarial before and after parent order" {
 test "oracle matches current reverse chains across deterministic sizes" {
   for size in [1, 2, 3, 5, 8, 13] {
     let incoming = oracle_reverse(oracle_chain(size))
-    let oplog = OpLog::new("local")
+    let oplog = OpLog("local")
     try! oracle_compare_plan(oplog, incoming, [])
     let planned = try! oplog.plan_remote(incoming)
     assert_eq(planned.length(), size)
@@ -350,7 +330,7 @@ test "oracle matches current reverse chains across deterministic sizes" {
 ///|
 test "oracle matches current four-branch reverse order" {
   let incoming = oracle_reverse(oracle_four_branches(3))
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   try! oracle_compare_plan(oplog, incoming, [])
   let planned = try! oplog.plan_remote(incoming)
   let agents_by_round = ["branch-d", "branch-c", "branch-b", "branch-a"]
@@ -366,13 +346,13 @@ test "oracle matches current four-branch reverse order" {
 
 ///|
 test "oracle matches current joins" {
-  let left = @core.RawVersion::new("left", 0)
-  let right = @core.RawVersion::new("right", 0)
-  let join = @core.Op::new_insert(-1, [left, right], "join", 0, "j", None, None)
-  let left_op = @core.Op::new_insert(-1, [], "left", 0, "l", None, None)
-  let right_op = @core.Op::new_insert(-1, [], "right", 0, "r", None, None)
+  let left = @core.RawVersion("left", 0)
+  let right = @core.RawVersion("right", 0)
+  let join = @core.Op::insert(-1, [left, right], "join", 0, "j", None, None)
+  let left_op = @core.Op::insert(-1, [], "left", 0, "l", None, None)
+  let right_op = @core.Op::insert(-1, [], "right", 0, "r", None, None)
   let incoming = [join, left_op, right_op]
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   try! oracle_compare_plan(oplog, incoming, [])
   let planned = try! oplog.plan_remote(incoming)
   oracle_assert_agents(planned, ["left", "right", "join"])
@@ -380,9 +360,9 @@ test "oracle matches current joins" {
 
 ///|
 test "oracle matches repeated dependencies across parents and origins" {
-  let left = @core.RawVersion::new("repeat-left", 0)
-  let right = @core.RawVersion::new("repeat-right", 0)
-  let repeated = @core.Op::new_insert(
+  let left = @core.RawVersion("repeat-left", 0)
+  let right = @core.RawVersion("repeat-right", 0)
+  let repeated = @core.Op::insert(
     -1,
     [left, right, left, right],
     "repeated",
@@ -391,18 +371,10 @@ test "oracle matches repeated dependencies across parents and origins" {
     Some(right),
     Some(left),
   )
-  let left_op = @core.Op::new_insert(-1, [], "repeat-left", 0, "l", None, None)
-  let right_op = @core.Op::new_insert(
-    -1,
-    [],
-    "repeat-right",
-    0,
-    "r",
-    None,
-    None,
-  )
+  let left_op = @core.Op::insert(-1, [], "repeat-left", 0, "l", None, None)
+  let right_op = @core.Op::insert(-1, [], "repeat-right", 0, "r", None, None)
   let incoming = [repeated, right_op, left_op]
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   try! oracle_compare_plan(oplog, incoming, [])
   let planned = try! oplog.plan_remote(incoming)
   oracle_assert_agents(planned, ["repeat-right", "repeat-left", "repeated"])
@@ -410,11 +382,11 @@ test "oracle matches repeated dependencies across parents and origins" {
 
 ///|
 test "oracle matches graph-known dependencies and admitted duplicates" {
-  let oplog = OpLog::new("local")
-  let seed = @core.Op::new_insert(-1, [], "known", 0, "s", None, None)
+  let oplog = OpLog("local")
+  let seed = @core.Op::insert(-1, [], "known", 0, "s", None, None)
   ignore(try! oplog.apply_remote(seed))
-  let seed_raw = @core.RawVersion::new("known", 0)
-  let child = @core.Op::new_insert(
+  let seed_raw = @core.RawVersion("known", 0)
+  let child = @core.Op::insert(
     -1,
     [seed_raw],
     "known-child",
@@ -435,8 +407,8 @@ test "oracle matches graph-known dependencies and admitted duplicates" {
 
 ///|
 test "oracle matches identical duplicates in an incoming batch" {
-  let duplicate = @core.Op::new_insert(-1, [], "duplicate", 0, "x", None, None)
-  let oplog = OpLog::new("local")
+  let duplicate = @core.Op::insert(-1, [], "duplicate", 0, "x", None, None)
+  let oplog = OpLog("local")
   try! oracle_compare_plan(oplog, [duplicate, duplicate], [])
   let planned = try! oplog.plan_remote([duplicate, duplicate])
   oracle_assert_op_sequence(planned, [duplicate])
@@ -444,8 +416,8 @@ test "oracle matches identical duplicates in an incoming batch" {
 
 ///|
 test "oracle preserves unknown pending dependencies and pending duplicates" {
-  let unknown = @core.RawVersion::new("unknown", 0)
-  let pending_op = @core.Op::new_insert(
+  let unknown = @core.RawVersion("unknown", 0)
+  let pending_op = @core.Op::insert(
     -1,
     [unknown],
     "pending",
@@ -454,11 +426,11 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
     None,
     None,
   )
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   ignore(try! oplog.apply_remote(pending_op))
   assert_eq(oplog.has_pending(), true)
 
-  let independent = @core.Op::new_insert(
+  let independent = @core.Op::insert(
     -1,
     [],
     "independent-pending-test",
@@ -476,7 +448,7 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
 
   // The unresolved duplicate remains pending until its dependency arrives;
   // once the dependency is supplied, fixed-point planning admits one identity.
-  let unknown_op = @core.Op::new_insert(-1, [], "unknown", 0, "u", None, None)
+  let unknown_op = @core.Op::insert(-1, [], "unknown", 0, "u", None, None)
   try! oracle_compare_plan(oplog, [pending_op, unknown_op], [])
   let resolved_plan = try! oplog.plan_remote([pending_op, unknown_op])
   oracle_assert_agents(resolved_plan, ["unknown", "pending"])
@@ -484,9 +456,9 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
 
 ///|
 test "oracle characterizes malformed delete and undelete admission" {
-  let oplog = OpLog::new("local")
-  let delete_raw = @core.RawVersion::new("malformed-delete", 0)
-  let delete_seed = @core.Op::new_insert(
+  let oplog = OpLog("local")
+  let delete_raw = @core.RawVersion("malformed-delete", 0)
+  let delete_seed = @core.Op::insert(
     -1,
     [],
     "malformed-delete",
@@ -495,7 +467,7 @@ test "oracle characterizes malformed delete and undelete admission" {
     None,
     None,
   )
-  let undelete_seed = @core.Op::new_insert(
+  let undelete_seed = @core.Op::insert(
     -1,
     [],
     "malformed-undelete",
@@ -509,14 +481,8 @@ test "oracle characterizes malformed delete and undelete admission" {
 
   // Planning compares every retained logical field, while public application
   // preserves its malformed-origin validation boundary before preparation.
-  let malformed_delete = @core.Op::new_delete(
-    -1,
-    [],
-    "malformed-delete",
-    0,
-    None,
-  )
-  let malformed_undelete = @core.Op::new_undelete(
+  let malformed_delete = @core.Op::delete(-1, [], "malformed-delete", 0, None)
+  let malformed_undelete = @core.Op::undelete(
     -1,
     [],
     "malformed-undelete",
@@ -557,16 +523,16 @@ test "oracle characterizes malformed delete and undelete admission" {
 
 ///|
 test "oracle orders valid delete and undelete after sole origin dependency" {
-  let target_raw = @core.RawVersion::new("target", 0)
-  let target = @core.Op::new_insert(-1, [], "target", 0, "t", None, None)
-  let delete = @core.Op::new_delete(-1, [], "delete", 0, Some(target_raw))
-  let delete_log = OpLog::new("local")
+  let target_raw = @core.RawVersion("target", 0)
+  let target = @core.Op::insert(-1, [], "target", 0, "t", None, None)
+  let delete = @core.Op::delete(-1, [], "delete", 0, Some(target_raw))
+  let delete_log = OpLog("local")
   try! oracle_compare_plan(delete_log, [delete, target], [])
   let delete_plan = try! delete_log.plan_remote([delete, target])
   oracle_assert_op_sequence(delete_plan, [target, delete])
 
-  let undelete = @core.Op::new_undelete(-1, [], "undelete", 0, Some(target_raw))
-  let undelete_log = OpLog::new("local")
+  let undelete = @core.Op::undelete(-1, [], "undelete", 0, Some(target_raw))
+  let undelete_log = OpLog("local")
   try! oracle_compare_plan(undelete_log, [undelete, target], [])
   let undelete_plan = try! undelete_log.plan_remote([undelete, target])
   oracle_assert_op_sequence(undelete_plan, [target, undelete])
@@ -574,17 +540,9 @@ test "oracle orders valid delete and undelete after sole origin dependency" {
 
 ///|
 test "oracle matches apply order while preserving unrelated pending" {
-  let parent_raw = @core.RawVersion::new("arriving-parent", 0)
-  let parent = @core.Op::new_insert(
-    -1,
-    [],
-    "arriving-parent",
-    0,
-    "p",
-    None,
-    None,
-  )
-  let child = @core.Op::new_insert(
+  let parent_raw = @core.RawVersion("arriving-parent", 0)
+  let parent = @core.Op::insert(-1, [], "arriving-parent", 0, "p", None, None)
+  let child = @core.Op::insert(
     -1,
     [parent_raw],
     "waiting-child",
@@ -593,16 +551,16 @@ test "oracle matches apply order while preserving unrelated pending" {
     None,
     None,
   )
-  let unrelated = @core.Op::new_insert(
+  let unrelated = @core.Op::insert(
     -1,
-    [@core.RawVersion::new("still-missing", 0)],
+    [@core.RawVersion("still-missing", 0)],
     "unrelated-pending",
     0,
     "u",
     None,
     None,
   )
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
   assert_eq((try! oplog.apply_remote(unrelated)).length(), 0)
 
@@ -639,8 +597,8 @@ test "oracle differentially covers the public remote admission lifecycle" {
     // The batch includes a repeated delivery; the oracle must collapse it.
     incoming.push(incoming_base[0])
 
-    let missing_raw = @core.RawVersion::new("\{prefix}-missing", 0)
-    let pending_root = @core.Op::new_insert(
+    let missing_raw = @core.RawVersion("\{prefix}-missing", 0)
+    let pending_root = @core.Op::insert(
       -1,
       [missing_raw],
       "\{prefix}-pending-root",
@@ -649,7 +607,7 @@ test "oracle differentially covers the public remote admission lifecycle" {
       None,
       None,
     )
-    let pending_child = @core.Op::new_insert(
+    let pending_child = @core.Op::insert(
       -1,
       [oracle_raw(pending_root)],
       "\{prefix}-pending-child",
@@ -658,7 +616,7 @@ test "oracle differentially covers the public remote admission lifecycle" {
       None,
       None,
     )
-    let oplog = OpLog::new("local")
+    let oplog = OpLog("local")
     // Repeated delivery while unresolved remains one pending identity.
     assert_eq((try! oplog.apply_remote(pending_child)).length(), 0)
     assert_eq((try! oplog.apply_remote(pending_child)).length(), 0)
@@ -705,7 +663,7 @@ test "oracle differentially covers the public remote admission lifecycle" {
 
     // A later prepared plan supplies the missing root and drains the retained
     // component in the same fixed-point order.
-    let missing_root = @core.Op::new_insert(
+    let missing_root = @core.Op::insert(
       -1,
       [],
       "\{prefix}-missing",
@@ -751,11 +709,11 @@ test "oracle differentially covers the public remote admission lifecycle" {
 
 ///|
 test "oracle matches transitive discard and retry behavior" {
-  let root_raw = @core.RawVersion::new("reject-root", 0)
-  let child_raw = @core.RawVersion::new("reject-child", 0)
-  let ghost_raw = @core.RawVersion::new("reject-ghost", 0)
-  let unrelated_ghost = @core.RawVersion::new("unrelated-ghost", 0)
-  let root = @core.Op::new_insert(
+  let root_raw = @core.RawVersion("reject-root", 0)
+  let child_raw = @core.RawVersion("reject-child", 0)
+  let ghost_raw = @core.RawVersion("reject-ghost", 0)
+  let unrelated_ghost = @core.RawVersion("unrelated-ghost", 0)
+  let root = @core.Op::insert(
     -1,
     [ghost_raw],
     "reject-root",
@@ -764,7 +722,7 @@ test "oracle matches transitive discard and retry behavior" {
     None,
     None,
   )
-  let child = @core.Op::new_insert(
+  let child = @core.Op::insert(
     -1,
     [root_raw],
     "reject-child",
@@ -773,7 +731,7 @@ test "oracle matches transitive discard and retry behavior" {
     None,
     None,
   )
-  let grandchild = @core.Op::new_insert(
+  let grandchild = @core.Op::insert(
     -1,
     [],
     "reject-grandchild",
@@ -782,7 +740,7 @@ test "oracle matches transitive discard and retry behavior" {
     None,
     Some(child_raw),
   )
-  let unrelated = @core.Op::new_insert(
+  let unrelated = @core.Op::insert(
     -1,
     [unrelated_ghost],
     "unrelated",
@@ -791,7 +749,7 @@ test "oracle matches transitive discard and retry behavior" {
     None,
     None,
   )
-  let oplog = OpLog::new("local")
+  let oplog = OpLog("local")
   // Enqueue descendants before the child and rejected root so cleanup needs
   // more than one fixed-point pass.
   ignore(try! oplog.apply_remote(grandchild))
@@ -813,7 +771,7 @@ test "oracle matches transitive discard and retry behavior" {
   assert_eq(oplog.has_pending(), true)
 
   // Re-admit the rejected identity, then retry its dependent identities.
-  let retry_root = @core.Op::new_insert(
+  let retry_root = @core.Op::insert(
     -1,
     [],
     "reject-root",

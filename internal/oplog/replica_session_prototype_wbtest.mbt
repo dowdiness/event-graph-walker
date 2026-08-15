@@ -135,12 +135,12 @@ fn replica_session_admit_insert(
     Some(raw) => raw.seq
     None => raise OpLogError::MissingLocalVersion(lv~)
   }
-  let operation = @core.Op::new_insert(
+  let operation = @core.Op::insert(
     lv, parents, writer_id, seq, text, origin_left, origin_right,
   )
   authority.add_op(operation)
   authority.planner.acknowledge_admitted(
-    @core.RawVersion::new(operation.agent(), operation.seq()),
+    @core.RawVersion(operation.agent(), operation.seq()),
   )
   ignore(
     authority.planner.maybe_compact(raw => {
