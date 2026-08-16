@@ -22,6 +22,7 @@ pub(all) suberror DocumentError {
   Fugue(@fugue.FugueError)
   Branch(@branch.BranchError)
   ContentError(reason~ : ContentErrorReason)
+  ProjectionRecoveryRequired(frontier~ : @core.Frontier)
 }
 
 // Types and methods

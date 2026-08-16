@@ -17,7 +17,7 @@ struct InsertCursor {
 ///|
 /// Provides position-based operations (insert/delete at cursor position)
 pub struct Document {
-  priv tree : @fugue.FugueTree[String]
+  priv mut tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
   agent_id : String
   // Lazy visible projection index. IndexedState owns the position cache and
@@ -25,6 +25,8 @@ pub struct Document {
   priv indexed_state : IndexedState
   // Insert cursor: caches last insert position/LV for sequential append fast-path.
   priv mut cursor : InsertCursor?
+  // Document-owned health for the Fugue-derived projection.
+  priv mut projection_health : ProjectionHealth
 }
 
 ///|
@@ -32,12 +34,20 @@ pub struct Document {
 pub fn Document::new(agent_id : String) -> Document {
   let oplog = @oplog.OpLog(agent_id)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  { tree, oplog, agent_id, indexed_state: IndexedState::new(), cursor: None }
+  {
+    tree,
+    oplog,
+    agent_id,
+    indexed_state: IndexedState::new(),
+    cursor: None,
+    projection_health: ProjectionHealth::Ready,
+  }
 }
 
 ///|
 /// Get the current text content
 pub fn Document::to_text(self : Document) -> String {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.text(self.tree)
 }
 
@@ -102,6 +112,7 @@ pub fn Document::get_frontier_raw(
 /// Get the LV at a specific 0-based visible position.
 /// Uses O(log n) lookup via IndexedState's OrderTree projection.
 fn Document::lv_at_position(self : Document, position : Int) -> Int? {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.lv_at_position(self.tree, position)
 }
 
@@ -117,6 +128,7 @@ fn Document::invalidate_cache(self : Document) -> Unit {
 /// Returns the LV of the item before the cursor position,
 /// or -1 if at the start of the document.
 fn Document::position_to_lv(self : Document, position : Int) -> Int {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.position_to_lv(self.tree, position)
 }
 
@@ -138,6 +150,7 @@ pub fn Document::insert(
   position : Int,
   text : String,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   let mut current_pos = position
   let mut last_op : @core.Op? = None
   let mut cache_valid = self.indexed_state.is_ready()
@@ -289,6 +302,7 @@ pub fn Document::delete(
   self : Document,
   position : Int,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   self.cursor = None
   if position < 0 {
     raise DocumentError::InvalidPosition(pos=position)
@@ -333,6 +347,7 @@ pub fn Document::delete_range(
   start : Int,
   end : Int,
 ) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
   self.cursor = None
   if start < 0 {
     raise DocumentError::InvalidPosition(pos=start)
@@ -385,6 +400,7 @@ pub fn Document::replace_range(
   end : Int,
   text : String,
 ) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
   self.delete_range(start, end)
   if text.length() == 0 {
     return
@@ -550,6 +566,7 @@ pub fn Document::undelete(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   self.commit_undelete_by_lv(target_lv)
 }
@@ -560,6 +577,7 @@ pub fn Document::delete_by_lv(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   self.commit_delete_by_lv(target_lv)
 }
@@ -570,6 +588,7 @@ pub fn Document::delete_if_visible(
   self : Document,
   target_lv : Int,
 ) -> TargetEditResult raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
     Some(_) => {
@@ -586,6 +605,7 @@ pub fn Document::undelete_if_deleted(
   self : Document,
   target_lv : Int,
 ) -> TargetEditResult raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
     Some(_) => Stale
@@ -684,6 +704,7 @@ fn Document::apply_remote_with(
   op : @core.Op,
   commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
   self.cursor = None
   // Validate Insert content before touching the oplog so malformed peer ops
   // can't persist (issue #31).
@@ -709,11 +730,15 @@ fn Document::apply_remote_with(
   match outcome {
     RemoteAdmissionOutcome::Complete(applied_ops) => {
       self.indexed_state.restore_cache(detached_cache)
-      self.project_remote_ops(applied_ops[:])
+      self.project_remote_ops(applied_ops[:]) catch {
+        error => self.recover_after_projection_failure(error)
+      }
     }
     RemoteAdmissionOutcome::Partial(committed, error) => {
       self.indexed_state.restore_cache(detached_cache)
-      self.project_remote_ops(committed[:])
+      self.project_remote_ops(committed[:]) catch {
+        error => self.recover_after_projection_failure(error)
+      }
       raise DocumentError::OpLog(
         @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
       )
@@ -738,6 +763,7 @@ fn Document::merge_remote_with(
   remote_frontier : Array[@core.RawVersion],
   commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
 ) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
   self.cursor = None
   // Validate the complete batch before touching state, so malformed content
   // and invalid batch closure fail atomically (issue #31).
@@ -759,12 +785,18 @@ fn Document::merge_remote_with(
   match outcome {
     RemoteAdmissionOutcome::Complete(_) => {
       let _ = branch.advance(self.oplog.get_frontier()) catch {
-        e => raise DocumentError::Branch(e)
+        e => {
+          self.recover_projection(self.oplog.get_frontier())
+          raise DocumentError::Branch(e)
+        }
       }
     }
     RemoteAdmissionOutcome::Partial(committed, error) => {
       let _ = branch.advance(self.oplog.get_frontier()) catch {
-        e => raise DocumentError::Branch(e)
+        e => {
+          self.recover_projection(self.oplog.get_frontier())
+          raise DocumentError::Branch(e)
+        }
       }
       raise DocumentError::OpLog(
         @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
@@ -788,6 +820,7 @@ pub fn Document::merge_remote(
 ///|
 /// Get the number of visible characters in the document.
 pub fn Document::visible_count(self : Document) -> Int {
+  self.ensure_projection_ready_for_read()
   self.tree.visible_count()
 }
 
@@ -830,6 +863,7 @@ pub fn Document::checkout_branch(
 pub fn Document::get_visible_items(
   self : Document,
 ) -> Array[(@fugue.Lv, @fugue.Item[String])] {
+  self.ensure_projection_ready_for_read()
   // Delegate to tree traversal — VisibleRun doesn't store enough
   // information to reconstruct full Item structs.
   self.tree.get_visible_items()
@@ -838,5 +872,6 @@ pub fn Document::get_visible_items(
 ///|
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.lv_to_position(self.tree, lv)
 }

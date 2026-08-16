@@ -120,6 +120,8 @@ fn TextError::from_document_error(
       }
       TextError::SyncFailed(@sync.Failure::InvalidContent(detail~))
     }
+    ProjectionRecoveryRequired(_) =>
+      TextError::Internal(detail="document projection recovery required")
   }
 }
 
