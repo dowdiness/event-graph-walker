@@ -1,8 +1,9 @@
 ///| P1 pending-membership measurement matrix.
 
 ///|
-/// These benchmarks measure the current implementation only. They do not
-/// authorize a count-based optimization without a reproduced regression.
+/// These benchmarks measure the current implementation and compare duplicate
+/// pending delivery with a distinct prepare+admit operation. They do not
+/// authorize a further optimization without a reproduced regression.
 
 ///|
 fn p1_pending_benchmark_fixture(
@@ -95,6 +96,53 @@ fn p1_pending_benchmark_prepare_and_commit(
 }
 
 ///|
+fn p1_pending_benchmark_prepare_and_admit(
+  b : @bench.T,
+  count : Int,
+  max_pending : Int?,
+) -> Unit raise OpLogError {
+  let (target, _) = p1_pending_benchmark_fixture(count)
+  let mut next_seq = 0
+  b.bench(fn() {
+    let operation = p0_insert("p1-benchmark-fresh", next_seq, [], "N", None)
+    next_seq += 1
+    let result : Result[PreparedAdmission, OpLogError] = match max_pending {
+      Some(limit) =>
+        Ok(target.prepare_remote([operation], max_pending=limit)) catch {
+          error => Err(error)
+        }
+      None =>
+        Ok(target.prepare_remote([operation])) catch {
+          error => Err(error)
+        }
+    }
+    match result {
+      Ok(plan) => {
+        let outcome : Result[AdmissionOutcome, OpLogError] = Ok(
+          target.commit_admission(plan),
+        ) catch {
+          error => Err(error)
+        }
+        match outcome {
+          Ok(AdmissionOutcome::Complete(receipt)) =>
+            b.keep(receipt.committed().length())
+          Ok(AdmissionOutcome::Partial(receipt~, error~)) => {
+            ignore(error)
+            b.keep(receipt.committed().length())
+          }
+          Err(_) => b.keep(-1)
+        }
+      }
+      Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
+        ignore(limit)
+        b.keep(required)
+      }
+      Err(_) => b.keep(-1)
+    }
+  })
+}
+
+///|
 test "bench: P1 prepare pending matrix unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare(b, count, None)
@@ -133,5 +181,26 @@ test "bench: P1 prepare+commit pending matrix bounded pass" (b : @bench.T) {
 test "bench: P1 prepare+commit pending matrix bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_commit(b, count, Some(count - 1))
+  }
+}
+
+///|
+test "bench: P1 prepare+admit pending matrix unbounded" (b : @bench.T) {
+  for count in [0, 1000, 10000, 100000] {
+    p1_pending_benchmark_prepare_and_admit(b, count, None)
+  }
+}
+
+///|
+test "bench: P1 prepare+admit pending matrix bounded pass" (b : @bench.T) {
+  for count in [0, 1000, 10000, 100000] {
+    p1_pending_benchmark_prepare_and_admit(b, count, Some(count + 1))
+  }
+}
+
+///|
+test "bench: P1 prepare+admit pending matrix bounded reject" (b : @bench.T) {
+  for count in [0, 1000, 10000, 100000] {
+    p1_pending_benchmark_prepare_and_admit(b, count, Some(count))
   }
 }

@@ -173,6 +173,34 @@ test "P1 typed invalid admission rejects before planner mutation" {
 }
 
 ///|
+test "P1 typed begin rejects an absent pending discard identity" {
+  let receiver = OpLog("p1-absent-discard")
+  let missing = p0_raw("p1-absent-discard-missing", 0)
+  let pending = p0_insert("p1-absent-discard-pending", 0, [missing], "P", None)
+  ignore(try! receiver.commit_remote(try! receiver.prepare_remote([pending])))
+  let ready = p0_insert("p1-absent-discard-ready", 0, [], "R", None)
+  let plan = try! receiver.prepare_remote([ready])
+  plan.discarded_pending.add(@core.RawVersion("absent-discard", 0))
+  let pending_before = receiver.planner.pending_operations()
+  let result : Result[AdmissionOutcome, OpLogError] = Ok(
+    receiver.commit_admission(plan),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::InvalidAdmission) => ()
+    _ => fail("expected absent discard identity rejection")
+  }
+  assert_eq(receiver.op_count(), 0)
+  assert_true(
+    planner_lifecycle_same_ops(
+      receiver.planner.pending_operations(),
+      pending_before,
+    ),
+  )
+}
+
+///|
 test "P1 typed begin rechecks the hard pending limit" {
   let receiver = OpLog("p1-limit-recheck")
   let incoming = p0_insert("p1-limit-recheck-incoming", 0, [], "r", None)

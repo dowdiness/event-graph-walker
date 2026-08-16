@@ -1300,6 +1300,11 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
   }
   let current_pending_before_count = self.pending_count()
   let staged_count = plan.staged_count()
+  for raw in plan.discarded_pending {
+    if !self.pending.contains(raw) {
+      return RemoteAdmissionBeginResult::Conflict
+    }
+  }
   if plan.discarded_pending.length() > current_pending_before_count {
     return RemoteAdmissionBeginResult::Conflict
   }
