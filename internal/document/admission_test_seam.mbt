@@ -4,6 +4,7 @@
 /// These hooks observe boundary calls without adding counters to OpLog or
 /// Document state. The optional lifecycle and recovery hooks are consumed only
 /// by the future typed batch shell's injectable test seam.
+#warnings("-struct_never_constructed")
 priv struct AdmissionBoundaryHooks {
   on_prepare_remote : () -> Unit
   on_commit_admission : () -> Unit
@@ -15,6 +16,7 @@ priv struct AdmissionBoundaryHooks {
 }
 
 ///|
+#warnings("-unused_value")
 fn Document::set_admission_hooks(
   self : Document,
   hooks : AdmissionBoundaryHooks,

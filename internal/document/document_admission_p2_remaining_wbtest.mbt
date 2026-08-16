@@ -37,19 +37,22 @@ struct P2DocumentSnapshot {
 fn p2_tree_snapshot(doc : Document) -> Array[P2TreeItemSnapshot] {
   doc.tree
   .get_all_items()
-  .map((lv, item) => {
-    lv: lv.0,
-    content: item.content,
-    parent: item.parent.map(parent => parent.0),
-    side: item.side,
-    deleted: item.deleted,
-    deleted_ts: item.deleted_ts,
-    deleted_agent: item.deleted_agent,
-    deleted_is_undelete: item.deleted_is_undelete,
-    state: item.state,
-    delete_count: item.delete_count,
-    timestamp: item.timestamp.0,
-    agent: item.agent.0,
+  .map(pair => {
+    let (lv, item) = pair
+    {
+      lv: lv.0,
+      content: item.content,
+      parent: item.parent.map(parent => parent.0),
+      side: item.side,
+      deleted: item.deleted,
+      deleted_ts: item.deleted_ts,
+      deleted_agent: item.deleted_agent,
+      deleted_is_undelete: item.deleted_is_undelete,
+      state: item.state,
+      delete_count: item.delete_count,
+      timestamp: item.timestamp.0,
+      agent: item.agent.0,
+    }
   })
 }
 
@@ -385,6 +388,54 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
   }
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
+}
+
+///|
+test "P2 green preflight recovery remains sticky for projected batch" {
+  let doc = Document::new("p2-preflight-project")
+  let known = try! doc.insert(0, "Y")
+  ignore(doc.to_text())
+  let known_raw = @core.RawVersion(known.agent(), known.seq())
+  let incoming = p2_remote_insert(
+    "p2-preflight-project-peer",
+    0,
+    [],
+    Some(known_raw),
+  )
+  doc.replace_projection_tree(@fugue.FugueTree::new())
+  let mut recovery_calls = 0
+  let mut projection_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => (),
+    on_commit_admission: () => (),
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: Some(frontier => {
+      recovery_calls = recovery_calls + 1
+      @branch.Branch::checkout(doc.oplog, frontier)
+    }),
+  })
+
+  let admission = try! doc.admit_remote([incoming])
+  assert_eq(recovery_calls, 1)
+  assert_eq(projection_count, 1)
+  match admission.outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) =>
+      p2_assert_operation_prefix(receipt.committed(), [incoming], 1)
+    @oplog.AdmissionOutcome::Partial(..) =>
+      fail("known-origin batch must complete after recovery")
+  }
+  match admission.projection {
+    ProjectionStatus::Recovered => ()
+    ProjectionStatus::Projected
+    | ProjectionStatus::Skipped
+    | ProjectionStatus::RecoveryRequired(..) =>
+      fail("successful preflight recovery must remain sticky")
+  }
+  let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
+  assert_eq(doc.to_text(), fresh.to_text())
 }
 
 ///|

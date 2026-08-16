@@ -7,15 +7,7 @@ fn p2_remote_insert(
   parents : Array[@core.RawVersion],
   origin_left : @core.RawVersion?,
 ) -> @core.Op {
-  @core.Op::insert(
-    -1,
-    parents,
-    agent,
-    sequence,
-    "p2-\{sequence}",
-    origin_left,
-    None,
-  )
+  @core.Op::insert(-1, parents, agent, sequence, "x", origin_left, None)
 }
 
 ///|
