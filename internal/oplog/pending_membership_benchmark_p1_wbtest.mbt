@@ -36,29 +36,7 @@ fn p1_pending_benchmark_prepare(
   b : @bench.T,
   count : Int,
   max_pending : Int?,
-) -> Unit raise OpLogError {
-  let (target, incoming) = p1_pending_benchmark_fixture(count)
-  b.bench(fn() {
-    let result : Result[PreparedAdmission, OpLogError] = match max_pending {
-      Some(limit) =>
-        Ok(target.prepare_remote(incoming, max_pending=limit)) catch {
-          error => Err(error)
-        }
-      None => Ok(target.prepare_remote(incoming)) catch { error => Err(error) }
-    }
-    match result {
-      Ok(plan) => b.keep(plan.required_pending)
-      Err(OpLogError::PendingLimitExceeded(required~, ..)) => b.keep(required)
-      Err(_) => b.keep(-1)
-    }
-  })
-}
-
-///|
-fn p1_pending_benchmark_prepare_and_commit(
-  b : @bench.T,
-  count : Int,
-  max_pending : Int?,
+  expect_pending_limit_rejection : Bool,
 ) -> Unit raise OpLogError {
   let (target, incoming) = p1_pending_benchmark_fixture(count)
   b.bench(fn() {
@@ -71,26 +49,88 @@ fn p1_pending_benchmark_prepare_and_commit(
     }
     match result {
       Ok(plan) => {
+        if expect_pending_limit_rejection {
+          abort("duplicate-pending prepare unexpectedly succeeded")
+        }
+        if plan.required_pending != count {
+          abort("duplicate-pending prepare reported the wrong pending count")
+        }
+        b.keep(plan.required_pending)
+      }
+      Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
+        ignore(limit)
+        if !expect_pending_limit_rejection {
+          abort("duplicate-pending prepare unexpectedly hit the pending limit")
+        }
+        if required != count {
+          abort("duplicate-pending prepare reported the wrong rejection count")
+        }
+        b.keep(required)
+      }
+      Err(_) => abort("duplicate-pending prepare unexpectedly failed")
+    }
+  })
+}
+
+///|
+fn p1_pending_benchmark_prepare_and_commit(
+  b : @bench.T,
+  count : Int,
+  max_pending : Int?,
+  expect_pending_limit_rejection : Bool,
+) -> Unit raise OpLogError {
+  let (target, incoming) = p1_pending_benchmark_fixture(count)
+  b.bench(fn() {
+    let result : Result[PreparedAdmission, OpLogError] = match max_pending {
+      Some(limit) =>
+        Ok(target.prepare_remote(incoming, max_pending=limit)) catch {
+          error => Err(error)
+        }
+      None => Ok(target.prepare_remote(incoming)) catch { error => Err(error) }
+    }
+    match result {
+      Ok(plan) => {
+        if expect_pending_limit_rejection {
+          abort("duplicate-pending prepare+commit unexpectedly prepared")
+        }
+        if plan.required_pending != count {
+          abort(
+            "duplicate-pending prepare+commit reported the wrong pending count",
+          )
+        }
         let outcome : Result[AdmissionOutcome, OpLogError] = Ok(
           target.commit_admission(plan),
         ) catch {
           error => Err(error)
         }
         match outcome {
-          Ok(AdmissionOutcome::Complete(receipt)) =>
-            b.keep(receipt.pending_after_count())
-          Ok(AdmissionOutcome::Partial(receipt~, error~)) => {
-            ignore(error)
-            b.keep(receipt.pending_after_count())
+          Ok(AdmissionOutcome::Complete(receipt)) => {
+            let pending_after = receipt.pending_after_count()
+            if pending_after != count {
+              abort("duplicate-pending commit changed pending membership")
+            }
+            b.keep(pending_after)
           }
-          Err(_) => b.keep(-1)
+          Ok(AdmissionOutcome::Partial(..)) =>
+            abort("duplicate-pending commit unexpectedly became partial")
+          Err(_) => abort("duplicate-pending commit unexpectedly failed")
         }
       }
       Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
         ignore(limit)
+        if !expect_pending_limit_rejection {
+          abort(
+            "duplicate-pending prepare+commit unexpectedly hit the pending limit",
+          )
+        }
+        if required != count {
+          abort(
+            "duplicate-pending prepare+commit reported the wrong rejection count",
+          )
+        }
         b.keep(required)
       }
-      Err(_) => b.keep(-1)
+      Err(_) => abort("duplicate-pending prepare+commit unexpectedly failed")
     }
   })
 }
@@ -165,63 +205,63 @@ fn p1_pending_benchmark_prepare_and_admit(
 }
 
 ///|
-test "bench: P1 prepare pending matrix unbounded" (b : @bench.T) {
+test "bench: P1 duplicate-pending prepare unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare(b, count, None)
+    p1_pending_benchmark_prepare(b, count, None, false)
   }
 }
 
 ///|
-test "bench: P1 prepare pending matrix bounded pass" (b : @bench.T) {
+test "bench: P1 duplicate-pending prepare bounded pass" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare(b, count, Some(count))
+    p1_pending_benchmark_prepare(b, count, Some(count), false)
   }
 }
 
 ///|
-test "bench: P1 prepare pending matrix bounded reject" (b : @bench.T) {
+test "bench: P1 duplicate-pending prepare bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare(b, count, Some(count - 1))
+    p1_pending_benchmark_prepare(b, count, Some(count - 1), true)
   }
 }
 
 ///|
-test "bench: P1 prepare+commit pending matrix unbounded" (b : @bench.T) {
+test "bench: P1 duplicate-pending prepare+commit unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare_and_commit(b, count, None)
+    p1_pending_benchmark_prepare_and_commit(b, count, None, false)
   }
 }
 
 ///|
-test "bench: P1 prepare+commit pending matrix bounded pass" (b : @bench.T) {
+test "bench: P1 duplicate-pending prepare+commit bounded pass" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare_and_commit(b, count, Some(count))
+    p1_pending_benchmark_prepare_and_commit(b, count, Some(count), false)
   }
 }
 
 ///|
-test "bench: P1 prepare+commit pending matrix bounded reject" (b : @bench.T) {
+test "bench: P1 duplicate-pending prepare+commit bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare_and_commit(b, count, Some(count - 1))
+    p1_pending_benchmark_prepare_and_commit(b, count, Some(count - 1), true)
   }
 }
 
 ///|
-test "bench: P1 prepare+admit pending matrix unbounded" (b : @bench.T) {
+test "bench: P1 valid fresh prepare+admit unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_admit(b, count, None, false)
   }
 }
 
 ///|
-test "bench: P1 prepare+admit pending matrix bounded pass" (b : @bench.T) {
+test "bench: P1 valid fresh prepare+admit bounded pass" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_admit(b, count, Some(count + 1), false)
   }
 }
 
 ///|
-test "bench: P1 prepare+admit pending matrix bounded reject" (b : @bench.T) {
+test "bench: P1 valid fresh prepare+admit bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_admit(b, count, Some(count), true)
   }
