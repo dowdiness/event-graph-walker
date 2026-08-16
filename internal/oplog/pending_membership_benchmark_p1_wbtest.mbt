@@ -172,6 +172,12 @@ fn p1_pending_benchmark_prepare_and_admit(
     }
     match result {
       Ok(plan) => {
+        if expect_pending_limit_rejection {
+          abort("fresh admission unexpectedly prepared under the pending limit")
+        }
+        if plan.required_pending != count + 1 {
+          abort("fresh admission reported the wrong pending count")
+        }
         let outcome : Result[AdmissionOutcome, OpLogError] = Ok(
           target.commit_admission(plan),
         ) catch {
@@ -193,11 +199,13 @@ fn p1_pending_benchmark_prepare_and_admit(
       }
       Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
         ignore(limit)
-        if expect_pending_limit_rejection {
-          b.keep(required)
-        } else {
+        if !expect_pending_limit_rejection {
           abort("fresh admission unexpectedly hit the pending limit")
         }
+        if required != count + 1 {
+          abort("fresh admission reported the wrong rejection count")
+        }
+        b.keep(required)
       }
       Err(_) => abort("fresh admission prepare unexpectedly failed")
     }
