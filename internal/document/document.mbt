@@ -27,6 +27,8 @@ pub struct Document {
   priv mut cursor : InsertCursor?
   // Document-owned health for the Fugue-derived projection.
   priv mut projection_health : ProjectionHealth
+  // Package-local admission hooks used only by white-box boundary tests.
+  priv mut admission_hooks : AdmissionBoundaryHooks?
 }
 
 ///|
@@ -41,6 +43,7 @@ pub fn Document::new(agent_id : String) -> Document {
     indexed_state: IndexedState::new(),
     cursor: None,
     projection_health: ProjectionHealth::Ready,
+    admission_hooks: None,
   }
 }
 
@@ -646,6 +649,7 @@ fn Document::project_remote_ops(
   if applied_ops.length() == 0 {
     return
   }
+  self.observe_projection_finalization(applied_ops)
   // For small batches with a warm cache, update incrementally to avoid
   // the O(n) full rebuild. For large batches, invalidate and rebuild lazily.
   let mut incremental = applied_ops.length() <= 3 &&
@@ -709,6 +713,7 @@ fn Document::apply_remote_with(
   // Validate Insert content before touching the oplog so malformed peer ops
   // can't persist (issue #31).
   validate_remote_ops([op][:])
+  self.observe_prepare_remote()
   let prepared = self.oplog.prepare_remote([op]) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -719,6 +724,7 @@ fn Document::apply_remote_with(
   // Detach before admission so a fallible commit cannot observe a stale
   // canonical cache. The exact cache is restored once the outcome is known.
   let detached_cache = self.indexed_state.take_cache()
+  self.observe_commit_admission()
   let outcome = try commit_prepared_admission(prepared, commit) catch {
     error => {
       self.indexed_state.restore_cache(detached_cache)
@@ -771,6 +777,7 @@ fn Document::merge_remote_with(
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }
+  self.observe_prepare_remote()
   let prepared = self.oplog.prepare_remote(remote_ops) catch {
     e => raise DocumentError::OpLog(e)
   }
@@ -781,6 +788,7 @@ fn Document::merge_remote_with(
   // Invalidate before merge so admission and partial-merge failures cannot
   // leave a stale position cache behind.
   self.invalidate_cache()
+  self.observe_commit_admission()
   let outcome = commit_prepared_admission(prepared, commit)
   match outcome {
     RemoteAdmissionOutcome::Complete(_) => {
