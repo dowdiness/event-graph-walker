@@ -11,7 +11,7 @@ The accepted pending-owner decision in ADR 0004 establishes EGW core as the sole
 The legacy-operation transition is split into four independently validated boundaries:
 
 1. **P0 — semantic parity:** core preparation proves same-agent sequence ancestry through declared parents, requires every origin/delete/undelete target to identify an Insert, preserves complete identity equality, distinguishes current-message rejection from retained-pending invalid-root cleanup, and enforces a complete-transition pending forecast without mutating state during preparation. A hard pending invariant across complete and partial commit outcomes remains deferred.
-2. **P1 — transition value:** the prepared admission records committed, retained, discarded, duplicate, and partial ownership as one typed, single-use transition value; it owns the complete/partial pending-budget contract.
+2. **P1 — typed transition boundary:** `PreparedAdmission` records the prospective, generation-bound transition; `AdmissionOutcome` and `AdmissionReceipt` record the actual complete or partial ownership result after the commit attempt; the boundary owns the hard pending-limit contract.
 3. **P2 — batch shell:** Document performs one core admission transition and one projection finalization for an incomplete incoming batch; the complete-frontier closure contract of `merge_remote` is not reused for a partial admission subset.
 4. **P3 — façade cutover:** SyncSession retains wire/schema/format/limit compatibility only; it does not retain a second pending queue, planner, H-sized admission map, or per-operation remote commit loop.
 
