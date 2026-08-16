@@ -2,13 +2,16 @@
 /// Package-local hooks for specifying Document admission boundaries in white-box tests.
 ///
 /// These hooks observe boundary calls without adding counters to OpLog or
-/// Document state. The optional causal failure hook is consumed only by the
-/// future typed batch shell's injectable commit seam.
+/// Document state. The optional lifecycle and recovery hooks are consumed only
+/// by the future typed batch shell's injectable test seam.
 priv struct AdmissionBoundaryHooks {
   on_prepare_remote : () -> Unit
   on_commit_admission : () -> Unit
   on_projection_finalization : (ArrayView[@core.Op]) -> Unit
+  prepare_override : ((Array[@core.Op]) -> @oplog.PreparedAdmission raise @oplog.OpLogError)?
   commit_failure : ((@core.Op) -> @causal_graph.CausalGraphError?)?
+  projection_failure : ((ArrayView[@core.Op]) -> DocumentError?)?
+  recovery_checkout : ((@core.Frontier) -> @branch.Branch raise @branch.BranchError)?
 }
 
 ///|
@@ -53,5 +56,51 @@ fn Document::admission_commit_failure(
   match self.admission_hooks {
     Some(hooks) => hooks.commit_failure
     None => None
+  }
+}
+
+///|
+fn Document::admission_prepare_override(
+  self : Document,
+) -> ((Array[@core.Op]) -> @oplog.PreparedAdmission raise @oplog.OpLogError)? {
+  match self.admission_hooks {
+    Some(hooks) => hooks.prepare_override
+    None => None
+  }
+}
+
+///|
+fn Document::admission_projection_failure(
+  self : Document,
+) -> ((ArrayView[@core.Op]) -> DocumentError?)? {
+  match self.admission_hooks {
+    Some(hooks) => hooks.projection_failure
+    None => None
+  }
+}
+
+///|
+fn Document::admission_recovery_checkout(
+  self : Document,
+) -> ((@core.Frontier) -> @branch.Branch raise @branch.BranchError)? {
+  match self.admission_hooks {
+    Some(hooks) => hooks.recovery_checkout
+    None => None
+  }
+}
+
+///|
+fn Document::prepare_remote_for_admission(
+  self : Document,
+  incoming : Array[@core.Op],
+  max_pending : Int?,
+) -> @oplog.PreparedAdmission raise @oplog.OpLogError {
+  match self.admission_prepare_override() {
+    Some(replacement) => replacement(incoming)
+    None =>
+      match max_pending {
+        Some(limit) => self.oplog.prepare_remote(incoming, max_pending=limit)
+        None => self.oplog.prepare_remote(incoming)
+      }
   }
 }

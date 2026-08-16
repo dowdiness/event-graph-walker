@@ -84,7 +84,14 @@ fn Document::recover_after_projection_failure(
   self : Document,
   error : DocumentError,
 ) -> Unit raise DocumentError {
-  self.recover_projection(self.oplog.get_frontier())
+  let frontier = self.oplog.get_frontier()
+  match self.admission_recovery_checkout() {
+    Some(checkout) =>
+      self.recover_projection_with(frontier, (_oplog, frontier) => {
+        checkout(frontier)
+      })
+    None => self.recover_projection(frontier)
+  }
   raise error
 }
 

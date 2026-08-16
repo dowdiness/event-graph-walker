@@ -650,6 +650,14 @@ fn Document::project_remote_ops(
     return
   }
   self.observe_projection_finalization(applied_ops)
+  match self.admission_projection_failure() {
+    Some(failure) =>
+      match failure(applied_ops) {
+        Some(error) => raise error
+        None => ()
+      }
+    None => ()
+  }
   // For small batches with a warm cache, update incrementally to avoid
   // the O(n) full rebuild. For large batches, invalidate and rebuild lazily.
   let mut incremental = applied_ops.length() <= 3 &&
@@ -714,7 +722,7 @@ fn Document::apply_remote_with(
   // can't persist (issue #31).
   validate_remote_ops([op][:])
   self.observe_prepare_remote()
-  let prepared = self.oplog.prepare_remote([op]) catch {
+  let prepared = self.prepare_remote_for_admission([op], None) catch {
     e => raise DocumentError::OpLog(e)
   }
   self.preflight_remote_targets(prepared.operations())
@@ -778,7 +786,7 @@ fn Document::merge_remote_with(
     e => raise DocumentError::OpLog(e)
   }
   self.observe_prepare_remote()
-  let prepared = self.oplog.prepare_remote(remote_ops) catch {
+  let prepared = self.prepare_remote_for_admission(remote_ops, None) catch {
     e => raise DocumentError::OpLog(e)
   }
   self.preflight_remote_targets(prepared.operations())

@@ -47,7 +47,7 @@ fn p2_assert_operation_prefix(
   actual : ArrayView[@core.Op],
   expected : Array[@core.Op],
   count : Int,
-) -> Unit {
+) -> Unit raise {
   assert_eq(actual.length(), count)
   for index = 0; index < count; index = index + 1 {
     assert_eq(
@@ -62,7 +62,7 @@ fn p2_assert_identity_prefix(
   actual : ArrayView[@core.RawVersion],
   expected : Array[@core.Op],
   count : Int,
-) -> Unit {
+) -> Unit raise {
   assert_eq(actual.length(), count)
   for index = 0; index < count; index = index + 1 {
     assert_eq(
@@ -88,7 +88,10 @@ test "P2 red complete batch has one typed transition and one projection" {
         projected_ops.push(op)
       }
     },
+    prepare_override: None,
     commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
   })
   let incoming = p2_ready_batch("p2-complete-peer", 3)
 
@@ -126,7 +129,10 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
     on_prepare_remote: () => prepare_count = prepare_count + 1,
     on_commit_admission: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
     commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
   })
   let incoming = p2_ready_batch("p2-duplicate-peer", 2)
   ignore(try! duplicate_doc.admit_remote(incoming))
@@ -161,7 +167,10 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
     on_projection_finalization: _ => {
       pending_projection_count = pending_projection_count + 1
     },
+    prepare_override: None,
     commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
   })
   let pending_incoming = p2_pending_batch("p2-pending-peer")
   let pending = try! pending_doc.admit_remote(pending_incoming)
@@ -208,6 +217,7 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
           projected_ops.push(op)
         }
       },
+      prepare_override: None,
       commit_failure: Some(op => {
         if op.seq() == failed_index {
           Some(@causal_graph.CausalGraphError::MissingParent(lv=-201))
@@ -215,6 +225,8 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
           None
         }
       }),
+      projection_failure: None,
+      recovery_checkout: None,
     })
     assert_true(doc.admission_commit_failure() is Some(_))
 
