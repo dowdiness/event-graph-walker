@@ -734,6 +734,8 @@ pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
 /// A sync session bound to a `TextState`.
 pub(all) struct SyncSession {
   priv doc : TextState
+  // White-box seam for proving admission-guard ordering; production uses None.
+  priv prepare_for_mutation_override : (() -> Unit raise TextError)?
 }
 
 ///|
@@ -1255,12 +1257,24 @@ fn prepare_sync(
 }
 
 ///|
+/// Run the Document-owned recovery transition before sync preflight.
+fn SyncSession::prepare_for_admission(
+  self : SyncSession,
+) -> Unit raise TextError {
+  match self.prepare_for_mutation_override {
+    Some(prepare) => prepare()
+    None => self.doc.prepare_for_mutation()
+  }
+}
+
+///|
 /// Apply a message after parsing it into a receiver-specific commit plan.
 pub fn SyncSession::apply_with_limits(
   self : SyncSession,
   message : SyncMessage,
   limits : @sync.Limits,
 ) -> SyncReport raise TextError {
+  self.prepare_for_admission()
   let prepared = map_sync_failure(fn() raise @sync.Failure {
     prepare_sync(
       message,

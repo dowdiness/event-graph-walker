@@ -217,7 +217,7 @@ pub fn TextState::version(self : TextState) -> Version {
 ///|
 /// Get a sync session for this document
 pub fn TextState::sync(self : TextState) -> SyncSession {
-  SyncSession::{ doc: self }
+  SyncSession::{ doc: self, prepare_for_mutation_override: None }
 }
 
 ///|
