@@ -96,16 +96,30 @@ fn p1_pending_benchmark_prepare_and_commit(
 }
 
 ///|
+/// The fresh path keeps a valid same-agent causal chain. A bounded
+/// rejection leaves the current operation and predecessor state unchanged.
 fn p1_pending_benchmark_prepare_and_admit(
   b : @bench.T,
   count : Int,
   max_pending : Int?,
+  expect_pending_limit_rejection : Bool,
 ) -> Unit raise OpLogError {
   let (target, _) = p1_pending_benchmark_fixture(count)
   let mut next_seq = 0
+  let mut previous : @core.RawVersion? = None
   b.bench(fn() {
-    let operation = p0_insert("p1-benchmark-fresh", next_seq, [], "N", None)
-    next_seq += 1
+    let parents = match previous {
+      Some(parent) => [parent]
+      None => []
+    }
+    let operation = p0_insert(
+      "p1-benchmark-fresh",
+      next_seq,
+      parents,
+      "N",
+      None,
+    )
+    let raw = remote_admission_raw(operation)
     let result : Result[PreparedAdmission, OpLogError] = match max_pending {
       Some(limit) =>
         Ok(target.prepare_remote([operation], max_pending=limit)) catch {
@@ -124,20 +138,28 @@ fn p1_pending_benchmark_prepare_and_admit(
           error => Err(error)
         }
         match outcome {
-          Ok(AdmissionOutcome::Complete(receipt)) =>
-            b.keep(receipt.committed().length())
-          Ok(AdmissionOutcome::Partial(receipt~, error~)) => {
-            ignore(error)
-            b.keep(receipt.committed().length())
+          Ok(AdmissionOutcome::Complete(receipt)) => {
+            if receipt.committed().length() != 1 {
+              abort("fresh admission did not commit exactly one operation")
+            }
+            previous = Some(raw)
+            next_seq += 1
+            b.keep(1)
           }
-          Err(_) => b.keep(-1)
+          Ok(AdmissionOutcome::Partial(..)) =>
+            abort("fresh admission unexpectedly became partial")
+          Err(_) => abort("fresh admission commit unexpectedly failed")
         }
       }
       Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
         ignore(limit)
-        b.keep(required)
+        if expect_pending_limit_rejection {
+          b.keep(required)
+        } else {
+          abort("fresh admission unexpectedly hit the pending limit")
+        }
       }
-      Err(_) => b.keep(-1)
+      Err(_) => abort("fresh admission prepare unexpectedly failed")
     }
   })
 }
@@ -187,20 +209,20 @@ test "bench: P1 prepare+commit pending matrix bounded reject" (b : @bench.T) {
 ///|
 test "bench: P1 prepare+admit pending matrix unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare_and_admit(b, count, None)
+    p1_pending_benchmark_prepare_and_admit(b, count, None, false)
   }
 }
 
 ///|
 test "bench: P1 prepare+admit pending matrix bounded pass" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare_and_admit(b, count, Some(count + 1))
+    p1_pending_benchmark_prepare_and_admit(b, count, Some(count + 1), false)
   }
 }
 
 ///|
 test "bench: P1 prepare+admit pending matrix bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_prepare_and_admit(b, count, Some(count))
+    p1_pending_benchmark_prepare_and_admit(b, count, Some(count), true)
   }
 }
