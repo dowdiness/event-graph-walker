@@ -250,7 +250,7 @@ test "P0 semantic prepare is fully nonmutating and repeatable" {
 }
 
 ///|
-test "P0 core pending limit rejects without state mutation" {
+test "P1 hard pending limit rejects without state mutation" {
   let receiver = OpLog("receiver")
   let future = p0_insert(
     "alice",
@@ -260,46 +260,41 @@ test "P0 core pending limit rejects without state mutation" {
     Some(p0_raw("alice", 0)),
   )
   let result : Result[PreparedAdmission, OpLogError] = Ok(
-    receiver.prepare_remote([future], max_pending_after_complete=0),
+    receiver.prepare_remote([future], max_pending=0),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(PendingForecastExceeded(limit~, predicted~)) => {
+    Err(PendingLimitExceeded(limit~, required~)) => {
       inspect(limit, content="0")
-      inspect(predicted, content="1")
+      inspect(required, content="1")
     }
-    _ => fail("expected core pending budget rejection")
+    _ => fail("expected hard pending-limit rejection")
   }
   inspect(receiver.op_count(), content="0")
   inspect(receiver.has_pending(), content="false")
 
-  let allowed = try! receiver.prepare_remote(
-    [future],
-    max_pending_after_complete=1,
-  )
+  let allowed = try! receiver.prepare_remote([future], max_pending=1)
   inspect(allowed.operations().length(), content="0")
   ignore(try! receiver.commit_remote(allowed))
   inspect(receiver.op_count(), content="0")
   inspect(receiver.has_pending(), content="true")
+  inspect(receiver.planner.pending_operations().length(), content="1")
 
-  let duplicate = try! receiver.prepare_remote(
-    [future],
-    max_pending_after_complete=1,
-  )
+  let duplicate = try! receiver.prepare_remote([future], max_pending=1)
   inspect(duplicate.operations().length(), content="0")
   ignore(try! receiver.commit_remote(duplicate))
   inspect(receiver.has_pending(), content="true")
 
   let negative : Result[PreparedAdmission, OpLogError] = Ok(
-    receiver.prepare_remote([], max_pending_after_complete=-1),
+    receiver.prepare_remote([], max_pending=-1),
   ) catch {
     error => Err(error)
   }
   match negative {
-    Err(PendingForecastExceeded(limit~, predicted~)) => {
+    Err(PendingLimitExceeded(limit~, required~)) => {
       inspect(limit, content="-1")
-      inspect(predicted, content="1")
+      inspect(required, content="1")
     }
     _ => fail("negative pending limit must reject")
   }
@@ -307,10 +302,19 @@ test "P0 core pending limit rejects without state mutation" {
 
   let ready_receiver = OpLog("ready-receiver")
   let ready = p0_insert("ready", 0, [], "R", None)
-  let ready_plan = try! ready_receiver.prepare_remote(
-    [ready],
-    max_pending_after_complete=0,
-  )
+  let ready_rejected : Result[PreparedAdmission, OpLogError] = Ok(
+    ready_receiver.prepare_remote([ready], max_pending=0),
+  ) catch {
+    error => Err(error)
+  }
+  match ready_rejected {
+    Err(PendingLimitExceeded(limit~, required~)) => {
+      inspect(limit, content="0")
+      inspect(required, content="1")
+    }
+    _ => fail("begin-after pending membership must be bounded")
+  }
+  let ready_plan = try! ready_receiver.prepare_remote([ready], max_pending=1)
   inspect(ready_plan.operations().length(), content="1")
   ignore(try! ready_receiver.commit_remote(ready_plan))
   inspect(ready_receiver.op_count(), content="1")
@@ -336,9 +340,21 @@ test "P0 core pending limit rejects without state mutation" {
     [p0_raw("alice", 0)],
     p0_raw("alice", 0),
   )
+  let discard_rejected : Result[PreparedAdmission, OpLogError] = Ok(
+    discard_receiver.prepare_remote([alice_root, alice_delete], max_pending=1),
+  ) catch {
+    error => Err(error)
+  }
+  match discard_rejected {
+    Err(PendingLimitExceeded(limit~, required~)) => {
+      inspect(limit, content="1")
+      inspect(required, content="2")
+    }
+    _ => fail("discard closure must be included in the bound")
+  }
   let discard_plan = try! discard_receiver.prepare_remote(
     [alice_root, alice_delete],
-    max_pending_after_complete=0,
+    max_pending=2,
   )
   inspect(discard_plan.operations().length(), content="2")
   ignore(try! discard_receiver.commit_remote(discard_plan))
@@ -348,7 +364,7 @@ test "P0 core pending limit rejects without state mutation" {
   let large_receiver = OpLog("large-limit")
   let large_plan = try! large_receiver.prepare_remote(
     [p0_insert("large", 0, [], "L", None)],
-    max_pending_after_complete=2147483647,
+    max_pending=2147483647,
   )
   inspect(large_plan.operations().length(), content="1")
 }
@@ -472,16 +488,27 @@ test "P0 rejection closure crosses alternating retained and staged dependents" {
 }
 
 ///|
-test "P0 pending limit is a complete-transition forecast across partial admission" {
+test "P1 pending limit rejects before zero-prefix partial" {
   let receiver = OpLog("partial-limit")
   let first = p0_insert("partial-limit-first", 0, [], "A", None)
   let failed = p0_insert("partial-limit-failed", 0, [], "B", None)
-  let plan = try! receiver.prepare_remote(
-    [first, failed],
-    max_pending_after_complete=0,
-  )
-  inspect(plan.operations().length(), content="2")
+  let rejected : Result[PreparedAdmission, OpLogError] = Ok(
+    receiver.prepare_remote([first, failed], max_pending=1),
+  ) catch {
+    error => Err(error)
+  }
+  match rejected {
+    Err(PendingLimitExceeded(limit~, required~)) => {
+      assert_eq(limit, 1)
+      assert_eq(required, 2)
+    }
+    _ => fail("zero-prefix partial must satisfy begin-after pending bound")
+  }
+  assert_eq(receiver.op_count(), 0)
+  assert_eq(receiver.planner.pending_operations().length(), 0)
 
+  let plan = try! receiver.prepare_remote([first, failed], max_pending=2)
+  inspect(plan.operations().length(), content="2")
   let failed_raw = remote_admission_raw(failed)
   let result : Result[Array[@core.Op], OpLogError] = Ok(
     receiver.commit_remote_with(plan, op => {
@@ -505,13 +532,11 @@ test "P0 pending limit is a complete-transition forecast across partial admissio
     }
     _ => fail("expected partial remote admission")
   }
-  // The limit predicts the pending membership after a complete transition.
-  // A partial prefix leaves its uncommitted suffix pending until retry.
   assert_eq(receiver.planner.pending_raws(), [failed_raw])
   assert_eq(receiver.planner.pending_raws().length(), 1)
 
   let retried = try! receiver.commit_remote(
-    try! receiver.prepare_remote([failed], max_pending_after_complete=0),
+    try! receiver.prepare_remote([failed], max_pending=1),
   )
   assert_eq(retried.length(), 1)
   assert_eq(receiver.has_pending(), false)

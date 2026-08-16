@@ -306,6 +306,32 @@ pub fn OpLog::has_pending(self : OpLog) -> Bool {
 }
 
 ///|
+/// Classify duplicate delivery evidence without treating it as terminal
+/// ownership. The resulting arrays are unique and preserve incoming order.
+fn OpLog::remote_admission_duplicate_evidence(
+  self : OpLog,
+  incoming : Array[@core.Op],
+) -> (Array[@core.RawVersion], Array[@core.RawVersion]) {
+  let already_admitted : Array[@core.RawVersion] = []
+  let duplicate_of_pending : Array[@core.RawVersion] = []
+  let admitted_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let pending_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for op in incoming {
+    let raw = remote_admission_raw(op)
+    if self.graph.raw_to_lv(raw) is Some(_) {
+      if admitted_seen.add_and_check(raw) {
+        already_admitted.push(raw)
+      }
+    } else if self.planner.pending.contains(raw) {
+      if pending_seen.add_and_check(raw) {
+        duplicate_of_pending.push(raw)
+      }
+    }
+  }
+  (already_admitted, duplicate_of_pending)
+}
+
+///|
 /// Compare incoming operations with full payloads retained in admitted history.
 fn OpLog::preflight_remote_identities(
   self : OpLog,
@@ -345,32 +371,29 @@ fn OpLog::remote_admission_semantics(self : OpLog) -> RemoteAdmissionSemantics {
 ///|
 /// Prepare a remote admission without changing graph, log, or planner state.
 ///
-/// When `max_pending_after_complete` is supplied, it limits the predicted
-/// retained membership after a complete transition. It is not a hard
-/// post-partial bound: a commit that acknowledges a prefix may leave its
-/// uncommitted suffix pending above this forecast. The hard complete/partial
-/// budget invariant belongs to the P1 transition value.
+/// `max_pending` is a hard bound on the unique pending membership immediately
+/// after begin applies the prepared discard and staged-registration transition.
+/// It covers both complete and partial commit outcomes.
 pub fn OpLog::prepare_remote(
   self : OpLog,
   incoming : Array[@core.Op],
-  max_pending_after_complete? : Int,
+  max_pending? : Int,
 ) -> PreparedAdmission raise OpLogError {
   self.preflight_remote_identities(incoming)
+  let (already_admitted, duplicate_of_pending) = self.remote_admission_duplicate_evidence(
+    incoming,
+  )
   let prepared = self.planner.prepare_with_semantics(
     incoming,
     raw => self.graph.raw_to_lv(raw) is Some(_),
     Some(self.remote_admission_semantics()),
   )
-  match max_pending_after_complete {
-    Some(limit) => {
-      let predicted = prepared.remaining_raws(self.planner).length()
-      if predicted > limit {
-        raise OpLogError::PendingForecastExceeded(limit~, predicted~)
-      }
-    }
-    None => ()
-  }
-  prepared
+  prepared.with_prospective(
+    self.planner,
+    max_pending,
+    already_admitted,
+    duplicate_of_pending,
+  )
 }
 
 ///|
@@ -426,34 +449,36 @@ fn OpLog::begin_admission(
     RemoteAdmissionBeginResult::Stale => raise OpLogError::StaleAdmission
     RemoteAdmissionBeginResult::Consumed => raise OpLogError::ConsumedAdmission
     RemoteAdmissionBeginResult::Conflict => raise OpLogError::InvalidAdmission
+    RemoteAdmissionBeginResult::PendingLimit(limit~, required~) =>
+      raise OpLogError::PendingLimitExceeded(limit~, required~)
   }
 }
 
 ///|
-/// Commit a prepared remote admission with an injectable single-operation shell.
-fn OpLog::commit_remote_with(
+/// Commit a prepared admission through the typed post-begin outcome seam.
+fn OpLog::commit_admission_with(
   self : OpLog,
   prepared : PreparedAdmission,
-  commit_one : (@core.Op) -> @core.Op raise OpLogError,
-) -> Array[@core.Op] raise OpLogError {
+  commit_one : (@core.Op) -> @core.Op raise @causal_graph.CausalGraphError,
+) -> AdmissionOutcome raise OpLogError {
+  let frontier_before = self.get_frontier()
   self.begin_admission(prepared)
   let committed : Array[@core.Op] = []
   for op in prepared.operations() {
-    let result : Result[@core.Op, OpLogError] = Ok(commit_one(op)) catch {
+    let result : Result[@core.Op, @causal_graph.CausalGraphError] = Ok(
+      commit_one(op),
+    ) catch {
       error => Err(error)
     }
     match result {
-      Err(OpLogError::CausalGraphError(error~)) => {
-        ignore(
-          self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
-        )
-        raise OpLogError::PartialRemoteAdmission(committed~, error~)
-      }
       Err(error) => {
         ignore(
           self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
         )
-        raise error
+        return AdmissionOutcome::Partial(
+          receipt=self.admission_receipt(prepared, committed, frontier_before),
+          error~,
+        )
       }
       Ok(local_op) => {
         self.planner.acknowledge_admitted(remote_admission_raw(op))
@@ -464,27 +489,96 @@ fn OpLog::commit_remote_with(
   ignore(
     self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
   )
-  committed
+  AdmissionOutcome::Complete(
+    self.admission_receipt(prepared, committed, frontier_before),
+  )
 }
 
 ///|
-/// Commit one operation using the production graph/log shell.
+/// Commit a prepared admission with an injectable legacy error shell. The
+/// canonical typed transition is still implemented by commit_admission_with.
+fn OpLog::commit_remote_with(
+  self : OpLog,
+  prepared : PreparedAdmission,
+  commit_one : (@core.Op) -> @core.Op raise OpLogError,
+) -> Array[@core.Op] raise OpLogError {
+  let outcome = self.commit_admission_with(prepared, op => {
+    let result : Result[@core.Op, OpLogError] = Ok(commit_one(op)) catch {
+      error => Err(error)
+    }
+    match result {
+      Ok(local_op) => local_op
+      Err(OpLogError::CausalGraphError(error~)) => raise error
+      Err(_) => abort("non-causal error escaped the post-begin admission seam")
+    }
+  })
+  match outcome {
+    AdmissionOutcome::Complete(receipt) => receipt.committed().to_owned()
+    AdmissionOutcome::Partial(receipt~, error~) =>
+      raise OpLogError::PartialRemoteAdmission(
+        committed=receipt.committed().to_owned(),
+        error~,
+      )
+  }
+}
+
+///|
+/// Commit one operation through the narrow post-begin causal-error seam.
+fn OpLog::commit_one_remote_for_admission(
+  self : OpLog,
+  op : @core.Op,
+) -> @core.Op raise @causal_graph.CausalGraphError {
+  let result : Result[(Bool, @core.Op?), OpLogError] = Ok(
+    self.try_apply_remote(op),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::CausalGraphError(error~)) => raise error
+    Err(_) => abort("non-causal error escaped the production admission seam")
+    Ok((keep_pending, local_op)) => {
+      guard !keep_pending else {
+        abort("prepared remote operation lost dependency readiness")
+      }
+      match local_op {
+        Some(committed) => committed
+        None => abort("prepared remote operation was admitted outside OpLog")
+      }
+    }
+  }
+}
+
+///|
+/// Legacy single-operation shell retained for white-box compatibility tests.
 fn OpLog::commit_one_remote(
   self : OpLog,
   op : @core.Op,
 ) -> @core.Op raise OpLogError {
-  let (keep_pending, local_op) = self.try_apply_remote(op)
-  guard !keep_pending else {
-    abort("prepared remote operation lost dependency readiness")
+  let result : Result[@core.Op, @causal_graph.CausalGraphError] = Ok(
+    self.commit_one_remote_for_admission(op),
+  ) catch {
+    error => Err(error)
   }
-  match local_op {
-    Some(committed) => committed
-    None => abort("prepared remote operation was admitted outside OpLog")
+  match result {
+    Ok(committed) => committed
+    Err(error) => raise OpLogError::CausalGraphError(error~)
   }
 }
 
 ///|
-/// Commit a prepared remote admission exactly once.
+/// Commit a prepared remote admission through the typed capability.
+pub fn OpLog::commit_admission(
+  self : OpLog,
+  prepared : PreparedAdmission,
+) -> AdmissionOutcome raise OpLogError {
+  self.commit_admission_with(prepared, op => {
+    self.commit_one_remote_for_admission(op)
+  })
+}
+
+///|
+/// Commit a prepared remote admission exactly once through the legacy result
+/// shape. Partial typed evidence is translated only after receipt construction.
 pub fn OpLog::commit_remote(
   self : OpLog,
   prepared : PreparedAdmission,

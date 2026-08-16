@@ -19,10 +19,8 @@ pub(all) suberror OpLogError {
   )
   /// A delete or undelete carries the insert-only right-origin field.
   InvalidOriginShape(raw~ : @core.RawVersion)
-  /// The complete prepared transition would retain more pending operations
-  /// than the requested forecast allows. A partial commit suffix may exceed
-  /// this forecast until the suffix is retried or discarded.
-  PendingForecastExceeded(limit~ : Int, predicted~ : Int)
+  /// The begin-after pending membership exceeds the hard accepted limit.
+  PendingLimitExceeded(limit~ : Int, required~ : Int)
   /// Remote op refers to a parent not present locally or in the batch.
   MissingRemoteParent(raw~ : @core.RawVersion)
   /// Remote frontier references an op not present locally or in the batch.
