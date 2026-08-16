@@ -79,6 +79,22 @@ fn Document::ensure_projection_ready(
 }
 
 ///|
+/// Ensure the projection is ready for typed admission and report whether this
+/// entry guard performed recovery so the admission result can retain that
+/// evidence even when no committed operations are projected.
+fn Document::ensure_projection_ready_for_admission(
+  self : Document,
+) -> Bool raise DocumentError {
+  match self.projection_health {
+    ProjectionHealth::Ready => false
+    ProjectionHealth::RecoveryRequired(frontier~, checkout~) => {
+      self.recover_projection_with(frontier, checkout)
+      true
+    }
+  }
+}
+
+///|
 /// Recover the derived projection before preserving the original failure.
 fn Document::recover_after_projection_failure(
   self : Document,

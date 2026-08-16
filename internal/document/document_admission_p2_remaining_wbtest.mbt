@@ -853,3 +853,207 @@ test "P2 red recovered admission resets cursor before local insert" {
   ignore(try! doc.insert(doc.visible_count(), "l"))
   p2_assert_fresh_cursor_convergence(doc)
 }
+
+///|
+test "P2 green entry recovery is sticky for duplicate-only admission" {
+  let doc = Document::new("p2-entry-duplicate")
+  let incoming = p2_ready_batch("p2-entry-duplicate-peer", 1)
+  let mut recovery_ready = false
+  let mut recovery_calls = 0
+  let mut projection_failure = true
+  let mut prepare_count = 0
+  let mut commit_count = 0
+  let mut projection_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => prepare_count = prepare_count + 1,
+    on_commit_admission: () => commit_count = commit_count + 1,
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: Some(_ => {
+      if projection_failure {
+        Some(
+          DocumentError::Fugue(
+            @fugue.FugueError::MissingItem(id=@fugue.Lv(999)),
+          ),
+        )
+      } else {
+        None
+      }
+    }),
+    recovery_checkout: Some(frontier => {
+      recovery_calls = recovery_calls + 1
+      if recovery_ready {
+        @branch.Branch::checkout(doc.oplog, frontier)
+      } else {
+        raise @branch.BranchError::MissingOp(lv=999)
+      }
+    }),
+  })
+
+  let first = try! doc.admit_remote(incoming)
+  match first.projection {
+    ProjectionStatus::RecoveryRequired(..) => ()
+    ProjectionStatus::Skipped
+    | ProjectionStatus::Projected
+    | ProjectionStatus::Recovered =>
+      fail("fixture must leave entry recovery required")
+  }
+  recovery_ready = true
+  projection_failure = false
+  projection_count = 0
+  let admission = try! doc.admit_remote(incoming)
+  assert_eq(recovery_calls, 2)
+  assert_eq(prepare_count, 2)
+  assert_eq(commit_count, 2)
+  assert_eq(projection_count, 0)
+  match admission.outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) =>
+      assert_eq(receipt.committed().length(), 0)
+    @oplog.AdmissionOutcome::Partial(..) =>
+      fail("duplicate-only admission must be complete")
+  }
+  match admission.projection {
+    ProjectionStatus::Recovered => ()
+    ProjectionStatus::Skipped
+    | ProjectionStatus::Projected
+    | ProjectionStatus::RecoveryRequired(..) =>
+      fail("entry recovery must remain sticky for duplicate-only admission")
+  }
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+}
+
+///|
+test "P2 green entry recovery is sticky for projected admission" {
+  let doc = Document::new("p2-entry-projected")
+  let seed = p2_ready_batch("p2-entry-projected-seed", 1)
+  let incoming = p2_ready_batch("p2-entry-projected-peer", 1)
+  let mut recovery_ready = false
+  let mut recovery_calls = 0
+  let mut projection_failure = true
+  let mut projection_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => (),
+    on_commit_admission: () => (),
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: Some(_ => {
+      if projection_failure {
+        Some(
+          DocumentError::Fugue(
+            @fugue.FugueError::MissingItem(id=@fugue.Lv(999)),
+          ),
+        )
+      } else {
+        None
+      }
+    }),
+    recovery_checkout: Some(frontier => {
+      recovery_calls = recovery_calls + 1
+      if recovery_ready {
+        @branch.Branch::checkout(doc.oplog, frontier)
+      } else {
+        raise @branch.BranchError::MissingOp(lv=999)
+      }
+    }),
+  })
+
+  let first = try! doc.admit_remote(seed)
+  match first.projection {
+    ProjectionStatus::RecoveryRequired(..) => ()
+    ProjectionStatus::Skipped
+    | ProjectionStatus::Projected
+    | ProjectionStatus::Recovered =>
+      fail("fixture must leave entry recovery required")
+  }
+  recovery_ready = true
+  projection_failure = false
+  projection_count = 0
+  let admission = try! doc.admit_remote(incoming)
+  assert_eq(recovery_calls, 2)
+  assert_eq(projection_count, 1)
+  match admission.outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) =>
+      p2_assert_operation_prefix(receipt.committed(), incoming, 1)
+    @oplog.AdmissionOutcome::Partial(..) =>
+      fail("complete admission must not be partial")
+  }
+  match admission.projection {
+    ProjectionStatus::Recovered => ()
+    ProjectionStatus::Skipped
+    | ProjectionStatus::Projected
+    | ProjectionStatus::RecoveryRequired(..) =>
+      fail("entry recovery must remain sticky for projected admission")
+  }
+  let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
+  assert_eq(doc.to_text(), fresh.to_text())
+}
+
+///|
+test "P2 red divergence after recovery remains RecoveryRequired" {
+  let doc = Document::new("p2-divergence-after-recovery")
+  let known = try! doc.insert(0, "Y")
+  ignore(doc.to_text())
+  let known_raw = @core.RawVersion(known.agent(), known.seq())
+  let missing = @core.RawVersion("p2-divergence-after-recovery-missing", 0)
+  let unready = p2_remote_insert(
+    "p2-divergence-after-recovery-peer",
+    0,
+    [missing],
+    Some(known_raw),
+  )
+  doc.replace_projection_tree(@fugue.FugueTree::new())
+  let before_frontier = doc.get_frontier()
+  let mut recovery_calls = 0
+  let mut prepare_count = 0
+  let mut commit_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => prepare_count = prepare_count + 1,
+    on_commit_admission: () => commit_count = commit_count + 1,
+    on_projection_finalization: _ => (),
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: Some(_frontier => {
+      recovery_calls = recovery_calls + 1
+      if recovery_calls == 1 {
+        @branch.Branch::from_tree_and_oplog(@fugue.FugueTree::new(), doc.oplog)
+      } else {
+        raise @branch.BranchError::MissingOp(lv=1000)
+      }
+    }),
+  })
+
+  let result : Result[DocumentAdmission, DocumentError] = Ok(
+    doc.admit_remote([unready]),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::ProjectionRecoveryRequired(frontier~, error~)) => {
+      assert_eq(frontier, before_frontier)
+      match error {
+        @branch.BranchError::Fugue(@fugue.FugueError::MissingItem(..)) => ()
+        _ => fail("second divergence must preserve a BranchError cause")
+      }
+    }
+    _ => fail("second divergence must remain typed recovery-required")
+  }
+  assert_eq(recovery_calls, 1)
+  assert_eq(prepare_count, 1)
+  assert_eq(commit_count, 0)
+  assert_true(!doc.oplog.has_pending())
+  assert_eq(doc.get_frontier(), before_frontier)
+  assert_true(!doc.indexed_state.is_ready())
+  assert_true(doc.cursor is None)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  let mutation : Result[Unit, DocumentError] = Ok(doc.prepare_for_mutation()) catch {
+    error => Err(error)
+  }
+  match mutation {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("unresolved divergence must keep later mutations fail-closed")
+  }
+  assert_eq(recovery_calls, 2)
+}

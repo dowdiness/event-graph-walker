@@ -17,7 +17,7 @@ pub struct DocumentAdmission {
 ///|
 /// Construct admission evidence in one place so callers cannot accidentally
 /// separate the authority outcome from its derived projection status.
-pub fn DocumentAdmission::DocumentAdmission(
+fn DocumentAdmission::DocumentAdmission(
   outcome : @oplog.AdmissionOutcome,
   projection : ProjectionStatus,
 ) -> DocumentAdmission {
@@ -27,7 +27,7 @@ pub fn DocumentAdmission::DocumentAdmission(
 ///|
 priv enum RemoteTargetCheck {
   Ready
-  Diverged(DocumentError)
+  Diverged(@branch.BranchError)
   Invalid(DocumentError)
 }
 
@@ -70,9 +70,11 @@ fn Document::check_remote_targets(
             None => ()
             Some(error) =>
               match error {
-                DocumentError::Fugue(@fugue.FugueError::MissingItem(..)) =>
-                  return RemoteTargetCheck::Diverged(error)
-                _ => return RemoteTargetCheck::Invalid(error)
+                DocumentError::Fugue(fugue_error) =>
+                  return RemoteTargetCheck::Diverged(
+                    @branch.BranchError::Fugue(fugue_error),
+                  )
+                error => return RemoteTargetCheck::Invalid(error)
               }
           }
       }
@@ -105,11 +107,45 @@ fn Document::ensure_admission_targets(
         (RemoteTargetCheck::Invalid(error), _)
         | (_, RemoteTargetCheck::Invalid(error)) => raise error
         (RemoteTargetCheck::Diverged(error), _)
-        | (_, RemoteTargetCheck::Diverged(error)) => raise error
+        | (_, RemoteTargetCheck::Diverged(error)) => {
+          self.mark_admission_recovery_required(self.get_frontier(), error)
+          false
+        }
       }
     }
     (RemoteTargetCheck::Ready, RemoteTargetCheck::Ready) => false
   }
+}
+
+///|
+/// Keep the derived projection fail-closed when a successful checkout still
+/// cannot satisfy a graph-known origin check.
+fn Document::mark_admission_recovery_required(
+  self : Document,
+  frontier : @core.Frontier,
+  error : @branch.BranchError,
+) -> Unit raise DocumentError {
+  self.indexed_state.invalidate()
+  self.cursor = None
+  match self.admission_recovery_checkout() {
+    Some(checkout) => {
+      let recovery_checkout = (_oplog, next_frontier) => checkout(next_frontier)
+      self.projection_health = ProjectionHealth::RecoveryRequired(
+        frontier~,
+        checkout=recovery_checkout,
+      )
+    }
+    None => {
+      let recovery_checkout = (oplog, next_frontier) => {
+        @branch.Branch::checkout(oplog, next_frontier)
+      }
+      self.projection_health = ProjectionHealth::RecoveryRequired(
+        frontier~,
+        checkout=recovery_checkout,
+      )
+    }
+  }
+  raise DocumentError::ProjectionRecoveryRequired(frontier~, error~)
 }
 
 ///|
@@ -148,17 +184,18 @@ fn Document::admit_remote_with(
   max_pending : Int?,
   capabilities : AdmissionCapabilities,
 ) -> DocumentAdmission raise DocumentError {
-  self.ensure_projection_ready()
+  let entry_recovered = self.ensure_projection_ready_for_admission()
   validate_remote_ops(incoming[:])
   self.observe_prepare_remote()
   let prepared = (capabilities.prepare)(incoming, max_pending) catch {
     error => raise DocumentError::OpLog(error)
   }
-  let recovered = self.ensure_admission_targets(
+  let preflight_recovered = self.ensure_admission_targets(
     prepared.operations(),
     incoming[:],
     capabilities.recover,
   )
+  let recovered = entry_recovered || preflight_recovered
 
   let detached_cache = self.indexed_state.take_cache()
   self.observe_commit_admission()

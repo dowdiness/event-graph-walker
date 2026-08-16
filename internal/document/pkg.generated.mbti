@@ -68,7 +68,6 @@ pub struct DocumentAdmission {
   outcome : @oplog.AdmissionOutcome
   projection : ProjectionStatus
 }
-pub fn DocumentAdmission::DocumentAdmission(@oplog.AdmissionOutcome, ProjectionStatus) -> Self
 
 type IndexedState
 
