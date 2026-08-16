@@ -46,6 +46,8 @@ pub fn AdmissionReceipt::frontier_before(Self) -> @core.Frontier
 pub fn AdmissionReceipt::pending_after_count(Self) -> Int
 pub fn AdmissionReceipt::pending_before_count(Self) -> Int
 pub fn AdmissionReceipt::pending_from_transition(Self) -> ArrayView[@core.RawVersion]
+pub fn AdmissionReceipt::pending_retained(Self) -> ArrayView[@core.RawVersion]
+pub fn AdmissionReceipt::pending_staged(Self) -> ArrayView[@core.RawVersion]
 
 pub struct OpLog {
   // private fields

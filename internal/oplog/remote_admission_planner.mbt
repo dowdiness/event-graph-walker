@@ -85,6 +85,9 @@ pub struct PreparedAdmission {
   priv max_pending : Int?
   priv already_admitted : Array[@core.RawVersion]
   priv duplicate_of_pending : Array[@core.RawVersion]
+  // Prospective provenance for retained identities affected by this plan.
+  priv retained_pending : Array[@core.RawVersion]
+  priv touched_retained_pending : Array[@core.RawVersion]
   priv mut consumed : Bool
 }
 
@@ -975,6 +978,8 @@ fn RemoteAdmissionPlanner::prepare_fast(
     max_pending: None,
     already_admitted: [],
     duplicate_of_pending: [],
+    retained_pending: [],
+    touched_retained_pending: [],
     consumed: false,
   })
 }
@@ -1184,6 +1189,46 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
       None => ()
     }
   }
+  let touched_retained_pending : Array[@core.RawVersion] = []
+  let touched_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for entry in self.pending_order {
+    match self.pending.get(entry.raw) {
+      Some(node) =>
+        if node.arrival == entry.arrival {
+          match overlay.touched_deltas.get(entry.raw) {
+            Some(delta) =>
+              if delta != 0 &&
+                !rejection.discarded_pending.contains(entry.raw) &&
+                touched_seen.add_and_check(entry.raw) {
+                touched_retained_pending.push(entry.raw)
+              }
+            None => ()
+          }
+        }
+      None => ()
+    }
+  }
+  // Reverse waiter edges are the equivalent prospective evidence when a
+  // retained node is touched by a planned dependency but does not become
+  // ready. Keep this derived from the disposable overlay inputs rather than
+  // making planner-owned pending storage part of the receipt.
+  for op in overlay.planned_operations {
+    match self.waiters.get(remote_admission_raw(op)) {
+      Some(waiters) =>
+        for waiter in waiters {
+          match self.pending.get(waiter.raw) {
+            Some(node) =>
+              if node.arrival == waiter.arrival &&
+                !rejection.discarded_pending.contains(waiter.raw) &&
+                touched_seen.add_and_check(waiter.raw) {
+                touched_retained_pending.push(waiter.raw)
+              }
+            None => ()
+          }
+        }
+      None => ()
+    }
+  }
   let plan = {
     planned: overlay.planned_operations,
     storage: ImmediateGeneral(
@@ -1201,6 +1246,8 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
     max_pending: None,
     already_admitted: [],
     duplicate_of_pending: [],
+    retained_pending: [],
+    touched_retained_pending,
     consumed: false,
   }
   plan.with_pending_evidence(self)
@@ -1617,7 +1664,26 @@ fn PreparedAdmission::with_pending_evidence(
   let pending_before_count = planner.pending_raws().length()
   let new_staged_count = self.staged_raws().length()
   let required_pending = planner.required_pending_for(self)
-  { ..self, pending_before_count, new_staged_count, required_pending }
+  let retained_pending : Array[@core.RawVersion] = []
+  let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for raw in self.touched_retained_pending {
+    if seen.add_and_check(raw) {
+      retained_pending.push(raw)
+    }
+  }
+  for op in self.planned {
+    let raw = remote_admission_raw(op)
+    if planner.pending.contains(raw) && seen.add_and_check(raw) {
+      retained_pending.push(raw)
+    }
+  }
+  {
+    ..self,
+    pending_before_count,
+    new_staged_count,
+    required_pending,
+    retained_pending,
+  }
 }
 
 ///|
@@ -1641,11 +1707,21 @@ fn PreparedAdmission::with_prospective(
       }
     None => ()
   }
+  let retained_pending = prepared.retained_pending.copy()
+  let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet(
+    retained_pending,
+  )
+  for raw in duplicate_of_pending {
+    if seen.add_and_check(raw) {
+      retained_pending.push(raw)
+    }
+  }
   {
     ..prepared,
     max_pending,
     already_admitted: already_admitted.copy(),
     duplicate_of_pending: duplicate_of_pending.copy(),
+    retained_pending,
   }
 }
 

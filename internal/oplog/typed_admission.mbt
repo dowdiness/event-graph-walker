@@ -5,6 +5,8 @@ pub struct AdmissionReceipt {
   priv committed : Array[@core.Op]
   priv already_admitted : Array[@core.RawVersion]
   priv pending_from_transition : Array[@core.RawVersion]
+  priv pending_retained : Array[@core.RawVersion]
+  priv pending_staged : Array[@core.RawVersion]
   priv discarded_pending : Array[@core.RawVersion]
   priv discarded_staged : Array[@core.RawVersion]
   priv pending_before_count : Int
@@ -24,6 +26,8 @@ fn AdmissionReceipt::from_parts(
   committed : Array[@core.Op],
   already_admitted : Array[@core.RawVersion],
   pending_from_transition : Array[@core.RawVersion],
+  pending_retained : Array[@core.RawVersion],
+  pending_staged : Array[@core.RawVersion],
   discarded_pending : Array[@core.RawVersion],
   discarded_staged : Array[@core.RawVersion],
   pending_before_count : Int,
@@ -35,6 +39,8 @@ fn AdmissionReceipt::from_parts(
     committed: committed.copy(),
     already_admitted: already_admitted.copy(),
     pending_from_transition: pending_from_transition.copy(),
+    pending_retained: pending_retained.copy(),
+    pending_staged: pending_staged.copy(),
     discarded_pending: discarded_pending.copy(),
     discarded_staged: discarded_staged.copy(),
     pending_before_count,
@@ -63,6 +69,20 @@ pub fn AdmissionReceipt::pending_from_transition(
   self : AdmissionReceipt,
 ) -> ArrayView[@core.RawVersion] {
   self.pending_from_transition[:]
+}
+
+///|
+pub fn AdmissionReceipt::pending_retained(
+  self : AdmissionReceipt,
+) -> ArrayView[@core.RawVersion] {
+  self.pending_retained[:]
+}
+
+///|
+pub fn AdmissionReceipt::pending_staged(
+  self : AdmissionReceipt,
+) -> ArrayView[@core.RawVersion] {
+  self.pending_staged[:]
 }
 
 ///|
@@ -111,6 +131,11 @@ fn PreparedAdmission::transition_pending_candidates(
 ) -> Array[@core.RawVersion] {
   let result : Array[@core.RawVersion] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for raw in self.retained_pending {
+    if seen.add_and_check(raw) {
+      result.push(raw)
+    }
+  }
   for op in self.planned {
     let raw = remote_admission_raw(op)
     if seen.add_and_check(raw) {
@@ -141,6 +166,18 @@ fn OpLog::admission_receipt(
   frontier_before : @core.Frontier,
 ) -> AdmissionReceipt {
   let pending_from_transition : Array[@core.RawVersion] = []
+  let pending_retained : Array[@core.RawVersion] = []
+  let pending_staged : Array[@core.RawVersion] = []
+  for raw in prepared.retained_pending {
+    if self.planner.pending.contains(raw) {
+      pending_retained.push(raw)
+    }
+  }
+  for raw in prepared.staged_raws() {
+    if self.planner.pending.contains(raw) {
+      pending_staged.push(raw)
+    }
+  }
   for raw in prepared.transition_pending_candidates() {
     if self.planner.pending.contains(raw) {
       pending_from_transition.push(raw)
@@ -150,6 +187,8 @@ fn OpLog::admission_receipt(
     committed,
     prepared.already_admitted,
     pending_from_transition,
+    pending_retained,
+    pending_staged,
     prepared.discarded_pending.to_array(),
     prepared.discarded_staged.to_array(),
     prepared.pending_before_count,

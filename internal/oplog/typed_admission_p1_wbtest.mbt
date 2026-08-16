@@ -33,6 +33,8 @@ test "P1 receipt owns defensive identity and operation snapshots" {
   let committed_source = [p0_insert("receipt-committed", 0, [], "a", None)]
   let already_admitted_source = [@core.RawVersion("receipt-admitted", 0)]
   let pending_source = [@core.RawVersion("receipt-pending", 0)]
+  let pending_retained_source = [@core.RawVersion("receipt-retained", 0)]
+  let pending_staged_source = [@core.RawVersion("receipt-staged", 0)]
   let discarded_pending_source = [
     @core.RawVersion("receipt-discarded-pending", 0),
   ]
@@ -43,6 +45,8 @@ test "P1 receipt owns defensive identity and operation snapshots" {
     committed_source,
     already_admitted_source,
     pending_source,
+    pending_retained_source,
+    pending_staged_source,
     discarded_pending_source,
     discarded_staged_source,
     4,
@@ -54,6 +58,8 @@ test "P1 receipt owns defensive identity and operation snapshots" {
   committed_source[0] = p0_insert("receipt-mutated", 0, [], "x", None)
   already_admitted_source[0] = @core.RawVersion("mutated", 0)
   pending_source[0] = @core.RawVersion("mutated", 1)
+  pending_retained_source[0] = @core.RawVersion("mutated", 4)
+  pending_staged_source[0] = @core.RawVersion("mutated", 5)
   discarded_pending_source[0] = @core.RawVersion("mutated", 2)
   discarded_staged_source[0] = @core.RawVersion("mutated", 3)
 
@@ -73,6 +79,18 @@ test "P1 receipt owns defensive identity and operation snapshots" {
     p1_receipt_has_raw(
       receipt.pending_from_transition(),
       @core.RawVersion("receipt-pending", 0),
+    ),
+  )
+  assert_true(
+    p1_receipt_has_raw(
+      receipt.pending_retained(),
+      @core.RawVersion("receipt-retained", 0),
+    ),
+  )
+  assert_true(
+    p1_receipt_has_raw(
+      receipt.pending_staged(),
+      @core.RawVersion("receipt-staged", 0),
     ),
   )
   assert_true(
@@ -127,6 +145,37 @@ test "P1 hard pending precondition counts unresolved staged identities" {
     ),
   )
   assert_eq(receiver.has_pending(), false)
+}
+
+///|
+test "P1 receipt preserves touched retained pending provenance" {
+  let receiver = OpLog("p1-touched-retained")
+  let dependency_a = p0_insert("p1-touched-a", 0, [], "A", None)
+  let dependency_b = p0_insert("p1-touched-b", 0, [], "B", None)
+  let retained = p0_insert(
+    "p1-touched-retained",
+    0,
+    [remote_admission_raw(dependency_a), remote_admission_raw(dependency_b)],
+    "R",
+    None,
+  )
+  ignore(try! receiver.commit_remote(try! receiver.prepare_remote([retained])))
+
+  let outcome = try! receiver.commit_admission(
+    try! receiver.prepare_remote([dependency_a]),
+  )
+  match outcome {
+    AdmissionOutcome::Complete(receipt) => {
+      let retained_raw = remote_admission_raw(retained)
+      assert_true(
+        p1_receipt_has_raw(receipt.pending_from_transition(), retained_raw),
+      )
+      assert_true(p1_receipt_has_raw(receipt.pending_retained(), retained_raw))
+      assert_true(!p1_receipt_has_raw(receipt.pending_staged(), retained_raw))
+      assert_eq(receipt.pending_after_count(), 1)
+    }
+    AdmissionOutcome::Partial(..) => fail("one dependency should complete")
+  }
 }
 
 ///|
@@ -259,6 +308,58 @@ test "P1 pending duplicate enters rejection closure and is discarded" {
       )
     }
     AdmissionOutcome::Partial(..) => fail("rejection closure should complete")
+  }
+}
+
+///|
+test "P1 partial receipt separates retained and staged pending provenance" {
+  let receiver = OpLog("p1-partial-provenance")
+  let retained_predecessor = p0_insert(
+    "p1-partial-dependency",
+    0,
+    [],
+    "P",
+    None,
+  )
+  let retained = p0_insert(
+    "p1-partial-retained",
+    0,
+    [remote_admission_raw(retained_predecessor)],
+    "R",
+    None,
+  )
+  let staged = p0_insert("p1-partial-staged", 0, [], "S", None)
+  ignore(try! receiver.commit_remote(try! receiver.prepare_remote([retained])))
+  let plan = try! receiver.prepare_remote([retained_predecessor, staged])
+  assert_true(plan.operations().length() > 0)
+  let failure_raw = remote_admission_raw(plan.operations()[0])
+  let outcome = try! receiver.commit_admission_with(plan, op => {
+    if remote_admission_raw(op) == failure_raw {
+      raise @causal_graph.CausalGraphError::MissingParent(lv=-102)
+    }
+    receiver.commit_one_remote_for_admission(op)
+  })
+  match outcome {
+    AdmissionOutcome::Partial(receipt~, error~) => {
+      let retained_raw = remote_admission_raw(retained)
+      let staged_raw = remote_admission_raw(staged)
+      assert_true(
+        p1_receipt_has_raw(receipt.pending_from_transition(), retained_raw),
+      )
+      assert_true(
+        p1_receipt_has_raw(receipt.pending_from_transition(), staged_raw),
+      )
+      assert_true(p1_receipt_has_raw(receipt.pending_retained(), retained_raw))
+      assert_true(!p1_receipt_has_raw(receipt.pending_staged(), retained_raw))
+      assert_true(p1_receipt_has_raw(receipt.pending_staged(), staged_raw))
+      assert_true(!p1_receipt_has_raw(receipt.pending_retained(), staged_raw))
+      match error {
+        @causal_graph.CausalGraphError::MissingParent(lv~) =>
+          assert_eq(lv, -102)
+        _ => fail("expected provenance test causal failure")
+      }
+    }
+    AdmissionOutcome::Complete(_) => fail("injected failure must be partial")
   }
 }
 
