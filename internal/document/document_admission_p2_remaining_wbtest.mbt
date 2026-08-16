@@ -322,9 +322,18 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
   let doc = Document::new("p2-preflight")
   let known = try! doc.insert(0, "Y")
   ignore(doc.to_text())
-  try! doc.tree.delete(@fugue.Lv(known.lv()))
+  let known_raw = @core.RawVersion(known.agent(), known.seq())
+  let missing = @core.RawVersion("p2-preflight-missing", 0)
+  let unready = p2_remote_insert(
+    "p2-preflight-peer",
+    0,
+    [missing],
+    Some(known_raw),
+  )
+  // A tombstone still resolves through FugueTree::get. Replace the tree so
+  // the authority-known Insert is genuinely absent from the projection.
+  doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
-  let unready = p2_pending_batch("p2-preflight-peer")[0]
   let mut recovery_calls = 0
   let mut recovery_saw_no_pending = false
   let mut recovery_saw_invalid_derived_state = false
@@ -368,14 +377,81 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
       fail("unready input must remain a complete pending transition")
   }
   match admission.projection {
-    ProjectionStatus::Skipped => ()
+    ProjectionStatus::Recovered => ()
     ProjectionStatus::Projected
-    | ProjectionStatus::Recovered
+    | ProjectionStatus::Skipped
     | ProjectionStatus::RecoveryRequired(..) =>
-      fail("pending-only admission must skip projection")
+      fail("successful preflight recovery must be reported")
   }
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
+}
+
+///|
+test "P2 red preflight recovery then stale rejection keeps authority unchanged" {
+  let doc = Document::new("p2-preflight-stale")
+  let known = try! doc.insert(0, "Y")
+  ignore(doc.to_text())
+  let known_raw = @core.RawVersion(known.agent(), known.seq())
+  let missing = @core.RawVersion("p2-preflight-stale-missing", 0)
+  let unready = p2_remote_insert(
+    "p2-preflight-stale-peer",
+    0,
+    [missing],
+    Some(known_raw),
+  )
+  let stale_plan = try! doc.oplog.prepare_remote([unready])
+  let generation_tick = try! doc.oplog.prepare_remote([])
+  ignore(try! doc.oplog.commit_admission(generation_tick))
+  doc.replace_projection_tree(@fugue.FugueTree::new())
+  let before_frontier = doc.get_frontier()
+  let before_ops = doc.get_all_ops()
+  let mut recovery_calls = 0
+  let mut recovery_saw_no_pending = false
+  let mut recovery_saw_invalid_derived_state = false
+  let mut prepare_count = 0
+  let mut commit_count = 0
+  let mut projection_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => prepare_count = prepare_count + 1,
+    on_commit_admission: () => commit_count = commit_count + 1,
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: Some(_ => stale_plan),
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: Some(frontier => {
+      recovery_calls = recovery_calls + 1
+      recovery_saw_no_pending = !doc.oplog.has_pending()
+      recovery_saw_invalid_derived_state = !doc.indexed_state.is_ready() &&
+        doc.cursor is None
+      @branch.Branch::checkout(doc.oplog, frontier)
+    }),
+  })
+
+  let result : Result[DocumentAdmission, DocumentError] = Ok(
+    doc.admit_remote([unready]),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
+    _ => fail("expected stale rejection after preflight recovery")
+  }
+  assert_eq(recovery_calls, 1)
+  assert_true(recovery_saw_no_pending)
+  assert_true(recovery_saw_invalid_derived_state)
+  assert_eq(prepare_count, 1)
+  assert_eq(commit_count, 1)
+  assert_eq(projection_count, 0)
+  assert_eq(doc.get_frontier(), before_frontier)
+  p2_assert_same_operations(doc.get_all_ops(), before_ops)
+  assert_true(!doc.oplog.has_pending())
+  assert_true(!doc.indexed_state.is_ready())
+  assert_true(doc.cursor is None)
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
+  assert_eq(doc.tree.to_text(), fresh.to_text())
+  assert_eq(doc.get_frontier(), fresh.get_frontier())
 }
 
 ///|
