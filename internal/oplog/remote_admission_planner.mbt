@@ -306,6 +306,7 @@ fn remote_admission_validate(op : @core.Op) -> Unit raise OpLogError {
   ignore(RemoteAdmissionPlanner::has_pending)
   ignore(PreparedAdmission::remaining_raws)
   ignore(RemoteAdmissionPlanner::pending_raws)
+  ignore(RemoteAdmissionPlanner::required_pending_set_oracle)
   ignore(RemoteAdmissionPlanner::generation)
   ignore(PreparedAdmission::generation)
   ignore(RemoteAdmissionPlanner::arrival_of)
@@ -1191,19 +1192,15 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
   }
   let touched_retained_pending : Array[@core.RawVersion] = []
   let touched_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  for entry in self.pending_order {
-    match self.pending.get(entry.raw) {
-      Some(node) =>
-        if node.arrival == entry.arrival {
-          match overlay.touched_deltas.get(entry.raw) {
-            Some(delta) =>
-              if delta != 0 &&
-                !rejection.discarded_pending.contains(entry.raw) &&
-                touched_seen.add_and_check(entry.raw) {
-                touched_retained_pending.push(entry.raw)
-              }
-            None => ()
-          }
+  for entry in overlay.touched_deltas.iter() {
+    let raw = entry.0
+    let delta = entry.1
+    match self.pending.get(raw) {
+      Some(_) =>
+        if delta != 0 &&
+          !rejection.discarded_pending.contains(raw) &&
+          touched_seen.add_and_check(raw) {
+          touched_retained_pending.push(raw)
         }
       None => ()
     }
@@ -1301,11 +1298,15 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
         return RemoteAdmissionBeginResult::Conflict
       }
   }
-  let current_pending_before_count = self.pending_raws().length()
+  let current_pending_before_count = self.pending_count()
+  let staged_count = plan.staged_count()
+  if plan.discarded_pending.length() > current_pending_before_count {
+    return RemoteAdmissionBeginResult::Conflict
+  }
   let required_pending = self.required_pending_for(plan)
   if current_pending_before_count != plan.pending_before_count ||
     required_pending != plan.required_pending ||
-    plan.staged_raws().length() != plan.new_staged_count {
+    staged_count != plan.new_staged_count {
     return RemoteAdmissionBeginResult::Conflict
   }
   match plan.max_pending {
@@ -1637,9 +1638,24 @@ fn PreparedAdmission::staged_raws(
 }
 
 ///|
-/// Compute the unique live pending membership immediately after begin applies
-/// the prepared discard and staged-registration transition.
-fn RemoteAdmissionPlanner::required_pending_for(
+/// Count live canonical pending membership without materializing arrival order.
+fn RemoteAdmissionPlanner::pending_count(self : RemoteAdmissionPlanner) -> Int {
+  self.pending.length()
+}
+
+///|
+/// Count staged identities without materializing their RawVersion array.
+fn PreparedAdmission::staged_count(self : PreparedAdmission) -> Int {
+  match self.storage {
+    DeferredFast => self.planned.length()
+    ImmediateGeneral(nodes, planned_count=_) => nodes.length()
+  }
+}
+
+///|
+/// Reference set oracle for the begin-after pending membership contract.
+/// Production admission uses `required_pending_for`; tests compare both.
+fn RemoteAdmissionPlanner::required_pending_set_oracle(
   self : RemoteAdmissionPlanner,
   plan : PreparedAdmission,
 ) -> Int {
@@ -1656,13 +1672,34 @@ fn RemoteAdmissionPlanner::required_pending_for(
 }
 
 ///|
+/// Compute the unique live pending membership immediately after begin applies
+/// the prepared discard and staged-registration transition. The plan
+/// invariants make this count equivalent to the set oracle above.
+fn RemoteAdmissionPlanner::required_pending_for(
+  self : RemoteAdmissionPlanner,
+  plan : PreparedAdmission,
+) -> Int {
+  let pending_before_count = self.pending_count()
+  let discarded_pending_count = plan.discarded_pending.length()
+  if discarded_pending_count > pending_before_count {
+    abort("prepared pending discard exceeds live membership")
+  }
+  let remaining_pending = pending_before_count - discarded_pending_count
+  let staged_count = plan.staged_count()
+  if staged_count > 2147483647 - remaining_pending {
+    abort("prepared pending count overflows Int")
+  }
+  remaining_pending + staged_count
+}
+
+///|
 /// Attach generation-bound pending evidence without mutating planner state.
 fn PreparedAdmission::with_pending_evidence(
   self : PreparedAdmission,
   planner : RemoteAdmissionPlanner,
 ) -> PreparedAdmission {
-  let pending_before_count = planner.pending_raws().length()
-  let new_staged_count = self.staged_raws().length()
+  let pending_before_count = planner.pending_count()
+  let new_staged_count = self.staged_count()
   let required_pending = planner.required_pending_for(self)
   let retained_pending : Array[@core.RawVersion] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])

@@ -54,7 +54,7 @@ fn p1_pending_benchmark_prepare(
 }
 
 ///|
-fn p1_pending_benchmark_commit(
+fn p1_pending_benchmark_prepare_and_commit(
   b : @bench.T,
   count : Int,
   max_pending : Int?,
@@ -116,22 +116,22 @@ test "bench: P1 prepare pending matrix bounded reject" (b : @bench.T) {
 }
 
 ///|
-test "bench: P1 commit pending matrix unbounded" (b : @bench.T) {
+test "bench: P1 prepare+commit pending matrix unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_commit(b, count, None)
+    p1_pending_benchmark_prepare_and_commit(b, count, None)
   }
 }
 
 ///|
-test "bench: P1 commit pending matrix bounded pass" (b : @bench.T) {
+test "bench: P1 prepare+commit pending matrix bounded pass" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_commit(b, count, Some(count))
+    p1_pending_benchmark_prepare_and_commit(b, count, Some(count))
   }
 }
 
 ///|
-test "bench: P1 commit pending matrix bounded reject" (b : @bench.T) {
+test "bench: P1 prepare+commit pending matrix bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
-    p1_pending_benchmark_commit(b, count, Some(count - 1))
+    p1_pending_benchmark_prepare_and_commit(b, count, Some(count - 1))
   }
 }

@@ -289,9 +289,12 @@ test "P1 discarded touched retained pending is absent from receipt ownership" {
     [remote_admission_raw(root)],
     remote_admission_raw(root),
   )
-  let outcome = try! receiver.commit_admission(
-    try! receiver.prepare_remote([dependency_a, root, target]),
+  let plan = try! receiver.prepare_remote([dependency_a, root, target])
+  assert_eq(
+    plan.required_pending,
+    receiver.planner.required_pending_set_oracle(plan),
   )
+  let outcome = try! receiver.commit_admission(plan)
   match outcome {
     AdmissionOutcome::Complete(receipt) => {
       let touched_raw = remote_admission_raw(touched_discarded)
@@ -332,9 +335,12 @@ test "P1 unrelated retained pending remains outside the receipt transition" {
     [remote_admission_raw(root)],
     remote_admission_raw(root),
   )
-  let outcome = try! receiver.commit_admission(
-    try! receiver.prepare_remote([root, target]),
+  let plan = try! receiver.prepare_remote([root, target])
+  assert_eq(
+    plan.required_pending,
+    receiver.planner.required_pending_set_oracle(plan),
   )
+  let outcome = try! receiver.commit_admission(plan)
   match outcome {
     AdmissionOutcome::Complete(receipt) => {
       assert_true(

@@ -192,7 +192,7 @@ fn OpLog::admission_receipt(
     prepared.discarded_pending.to_array(),
     prepared.discarded_staged.to_array(),
     prepared.pending_before_count,
-    self.planner.pending_raws().length(),
+    self.planner.pending_count(),
     frontier_before,
     self.get_frontier(),
   )

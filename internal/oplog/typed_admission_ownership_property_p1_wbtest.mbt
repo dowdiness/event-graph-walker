@@ -96,7 +96,7 @@ fn typed_ownership_property(trace : TypedOwnershipTrace) -> Bool {
   }
   ignore(try! receiver.commit_remote(try! receiver.prepare_remote([pending])))
 
-  let dependency = p0_insert("p1-property-dependency", 0, [], "D", None)
+  let dependency = p0_insert("p1-property-missing", 0, [], "D", None)
   let fresh = p0_insert("p1-property-fresh", 0, [], "N", None)
   let wake_pending = trace.mode % 2 == 1
   let operations = if wake_pending {
@@ -108,6 +108,9 @@ fn typed_ownership_property(trace : TypedOwnershipTrace) -> Bool {
     (Ok(receiver.prepare_remote(operations)) catch { error => Err(error) }) {
     Ok(plan) => plan
     Err(_) => return false
+  }
+  if plan.required_pending != receiver.planner.required_pending_set_oracle(plan) {
+    return false
   }
   let operation_count = plan.operations().length()
   if operation_count == 0 {
@@ -216,6 +219,9 @@ test "property generator: typed ownership traces are valid" {
   assert_true(!traces.is_empty())
   for trace in traces {
     assert_true(trace.mode >= 0 && trace.mode < 8)
+  }
+  for mode in 0..<8 {
+    assert_true(typed_ownership_property({ mode, }))
   }
 }
 
