@@ -9,6 +9,7 @@ pub(all) suberror TextError {
   InvalidRange(start~ : Int, end~ : Int)
   SyncFailed(@sync.Failure)
   VersionNotFound
+  ProjectionRecoveryRequired
   Internal(detail~ : String)
 }
 
@@ -33,6 +34,7 @@ pub fn TextError::message(self : TextError) -> String {
     SyncFailed(@sync.Failure::LimitExceeded(kind~, limit~, actual~)) =>
       "Sync failed: \{kind} limit \{limit} exceeded by \{actual}"
     VersionNotFound => "Version not found in document history"
+    ProjectionRecoveryRequired => "Document projection recovery required"
     Internal(detail~) => "Internal error: \{detail}"
   }
 }
@@ -57,6 +59,7 @@ pub fn TextError::help(self : TextError) -> String {
     SyncFailed(@sync.Failure::LimitExceeded(_)) =>
       "Reject the message or construct the state with appropriate sync limits"
     VersionNotFound => "The version may not be synced yet. Try syncing first."
+    ProjectionRecoveryRequired => "Retry after document projection recovery"
     Internal(_) => "Please report this bug with the debug output"
   }
 }
@@ -73,6 +76,7 @@ pub fn TextError::debug(self : TextError) -> String {
       "TextError::InvalidRange { start: \{start}, end: \{end} }"
     SyncFailed(failure) => "TextError::SyncFailed { reason: \{failure} }"
     VersionNotFound => "TextError::VersionNotFound"
+    ProjectionRecoveryRequired => "TextError::ProjectionRecoveryRequired"
     Internal(detail~) => "TextError::Internal { detail: \{detail} }"
   }
 }
@@ -91,6 +95,7 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
     SyncFailed(@sync.Failure::ConflictingIdentity(_)) => false
     SyncFailed(@sync.Failure::LimitExceeded(_)) => false
     VersionNotFound => true
+    ProjectionRecoveryRequired => true
     Internal(_) => false
   }
 }
@@ -99,10 +104,10 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
 /// Convert from DocumentError to TextError
 fn TextError::from_document_error(
   err : @document.DocumentError,
-  doc_len : Int,
+  doc_len : () -> Int,
 ) -> TextError {
   match err {
-    InvalidPosition(pos~) => TextError::InvalidPosition(pos~, len=doc_len)
+    InvalidPosition(pos~) => TextError::InvalidPosition(pos~, len=doc_len())
     MissingOrigin(raw~) =>
       TextError::SyncFailed(
         @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),
@@ -120,8 +125,7 @@ fn TextError::from_document_error(
       }
       TextError::SyncFailed(@sync.Failure::InvalidContent(detail~))
     }
-    ProjectionRecoveryRequired(_) =>
-      TextError::Internal(detail="document projection recovery required")
+    ProjectionRecoveryRequired(..) => TextError::ProjectionRecoveryRequired
   }
 }
 

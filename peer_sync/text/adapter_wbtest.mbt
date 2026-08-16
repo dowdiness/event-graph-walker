@@ -25,6 +25,10 @@ test "text adapter maps shared and local errors" {
     Some(@peer_sync.FailureDisposition::Recoverable) => ()
     _ => fail("version not found must be recoverable")
   }
+  match classify_error(@egw_text.TextError::ProjectionRecoveryRequired) {
+    Some(@peer_sync.FailureDisposition::Recoverable) => ()
+    _ => fail("projection recovery must be recoverable")
+  }
   match classify_error(@egw_text.TextError::EmptyReplicaId) {
     None => ()
     _ => fail("empty replica ID is local")

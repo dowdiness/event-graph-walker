@@ -69,6 +69,17 @@ pub fn TextState::new_with_sync_limits(
 }
 
 ///|
+/// Recover the Document projection before reading it for mutation validation.
+fn TextState::prepare_for_mutation(self : TextState) -> Unit raise TextError {
+  self.inner.prepare_for_mutation() catch {
+    error =>
+      raise TextError::from_document_error(error, () => {
+        self.inner.visible_count()
+      })
+  }
+}
+
+///|
 fn TextState::advance_cached_version(self : TextState, op : @core.Op) -> Unit {
   self.cached_version = self.cached_version.advance(op)
 }
@@ -116,6 +127,7 @@ pub fn TextState::insert(
   pos : Pos,
   text : String,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let plan = plan_insert(pos.value(), text, doc_len)
   if plan.text.length() == 0 {
@@ -127,7 +139,7 @@ pub fn TextState::insert(
   } catch {
     err => {
       self.invalidate_cached_version()
-      raise TextError::from_document_error(err, doc_len)
+      raise TextError::from_document_error(err, () => doc_len)
     }
   }
 }
@@ -135,6 +147,7 @@ pub fn TextState::insert(
 ///|
 /// Delete a single character at the given position
 pub fn TextState::delete(self : TextState, pos : Pos) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val >= doc_len {
@@ -146,7 +159,7 @@ pub fn TextState::delete(self : TextState, pos : Pos) -> Unit raise TextError {
   } catch {
     err => {
       self.invalidate_cached_version()
-      raise TextError::from_document_error(err, doc_len)
+      raise TextError::from_document_error(err, () => doc_len)
     }
   }
 }
@@ -157,13 +170,14 @@ pub fn TextState::delete_range(
   self : TextState,
   range : Range,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
   if start != end {
     self.invalidate_cached_version()
   }
   self.inner.delete_range(start, end) catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => raise TextError::from_document_error(err, () => doc_len)
   }
 }
 
@@ -174,6 +188,7 @@ pub fn TextState::replace_range(
   range : Range,
   text : String,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
   let plan = plan_insert(start, text, doc_len)
@@ -182,7 +197,7 @@ pub fn TextState::replace_range(
   }
   // Keep replacement and cursor-reset semantics owned by Document.
   self.inner.replace_range(start, end, plan.text) catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => raise TextError::from_document_error(err, () => doc_len)
   }
 }
 
@@ -225,7 +240,7 @@ pub fn TextState::checkout(
     )
     TextView::from_branch(branch, version)
   } catch {
-    err => raise TextError::from_document_error(err, self.len())
+    err => raise TextError::from_document_error(err, () => self.len())
   }
 }
 

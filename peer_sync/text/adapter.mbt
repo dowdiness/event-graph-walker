@@ -15,7 +15,8 @@ pub fn classify_error(
   match error {
     @egw_text.TextError::SyncFailed(failure) =>
       Some(@peer_sync.FailureDisposition(failure))
-    @egw_text.TextError::VersionNotFound =>
+    @egw_text.TextError::VersionNotFound
+    | @egw_text.TextError::ProjectionRecoveryRequired =>
       Some(@peer_sync.FailureDisposition::recoverable())
     @egw_text.TextError::EmptyReplicaId
     | @egw_text.TextError::InvalidText(_)

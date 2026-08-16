@@ -1071,7 +1071,7 @@ pub fn SyncMessage::from_json_string(
 ///|
 fn current_heads(doc : TextState) -> Array[@core.RawVersion] raise TextError {
   doc.inner.get_frontier_raw() catch {
-    error => raise TextError::from_document_error(error, doc.len())
+    error => raise TextError::from_document_error(error, () => doc.len())
   }
 }
 
@@ -1278,7 +1278,7 @@ pub fn SyncSession::apply_with_limits(
   // preflight, so protocol failures cannot occur after the first mutation.
   for parsed_op in prepared.applicable {
     self.doc.inner.apply_remote(parsed_op.raw()) catch {
-      error => raise TextError::from_document_error(error, self.doc.len())
+      error => raise TextError::from_document_error(error, () => self.doc.len())
     }
   }
   self.doc.pending_sync_records = prepared.pending

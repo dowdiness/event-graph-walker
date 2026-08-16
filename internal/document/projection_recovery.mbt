@@ -3,7 +3,10 @@
 ///|
 priv enum ProjectionHealth {
   Ready
-  RecoveryRequired(frontier~ : @core.Frontier)
+  RecoveryRequired(
+    frontier~ : @core.Frontier,
+    checkout~ : (@oplog.OpLog, @core.Frontier) -> @branch.Branch raise @branch.BranchError
+  )
 }
 
 ///|
@@ -28,9 +31,12 @@ fn Document::recover_projection_with(
 ) -> Unit raise DocumentError {
   self.indexed_state.invalidate()
   self.cursor = None
-  self.projection_health = ProjectionHealth::RecoveryRequired(frontier~)
+  self.projection_health = ProjectionHealth::RecoveryRequired(
+    frontier~,
+    checkout~,
+  )
   let branch = checkout(self.oplog, frontier) catch {
-    _ => raise DocumentError::ProjectionRecoveryRequired(frontier~)
+    error => raise DocumentError::ProjectionRecoveryRequired(frontier~, error~)
   }
   self.replace_projection_tree(branch.inner_tree())
   self.indexed_state.invalidate()
@@ -50,14 +56,25 @@ fn Document::recover_projection(
 }
 
 ///|
+/// Ensure the derived projection is canonical before a dependent mutation.
+///
+/// This narrow direct-dependent guard lets facades validate their own input
+/// without reading a failed non-fallible projection first.
+pub fn Document::prepare_for_mutation(
+  self : Document,
+) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
+}
+
+///|
 /// Retry canonical recovery before a fallible document mutation.
 fn Document::ensure_projection_ready(
   self : Document,
 ) -> Unit raise DocumentError {
   match self.projection_health {
     ProjectionHealth::Ready => ()
-    ProjectionHealth::RecoveryRequired(frontier~) =>
-      self.recover_projection(frontier)
+    ProjectionHealth::RecoveryRequired(frontier~, checkout~) =>
+      self.recover_projection_with(frontier, checkout)
   }
 }
 

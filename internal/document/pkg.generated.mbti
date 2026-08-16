@@ -22,7 +22,7 @@ pub(all) suberror DocumentError {
   Fugue(@fugue.FugueError)
   Branch(@branch.BranchError)
   ContentError(reason~ : ContentErrorReason)
-  ProjectionRecoveryRequired(frontier~ : @core.Frontier)
+  ProjectionRecoveryRequired(frontier~ : @core.Frontier, error~ : @branch.BranchError)
 }
 
 // Types and methods
@@ -55,6 +55,7 @@ pub fn Document::insert(Self, Int, String) -> @core.Op raise DocumentError
 pub fn Document::lv_to_position(Self, Int) -> Int?
 pub fn Document::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self
+pub fn Document::prepare_for_mutation(Self) -> Unit raise DocumentError
 pub fn Document::replace_range(Self, Int, Int, String) -> Unit raise DocumentError
 pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
