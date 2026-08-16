@@ -256,6 +256,58 @@ test "P1 typed ownership categories remain disjoint" {
 }
 
 ///|
+test "P1 discarded touched retained pending is absent from receipt ownership" {
+  let receiver = OpLog("p1-touched-discarded")
+  let missing_target = p0_raw("p1-touched-discard-target", 1)
+  let invalid_pending = p0_insert(
+    "p1-touched-discard-invalid",
+    0,
+    [missing_target],
+    "I",
+    Some(missing_target),
+  )
+  ignore(
+    try! receiver.commit_remote(try! receiver.prepare_remote([invalid_pending])),
+  )
+  let dependency_a = p0_insert("p1-touched-discard-a", 0, [], "A", None)
+  let touched_discarded = p0_insert(
+    "p1-touched-discarded",
+    0,
+    [remote_admission_raw(dependency_a), remote_admission_raw(invalid_pending)],
+    "X",
+    None,
+  )
+  ignore(
+    try! receiver.commit_remote(
+      try! receiver.prepare_remote([touched_discarded]),
+    ),
+  )
+  let root = p0_insert("p1-touched-discard-target", 0, [], "A", None)
+  let target = p0_delete(
+    "p1-touched-discard-target",
+    1,
+    [remote_admission_raw(root)],
+    remote_admission_raw(root),
+  )
+  let outcome = try! receiver.commit_admission(
+    try! receiver.prepare_remote([dependency_a, root, target]),
+  )
+  match outcome {
+    AdmissionOutcome::Complete(receipt) => {
+      let touched_raw = remote_admission_raw(touched_discarded)
+      assert_true(p1_receipt_has_raw(receipt.discarded_pending(), touched_raw))
+      assert_true(
+        !p1_receipt_has_raw(receipt.pending_from_transition(), touched_raw),
+      )
+      assert_true(!p1_receipt_has_raw(receipt.pending_retained(), touched_raw))
+      assert_true(!p1_receipt_has_raw(receipt.pending_staged(), touched_raw))
+    }
+    AdmissionOutcome::Partial(..) =>
+      fail("discarded touched pending should complete")
+  }
+}
+
+///|
 test "P1 unrelated retained pending remains outside the receipt transition" {
   let receiver = OpLog("p1-unrelated-retained")
   let unrelated_missing = p0_raw("p1-unrelated-missing", 0)
