@@ -213,6 +213,74 @@ test "P3 complete-after limit accepts all-ready batch over the limit" {
 }
 
 ///|
+test "P3 complete-after limit is rechecked at begin" {
+  let receiver = OpLog("p3-after-begin-recheck")
+  let ready = p0_insert("p3-after-begin-ready", 0, [], "A", None)
+  let missing = p0_raw("p3-after-begin-missing", 0)
+  let unresolved = p0_insert(
+    "p3-after-begin-unresolved",
+    0,
+    [missing],
+    "B",
+    None,
+  )
+  let plan = PreparedAdmission::{
+    planned: [ready],
+    storage: ImmediateGeneral(
+      [
+        {
+          op: ready,
+          raw: remote_admission_raw(ready),
+          arrival: 0,
+          dependencies: [],
+          waiting_dependencies: [],
+          unresolved_count: 0,
+        },
+        {
+          op: unresolved,
+          raw: remote_admission_raw(unresolved),
+          arrival: 1,
+          dependencies: [missing],
+          waiting_dependencies: [missing],
+          unresolved_count: 1,
+        },
+      ],
+      planned_count=1,
+    ),
+    discard_roots: [],
+    discarded_pending: @hashset.HashSet([]),
+    discarded_staged: @hashset.HashSet([]),
+    next_arrival: 2,
+    generation: 0,
+    pending_before_count: 0,
+    new_staged_count: 2,
+    required_pending: 2,
+    max_pending: Some(2),
+    max_pending_after_complete: Some(0),
+    already_admitted: [],
+    duplicate_of_pending: [],
+    retained_pending: [],
+    touched_retained_pending: [],
+    consumed: false,
+  }
+  let result : Result[AdmissionOutcome, OpLogError] = Ok(
+    receiver.commit_admission(plan),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
+      assert_eq(limit, 0)
+      assert_eq(required, 1)
+    }
+    _ => fail("expected begin-time complete-after limit rejection")
+  }
+  assert_eq(receiver.op_count(), 0)
+  assert_true(!receiver.has_pending())
+  assert_eq(receiver.planner.generation(), 0)
+}
+
+///|
 test "P3 core admission does not count repeated raw identities as redelivery" {
   let receiver = OpLog("p3-core-raw-duplicate")
   let operation = p0_insert("p3-core-raw-duplicate-peer", 0, [], "A", None)
