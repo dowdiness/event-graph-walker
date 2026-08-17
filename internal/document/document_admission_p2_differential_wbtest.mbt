@@ -449,3 +449,252 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   assert_eq(merged.tree.to_text(), source.tree.to_text())
   assert_eq(merged.get_frontier(), source.get_frontier())
 }
+
+///|
+fn p2_diff_rejection_hooks(
+  doc : Document,
+  counters : Array[Int],
+  prepare_override : ((Array[@core.Op]) -> @oplog.PreparedAdmission raise @oplog.OpLogError)?,
+) -> Unit {
+  doc.set_admission_hooks({
+    on_prepare_remote: () => counters[0] = counters[0] + 1,
+    on_commit_admission: () => counters[1] = counters[1] + 1,
+    on_projection_finalization: _ => counters[2] = counters[2] + 1,
+    prepare_override,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
+  })
+}
+
+///|
+fn p2_diff_assert_rejection_counts(
+  counters : Array[Int],
+  prepare : Int,
+  commit : Int,
+  projection : Int,
+) -> Unit raise {
+  assert_eq(counters[0], prepare)
+  assert_eq(counters[1], commit)
+  assert_eq(counters[2], projection)
+}
+
+///|
+fn p2_diff_assert_valid_admission(
+  admission : DocumentAdmission,
+  operation : @core.Op,
+) -> Unit raise {
+  match admission.outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) =>
+      p2_assert_operation_prefix(receipt.committed(), [operation], 1)
+    @oplog.AdmissionOutcome::Partial(..) =>
+      fail("valid rejection follow-up must not be partial")
+  }
+  match admission.projection {
+    ProjectionStatus::Projected => ()
+    _ => fail("valid rejection follow-up must project")
+  }
+}
+
+///|
+test "P2.3 differential gate covers malformed and lifecycle rejection" {
+  let malformed = @core.Op::insert(
+    -1,
+    [],
+    "p2-diff-rejection-malformed",
+    0,
+    "xy",
+    None,
+    None,
+  )
+  let typed_malformed = Document::new("p2-diff-typed-malformed")
+  let legacy_malformed = Document::new("p2-diff-legacy-malformed")
+  let typed_malformed_counts = [0, 0, 0]
+  let legacy_malformed_counts = [0, 0, 0]
+  p2_diff_rejection_hooks(typed_malformed, typed_malformed_counts, None)
+  p2_diff_rejection_hooks(legacy_malformed, legacy_malformed_counts, None)
+  let typed_malformed_result : Result[DocumentAdmission, DocumentError] = Ok(
+    typed_malformed.admit_remote([malformed]),
+  ) catch {
+    error => Err(error)
+  }
+  let legacy_malformed_result : Result[Unit, DocumentError] = Ok(
+    legacy_malformed.apply_remote(malformed),
+  ) catch {
+    error => Err(error)
+  }
+  match typed_malformed_result {
+    Err(DocumentError::ContentError(reason~)) =>
+      match reason {
+        ContentErrorReason::MultipleCodepoints => ()
+        _ => fail("typed malformed rejection reason changed")
+      }
+    _ => fail("typed malformed rejection changed")
+  }
+  match legacy_malformed_result {
+    Err(DocumentError::ContentError(reason~)) =>
+      match reason {
+        ContentErrorReason::MultipleCodepoints => ()
+        _ => fail("legacy malformed rejection reason changed")
+      }
+    _ => fail("legacy malformed rejection changed")
+  }
+  p2_diff_assert_rejection_counts(typed_malformed_counts, 0, 0, 0)
+  p2_diff_assert_rejection_counts(legacy_malformed_counts, 0, 0, 0)
+  p2_diff_assert_state(typed_malformed, legacy_malformed)
+  let malformed_follow_up = p2_ready_batch("p2-diff-malformed-follow-up", 1)[0]
+  p2_diff_rejection_hooks(typed_malformed, typed_malformed_counts, None)
+  p2_diff_rejection_hooks(legacy_malformed, legacy_malformed_counts, None)
+  let typed_malformed_admission = try! typed_malformed.admit_remote([
+    malformed_follow_up,
+  ])
+  p2_diff_assert_valid_admission(typed_malformed_admission, malformed_follow_up)
+  try! legacy_malformed.apply_remote(malformed_follow_up)
+  p2_diff_assert_state(typed_malformed, legacy_malformed)
+
+  let typed_stale = Document::new("p2-diff-stale")
+  let legacy_stale = Document::new("p2-diff-stale")
+  let typed_stale_plan = try! typed_stale.oplog.prepare_remote([])
+  let legacy_stale_plan = try! legacy_stale.oplog.prepare_remote([])
+  ignore(try! typed_stale.insert(0, "seed"))
+  ignore(try! legacy_stale.insert(0, "seed"))
+  let typed_stale_counts = [0, 0, 0]
+  let legacy_stale_counts = [0, 0, 0]
+  p2_diff_rejection_hooks(
+    typed_stale,
+    typed_stale_counts,
+    Some(_ => typed_stale_plan),
+  )
+  p2_diff_rejection_hooks(
+    legacy_stale,
+    legacy_stale_counts,
+    Some(_ => legacy_stale_plan),
+  )
+  let typed_stale_result : Result[DocumentAdmission, DocumentError] = Ok(
+    typed_stale.admit_remote([]),
+  ) catch {
+    error => Err(error)
+  }
+  let legacy_stale_result : Result[Unit, DocumentError] = Ok(
+    legacy_stale.merge_remote([], []),
+  ) catch {
+    error => Err(error)
+  }
+  match typed_stale_result {
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
+    _ => fail("typed stale rejection changed")
+  }
+  match legacy_stale_result {
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
+    _ => fail("legacy stale rejection changed")
+  }
+  p2_diff_assert_rejection_counts(typed_stale_counts, 1, 1, 0)
+  p2_diff_assert_rejection_counts(legacy_stale_counts, 1, 1, 0)
+  p2_diff_assert_state(typed_stale, legacy_stale)
+  let stale_follow_up = p2_ready_batch("p2-diff-stale-follow-up", 1)[0]
+  p2_diff_rejection_hooks(typed_stale, typed_stale_counts, None)
+  p2_diff_rejection_hooks(legacy_stale, legacy_stale_counts, None)
+  let typed_stale_admission = try! typed_stale.admit_remote([stale_follow_up])
+  p2_diff_assert_valid_admission(typed_stale_admission, stale_follow_up)
+  try! legacy_stale.apply_remote(stale_follow_up)
+  p2_diff_assert_state(typed_stale, legacy_stale)
+
+  let typed_consumed = Document::new("p2-diff-typed-consumed")
+  let legacy_consumed = Document::new("p2-diff-legacy-consumed")
+  let typed_consumed_plan = try! typed_consumed.oplog.prepare_remote([])
+  let legacy_consumed_plan = try! legacy_consumed.oplog.prepare_remote([])
+  ignore(try! typed_consumed.oplog.commit_admission(typed_consumed_plan))
+  ignore(try! legacy_consumed.oplog.commit_admission(legacy_consumed_plan))
+  let typed_consumed_counts = [0, 0, 0]
+  let legacy_consumed_counts = [0, 0, 0]
+  p2_diff_rejection_hooks(
+    typed_consumed,
+    typed_consumed_counts,
+    Some(_ => typed_consumed_plan),
+  )
+  p2_diff_rejection_hooks(
+    legacy_consumed,
+    legacy_consumed_counts,
+    Some(_ => legacy_consumed_plan),
+  )
+  let typed_consumed_result : Result[DocumentAdmission, DocumentError] = Ok(
+    typed_consumed.admit_remote([]),
+  ) catch {
+    error => Err(error)
+  }
+  let legacy_consumed_result : Result[Unit, DocumentError] = Ok(
+    legacy_consumed.merge_remote([], []),
+  ) catch {
+    error => Err(error)
+  }
+  match typed_consumed_result {
+    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedAdmission)) => ()
+    _ => fail("typed consumed rejection changed")
+  }
+  match legacy_consumed_result {
+    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedAdmission)) => ()
+    _ => fail("legacy consumed rejection changed")
+  }
+  p2_diff_assert_rejection_counts(typed_consumed_counts, 1, 1, 0)
+  p2_diff_assert_rejection_counts(legacy_consumed_counts, 1, 1, 0)
+  p2_diff_assert_state(typed_consumed, legacy_consumed)
+  let consumed_follow_up = p2_ready_batch("p2-diff-consumed-follow-up", 1)[0]
+  p2_diff_rejection_hooks(typed_consumed, typed_consumed_counts, None)
+  p2_diff_rejection_hooks(legacy_consumed, legacy_consumed_counts, None)
+  let typed_consumed_admission = try! typed_consumed.admit_remote([
+    consumed_follow_up,
+  ])
+  p2_diff_assert_valid_admission(typed_consumed_admission, consumed_follow_up)
+  try! legacy_consumed.apply_remote(consumed_follow_up)
+  p2_diff_assert_state(typed_consumed, legacy_consumed)
+
+  let typed_limit = Document::new("p2-diff-typed-limit")
+  let legacy_limit = Document::new("p2-diff-legacy-limit")
+  let limit_incoming = p2_pending_batch("p2-diff-limit")
+  let typed_limit_counts = [0, 0, 0]
+  let legacy_limit_counts = [0, 0, 0]
+  p2_diff_rejection_hooks(typed_limit, typed_limit_counts, None)
+  p2_diff_rejection_hooks(legacy_limit, legacy_limit_counts, None)
+  let typed_limit_result : Result[DocumentAdmission, DocumentError] = Ok(
+    typed_limit.admit_remote(limit_incoming, max_pending=0),
+  ) catch {
+    error => Err(error)
+  }
+  let legacy_limit_result : Result[DocumentAdmission, DocumentError] = Ok(
+    legacy_limit.admit_remote(limit_incoming, max_pending=0),
+  ) catch {
+    error => Err(error)
+  }
+  match typed_limit_result {
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::PendingLimitExceeded(limit~, required~)
+      )
+    ) => {
+      assert_eq(limit, 0)
+      assert_eq(required, 1)
+    }
+    _ => fail("typed pending-limit rejection changed")
+  }
+  match legacy_limit_result {
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::PendingLimitExceeded(limit~, required~)
+      )
+    ) => {
+      assert_eq(limit, 0)
+      assert_eq(required, 1)
+    }
+    _ => fail("legacy pending-limit rejection changed")
+  }
+  p2_diff_assert_rejection_counts(typed_limit_counts, 1, 0, 0)
+  p2_diff_assert_rejection_counts(legacy_limit_counts, 1, 0, 0)
+  p2_diff_assert_state(typed_limit, legacy_limit)
+  let limit_follow_up = p2_ready_batch("p2-diff-limit-follow-up", 1)[0]
+  p2_diff_rejection_hooks(typed_limit, typed_limit_counts, None)
+  p2_diff_rejection_hooks(legacy_limit, legacy_limit_counts, None)
+  let typed_limit_admission = try! typed_limit.admit_remote([limit_follow_up])
+  p2_diff_assert_valid_admission(typed_limit_admission, limit_follow_up)
+  try! legacy_limit.apply_remote(limit_follow_up)
+  p2_diff_assert_state(typed_limit, legacy_limit)
+}
