@@ -27,7 +27,7 @@ fn DocumentAdmission::DocumentAdmission(
 ///|
 priv enum RemoteTargetCheck {
   Ready
-  Diverged(@branch.BranchError)
+  Diverged(error~ : @branch.BranchError, origin~ : @core.RawVersion)
   Invalid(DocumentError)
 }
 
@@ -72,7 +72,8 @@ fn Document::check_remote_targets(
               match error {
                 DocumentError::Fugue(fugue_error) =>
                   return RemoteTargetCheck::Diverged(
-                    @branch.BranchError::Fugue(fugue_error),
+                    error=@branch.BranchError::Fugue(fugue_error),
+                    origin~,
                   )
                 error => return RemoteTargetCheck::Invalid(error)
               }
@@ -96,23 +97,28 @@ fn Document::ensure_admission_targets(
   let prepared_check = self.check_remote_targets(prepared)
   let incoming_check = self.check_remote_targets(incoming)
   match (prepared_check, incoming_check) {
-    (RemoteTargetCheck::Invalid(error), _)
-    | (_, RemoteTargetCheck::Invalid(error)) => raise error
-    (RemoteTargetCheck::Diverged(_), _) | (_, RemoteTargetCheck::Diverged(_)) => {
+    (RemoteTargetCheck::Diverged(..), _)
+    | (_, RemoteTargetCheck::Diverged(..)) => {
       recover(self.get_frontier())
       let prepared_after = self.check_remote_targets(prepared)
       let incoming_after = self.check_remote_targets(incoming)
       match (prepared_after, incoming_after) {
-        (RemoteTargetCheck::Ready, RemoteTargetCheck::Ready) => true
-        (RemoteTargetCheck::Invalid(error), _)
-        | (_, RemoteTargetCheck::Invalid(error)) => raise error
-        (RemoteTargetCheck::Diverged(error), _)
-        | (_, RemoteTargetCheck::Diverged(error)) => {
-          self.mark_admission_recovery_required(self.get_frontier(), error)
+        (RemoteTargetCheck::Diverged(error~, origin~), _)
+        | (_, RemoteTargetCheck::Diverged(error~, origin~)) => {
+          self.mark_admission_recovery_required(
+            self.get_frontier(),
+            error,
+            origin,
+          )
           false
         }
+        (RemoteTargetCheck::Invalid(error), _)
+        | (_, RemoteTargetCheck::Invalid(error)) => raise error
+        (RemoteTargetCheck::Ready, RemoteTargetCheck::Ready) => true
       }
     }
+    (RemoteTargetCheck::Invalid(error), _)
+    | (_, RemoteTargetCheck::Invalid(error)) => raise error
     (RemoteTargetCheck::Ready, RemoteTargetCheck::Ready) => false
   }
 }
@@ -124,9 +130,11 @@ fn Document::mark_admission_recovery_required(
   self : Document,
   frontier : @core.Frontier,
   error : @branch.BranchError,
+  origin : @core.RawVersion,
 ) -> Unit raise DocumentError {
   self.indexed_state.invalidate()
   self.cursor = None
+  self.projection_verification = Some({ origin, error })
   match self.admission_recovery_checkout() {
     Some(checkout) => {
       let recovery_checkout = (_oplog, next_frontier) => checkout(next_frontier)

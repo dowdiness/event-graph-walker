@@ -1154,10 +1154,10 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
     projection_failure: None,
     recovery_checkout: Some(_frontier => {
       recovery_calls = recovery_calls + 1
-      if recovery_calls == 1 {
+      if recovery_calls <= 2 {
         @branch.Branch::from_tree_and_oplog(@fugue.FugueTree::new(), doc.oplog)
       } else {
-        raise @branch.BranchError::MissingOp(lv=1000)
+        @branch.Branch::checkout(doc.oplog, _frontier)
       }
     }),
   })
@@ -1193,4 +1193,70 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
     _ => fail("unresolved divergence must keep later mutations fail-closed")
   }
   assert_eq(recovery_calls, 2)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  try! doc.prepare_for_mutation()
+  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
+  assert_eq(doc.tree.to_text(), fresh.to_text())
+  assert_eq(doc.get_frontier(), fresh.get_frontier())
+}
+
+///|
+test "P2 red divergence is repaired before invalid admission rejection" {
+  let doc = Document::new("p2-invalid-with-divergence")
+  let known = try! doc.insert(0, "Y")
+  ignore(doc.to_text())
+  let known_raw = @core.RawVersion(known.agent(), known.seq())
+  let invalid_noninsert_raw = @core.RawVersion("p2-invalid-noninsert", 0)
+  let invalid_noninsert = @core.Op::delete(
+    -1,
+    [],
+    invalid_noninsert_raw.agent,
+    invalid_noninsert_raw.seq,
+    Some(@core.RawVersion("p2-invalid-target", 0)),
+  )
+  let invalid_dependent = @core.Op::insert(
+    -1,
+    [],
+    "p2-invalid-dependent",
+    0,
+    "x",
+    Some(invalid_noninsert_raw),
+    None,
+  )
+  let incoming = p2_remote_insert(
+    "p2-invalid-with-divergence-peer",
+    0,
+    [],
+    Some(known_raw),
+  )
+  doc.replace_projection_tree(@fugue.FugueTree::new())
+  let before_frontier = doc.get_frontier()
+  let before_ops = doc.get_all_ops()
+  let mut recovery_calls = 0
+  let result : Result[Bool, DocumentError] = Ok(
+    doc.ensure_admission_targets(
+      [invalid_noninsert, invalid_dependent],
+      [incoming],
+      frontier => {
+        recovery_calls = recovery_calls + 1
+        doc.recover_projection(frontier)
+      },
+    ),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::MissingOrigin(raw~)) =>
+      assert_eq(raw, invalid_noninsert_raw)
+    _ => fail("invalid admission must remain the returned error")
+  }
+  assert_eq(recovery_calls, 1)
+  assert_eq(doc.get_frontier(), before_frontier)
+  p2_assert_same_operations(doc.get_all_ops(), before_ops)
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
+  assert_eq(doc.tree.to_text(), fresh.to_text())
+  assert_eq(doc.get_frontier(), fresh.get_frontier())
 }

@@ -27,6 +27,8 @@ pub struct Document {
   priv mut cursor : InsertCursor?
   // Document-owned health for the Fugue-derived projection.
   priv mut projection_health : ProjectionHealth
+  // Target evidence required to validate a recovered tree before it becomes Ready.
+  priv mut projection_verification : ProjectionRecoveryVerification?
   // Package-local admission hooks used only by white-box boundary tests.
   priv mut admission_hooks : AdmissionBoundaryHooks?
 }
@@ -43,6 +45,7 @@ pub fn Document::new(agent_id : String) -> Document {
     indexed_state: IndexedState::new(),
     cursor: None,
     projection_health: ProjectionHealth::Ready,
+    projection_verification: None,
     admission_hooks: None,
   }
 }

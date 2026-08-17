@@ -10,6 +10,13 @@ priv enum ProjectionHealth {
 }
 
 ///|
+/// A target condition that must hold before a recovered tree becomes readable.
+priv struct ProjectionRecoveryVerification {
+  origin : @core.RawVersion
+  error : @branch.BranchError
+}
+
+///|
 /// Install a freshly checked-out tree without exposing a replacement operation
 /// outside the document package.
 fn Document::replace_projection_tree(
@@ -38,9 +45,26 @@ fn Document::recover_projection_with(
   let branch = checkout(self.oplog, frontier) catch {
     error => raise DocumentError::ProjectionRecoveryRequired(frontier~, error~)
   }
+  match self.projection_verification {
+    Some(verification) => {
+      let target_present = match
+        self.oplog.causal_graph().raw_to_lv(verification.origin) {
+        Some(lv) => branch.inner_tree().get(@fugue.Lv(lv)) is Some(_)
+        None => false
+      }
+      if !target_present {
+        raise DocumentError::ProjectionRecoveryRequired(
+          frontier~,
+          error=verification.error,
+        )
+      }
+    }
+    None => ()
+  }
   self.replace_projection_tree(branch.inner_tree())
   self.indexed_state.invalidate()
   self.cursor = None
+  self.projection_verification = None
   self.projection_health = ProjectionHealth::Ready
 }
 
