@@ -25,7 +25,11 @@ fn DocumentAdmission::DocumentAdmission(
 }
 
 ///|
+/// Stable graph-known origin requirements are distinct from current tree
+/// divergence observations: a required origin may be present now and missing
+/// in a later recovery candidate.
 priv struct RemoteTargetCheck {
+  required : Array[ProjectionRecoveryTarget]
   divergences : Array[ProjectionRecoveryTarget]
   invalid : DocumentError?
 }
@@ -60,6 +64,8 @@ priv struct AdmissionCapabilities {
 
 ///|
 /// Check remote Fugue origins without changing the pending planner or tree.
+/// Every graph-known origin enters `required`; only tree-missing origins enter
+/// `divergences`.
 fn Document::check_remote_targets(
   self : Document,
   ops : ArrayView[@core.Op],
@@ -74,6 +80,8 @@ fn Document::check_remote_targets(
       @core.Delete | @core.Undelete => planned_noninserts.add(raw)
     }
   }
+  let required : Array[ProjectionRecoveryTarget] = []
+  let required_origins : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   let divergences : Array[ProjectionRecoveryTarget] = []
   let divergence_origins : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([],
   )
@@ -82,7 +90,19 @@ fn Document::check_remote_targets(
     for origin in [op.origin_left(), op.origin_right()] {
       match origin {
         None => ()
-        Some(origin) =>
+        Some(origin) => {
+          match self.oplog.causal_graph().raw_to_lv(origin) {
+            Some(lv) =>
+              if required_origins.add_and_check(origin) {
+                required.push({
+                  origin,
+                  error: @branch.BranchError::Fugue(
+                    @fugue.FugueError::MissingItem(id=@fugue.Lv(lv)),
+                  ),
+                })
+              }
+            None => ()
+          }
           match
             self.preflight_remote_origin(
               self.oplog.causal_graph(),
@@ -103,10 +123,11 @@ fn Document::check_remote_targets(
                 error => if invalid is None { invalid = Some(error) }
               }
           }
+        }
       }
     }
   }
-  { divergences, invalid }
+  { required, divergences, invalid }
 }
 
 ///|
@@ -121,27 +142,31 @@ fn Document::ensure_admission_targets(
 ) -> Bool raise DocumentError {
   let prepared_check = self.check_remote_targets(prepared)
   let incoming_check = self.check_remote_targets(incoming)
-  let initial_targets = merge_projection_recovery_targets(
+  let initial_divergences = merge_projection_recovery_targets(
     prepared_check.divergences,
     incoming_check.divergences,
+  )
+  let initial_targets = merge_projection_recovery_targets(
+    prepared_check.required,
+    incoming_check.required,
   )
   let initial_invalid = match prepared_check.invalid {
     Some(error) => Some(error)
     None => incoming_check.invalid
   }
-  if initial_targets.length() > 0 {
+  if initial_divergences.length() > 0 {
     self.projection_verification = Some(
       ProjectionRecoveryVerification::from_targets(initial_targets),
     )
     recover(self.get_frontier())
     let prepared_after = self.check_remote_targets(prepared)
     let incoming_after = self.check_remote_targets(incoming)
-    let remaining_targets = merge_projection_recovery_targets(
+    let remaining_divergences = merge_projection_recovery_targets(
       prepared_after.divergences,
       incoming_after.divergences,
     )
-    if remaining_targets.length() > 0 {
-      let error = remaining_targets[0].error
+    if remaining_divergences.length() > 0 {
+      let error = remaining_divergences[0].error
       self.mark_admission_recovery_required(
         self.get_frontier(),
         error,

@@ -1411,3 +1411,88 @@ test "P2 red recovery retains verification after checkout failure" {
   assert_eq(doc.tree.to_text(), fresh.to_text())
   assert_eq(doc.get_frontier(), fresh.get_frontier())
 }
+
+///|
+test "P2 red recovery retains present origins across swapped missing targets" {
+  let doc = Document::new("p2-swapped-recovery-targets")
+  let first_input = p2_remote_insert("p2-swapped-origin-y1", 0, [], None)
+  let second_input = p2_remote_insert("p2-swapped-origin-y2", 0, [], None)
+  ignore(try! doc.admit_remote([first_input, second_input]))
+  ignore(doc.to_text())
+  let admitted = doc.get_all_ops()
+  let first = admitted[0]
+  let second = admitted[1]
+  let first_raw = @core.RawVersion(first.agent(), first.seq())
+  let second_raw = @core.RawVersion(second.agent(), second.seq())
+  let initial_tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  try! apply_projection(initial_tree, second, doc.oplog.causal_graph())
+  assert_true(initial_tree.get(@fugue.Lv(second.lv())) is Some(_))
+  assert_true(initial_tree.get(@fugue.Lv(first.lv())) is None)
+  doc.replace_projection_tree(initial_tree)
+  let incoming = @core.Op::insert(
+    -1,
+    [],
+    "p2-swapped-recovery-peer",
+    0,
+    "x",
+    Some(first_raw),
+    Some(second_raw),
+  )
+  let before_frontier = doc.get_frontier()
+  let partial_tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  try! apply_projection(partial_tree, first, doc.oplog.causal_graph())
+  assert_true(partial_tree.get(@fugue.Lv(first.lv())) is Some(_))
+  assert_true(partial_tree.get(@fugue.Lv(second.lv())) is None)
+  let partial_branch = @branch.Branch::from_tree_and_oplog(
+    partial_tree,
+    doc.oplog,
+  )
+  let mut recovery_calls = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => (),
+    on_commit_admission: () => (),
+    on_projection_finalization: _ => (),
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: Some(frontier => {
+      recovery_calls = recovery_calls + 1
+      if recovery_calls <= 2 {
+        partial_branch
+      } else {
+        @branch.Branch::checkout(doc.oplog, frontier)
+      }
+    }),
+  })
+  let initial_result : Result[DocumentAdmission, DocumentError] = Ok(
+    doc.admit_remote([incoming]),
+  ) catch {
+    error => Err(error)
+  }
+  match initial_result {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("initial swapped recovery must remain fail-closed")
+  }
+  assert_eq(recovery_calls, 1)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  let second_retry : Result[Unit, DocumentError] = Ok(
+    doc.prepare_for_mutation(),
+  ) catch {
+    error => Err(error)
+  }
+  match second_retry {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("present origin must remain part of recovery verification")
+  }
+  assert_eq(recovery_calls, 2)
+  assert_eq(doc.get_frontier(), before_frontier)
+  assert_true(!doc.indexed_state.is_ready())
+  assert_true(doc.cursor is None)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  try! doc.prepare_for_mutation()
+  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
+  assert_eq(doc.tree.to_text(), fresh.to_text())
+  assert_eq(doc.get_frontier(), fresh.get_frontier())
+}
