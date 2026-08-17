@@ -69,7 +69,6 @@ test "P3 pending ingress belongs to core and leaves no outer pending owner" {
   assert_eq(report.applied_operations(), 0)
   assert_eq(report.pending_operations(), 1)
   assert_eq(session.doc.inner.pending_count(), 1)
-  assert_eq(session.doc.pending_sync_records.length(), 0)
 }
 
 ///|
@@ -90,6 +89,5 @@ test "P3 parent-after drains core pending without outer replay" {
   assert_eq(second.applied_operations(), 2)
   assert_eq(second.pending_operations(), 0)
   assert_eq(receiver.sync().doc.inner.pending_count(), 0)
-  assert_eq(receiver.sync().doc.pending_sync_records.length(), 0)
   assert_eq(receiver.text(), "AB")
 }

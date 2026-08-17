@@ -36,7 +36,6 @@ fn plan_insert(
 pub(all) struct TextState {
   priv inner : @document.Document
   priv sync_limits : @sync.Limits
-  priv mut pending_sync_records : Array[StructuralOp]
   priv mut cached_version : VersionCache
 }
 
@@ -63,7 +62,6 @@ pub fn TextState::new_with_sync_limits(
   TextState::{
     inner: @document.Document::new(agent_id),
     sync_limits: limits,
-    pending_sync_records: [],
     cached_version: VersionCache::empty(),
   }
 }
