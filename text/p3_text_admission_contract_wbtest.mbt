@@ -22,6 +22,30 @@ test "P3 same-message raw duplicates canonicalize before admission" {
 }
 
 ///|
+test "P3 one message invokes one Document admission boundary" {
+  let source = try! TextState::new("p3-boundary-source")
+  try! source.insert(Pos::at(0), "A")
+  try! source.insert(Pos::at(1), "B")
+  let message = try! source.sync().export_all()
+  let receiver = try! TextState::new("p3-boundary-receiver")
+  let mut admission_calls = 0
+  let session = SyncSession::{
+    doc: receiver,
+    prepare_for_mutation_override: None,
+    admit_remote_override: Some((document, operations, max_pending) => {
+      admission_calls = admission_calls + 1
+      document.admit_remote(operations, max_pending~)
+    }),
+  }
+
+  let report = try! session.apply(message)
+
+  assert_eq(admission_calls, 1)
+  assert_eq(report.applied_operations(), 2)
+  assert_eq(report.pending_operations(), 0)
+}
+
+///|
 test "P3 complete report maps committed evidence and invalidates version cache" {
   let source = try! TextState::new("p3-complete-source")
   try! source.insert(Pos::at(0), "A")
@@ -69,6 +93,28 @@ test "P3 pending ingress belongs to core and leaves no outer pending owner" {
   assert_eq(report.applied_operations(), 0)
   assert_eq(report.pending_operations(), 1)
   assert_eq(session.doc.inner.pending_count(), 1)
+}
+
+///|
+test "P3 clear pending delegates live closure ownership to core" {
+  let receiver = try! TextState::new("p3-clear-pending")
+  let deferred = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-clear-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":1}]}",
+  )
+  ignore(try! receiver.sync().apply(deferred))
+  let before = receiver.version()
+  assert_eq(receiver.sync().pending_sync_count(), 1)
+
+  receiver.sync().clear_pending_sync()
+
+  assert_eq(receiver.sync().pending_sync_count(), 0)
+  assert_eq(receiver.version(), before)
+  let parent = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-clear-pending\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":0}]}",
+  )
+  let report = try! receiver.sync().apply(parent)
+  assert_eq(report.applied_operations(), 1)
+  assert_eq(receiver.text(), "A")
 }
 
 ///|

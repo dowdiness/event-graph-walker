@@ -17,6 +17,7 @@ test "sync admission retries recovery before duplicate-only preparation" {
         raise TextError::ProjectionRecoveryRequired
       }
     }),
+    admit_remote_override: None,
   }
   let before_version = session.current_version()
 

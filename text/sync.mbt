@@ -468,6 +468,8 @@ pub(all) struct SyncSession {
   priv doc : TextState
   // White-box seam for proving admission-guard ordering; production uses None.
   priv prepare_for_mutation_override : (() -> Unit raise TextError)?
+  // White-box seam for counting the single Text-to-Document admission call.
+  priv admit_remote_override : ((@document.Document, Array[@core.Op], Int) -> @document.DocumentAdmission raise @document.DocumentError)?
 }
 
 ///|
@@ -888,6 +890,18 @@ fn SyncSession::prepare_for_admission(
 }
 
 ///|
+fn SyncSession::admit_remote(
+  self : SyncSession,
+  operations : Array[@core.Op],
+  max_pending : Int,
+) -> @document.DocumentAdmission raise @document.DocumentError {
+  match self.admit_remote_override {
+    Some(admit) => admit(self.doc.inner, operations, max_pending)
+    None => self.doc.inner.admit_remote(operations, max_pending~)
+  }
+}
+
+///|
 /// Apply one canonical message through the Document-owned authority boundary.
 pub fn SyncSession::apply_with_limits(
   self : SyncSession,
@@ -898,9 +912,9 @@ pub fn SyncSession::apply_with_limits(
   map_sync_failure(fn() raise @sync.Failure {
     validate_message_limits(message, limits)
   })
-  let admission = self.doc.inner.admit_remote(
+  let admission = self.admit_remote(
     message.operations.copy(),
-    max_pending=limits.max_pending_operations(),
+    limits.max_pending_operations(),
   ) catch {
     error => raise TextError::from_document_error(error, () => self.doc.len())
   }
