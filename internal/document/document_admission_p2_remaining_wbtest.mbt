@@ -30,7 +30,6 @@ struct P2DocumentSnapshot {
   tree_items : Array[P2TreeItemSnapshot]
   pending : Bool
   cache : P2CacheSnapshot
-  cursor : (Int, Int, Bool)?
 }
 
 ///|
@@ -80,10 +79,6 @@ fn p2_snapshot_document(doc : Document) -> P2DocumentSnapshot raise {
     tree_items: p2_tree_snapshot(doc),
     pending: doc.oplog.has_pending(),
     cache: p2_cache_snapshot(doc),
-    cursor: match doc.cursor {
-      Some(cursor) => Some((cursor.next_position, cursor.lv, cursor.at_end))
-      None => None
-    },
   }
 }
 
@@ -148,15 +143,7 @@ fn p2_assert_document_snapshot(
   p2_assert_same_tree_items(p2_tree_snapshot(doc), before.tree_items)
   assert_eq(doc.oplog.has_pending(), before.pending)
   p2_assert_cache_snapshot(p2_cache_snapshot(doc), before.cache)
-  match (doc.cursor, before.cursor) {
-    (None, None) => ()
-    (Some(actual), Some(expected)) => {
-      assert_eq(actual.next_position, expected.0)
-      assert_eq(actual.lv, expected.1)
-      assert_eq(actual.at_end, expected.2)
-    }
-    _ => fail("cursor changed during atomic rejection")
-  }
+  assert_true(doc.cursor is None)
 }
 
 ///|
@@ -708,8 +695,23 @@ test "P2 red apply_remote remains compatible with one-op admission" {
   let remote = try! source.insert(0, "R")
   let legacy = Document::new("p2-compat-legacy")
   let batch = Document::new("p2-compat-batch")
+  let mut prepare_count = 0
+  let mut commit_count = 0
+  let mut projection_count = 0
+  legacy.set_admission_hooks({
+    on_prepare_remote: () => prepare_count = prepare_count + 1,
+    on_commit_admission: () => commit_count = commit_count + 1,
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
+  })
 
   try! legacy.apply_remote(remote)
+  assert_eq(prepare_count, 1)
+  assert_eq(commit_count, 1)
+  assert_eq(projection_count, 1)
   let admission = try! batch.admit_remote([remote])
   match admission.outcome {
     @oplog.AdmissionOutcome::Complete(receipt) =>
@@ -723,6 +725,107 @@ test "P2 red apply_remote remains compatible with one-op admission" {
 }
 
 ///|
+test "P2 wrapper apply_remote translates partial admission" {
+  let doc = Document::new("p2-wrapper-partial")
+  let incoming = p2_ready_batch("p2-wrapper-partial-peer", 1)[0]
+  let mut prepare_count = 0
+  let mut commit_count = 0
+  let mut projection_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => prepare_count = prepare_count + 1,
+    on_commit_admission: () => commit_count = commit_count + 1,
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
+    commit_failure: Some(_ => {
+      Some(@causal_graph.CausalGraphError::MissingParent(lv=-204))
+    }),
+    projection_failure: None,
+    recovery_checkout: None,
+  })
+
+  let result : Result[Unit, DocumentError] = Ok(doc.apply_remote(incoming)) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(
+      DocumentError::OpLog(
+        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
+      )
+    ) => {
+      assert_eq(committed.length(), 0)
+      match error {
+        @causal_graph.CausalGraphError::MissingParent(lv~) =>
+          assert_eq(lv, -204)
+        _ => fail("legacy wrapper must preserve the partial cause")
+      }
+    }
+    _ => fail("apply_remote must translate a partial typed outcome")
+  }
+  assert_eq(prepare_count, 1)
+  assert_eq(commit_count, 1)
+  assert_eq(projection_count, 0)
+  assert_true(doc.oplog.has_pending())
+  assert_eq(doc.get_all_ops().length(), 0)
+}
+
+///|
+test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
+  let doc = Document::new("p2-wrapper-partial-recovery")
+  let agent = "p2-wrapper-partial-recovery-peer"
+  let incoming = p2_ready_batch(agent, 2)
+  let remote_frontier = [@core.RawVersion(agent, 1)]
+  let mut prepare_count = 0
+  let mut commit_count = 0
+  let mut projection_count = 0
+  doc.set_admission_hooks({
+    on_prepare_remote: () => prepare_count = prepare_count + 1,
+    on_commit_admission: () => commit_count = commit_count + 1,
+    on_projection_finalization: _ => projection_count = projection_count + 1,
+    prepare_override: None,
+    commit_failure: Some(op => {
+      if op.seq() == 1 {
+        Some(@causal_graph.CausalGraphError::MissingParent(lv=-205))
+      } else {
+        None
+      }
+    }),
+    projection_failure: Some(_ => {
+      Some(
+        DocumentError::Fugue(@fugue.FugueError::MissingItem(id=@fugue.Lv(997))),
+      )
+    }),
+    recovery_checkout: Some(_frontier => {
+      raise @branch.BranchError::MissingOp(lv=1001)
+    }),
+  })
+
+  let result : Result[Unit, DocumentError] = Ok(
+    doc.merge_remote(incoming, remote_frontier),
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::ProjectionRecoveryRequired(frontier~, error~)) => {
+      assert_eq(frontier, doc.get_frontier())
+      match error {
+        @branch.BranchError::MissingOp(lv~) => assert_eq(lv, 1001)
+        _ => fail("recovery failure must retain its branch cause")
+      }
+    }
+    Err(DocumentError::OpLog(@oplog.OpLogError::PartialRemoteAdmission(..))) =>
+      fail("recovery failure must take priority over partial legacy error")
+    _ => fail("merge wrapper must expose typed recovery failure")
+  }
+  assert_eq(prepare_count, 1)
+  assert_eq(commit_count, 1)
+  assert_eq(projection_count, 1)
+  assert_eq(doc.oplog.op_count(), 1)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  assert_true(!doc.indexed_state.is_ready())
+  assert_true(doc.cursor is None)
+}
+
+///|
 test "P2 red merge_remote keeps closure validation while batch admission accepts incomplete input" {
   let source = Document::new("p2-merge-source")
   ignore(try! source.insert(0, "a"))
@@ -731,7 +834,24 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
   let remote_frontier = try! source.get_frontier_raw()
 
   let merged = Document::new("p2-merge-legacy")
+  let mut merged_prepare_count = 0
+  let mut merged_commit_count = 0
+  let mut merged_projection_count = 0
+  merged.set_admission_hooks({
+    on_prepare_remote: () => merged_prepare_count = merged_prepare_count + 1,
+    on_commit_admission: () => merged_commit_count = merged_commit_count + 1,
+    on_projection_finalization: _ => {
+      merged_projection_count = merged_projection_count + 1
+    },
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
+  })
   try! merged.merge_remote(remote_ops, remote_frontier)
+  assert_eq(merged_prepare_count, 1)
+  assert_eq(merged_commit_count, 1)
+  assert_eq(merged_projection_count, 1)
   let batched = Document::new("p2-merge-batch")
   ignore(try! batched.admit_remote(remote_ops))
   assert_eq(merged.to_text(), batched.to_text())
@@ -739,6 +859,20 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
 
   let incomplete = Document::new("p2-merge-incomplete")
   let second_only = [remote_ops[1]]
+  let mut invalid_prepare_count = 0
+  let mut invalid_commit_count = 0
+  let mut invalid_projection_count = 0
+  incomplete.set_admission_hooks({
+    on_prepare_remote: () => invalid_prepare_count = invalid_prepare_count + 1,
+    on_commit_admission: () => invalid_commit_count = invalid_commit_count + 1,
+    on_projection_finalization: _ => {
+      invalid_projection_count = invalid_projection_count + 1
+    },
+    prepare_override: None,
+    commit_failure: None,
+    projection_failure: None,
+    recovery_checkout: None,
+  })
   let closure_result : Result[Unit, DocumentError] = Ok(
     incomplete.merge_remote(second_only, remote_frontier),
   ) catch {
@@ -748,6 +882,9 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
     Err(DocumentError::OpLog(@oplog.OpLogError::MissingRemoteParent(..))) => ()
     _ => fail("merge_remote must retain complete-frontier closure validation")
   }
+  assert_eq(invalid_prepare_count, 0)
+  assert_eq(invalid_commit_count, 0)
+  assert_eq(invalid_projection_count, 0)
   assert_eq(incomplete.get_all_ops().length(), 0)
   assert_true(!incomplete.oplog.has_pending())
 

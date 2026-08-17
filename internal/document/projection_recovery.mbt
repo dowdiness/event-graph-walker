@@ -95,23 +95,6 @@ fn Document::ensure_projection_ready_for_admission(
 }
 
 ///|
-/// Recover the derived projection before preserving the original failure.
-fn Document::recover_after_projection_failure(
-  self : Document,
-  error : DocumentError,
-) -> Unit raise DocumentError {
-  let frontier = self.oplog.get_frontier()
-  match self.admission_recovery_checkout() {
-    Some(checkout) =>
-      self.recover_projection_with(frontier, (_oplog, frontier) => {
-        checkout(frontier)
-      })
-    None => self.recover_projection(frontier)
-  }
-  raise error
-}
-
-///|
 /// Derived readers retain their non-fallible signatures but never expose a
 /// projection that failed canonical recovery.
 fn Document::ensure_projection_ready_for_read(self : Document) -> Unit {

@@ -185,6 +185,9 @@ fn Document::admit_remote_with(
   capabilities : AdmissionCapabilities,
 ) -> DocumentAdmission raise DocumentError {
   let entry_recovered = self.ensure_projection_ready_for_admission()
+  // Remote ingress ends the local sequential-insert fast path at entry,
+  // including pending-only, duplicate-only, and pre-commit rejection paths.
+  self.cursor = None
   validate_remote_ops(incoming[:])
   self.observe_prepare_remote()
   let prepared = (capabilities.prepare)(incoming, max_pending) catch {
@@ -256,6 +259,46 @@ fn Document::admit_remote_with(
       }
       DocumentAdmission::DocumentAdmission(outcome, status)
     }
+  }
+}
+
+///|
+/// Return the authority frontier carried by either typed outcome variant.
+fn DocumentAdmission::frontier_after(
+  self : DocumentAdmission,
+) -> @core.Frontier {
+  match self.outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) => receipt.frontier_after()
+    @oplog.AdmissionOutcome::Partial(receipt~, ..) => receipt.frontier_after()
+  }
+}
+
+///|
+/// Translate typed admission evidence for the legacy Unit-returning wrappers.
+/// Recovery failure takes precedence over a partial authority outcome because
+/// the committed Document is not safe for ordinary derived use until repaired.
+fn DocumentAdmission::raise_legacy_remote_error(
+  self : DocumentAdmission,
+) -> Unit raise DocumentError {
+  match self.projection {
+    ProjectionStatus::RecoveryRequired(error~) =>
+      raise DocumentError::ProjectionRecoveryRequired(
+        frontier=self.frontier_after(),
+        error~,
+      )
+    ProjectionStatus::Skipped
+    | ProjectionStatus::Projected
+    | ProjectionStatus::Recovered =>
+      match self.outcome {
+        @oplog.AdmissionOutcome::Complete(_) => ()
+        @oplog.AdmissionOutcome::Partial(receipt~, error~) =>
+          raise DocumentError::OpLog(
+            @oplog.OpLogError::PartialRemoteAdmission(
+              committed=receipt.committed().to_owned(),
+              error~,
+            ),
+          )
+      }
   }
 }
 
