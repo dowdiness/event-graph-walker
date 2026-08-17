@@ -75,7 +75,7 @@ pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::op_count(Self) -> Int
 pub fn OpLog::pending_count(Self) -> Int
 pub fn OpLog::plan_remote(Self, Array[@core.Op]) -> Array[@core.Op] raise OpLogError
-pub fn OpLog::prepare_remote(Self, Array[@core.Op], max_pending? : Int) -> PreparedAdmission raise OpLogError
+pub fn OpLog::prepare_remote(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> PreparedAdmission raise OpLogError
 pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
 pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]

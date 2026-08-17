@@ -32,9 +32,13 @@ test "P3 one message invokes one Document admission boundary" {
   let session = SyncSession::{
     doc: receiver,
     prepare_for_mutation_override: None,
-    admit_remote_override: Some((document, operations, max_pending) => {
+    admit_remote_override: Some((
+      document,
+      operations,
+      max_pending_after_complete,
+    ) => {
       admission_calls = admission_calls + 1
-      document.admit_remote(operations, max_pending~)
+      document.admit_remote(operations, max_pending_after_complete~)
     }),
   }
 

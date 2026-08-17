@@ -56,7 +56,7 @@ fn merge_projection_recovery_targets(
 
 ///|
 priv struct AdmissionCapabilities {
-  prepare : (Array[@core.Op], Int?) -> @oplog.PreparedAdmission raise @oplog.OpLogError
+  prepare : (Array[@core.Op], Int?, Int?) -> @oplog.PreparedAdmission raise @oplog.OpLogError
   commit : (@oplog.PreparedAdmission) -> @oplog.AdmissionOutcome raise @oplog.OpLogError
   project : (ArrayView[@core.Op]) -> Unit raise DocumentError
   recover : (@core.Frontier) -> Unit raise DocumentError
@@ -260,6 +260,7 @@ fn Document::admit_remote_with(
   self : Document,
   incoming : Array[@core.Op],
   max_pending : Int?,
+  max_pending_after_complete : Int?,
   capabilities : AdmissionCapabilities,
 ) -> DocumentAdmission raise DocumentError {
   let entry_recovered = self.ensure_projection_ready_for_admission()
@@ -268,7 +269,9 @@ fn Document::admit_remote_with(
   self.cursor = None
   validate_remote_ops(incoming[:])
   self.observe_prepare_remote()
-  let prepared = (capabilities.prepare)(incoming, max_pending) catch {
+  let prepared = (capabilities.prepare)(
+    incoming, max_pending, max_pending_after_complete,
+  ) catch {
     error => raise DocumentError::OpLog(error)
   }
   let preflight_recovered = self.ensure_admission_targets(
@@ -387,10 +390,13 @@ pub fn Document::admit_remote(
   self : Document,
   incoming : Array[@core.Op],
   max_pending? : Int,
+  max_pending_after_complete? : Int,
 ) -> DocumentAdmission raise DocumentError {
-  self.admit_remote_with(incoming, max_pending, {
-    prepare: (operations, max_pending) => {
-      self.prepare_remote_for_admission(operations, max_pending)
+  self.admit_remote_with(incoming, max_pending, max_pending_after_complete, {
+    prepare: (operations, max_pending, max_pending_after_complete) => {
+      self.prepare_remote_for_admission(
+        operations, max_pending, max_pending_after_complete,
+      )
     },
     commit: prepared => self.commit_admission_for_document(prepared),
     project: committed => self.project_remote_ops(committed),

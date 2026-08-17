@@ -96,13 +96,23 @@ fn Document::prepare_remote_for_admission(
   self : Document,
   incoming : Array[@core.Op],
   max_pending : Int?,
+  max_pending_after_complete : Int?,
 ) -> @oplog.PreparedAdmission raise @oplog.OpLogError {
   match self.admission_prepare_override() {
     Some(replacement) => replacement(incoming)
     None =>
-      match max_pending {
-        Some(limit) => self.oplog.prepare_remote(incoming, max_pending=limit)
-        None => self.oplog.prepare_remote(incoming)
+      match (max_pending, max_pending_after_complete) {
+        (Some(during), Some(after)) =>
+          self.oplog.prepare_remote(
+            incoming,
+            max_pending=during,
+            max_pending_after_complete=after,
+          )
+        (Some(during), None) =>
+          self.oplog.prepare_remote(incoming, max_pending=during)
+        (None, Some(after)) =>
+          self.oplog.prepare_remote(incoming, max_pending_after_complete=after)
+        (None, None) => self.oplog.prepare_remote(incoming)
       }
   }
 }

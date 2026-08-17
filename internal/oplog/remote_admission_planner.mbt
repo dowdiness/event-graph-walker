@@ -83,6 +83,7 @@ pub struct PreparedAdmission {
   priv new_staged_count : Int
   priv required_pending : Int
   priv max_pending : Int?
+  priv max_pending_after_complete : Int?
   priv already_admitted : Array[@core.RawVersion]
   priv duplicate_of_pending : Array[@core.RawVersion]
   // Prospective provenance for retained identities affected by this plan.
@@ -977,6 +978,7 @@ fn RemoteAdmissionPlanner::prepare_fast(
     new_staged_count: 0,
     required_pending: 0,
     max_pending: None,
+    max_pending_after_complete: None,
     already_admitted: [],
     duplicate_of_pending: [],
     retained_pending: [],
@@ -1241,6 +1243,7 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
     new_staged_count: 0,
     required_pending: 0,
     max_pending: None,
+    max_pending_after_complete: None,
     already_admitted: [],
     duplicate_of_pending: [],
     retained_pending: [],
@@ -1322,6 +1325,18 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
           required=required_pending,
         )
       }
+    None => ()
+  }
+  match plan.max_pending_after_complete {
+    Some(limit) => {
+      let complete_pending_after = plan.remaining_raws(self).length()
+      if complete_pending_after > limit {
+        return RemoteAdmissionBeginResult::PendingLimit(
+          limit~,
+          required=complete_pending_after,
+        )
+      }
+    }
     None => ()
   }
   match plan.storage {
@@ -1747,11 +1762,12 @@ fn PreparedAdmission::with_pending_evidence(
 
 ///|
 /// Attach generation-bound prospective evidence and enforce the optional hard
-/// pending limit without mutating planner state.
+/// pending limits without mutating planner state.
 fn PreparedAdmission::with_prospective(
   self : PreparedAdmission,
   planner : RemoteAdmissionPlanner,
   max_pending : Int?,
+  max_pending_after_complete : Int?,
   already_admitted : Array[@core.RawVersion],
   duplicate_of_pending : Array[@core.RawVersion],
 ) -> PreparedAdmission raise OpLogError {
@@ -1766,6 +1782,18 @@ fn PreparedAdmission::with_prospective(
       }
     None => ()
   }
+  match max_pending_after_complete {
+    Some(limit) => {
+      let complete_pending_after = prepared.remaining_raws(planner).length()
+      if complete_pending_after > limit {
+        raise OpLogError::PendingLimitExceeded(
+          limit~,
+          required=complete_pending_after,
+        )
+      }
+    }
+    None => ()
+  }
   let retained_pending = prepared.retained_pending.copy()
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet(
     retained_pending,
@@ -1778,6 +1806,7 @@ fn PreparedAdmission::with_prospective(
   {
     ..prepared,
     max_pending,
+    max_pending_after_complete,
     already_admitted: already_admitted.copy(),
     duplicate_of_pending: duplicate_of_pending.copy(),
     retained_pending,

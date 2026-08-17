@@ -154,6 +154,65 @@ test "P3 discarded pending redelivery preserves delivery evidence" {
 }
 
 ///|
+test "P3 complete-after limit accepts a ready operation at zero" {
+  let receiver = OpLog("p3-after-ready-zero")
+  let ready = p0_insert("p3-after-ready-zero-peer", 0, [], "A", None)
+  let plan = try! receiver.prepare_remote([ready], max_pending_after_complete=0)
+  let outcome = try! receiver.commit_admission(plan)
+  match outcome {
+    AdmissionOutcome::Complete(receipt) => {
+      assert_eq(receipt.committed().length(), 1)
+      assert_eq(receipt.pending_after_count(), 0)
+    }
+    AdmissionOutcome::Partial(..) => fail("ready operation must complete")
+  }
+}
+
+///|
+test "P3 complete-after limit accepts mixed ready and unresolved batch" {
+  let receiver = OpLog("p3-after-mixed")
+  let ready = p0_insert("p3-after-mixed-ready", 0, [], "A", None)
+  let unresolved = p0_insert(
+    "p3-after-mixed-unresolved",
+    0,
+    [p0_raw("p3-after-mixed-missing", 0)],
+    "B",
+    None,
+  )
+  let plan = try! receiver.prepare_remote(
+    [ready, unresolved],
+    max_pending_after_complete=1,
+  )
+  let outcome = try! receiver.commit_admission(plan)
+  match outcome {
+    AdmissionOutcome::Complete(receipt) => {
+      assert_eq(receipt.committed().length(), 1)
+      assert_eq(receipt.pending_after_count(), 1)
+    }
+    AdmissionOutcome::Partial(..) => fail("mixed batch must complete")
+  }
+}
+
+///|
+test "P3 complete-after limit accepts all-ready batch over the limit" {
+  let receiver = OpLog("p3-after-all-ready")
+  let first = p0_insert("p3-after-all-ready-first", 0, [], "A", None)
+  let second = p0_insert("p3-after-all-ready-second", 0, [], "B", None)
+  let plan = try! receiver.prepare_remote(
+    [first, second],
+    max_pending_after_complete=1,
+  )
+  let outcome = try! receiver.commit_admission(plan)
+  match outcome {
+    AdmissionOutcome::Complete(receipt) => {
+      assert_eq(receipt.committed().length(), 2)
+      assert_eq(receipt.pending_after_count(), 0)
+    }
+    AdmissionOutcome::Partial(..) => fail("all-ready batch must complete")
+  }
+}
+
+///|
 test "P3 core admission does not count repeated raw identities as redelivery" {
   let receiver = OpLog("p3-core-raw-duplicate")
   let operation = p0_insert("p3-core-raw-duplicate-peer", 0, [], "A", None)

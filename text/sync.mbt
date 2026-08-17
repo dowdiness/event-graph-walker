@@ -893,11 +893,11 @@ fn SyncSession::prepare_for_admission(
 fn SyncSession::admit_remote(
   self : SyncSession,
   operations : Array[@core.Op],
-  max_pending : Int,
+  max_pending_after_complete : Int,
 ) -> @document.DocumentAdmission raise @document.DocumentError {
   match self.admit_remote_override {
-    Some(admit) => admit(self.doc.inner, operations, max_pending)
-    None => self.doc.inner.admit_remote(operations, max_pending~)
+    Some(admit) => admit(self.doc.inner, operations, max_pending_after_complete)
+    None => self.doc.inner.admit_remote(operations, max_pending_after_complete~)
   }
 }
 

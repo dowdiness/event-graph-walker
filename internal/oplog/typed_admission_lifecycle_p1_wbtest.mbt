@@ -216,6 +216,7 @@ test "P1 typed begin rechecks the hard pending limit" {
     new_staged_count: 1,
     required_pending: 1,
     max_pending: Some(0),
+    max_pending_after_complete: None,
     already_admitted: [],
     duplicate_of_pending: [],
     retained_pending: [],

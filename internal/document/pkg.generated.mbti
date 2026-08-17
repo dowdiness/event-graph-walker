@@ -36,7 +36,7 @@ pub struct Document {
   agent_id : String
   // private fields
 }
-pub fn Document::admit_remote(Self, Array[@core.Op], max_pending? : Int) -> DocumentAdmission raise DocumentError
+pub fn Document::admit_remote(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentAdmission raise DocumentError
 pub fn Document::agent_id(Self) -> String
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
