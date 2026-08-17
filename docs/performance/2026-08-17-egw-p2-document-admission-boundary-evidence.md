@@ -1,6 +1,6 @@
 # P2.3 Document admission boundary benchmark evidence
 
-This records the benchmark run for the P2.3 document admission boundary at source commit `22d01f8f75fdbd11230a3418934813d4d3e0cc00`, based on `origin/main` `0e4ec9347c4655449cf3dd5a2a543f1d9cfe335b`.
+This records the benchmark run for the P2.3 document admission boundary at source commit `f394d7048a5f8fd195519fe435841b54748a8967`, based on `origin/main` `0e4ec9347c4655449cf3dd5a2a543f1d9cfe335b`.
 
 ## Commands
 
@@ -14,7 +14,7 @@ Both targets ran the four benchmark cases (`complete`, `duplicate-only`, `pendin
 The raw JSON SHA-256 is:
 
 ```text
-ce526dc7cd8b60fbd746cce41905ed94c89689e7350fe6bd41d2567e881471a3
+417a321a0d57ffa46c82bc9a4a34c96e6c782ff6444d359dbeb7309f7b5d4be0
 ```
 
 ## Timing scope
@@ -25,10 +25,10 @@ A representative wasm-gc `M=1000` boundary measurement from this run was:
 
 | Case | `M × apply_remote` | `1 × admit_remote` | Difference |
 | --- | ---: | ---: | ---: |
-| complete | 5597.146 µs | 4798.124 µs | 14.3% lower |
-| duplicate-only | 2137.610 µs | 872.802 µs | 59.2% lower |
-| pending-only | 3137.263 µs | 3225.972 µs | 2.8% higher in this run |
-| partial | 2554.683 µs | 3188.205 µs | not directly comparable |
+| complete | 6492.618 µs | 3878.004 µs | 40.3% lower |
+| duplicate-only | 1723.264 µs | 1158.404 µs | 32.8% lower |
+| pending-only | 3569.129 µs | 2117.984 µs | 40.7% lower |
+| partial | 2323.779 µs | 2598.273 µs | not directly comparable |
 
 Partial is intentionally not a same-workload speed comparison: the per-operation lane stops at the first error and leaves one pending operation, while the batch lane owns the full pending suffix. Its lifecycle and state assertions remain evidence of the two intended ownership paths.
 
