@@ -49,6 +49,7 @@ test "P1 receipt owns defensive identity and operation snapshots" {
     pending_staged_source,
     discarded_pending_source,
     discarded_staged_source,
+    0,
     4,
     2,
     @core.Frontier::from_array([1]),

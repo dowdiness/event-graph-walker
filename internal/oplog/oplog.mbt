@@ -306,6 +306,18 @@ pub fn OpLog::has_pending(self : OpLog) -> Bool {
 }
 
 ///|
+/// Return the live canonical pending membership count.
+pub fn OpLog::pending_count(self : OpLog) -> Int {
+  self.planner.pending_count()
+}
+
+///|
+/// Clear all canonical pending membership without touching authority state.
+pub fn OpLog::clear_pending(self : OpLog) -> Unit {
+  self.planner.clear_pending()
+}
+
+///|
 /// Classify duplicate delivery evidence without treating it as terminal
 /// ownership. The resulting arrays are unique and preserve incoming order.
 fn OpLog::remote_admission_duplicate_evidence(

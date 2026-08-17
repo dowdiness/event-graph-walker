@@ -1649,6 +1649,23 @@ fn RemoteAdmissionPlanner::pending_count(self : RemoteAdmissionPlanner) -> Int {
 }
 
 ///|
+/// Clear every live pending node and all planner indexes in one generation
+/// transition. An empty planner is intentionally left untouched.
+fn RemoteAdmissionPlanner::clear_pending(self : RemoteAdmissionPlanner) -> Unit {
+  if self.pending.is_empty() {
+    return
+  }
+  self.pending = Map::default()
+  self.pending_order = []
+  self.waiters = Map::default()
+  self.ready = @priority_queue.PriorityQueue::default()
+  self.stale_order_tombstones = 0
+  self.stale_waiter_refs = 0
+  self.stale_ready_refs = 0
+  self.generation += 1
+}
+
+///|
 /// Count staged identities without materializing their RawVersion array.
 fn PreparedAdmission::staged_count(self : PreparedAdmission) -> Int {
   match self.storage {
