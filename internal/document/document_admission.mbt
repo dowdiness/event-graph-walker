@@ -25,10 +25,29 @@ fn DocumentAdmission::DocumentAdmission(
 }
 
 ///|
-priv enum RemoteTargetCheck {
-  Ready
-  Diverged(error~ : @branch.BranchError, origin~ : @core.RawVersion)
-  Invalid(DocumentError)
+priv struct RemoteTargetCheck {
+  divergences : Array[ProjectionRecoveryTarget]
+  invalid : DocumentError?
+}
+
+///|
+/// Merge target evidence from the prepared and incoming views without exposing
+/// a caller-owned array to the recovery state.
+fn merge_projection_recovery_targets(
+  prepared : Array[ProjectionRecoveryTarget],
+  incoming : Array[ProjectionRecoveryTarget],
+) -> Array[ProjectionRecoveryTarget] {
+  let targets = prepared.copy()
+  let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  for target in targets {
+    ignore(seen.add_and_check(target.origin))
+  }
+  for target in incoming {
+    if seen.add_and_check(target.origin) {
+      targets.push(target)
+    }
+  }
+  targets
 }
 
 ///|
@@ -55,6 +74,10 @@ fn Document::check_remote_targets(
       @core.Delete | @core.Undelete => planned_noninserts.add(raw)
     }
   }
+  let divergences : Array[ProjectionRecoveryTarget] = []
+  let divergence_origins : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([],
+  )
+  let mut invalid : DocumentError? = None
   for op in ops {
     for origin in [op.origin_left(), op.origin_right()] {
       match origin {
@@ -71,17 +94,19 @@ fn Document::check_remote_targets(
             Some(error) =>
               match error {
                 DocumentError::Fugue(fugue_error) =>
-                  return RemoteTargetCheck::Diverged(
-                    error=@branch.BranchError::Fugue(fugue_error),
-                    origin~,
-                  )
-                error => return RemoteTargetCheck::Invalid(error)
+                  if divergence_origins.add_and_check(origin) {
+                    divergences.push({
+                      origin,
+                      error: @branch.BranchError::Fugue(fugue_error),
+                    })
+                  }
+                error => if invalid is None { invalid = Some(error) }
               }
           }
       }
     }
   }
-  RemoteTargetCheck::Ready
+  { divergences, invalid }
 }
 
 ///|
@@ -96,30 +121,48 @@ fn Document::ensure_admission_targets(
 ) -> Bool raise DocumentError {
   let prepared_check = self.check_remote_targets(prepared)
   let incoming_check = self.check_remote_targets(incoming)
-  match (prepared_check, incoming_check) {
-    (RemoteTargetCheck::Diverged(..), _)
-    | (_, RemoteTargetCheck::Diverged(..)) => {
-      recover(self.get_frontier())
-      let prepared_after = self.check_remote_targets(prepared)
-      let incoming_after = self.check_remote_targets(incoming)
-      match (prepared_after, incoming_after) {
-        (RemoteTargetCheck::Diverged(error~, origin~), _)
-        | (_, RemoteTargetCheck::Diverged(error~, origin~)) => {
-          self.mark_admission_recovery_required(
-            self.get_frontier(),
-            error,
-            origin,
-          )
-          false
-        }
-        (RemoteTargetCheck::Invalid(error), _)
-        | (_, RemoteTargetCheck::Invalid(error)) => raise error
-        (RemoteTargetCheck::Ready, RemoteTargetCheck::Ready) => true
+  let initial_targets = merge_projection_recovery_targets(
+    prepared_check.divergences,
+    incoming_check.divergences,
+  )
+  let initial_invalid = match prepared_check.invalid {
+    Some(error) => Some(error)
+    None => incoming_check.invalid
+  }
+  if initial_targets.length() > 0 {
+    self.projection_verification = Some(
+      ProjectionRecoveryVerification::from_targets(initial_targets),
+    )
+    recover(self.get_frontier())
+    let prepared_after = self.check_remote_targets(prepared)
+    let incoming_after = self.check_remote_targets(incoming)
+    let remaining_targets = merge_projection_recovery_targets(
+      prepared_after.divergences,
+      incoming_after.divergences,
+    )
+    if remaining_targets.length() > 0 {
+      let error = remaining_targets[0].error
+      self.mark_admission_recovery_required(
+        self.get_frontier(),
+        error,
+        initial_targets,
+      )
+      false
+    } else {
+      let after_invalid = match prepared_after.invalid {
+        Some(error) => Some(error)
+        None => incoming_after.invalid
+      }
+      match after_invalid {
+        Some(error) => raise error
+        None => true
       }
     }
-    (RemoteTargetCheck::Invalid(error), _)
-    | (_, RemoteTargetCheck::Invalid(error)) => raise error
-    (RemoteTargetCheck::Ready, RemoteTargetCheck::Ready) => false
+  } else {
+    match initial_invalid {
+      Some(error) => raise error
+      None => false
+    }
   }
 }
 
@@ -130,11 +173,13 @@ fn Document::mark_admission_recovery_required(
   self : Document,
   frontier : @core.Frontier,
   error : @branch.BranchError,
-  origin : @core.RawVersion,
+  targets : Array[ProjectionRecoveryTarget],
 ) -> Unit raise DocumentError {
   self.indexed_state.invalidate()
   self.cursor = None
-  self.projection_verification = Some({ origin, error })
+  self.projection_verification = Some(
+    ProjectionRecoveryVerification::from_targets(targets),
+  )
   match self.admission_recovery_checkout() {
     Some(checkout) => {
       let recovery_checkout = (_oplog, next_frontier) => checkout(next_frontier)

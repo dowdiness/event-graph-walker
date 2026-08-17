@@ -1260,3 +1260,154 @@ test "P2 red divergence is repaired before invalid admission rejection" {
   assert_eq(doc.tree.to_text(), fresh.to_text())
   assert_eq(doc.get_frontier(), fresh.get_frontier())
 }
+
+///|
+test "P2 red recovery retains all missing target verification" {
+  let doc = Document::new("p2-multiple-recovery-targets")
+  let first = try! doc.insert(0, "Y1")
+  let second = try! doc.insert(1, "Y2")
+  ignore(doc.to_text())
+  let first_raw = @core.RawVersion(first.agent(), first.seq())
+  let second_raw = @core.RawVersion(second.agent(), second.seq())
+  let incoming = @core.Op::insert(
+    -1,
+    [],
+    "p2-multiple-recovery-targets-peer",
+    0,
+    "x",
+    Some(first_raw),
+    Some(second_raw),
+  )
+  doc.replace_projection_tree(@fugue.FugueTree::new())
+  let before_frontier = doc.get_frontier()
+  let mut recovery_calls = 0
+  let partial_tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  try! apply_projection(partial_tree, first, doc.oplog.causal_graph())
+  let partial_branch = @branch.Branch::from_tree_and_oplog(
+    partial_tree,
+    doc.oplog,
+  )
+  let result : Result[DocumentAdmission, DocumentError] = Ok(
+    {
+      doc.set_admission_hooks({
+        on_prepare_remote: () => (),
+        on_commit_admission: () => (),
+        on_projection_finalization: _ => (),
+        prepare_override: None,
+        commit_failure: None,
+        projection_failure: None,
+        recovery_checkout: Some(frontier => {
+          recovery_calls = recovery_calls + 1
+          if recovery_calls == 1 {
+            @branch.Branch::from_tree_and_oplog(
+              @fugue.FugueTree::new(),
+              doc.oplog,
+            )
+          } else if recovery_calls == 2 {
+            partial_branch
+          } else {
+            @branch.Branch::checkout(doc.oplog, frontier)
+          }
+        }),
+      })
+      doc.admit_remote([incoming])
+    },
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("initial incomplete recovery must remain fail-closed")
+  }
+  assert_eq(recovery_calls, 1)
+  let second_retry : Result[Unit, DocumentError] = Ok(
+    doc.prepare_for_mutation(),
+  ) catch {
+    error => Err(error)
+  }
+  match second_retry {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("one-target recovery must not hide the second divergence")
+  }
+  assert_eq(recovery_calls, 2)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  try! doc.prepare_for_mutation()
+  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
+  assert_eq(doc.tree.to_text(), fresh.to_text())
+  assert_eq(doc.get_frontier(), fresh.get_frontier())
+}
+
+///|
+test "P2 red recovery retains verification after checkout failure" {
+  let doc = Document::new("p2-recovery-failure-verification")
+  let known = try! doc.insert(0, "Y")
+  ignore(doc.to_text())
+  let known_raw = @core.RawVersion(known.agent(), known.seq())
+  let incoming = p2_remote_insert(
+    "p2-recovery-failure-verification-peer",
+    0,
+    [],
+    Some(known_raw),
+  )
+  doc.replace_projection_tree(@fugue.FugueTree::new())
+  let before_frontier = doc.get_frontier()
+  let mut recovery_calls = 0
+  let result : Result[DocumentAdmission, DocumentError] = Ok(
+    {
+      doc.set_admission_hooks({
+        on_prepare_remote: () => (),
+        on_commit_admission: () => (),
+        on_projection_finalization: _ => (),
+        prepare_override: None,
+        commit_failure: None,
+        projection_failure: None,
+        recovery_checkout: Some(frontier => {
+          recovery_calls = recovery_calls + 1
+          if recovery_calls == 1 {
+            raise @branch.BranchError::MissingOp(lv=777)
+          } else if recovery_calls == 2 {
+            @branch.Branch::from_tree_and_oplog(
+              @fugue.FugueTree::new(),
+              doc.oplog,
+            )
+          } else {
+            @branch.Branch::checkout(doc.oplog, frontier)
+          }
+        }),
+      })
+      doc.admit_remote([incoming])
+    },
+  ) catch {
+    error => Err(error)
+  }
+  match result {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("checkout failure must preserve recovery-required state")
+  }
+  assert_eq(recovery_calls, 1)
+  assert_eq(doc.get_frontier(), before_frontier)
+  assert_true(!doc.indexed_state.is_ready())
+  assert_true(doc.cursor is None)
+  let second_retry : Result[Unit, DocumentError] = Ok(
+    doc.prepare_for_mutation(),
+  ) catch {
+    error => Err(error)
+  }
+  match second_retry {
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    _ => fail("failed recovery must retain target verification")
+  }
+  assert_eq(recovery_calls, 2)
+  assert_eq(doc.get_frontier(), before_frontier)
+  assert_true(!doc.indexed_state.is_ready())
+  assert_true(doc.cursor is None)
+  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  try! doc.prepare_for_mutation()
+  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
+  assert_eq(doc.tree.to_text(), fresh.to_text())
+  assert_eq(doc.get_frontier(), fresh.get_frontier())
+}

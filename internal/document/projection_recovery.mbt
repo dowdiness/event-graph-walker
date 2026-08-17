@@ -10,10 +10,25 @@ priv enum ProjectionHealth {
 }
 
 ///|
-/// A target condition that must hold before a recovered tree becomes readable.
-priv struct ProjectionRecoveryVerification {
+/// One graph-known origin condition that must hold before a recovered tree is
+/// readable.
+priv struct ProjectionRecoveryTarget {
   origin : @core.RawVersion
   error : @branch.BranchError
+}
+
+///|
+/// All target conditions that must hold before a recovered tree is readable.
+priv struct ProjectionRecoveryVerification {
+  targets : Array[ProjectionRecoveryTarget]
+}
+
+///|
+/// Retain an owning copy so recovery conditions cannot change after capture.
+fn ProjectionRecoveryVerification::from_targets(
+  targets : Array[ProjectionRecoveryTarget],
+) -> ProjectionRecoveryVerification {
+  { targets: targets.copy() }
 }
 
 ///|
@@ -47,16 +62,21 @@ fn Document::recover_projection_with(
   }
   match self.projection_verification {
     Some(verification) => {
-      let target_present = match
-        self.oplog.causal_graph().raw_to_lv(verification.origin) {
-        Some(lv) => branch.inner_tree().get(@fugue.Lv(lv)) is Some(_)
-        None => false
+      let mut missing_error : @branch.BranchError? = None
+      for target in verification.targets {
+        let target_present = match
+          self.oplog.causal_graph().raw_to_lv(target.origin) {
+          Some(lv) => branch.inner_tree().get(@fugue.Lv(lv)) is Some(_)
+          None => false
+        }
+        if !target_present && missing_error is None {
+          missing_error = Some(target.error)
+        }
       }
-      if !target_present {
-        raise DocumentError::ProjectionRecoveryRequired(
-          frontier~,
-          error=verification.error,
-        )
+      match missing_error {
+        Some(error) =>
+          raise DocumentError::ProjectionRecoveryRequired(frontier~, error~)
+        None => ()
       }
     }
     None => ()
