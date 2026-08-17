@@ -8,7 +8,7 @@ cutover. It is not a cross-runtime performance claim.
 | lane | source commit |
 | --- | --- |
 | before | `f4cfec3095906104d111f23f90fb458c736f9da4` |
-| after | `e593319` (`feat/p3-text-admission-cutover`) |
+| after | `9b2f74e` (`feat/p3-text-admission-cutover`) |
 
 The same temporary white-box matrix probe and measurement boundary were used
 for both lanes:
@@ -32,7 +32,7 @@ The temporary probe was deleted after collection. The raw CSVs are retained:
 - [before CSV](./2026-08-17-egw-p3-text-admission-cutover-native-before.csv)
   — SHA-256 `39486cb693aa00a6c5082e3dcff992ebf729472e356aa9ac9eceaaf046e9a4b6`
 - [after CSV](./2026-08-17-egw-p3-text-admission-cutover-native-after.csv)
-  — SHA-256 `1ef3ae5154ebf4c66c759baf6078bc9301847e1517b31465510b8e84fe4412b5`
+  — SHA-256 `8c41d9eb69720f499bc94976faa6d4af3d644311070d8a8e5252f8d9e1df6e97`
 
 ## Interpretation boundary
 
