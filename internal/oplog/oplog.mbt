@@ -306,6 +306,18 @@ pub fn OpLog::has_pending(self : OpLog) -> Bool {
 }
 
 ///|
+/// Return the live canonical pending membership count.
+pub fn OpLog::pending_count(self : OpLog) -> Int {
+  self.planner.pending_count()
+}
+
+///|
+/// Clear all canonical pending membership without touching authority state.
+pub fn OpLog::clear_pending(self : OpLog) -> Unit {
+  self.planner.clear_pending()
+}
+
+///|
 /// Classify duplicate delivery evidence without treating it as terminal
 /// ownership. The resulting arrays are unique and preserve incoming order.
 fn OpLog::remote_admission_duplicate_evidence(
@@ -373,11 +385,14 @@ fn OpLog::remote_admission_semantics(self : OpLog) -> RemoteAdmissionSemantics {
 ///
 /// `max_pending` is a hard bound on the unique pending membership immediately
 /// after begin applies the prepared discard and staged-registration transition.
-/// It covers both complete and partial commit outcomes.
+/// It covers both complete and partial commit outcomes. The optional
+/// `max_pending_after_complete` is a separate compatibility bound on the live
+/// pending membership after every planned operation commits successfully.
 pub fn OpLog::prepare_remote(
   self : OpLog,
   incoming : Array[@core.Op],
   max_pending? : Int,
+  max_pending_after_complete? : Int,
 ) -> PreparedAdmission raise OpLogError {
   self.preflight_remote_identities(incoming)
   let (already_admitted, duplicate_of_pending) = self.remote_admission_duplicate_evidence(
@@ -391,6 +406,7 @@ pub fn OpLog::prepare_remote(
   prepared.with_prospective(
     self.planner,
     max_pending,
+    max_pending_after_complete,
     already_admitted,
     duplicate_of_pending,
   )

@@ -9,6 +9,7 @@ pub struct AdmissionReceipt {
   priv pending_staged : Array[@core.RawVersion]
   priv discarded_pending : Array[@core.RawVersion]
   priv discarded_staged : Array[@core.RawVersion]
+  priv redelivery_count : Int
   priv pending_before_count : Int
   priv pending_after_count : Int
   priv frontier_before : @core.Frontier
@@ -30,6 +31,7 @@ fn AdmissionReceipt::from_parts(
   pending_staged : Array[@core.RawVersion],
   discarded_pending : Array[@core.RawVersion],
   discarded_staged : Array[@core.RawVersion],
+  redelivery_count : Int,
   pending_before_count : Int,
   pending_after_count : Int,
   frontier_before : @core.Frontier,
@@ -43,6 +45,7 @@ fn AdmissionReceipt::from_parts(
     pending_staged: pending_staged.copy(),
     discarded_pending: discarded_pending.copy(),
     discarded_staged: discarded_staged.copy(),
+    redelivery_count,
     pending_before_count,
     pending_after_count,
     frontier_before: @core.Frontier::from_array(frontier_before.to_array()),
@@ -97,6 +100,11 @@ pub fn AdmissionReceipt::discarded_staged(
   self : AdmissionReceipt,
 ) -> ArrayView[@core.RawVersion] {
   self.discarded_staged[:]
+}
+
+///|
+pub fn AdmissionReceipt::redelivery_count(self : AdmissionReceipt) -> Int {
+  self.redelivery_count
 }
 
 ///|
@@ -191,6 +199,7 @@ fn OpLog::admission_receipt(
     pending_staged,
     prepared.discarded_pending.to_array(),
     prepared.discarded_staged.to_array(),
+    prepared.already_admitted.length() + prepared.duplicate_of_pending.length(),
     prepared.pending_before_count,
     self.planner.pending_count(),
     frontier_before,

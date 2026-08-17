@@ -69,6 +69,18 @@ pub fn Document::get_frontier(self : Document) -> @core.Frontier {
 }
 
 ///|
+/// Return live core-owned remote pending membership without reading projection state.
+pub fn Document::pending_count(self : Document) -> Int {
+  self.oplog.pending_count()
+}
+
+///|
+/// Clear core-owned remote pending membership without touching authority or projection state.
+pub fn Document::clear_pending(self : Document) -> Unit {
+  self.oplog.clear_pending()
+}
+
+///|
 /// Read-only view of the document's causal DAG.
 ///
 /// The returned `CausalSnapshot` is a live alias over the internal causal

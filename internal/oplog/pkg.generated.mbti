@@ -48,6 +48,7 @@ pub fn AdmissionReceipt::pending_before_count(Self) -> Int
 pub fn AdmissionReceipt::pending_from_transition(Self) -> ArrayView[@core.RawVersion]
 pub fn AdmissionReceipt::pending_retained(Self) -> ArrayView[@core.RawVersion]
 pub fn AdmissionReceipt::pending_staged(Self) -> ArrayView[@core.RawVersion]
+pub fn AdmissionReceipt::redelivery_count(Self) -> Int
 
 pub struct OpLog {
   // private fields
@@ -55,6 +56,7 @@ pub struct OpLog {
 pub fn OpLog::OpLog(String) -> Self
 pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
+pub fn OpLog::clear_pending(Self) -> Unit
 pub fn OpLog::commit_admission(Self, PreparedAdmission) -> AdmissionOutcome raise OpLogError
 pub fn OpLog::commit_admission_with_failure(Self, PreparedAdmission, (@core.Op) -> @causal_graph.CausalGraphError?) -> AdmissionOutcome raise OpLogError
 pub fn OpLog::commit_remote(Self, PreparedAdmission) -> Array[@core.Op] raise OpLogError
@@ -71,8 +73,9 @@ pub fn OpLog::get_ops_rle(Self, @rle.Rle[@core.LvRange]) -> Array[@core.Op]
 pub fn OpLog::has_pending(Self) -> Bool
 pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::op_count(Self) -> Int
+pub fn OpLog::pending_count(Self) -> Int
 pub fn OpLog::plan_remote(Self, Array[@core.Op]) -> Array[@core.Op] raise OpLogError
-pub fn OpLog::prepare_remote(Self, Array[@core.Op], max_pending? : Int) -> PreparedAdmission raise OpLogError
+pub fn OpLog::prepare_remote(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> PreparedAdmission raise OpLogError
 pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
 pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]

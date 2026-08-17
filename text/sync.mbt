@@ -95,136 +95,6 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
 }
 
 ///|
-/// Return whether `target` is reachable through the declared causal parents.
-///
-/// Origins and the implicit replica predecessor are deliberately excluded:
-/// they constrain applicability, but only `parents` define graph ancestry.
-fn parents_reach_identity(
-  parents : Array[@core.RawVersion],
-  target : @core.RawVersion,
-  known_ops : Map[String, @core.Op],
-) -> Bool {
-  let queue = parents.copy()
-  let visited : Map[String, Bool] = Map([])
-  let target_key = raw_key(target)
-  let mut index = 0
-  while index < queue.length() {
-    let current = queue[index]
-    index = index + 1
-    let current_key = raw_key(current)
-    if current_key == target_key {
-      return true
-    }
-    if visited.get(current_key) is None {
-      visited[current_key] = true
-      match known_ops.get(current_key) {
-        Some(parent_op) =>
-          for ancestor in parent_op.parents() {
-            queue.push(ancestor)
-          }
-        None => ()
-      }
-    }
-  }
-  false
-}
-
-///|
-/// Require every non-initial replica operation to causally descend from its
-/// predecessor, not merely wait for that predecessor to exist.
-fn validate_sequence_descent(
-  op : @core.Op,
-  known_ops : Map[String, @core.Op],
-) -> Unit raise @sync.Failure {
-  if op.seq() == 0 {
-    return
-  }
-  let predecessor = @core.RawVersion(op.agent(), op.seq() - 1)
-  if !parents_reach_identity(op.parents(), predecessor, known_ops) {
-    raise @sync.Failure::MalformedMessage(
-      detail="operation does not causally descend from its replica predecessor",
-    )
-  }
-}
-
-///|
-/// Reject an origin whose target is already known to be non-Insert.
-///
-/// This intentionally ignores unknown targets: dependency readiness still
-/// decides whether the operation is deferred. The early known-target check is
-/// applied only to a new current-message candidate so retained pending records
-/// keep their deferred provenance until their dependencies are decidable.
-fn validate_known_origin_targets(
-  op : @core.Op,
-  known_ops : Map[String, @core.Op],
-) -> Unit raise @sync.Failure {
-  fn require_known_insert(
-    origin : @core.RawVersion?,
-    known_ops : Map[String, @core.Op],
-  ) -> Unit raise @sync.Failure {
-    match origin {
-      None => ()
-      Some(raw) =>
-        match known_ops.get(raw_key(raw)) {
-          Some(target) =>
-            match target.content() {
-              @core.Insert(_) => ()
-              @core.Delete | @core.Undelete =>
-                raise @sync.Failure::MalformedMessage(
-                  detail="operation origin must identify an insert operation",
-                )
-            }
-          None => ()
-        }
-    }
-  }
-
-  require_known_insert(op.origin_left(), known_ops)
-  require_known_insert(op.origin_right(), known_ops)
-}
-
-///|
-/// Require every Fugue origin to identify an Insert operation.
-///
-/// Dependency resolution only proves that an origin exists in the causal
-/// graph. Delete and Undelete operations also have stable identities, but they
-/// do not create Fugue items and therefore cannot be valid insertion anchors or
-/// delete targets. Reject them during preflight so the commit shell cannot
-/// mutate the oplog and then fail while updating the Fugue tree.
-fn validate_origin_targets(
-  op : @core.Op,
-  known_ops : Map[String, @core.Op],
-) -> Unit raise @sync.Failure {
-  fn require_insert(
-    origin : @core.RawVersion?,
-    known_ops : Map[String, @core.Op],
-  ) -> Unit raise @sync.Failure {
-    match origin {
-      None => ()
-      Some(raw) =>
-        match known_ops.get(raw_key(raw)) {
-          Some(target) =>
-            match target.content() {
-              @core.Insert(_) => ()
-              @core.Delete | @core.Undelete =>
-                raise @sync.Failure::MalformedMessage(
-                  detail="operation origin must identify an insert operation",
-                )
-            }
-          None =>
-            raise @sync.Failure::MissingDependency(
-              replica_id=raw.agent,
-              sequence=raw.seq,
-            )
-        }
-    }
-  }
-
-  require_insert(op.origin_left(), known_ops)
-  require_insert(op.origin_right(), known_ops)
-}
-
-///|
 fn validate_insert_scalar(text : String) -> Unit raise @sync.Failure {
   let len = text.length()
   if len == 0 {
@@ -578,144 +448,6 @@ pub(all) struct SyncReport {
 } derive(Debug, Eq)
 
 ///|
-/// An operation parsed for the receiver's current causal context.
-///
-/// The raw operation stays behind this private wrapper so the commit shell
-/// cannot accidentally consume an operation that has only passed wire-level
-/// decoding. Construction also proves replica sequence ancestry and that every
-/// Fugue origin names an Insert operation.
-priv struct ApplicableOp {
-  op : StructuralOp
-}
-
-///|
-/// Provenance of an operation considered during synchronization preparation.
-///
-/// A malformed operation seen only in the current message rejects that
-/// message. A previously deferred operation retains that provenance even when
-/// resent, and is discarded once its dependencies make the malformation
-/// decidable, preventing one pending record from poisoning later attempts.
-priv enum SyncCandidate {
-  FromPending(StructuralOp)
-  FromMessage(StructuralOp)
-  FromPendingAndMessage(StructuralOp)
-}
-
-///|
-fn SyncCandidate::raw(self : SyncCandidate) -> @core.Op {
-  match self {
-    FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op.raw()
-  }
-}
-
-///|
-/// Record an identical observation from the current message without losing
-/// whether the operation was already present in the pending queue.
-fn SyncCandidate::observe_message(
-  self : SyncCandidate,
-  op : StructuralOp,
-) -> SyncCandidate {
-  match self {
-    FromPending(_) | FromPendingAndMessage(_) => FromPendingAndMessage(op)
-    FromMessage(_) => FromMessage(op)
-  }
-}
-
-///|
-/// Parse a dependency-resolved operation into the representation accepted by
-/// the commit shell.
-fn ApplicableOp::ApplicableOp(
-  op : StructuralOp,
-  known_ops : Map[String, @core.Op],
-) -> ApplicableOp raise @sync.Failure {
-  let raw = op.raw()
-  validate_sequence_descent(raw, known_ops)
-  validate_origin_targets(raw, known_ops)
-  { op, }
-}
-
-///|
-fn ApplicableOp::raw(self : ApplicableOp) -> @core.Op {
-  self.op.raw()
-}
-
-///|
-/// The receiver-specific result of parsing one synchronization candidate.
-///
-/// This sum type preserves the dependency decision instead of collapsing it to
-/// a Boolean. Only `Apply` can carry an `ApplicableOp`; `Defer` retains the
-/// decoded operation for the bounded pending queue.
-priv enum ParsedCandidate {
-  Apply(ApplicableOp)
-  Defer(StructuralOp)
-  DiscardInvalidPending
-}
-
-///|
-/// Parse one canonically ordered candidate against the receiver snapshot and
-/// operations already proved applicable earlier in the same transition.
-fn parse_candidate(
-  op : StructuralOp,
-  local_payloads : Map[String, String],
-  resolved : Map[String, Unit],
-  known_ops : Map[String, @core.Op],
-) -> ParsedCandidate raise @sync.Failure {
-  let raw = op.raw()
-  for dependency in op_dependencies(raw) {
-    let key = raw_key(dependency)
-    if local_payloads.get(key) is None && resolved.get(key) is None {
-      return Defer(op)
-    }
-  }
-  Apply(ApplicableOp::ApplicableOp(op, known_ops))
-}
-
-///|
-/// Parse a candidate according to its provenance.
-///
-/// New current-message failures remain atomic message failures. A pending
-/// record that only becomes provably malformed after its dependencies arrive
-/// is discarded from the next prepared queue, including when the peer resends
-/// it, while valid current-message operations remain applicable.
-fn parse_sync_candidate(
-  candidate : SyncCandidate,
-  local_payloads : Map[String, String],
-  resolved : Map[String, Unit],
-  known_ops : Map[String, @core.Op],
-) -> ParsedCandidate raise @sync.Failure {
-  match candidate {
-    FromMessage(op) => parse_candidate(op, local_payloads, resolved, known_ops)
-    FromPending(op) | FromPendingAndMessage(op) =>
-      parse_candidate(op, local_payloads, resolved, known_ops) catch {
-        _ => DiscardInvalidPending
-      }
-  }
-}
-
-///|
-/// A fully parsed, receiver-specific synchronization transition.
-///
-/// This type is private so the imperative commit shell can only receive plans
-/// produced by `prepare_sync`. Its operations have passed identity, resource,
-/// dependency, causal-ancestry, and Fugue-origin checks.
-priv struct PreparedSync {
-  applicable : Array[ApplicableOp]
-  pending : Array[StructuralOp]
-  duplicate_operations : Int
-}
-
-///|
-/// Derive the public report from the parsed transition without observing or
-/// mutating document state.
-fn PreparedSync::report(self : PreparedSync) -> SyncReport {
-  {
-    applied_operations: self.applicable.length(),
-    duplicate_operations: self.duplicate_operations,
-    pending_operations: self.pending.length(),
-  }
-}
-
-///|
 pub fn SyncReport::applied_operations(self : SyncReport) -> Int {
   self.applied_operations
 }
@@ -736,6 +468,8 @@ pub(all) struct SyncSession {
   priv doc : TextState
   // White-box seam for proving admission-guard ordering; production uses None.
   priv prepare_for_mutation_override : (() -> Unit raise TextError)?
+  // White-box seam for counting the single Text-to-Document admission call.
+  priv admit_remote_override : ((@document.Document, Array[@core.Op], Int) -> @document.DocumentAdmission raise @document.DocumentError)?
 }
 
 ///|
@@ -1115,25 +849,12 @@ pub fn SyncSession::export_since(
 }
 
 ///|
-fn local_payloads(local_ops : Array[@core.Op]) -> Map[String, String] {
-  let result : Map[String, String] = Map([])
-  for op in local_ops {
-    result[raw_key(op_identity(op))] = op_payload_key(op)
-  }
-  result
-}
-
-///|
-/// Parse a message and receiver snapshot into a total commit plan.
-///
-/// This is the functional core. It does not mutate the document or pending
-/// queue, and a failure therefore leaves all receiver state untouched.
-fn prepare_sync(
+/// Validate receiver policy at the wire-facing Text boundary. Causal
+/// applicability and pending ownership belong to Document/OpLog.
+fn validate_message_limits(
   message : SyncMessage,
   limits : @sync.Limits,
-  local_ops : Array[@core.Op],
-  pending_records : Array[StructuralOp],
-) -> PreparedSync raise @sync.Failure {
+) -> Unit raise @sync.Failure {
   let encoded_size = match message.encoded_size {
     Some(size) => size
     None => @utf8.encode(message.to_json_string()).length()
@@ -1152,108 +873,9 @@ fn prepare_sync(
       actual=message.decoded_operation_count,
     )
   }
-  let local_payload_map = local_payloads(local_ops)
-  let candidates : Map[String, SyncCandidate] = Map([])
-  for pending in pending_records {
-    candidates[raw_key(op_identity(pending.raw()))] = FromPending(pending)
+  for structural in message.structural_operations {
+    validate_op_limits(structural.raw(), limits)
   }
-  let mut duplicates = 0
-  for op in message.structural_operations {
-    let raw = op.raw()
-    validate_op_limits(raw, limits)
-    let id = op_identity(raw)
-    let key = raw_key(id)
-    let payload = op_payload_key(raw)
-    match local_payload_map.get(key) {
-      Some(existing) =>
-        if existing == payload {
-          duplicates = duplicates + 1
-        } else {
-          raise @sync.Failure::ConflictingIdentity(
-            replica_id=id.agent,
-            sequence=id.seq,
-          )
-        }
-      None =>
-        match candidates.get(key) {
-          Some(existing) =>
-            if op_payload_key(existing.raw()) == payload {
-              duplicates = duplicates + 1
-              candidates[key] = existing.observe_message(op)
-            } else {
-              raise @sync.Failure::ConflictingIdentity(
-                replica_id=id.agent,
-                sequence=id.seq,
-              )
-            }
-          None => candidates[key] = FromMessage(op)
-        }
-    }
-  }
-  let all_candidates : Array[StructuralOp] = []
-  for candidate in candidates.values() {
-    all_candidates.push(
-      match candidate {
-        FromPending(op) | FromMessage(op) | FromPendingAndMessage(op) => op
-      },
-    )
-  }
-  let known_ops : Map[String, @core.Op] = Map([])
-  for local_op in local_ops {
-    known_ops[raw_key(op_identity(local_op))] = local_op
-  }
-  for candidate in all_candidates {
-    known_ops[raw_key(op_identity(candidate.raw()))] = candidate.raw()
-  }
-  // Match core admission's provenance-aware early check: a new current
-  // candidate with a known non-Insert target is malformed even when an
-  // unrelated dependency is still missing. Retained candidates remain
-  // deferred until dependency readiness makes their full semantic decision.
-  for candidate in candidates.values() {
-    match candidate {
-      FromMessage(op) => validate_known_origin_targets(op.raw(), known_ops)
-      FromPending(_) | FromPendingAndMessage(_) => ()
-    }
-  }
-  let raw_candidates : Array[@core.Op] = []
-  let candidate_by_key : Map[String, StructuralOp] = Map([])
-  for candidate in all_candidates {
-    let raw = candidate.raw()
-    raw_candidates.push(raw)
-    candidate_by_key[raw_key(op_identity(raw))] = candidate
-  }
-  let ordered_raw = canonical_order(raw_candidates)
-  let ordered : Array[StructuralOp] = []
-  for raw in ordered_raw {
-    ordered.push(candidate_by_key.get(raw_key(op_identity(raw))).unwrap())
-  }
-  let resolved : Map[String, Unit] = Map([])
-  let applicable : Array[ApplicableOp] = []
-  let pending : Array[StructuralOp] = []
-  for op in ordered {
-    let raw = op.raw()
-    let candidate = candidates.get(raw_key(op_identity(raw))).unwrap()
-    validate_op_limits(raw, limits)
-    let parsed = parse_sync_candidate(
-      candidate, local_payload_map, resolved, known_ops,
-    )
-    match parsed {
-      Apply(applicable_op) => {
-        resolved[raw_key(op_identity(raw))] = ()
-        applicable.push(applicable_op)
-      }
-      Defer(pending_op) => pending.push(pending_op)
-      DiscardInvalidPending => ()
-    }
-  }
-  if pending.length() > limits.max_pending_operations() {
-    raise @sync.Failure::LimitExceeded(
-      kind=@sync.LimitKind::PendingOperations,
-      limit=limits.max_pending_operations(),
-      actual=pending.length(),
-    )
-  }
-  { applicable, pending, duplicate_operations: duplicates }
 }
 
 ///|
@@ -1268,35 +890,65 @@ fn SyncSession::prepare_for_admission(
 }
 
 ///|
-/// Apply a message after parsing it into a receiver-specific commit plan.
+fn SyncSession::admit_remote(
+  self : SyncSession,
+  operations : Array[@core.Op],
+  max_pending_after_complete : Int,
+) -> @document.DocumentAdmission raise @document.DocumentError {
+  match self.admit_remote_override {
+    Some(admit) => admit(self.doc.inner, operations, max_pending_after_complete)
+    None => self.doc.inner.admit_remote(operations, max_pending_after_complete~)
+  }
+}
+
+///|
+/// Apply one canonical message through the Document-owned authority boundary.
 pub fn SyncSession::apply_with_limits(
   self : SyncSession,
   message : SyncMessage,
   limits : @sync.Limits,
 ) -> SyncReport raise TextError {
   self.prepare_for_admission()
-  let prepared = map_sync_failure(fn() raise @sync.Failure {
-    prepare_sync(
-      message,
-      limits,
-      self.doc.inner.get_all_ops(),
-      self.doc.pending_sync_records.copy(),
-    )
+  map_sync_failure(fn() raise @sync.Failure {
+    validate_message_limits(message, limits)
   })
-  // Invalidate before admission so partial remote mutation cannot leave a
-  // stale cached version behind.
-  if !prepared.applicable.is_empty() {
+  let admission = self.admit_remote(
+    message.operations.copy(),
+    limits.max_pending_operations(),
+  ) catch {
+    error => raise TextError::from_document_error(error, () => self.doc.len())
+  }
+  let outcome = admission.outcome
+  let projection = admission.projection
+  let committed_count = match outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) => receipt.committed().length()
+    @oplog.AdmissionOutcome::Partial(receipt~, ..) =>
+      receipt.committed().length()
+  }
+  if committed_count > 0 {
     self.doc.invalidate_cached_version()
   }
-  // Imperative shell: PreparedSync is only constructible after complete
-  // preflight, so protocol failures cannot occur after the first mutation.
-  for parsed_op in prepared.applicable {
-    self.doc.inner.apply_remote(parsed_op.raw()) catch {
-      error => raise TextError::from_document_error(error, () => self.doc.len())
-    }
+  match projection {
+    @document.ProjectionStatus::RecoveryRequired(..) =>
+      raise TextError::ProjectionRecoveryRequired
+    @document.ProjectionStatus::Skipped
+    | @document.ProjectionStatus::Projected
+    | @document.ProjectionStatus::Recovered =>
+      match outcome {
+        @oplog.AdmissionOutcome::Complete(receipt) =>
+          {
+            applied_operations: receipt.committed().length(),
+            duplicate_operations: receipt.redelivery_count(),
+            pending_operations: receipt.pending_after_count(),
+          }
+        @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
+          let _ = receipt
+          raise TextError::from_oplog_error(
+            @oplog.OpLogError::CausalGraphError(error~),
+          )
+        }
+      }
   }
-  self.doc.pending_sync_records = prepared.pending
-  prepared.report()
 }
 
 ///|
@@ -1315,12 +967,12 @@ pub fn SyncSession::current_version(self : SyncSession) -> Version {
 
 ///|
 pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
-  self.doc.pending_sync_records.length()
+  self.doc.inner.pending_count()
 }
 
 ///|
 pub fn SyncSession::clear_pending_sync(self : SyncSession) -> Unit {
-  self.doc.pending_sync_records = []
+  self.doc.inner.clear_pending()
 }
 
 ///|
