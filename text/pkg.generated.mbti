@@ -18,6 +18,7 @@ pub(all) suberror TextError {
   InvalidRange(start~ : Int, end~ : Int)
   SyncFailed(@sync.Failure)
   VersionNotFound
+  ProjectionRecoveryRequired
   Internal(detail~ : String)
 }
 pub fn TextError::debug(Self) -> String

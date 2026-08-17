@@ -14,7 +14,7 @@ fn TextState::commit_insert_plan_and_record(
     let op = self.inner.insert(plan.position + offset, ch_text) catch {
       err => {
         self.invalidate_cached_version()
-        raise TextError::from_document_error(err, self.len())
+        raise TextError::from_document_error(err, () => self.len())
       }
     }
     self.advance_cached_version(op)
@@ -32,6 +32,7 @@ pub fn TextState::insert_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let plan = plan_insert(pos.value(), text, self.len())
   self.commit_insert_plan_and_record(plan, mgr, timestamp_ms~)
 }
@@ -44,6 +45,7 @@ pub fn TextState::delete_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let pos_val = pos.value()
   if pos_val >= doc_len {
@@ -58,7 +60,7 @@ pub fn TextState::delete_and_record(
   let op = self.inner.delete(pos_val) catch {
     err => {
       self.invalidate_cached_version()
-      raise TextError::from_document_error(err, doc_len)
+      raise TextError::from_document_error(err, () => doc_len)
     }
   }
   self.advance_cached_version(op)
@@ -80,6 +82,7 @@ pub fn TextState::delete_range_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
   if start == end {
@@ -88,7 +91,7 @@ pub fn TextState::delete_range_and_record(
   let items = self.inner.get_visible_items()
   self.invalidate_cached_version()
   self.inner.delete_range(start, end) catch {
-    err => raise TextError::from_document_error(err, doc_len)
+    err => raise TextError::from_document_error(err, () => doc_len)
   }
   let agent = self.inner.agent_id()
   for i = start; i < end; i = i + 1 {
@@ -111,6 +114,7 @@ pub fn TextState::replace_range_and_record(
   mgr : @undo.UndoManager,
   timestamp_ms~ : Int,
 ) -> Unit raise TextError {
+  self.prepare_for_mutation()
   let doc_len = self.len()
   let (start, _end) = checked_range_bounds(range, doc_len)
   let plan = plan_insert(start, text, doc_len)

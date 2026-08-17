@@ -53,12 +53,14 @@ test "IndexedState agrees with Fugue after remote apply" {
 
   let delete_op = try! alice.delete(1)
   try! bob.apply_remote(delete_op)
-  assert_true(bob.indexed_state.is_ready())
+  // The batch shell invalidates derived state before projection; the next
+  // indexed read lazily rebuilds it.
+  assert_true(!bob.indexed_state.is_ready())
   assert_indexed_state_matches_tree(bob)
 
   let undelete_op = try! alice.undelete(1)
   try! bob.apply_remote(undelete_op)
-  assert_true(bob.indexed_state.is_ready())
+  assert_true(!bob.indexed_state.is_ready())
   assert_indexed_state_matches_tree(bob)
 }
 

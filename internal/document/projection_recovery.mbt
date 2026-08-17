@@ -1,0 +1,148 @@
+///| Document-owned projection lifecycle and canonical recovery.
+
+///|
+priv enum ProjectionHealth {
+  Ready
+  RecoveryRequired(
+    frontier~ : @core.Frontier,
+    checkout~ : (@oplog.OpLog, @core.Frontier) -> @branch.Branch raise @branch.BranchError
+  )
+}
+
+///|
+/// One graph-known origin condition that must hold before a recovered tree is
+/// readable.
+priv struct ProjectionRecoveryTarget {
+  origin : @core.RawVersion
+  error : @branch.BranchError
+}
+
+///|
+/// All target conditions that must hold before a recovered tree is readable.
+priv struct ProjectionRecoveryVerification {
+  targets : Array[ProjectionRecoveryTarget]
+}
+
+///|
+/// Retain an owning copy so recovery conditions cannot change after capture.
+fn ProjectionRecoveryVerification::from_targets(
+  targets : Array[ProjectionRecoveryTarget],
+) -> ProjectionRecoveryVerification {
+  { targets: targets.copy() }
+}
+
+///|
+/// Install a freshly checked-out tree without exposing a replacement operation
+/// outside the document package.
+fn Document::replace_projection_tree(
+  self : Document,
+  replacement : @fugue.FugueTree[String],
+) -> Unit {
+  self.tree = replacement
+}
+
+///|
+/// Rebuild the derived projection through a supplied checkout seam.
+///
+/// The callback is private and exists so white-box tests can exercise failed
+/// checkout while the production entry point always uses Branch::checkout.
+fn Document::recover_projection_with(
+  self : Document,
+  frontier : @core.Frontier,
+  checkout : (@oplog.OpLog, @core.Frontier) -> @branch.Branch raise @branch.BranchError,
+) -> Unit raise DocumentError {
+  self.indexed_state.invalidate()
+  self.cursor = None
+  self.projection_health = ProjectionHealth::RecoveryRequired(
+    frontier~,
+    checkout~,
+  )
+  let branch = checkout(self.oplog, frontier) catch {
+    error => raise DocumentError::ProjectionRecoveryRequired(frontier~, error~)
+  }
+  match self.projection_verification {
+    Some(verification) => {
+      let mut missing_error : @branch.BranchError? = None
+      for target in verification.targets {
+        let target_present = match
+          self.oplog.causal_graph().raw_to_lv(target.origin) {
+          Some(lv) => branch.inner_tree().get(@fugue.Lv(lv)) is Some(_)
+          None => false
+        }
+        if !target_present && missing_error is None {
+          missing_error = Some(target.error)
+        }
+      }
+      match missing_error {
+        Some(error) =>
+          raise DocumentError::ProjectionRecoveryRequired(frontier~, error~)
+        None => ()
+      }
+    }
+    None => ()
+  }
+  self.replace_projection_tree(branch.inner_tree())
+  self.indexed_state.invalidate()
+  self.cursor = None
+  self.projection_verification = None
+  self.projection_health = ProjectionHealth::Ready
+}
+
+///|
+/// Rebuild the projection from the authoritative operation log.
+fn Document::recover_projection(
+  self : Document,
+  frontier : @core.Frontier,
+) -> Unit raise DocumentError {
+  self.recover_projection_with(frontier, (oplog, frontier) => {
+    @branch.Branch::checkout(oplog, frontier)
+  })
+}
+
+///|
+/// Ensure the derived projection is canonical before a dependent mutation.
+///
+/// This narrow direct-dependent guard lets facades validate their own input
+/// without reading a failed non-fallible projection first.
+pub fn Document::prepare_for_mutation(
+  self : Document,
+) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
+}
+
+///|
+/// Retry canonical recovery before a fallible document mutation.
+fn Document::ensure_projection_ready(
+  self : Document,
+) -> Unit raise DocumentError {
+  match self.projection_health {
+    ProjectionHealth::Ready => ()
+    ProjectionHealth::RecoveryRequired(frontier~, checkout~) =>
+      self.recover_projection_with(frontier, checkout)
+  }
+}
+
+///|
+/// Ensure the projection is ready for typed admission and report whether this
+/// entry guard performed recovery so the admission result can retain that
+/// evidence even when no committed operations are projected.
+fn Document::ensure_projection_ready_for_admission(
+  self : Document,
+) -> Bool raise DocumentError {
+  match self.projection_health {
+    ProjectionHealth::Ready => false
+    ProjectionHealth::RecoveryRequired(frontier~, checkout~) => {
+      self.recover_projection_with(frontier, checkout)
+      true
+    }
+  }
+}
+
+///|
+/// Derived readers retain their non-fallible signatures but never expose a
+/// projection that failed canonical recovery.
+fn Document::ensure_projection_ready_for_read(self : Document) -> Unit {
+  self.ensure_projection_ready() catch {
+    _ => abort("document projection recovery required")
+  }
+}

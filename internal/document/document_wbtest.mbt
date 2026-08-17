@@ -410,12 +410,14 @@ test "incremental insert: remote op between local inserts resets cache" {
   // Export Bob's op and apply to Alice
   let bob_op = doc_b.oplog.get_all_ops()[0]
   try! doc_a.apply_remote(bob_op)
-  // Small remote batch with warm cache: cache updated incrementally (not invalidated)
-  assert_true(doc_a.indexed_state.is_ready())
+  // The batch shell invalidates derived state before projection; the next
+  // read lazily rebuilds the cache.
+  assert_true(!doc_a.indexed_state.is_ready())
   assert_true(doc_a.cursor is None)
   // Verify cache content is correct: position queries return right LVs
   // Bob's "x" goes to the front (FugueMax ordering), so doc is "xabc"
   let text = doc_a.to_text()
+  assert_true(doc_a.indexed_state.is_ready())
   inspect(text.length(), content="4")
   // Position 0 should resolve to a valid LV (Bob's insert)
   assert_true(doc_a.lv_at_position(0) is Some(_))
@@ -459,143 +461,4 @@ test "lv_to_position after incremental append" {
     ),
   )
   inspect(doc.lv_to_position(99) is None, content="true")
-}
-
-///|
-test "apply_remote_with projects a partial committed prefix exactly once" {
-  let doc = Document::new("local")
-  let _ = try! doc.insert(0, "base")
-  ignore(doc.to_text())
-  assert_true(doc.indexed_state.is_ready())
-  let warm_cache = doc.indexed_state.cache
-  let mut commit_saw_detached_cache = false
-  let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
-  let result : Result[Unit, DocumentError] = try {
-    doc.apply_remote_with(incoming, _ => {
-      commit_saw_detached_cache = doc.indexed_state.cache is None
-      let committed = doc.oplog.insert("p", -1, -1)
-      raise @oplog.OpLogError::PartialRemoteAdmission(
-        committed=[committed],
-        error=@causal_graph.CausalGraphError::MissingParent(lv=-86),
-      )
-    })
-    Ok(())
-  } catch {
-    error => Err(error)
-  }
-  match result {
-    Err(
-      DocumentError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
-      )
-    ) => {
-      assert_eq(committed.length(), 1)
-      assert_eq(committed[0].agent(), "local")
-      assert_eq(committed[0].seq(), 4)
-      assert_eq(committed[0].lv(), 4)
-      match error {
-        @causal_graph.CausalGraphError::MissingParent(lv~) => assert_eq(lv, -86)
-        _ => fail("expected synthetic causal graph cause")
-      }
-    }
-    _ => fail("expected partial remote admission")
-  }
-  // The warm cache was restored before the single-op projection, so the
-  // incremental OrderTree path remains ready without a rebuild.
-  assert_true(commit_saw_detached_cache)
-  assert_true(doc.indexed_state.is_ready())
-  assert_true(doc.indexed_state.cache == warm_cache)
-  assert_eq(doc.visible_count(), 5)
-  assert_eq(doc.oplog.op_count(), 5)
-  assert_eq(doc.get_all_ops().length(), 5)
-  assert_eq(doc.to_text().length(), 5)
-  assert_true(doc.to_text().contains("p"))
-}
-
-///|
-test "apply_remote_with rethrows stale admission without projection" {
-  let doc = Document::new("local")
-  let _ = try! doc.insert(0, "warm")
-  ignore(doc.to_text())
-  assert_true(doc.indexed_state.is_ready())
-  let warm_cache = doc.indexed_state.cache
-  let mut commit_saw_detached_cache = false
-  let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
-  let result : Result[Unit, DocumentError] = try {
-    doc.apply_remote_with(incoming, _ => {
-      commit_saw_detached_cache = doc.indexed_state.cache is None
-      raise @oplog.OpLogError::StaleAdmission
-    })
-    Ok(())
-  } catch {
-    error => Err(error)
-  }
-  match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
-    _ => fail("expected unchanged stale admission error")
-  }
-  // The stale commit did not touch Fugue, and the exact warm cache was put
-  // back before the error was rethrown.
-  assert_true(commit_saw_detached_cache)
-  assert_true(doc.indexed_state.is_ready())
-  assert_true(doc.indexed_state.cache == warm_cache)
-  assert_eq(doc.to_text(), "warm")
-  assert_eq(doc.visible_count(), 4)
-  assert_eq(doc.oplog.op_count(), 4)
-  assert_eq(doc.get_all_ops().length(), 4)
-}
-
-///|
-test "merge_remote_with advances a partial prefix exactly once" {
-  let doc = Document::new("local")
-  let _ = try! doc.insert(0, "base")
-  ignore(doc.to_text())
-  assert_true(doc.indexed_state.is_ready())
-  let incoming = @core.Op::insert(-1, [], "remote", 0, "r", None, None)
-  let result : Result[Unit, DocumentError] = try {
-    doc.merge_remote_with([incoming], [], _ => {
-      let committed = try! doc.oplog.insert("p", -1, -1)
-      raise @oplog.OpLogError::PartialRemoteAdmission(
-        committed=[committed],
-        error=@causal_graph.CausalGraphError::MissingParent(lv=-86),
-      )
-    })
-    Ok(())
-  } catch {
-    error => Err(error)
-  }
-  match result {
-    Err(
-      DocumentError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
-      )
-    ) => {
-      assert_eq(committed.length(), 1)
-      assert_eq(committed[0].agent(), "local")
-      assert_eq(committed[0].seq(), 4)
-      match committed[0].content() {
-        @core.Insert(text) => assert_eq(text, "p")
-        _ => fail("expected injected insert")
-      }
-      match error {
-        @causal_graph.CausalGraphError::MissingParent(lv~) => assert_eq(lv, -86)
-        _ => fail("expected synthetic causal graph cause")
-      }
-    }
-    _ => fail("expected partial remote admission")
-  }
-  // The branch used by merge shares the document tree, while cache
-  // invalidation remains lazy and safe after the failure.
-  assert_eq(doc.tree.visible_count(), 5)
-  assert_true(doc.tree.to_text().contains("p"))
-  assert_true(!doc.tree.to_text().contains("r"))
-  assert_true(doc.indexed_state.cache is None)
-  assert_true(!doc.indexed_state.is_ready())
-
-  try! doc.merge_remote([incoming], [])
-  let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
-  assert_eq(doc.to_text(), fresh.to_text())
-  assert_eq(doc.visible_count(), fresh.visible_count())
-  assert_eq(doc.oplog.op_count(), 6)
-  assert_eq(doc.get_all_ops().length(), 6)
 }

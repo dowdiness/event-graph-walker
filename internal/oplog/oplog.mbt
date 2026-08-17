@@ -566,6 +566,24 @@ fn OpLog::commit_one_remote(
 }
 
 ///|
+/// Commit a prepared admission with a narrow per-operation causal failure
+/// capability. The normal Document path uses `commit_admission`; this adapter
+/// lets a direct dependent exercise the typed partial boundary without owning
+/// planner or pending state.
+pub fn OpLog::commit_admission_with_failure(
+  self : OpLog,
+  prepared : PreparedAdmission,
+  failure : (@core.Op) -> @causal_graph.CausalGraphError?,
+) -> AdmissionOutcome raise OpLogError {
+  self.commit_admission_with(prepared, op => {
+    match failure(op) {
+      Some(error) => raise error
+      None => self.commit_one_remote_for_admission(op)
+    }
+  })
+}
+
+///|
 /// Commit a prepared remote admission through the typed capability.
 pub fn OpLog::commit_admission(
   self : OpLog,

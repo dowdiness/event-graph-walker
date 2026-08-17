@@ -16,6 +16,11 @@ pub(all) suberror DocumentError {
   /// Raised from `apply_remote` / `merge_remote` when an ingested Op contains
   /// empty text, malformed UTF-16 (lone surrogate), or more than one codepoint.
   ContentError(reason~ : ContentErrorReason)
+  /// Fresh projection checkout failed; derived readers must remain fail-closed.
+  ProjectionRecoveryRequired(
+    frontier~ : @core.Frontier,
+    error~ : @branch.BranchError
+  )
 }
 
 ///|

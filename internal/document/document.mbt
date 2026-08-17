@@ -17,7 +17,7 @@ struct InsertCursor {
 ///|
 /// Provides position-based operations (insert/delete at cursor position)
 pub struct Document {
-  priv tree : @fugue.FugueTree[String]
+  priv mut tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
   agent_id : String
   // Lazy visible projection index. IndexedState owns the position cache and
@@ -25,6 +25,12 @@ pub struct Document {
   priv indexed_state : IndexedState
   // Insert cursor: caches last insert position/LV for sequential append fast-path.
   priv mut cursor : InsertCursor?
+  // Document-owned health for the Fugue-derived projection.
+  priv mut projection_health : ProjectionHealth
+  // Target evidence required to validate a recovered tree before it becomes Ready.
+  priv mut projection_verification : ProjectionRecoveryVerification?
+  // Package-local admission hooks used only by white-box boundary tests.
+  priv mut admission_hooks : AdmissionBoundaryHooks?
 }
 
 ///|
@@ -32,12 +38,22 @@ pub struct Document {
 pub fn Document::new(agent_id : String) -> Document {
   let oplog = @oplog.OpLog(agent_id)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  { tree, oplog, agent_id, indexed_state: IndexedState::new(), cursor: None }
+  {
+    tree,
+    oplog,
+    agent_id,
+    indexed_state: IndexedState::new(),
+    cursor: None,
+    projection_health: ProjectionHealth::Ready,
+    projection_verification: None,
+    admission_hooks: None,
+  }
 }
 
 ///|
 /// Get the current text content
 pub fn Document::to_text(self : Document) -> String {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.text(self.tree)
 }
 
@@ -102,6 +118,7 @@ pub fn Document::get_frontier_raw(
 /// Get the LV at a specific 0-based visible position.
 /// Uses O(log n) lookup via IndexedState's OrderTree projection.
 fn Document::lv_at_position(self : Document, position : Int) -> Int? {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.lv_at_position(self.tree, position)
 }
 
@@ -117,6 +134,7 @@ fn Document::invalidate_cache(self : Document) -> Unit {
 /// Returns the LV of the item before the cursor position,
 /// or -1 if at the start of the document.
 fn Document::position_to_lv(self : Document, position : Int) -> Int {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.position_to_lv(self.tree, position)
 }
 
@@ -138,6 +156,7 @@ pub fn Document::insert(
   position : Int,
   text : String,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   let mut current_pos = position
   let mut last_op : @core.Op? = None
   let mut cache_valid = self.indexed_state.is_ready()
@@ -289,6 +308,7 @@ pub fn Document::delete(
   self : Document,
   position : Int,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   self.cursor = None
   if position < 0 {
     raise DocumentError::InvalidPosition(pos=position)
@@ -333,6 +353,7 @@ pub fn Document::delete_range(
   start : Int,
   end : Int,
 ) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
   self.cursor = None
   if start < 0 {
     raise DocumentError::InvalidPosition(pos=start)
@@ -385,6 +406,7 @@ pub fn Document::replace_range(
   end : Int,
   text : String,
 ) -> Unit raise DocumentError {
+  self.ensure_projection_ready()
   self.delete_range(start, end)
   if text.length() == 0 {
     return
@@ -406,8 +428,7 @@ fn Document::validate_target_lv(
 }
 
 ///|
-/// Classify one remote Fugue origin without raising, so all invalid pending
-/// dependents can be discarded before the first error is propagated.
+/// Classify one remote Fugue origin without mutating pending or projection state.
 fn Document::preflight_remote_origin(
   self : Document,
   graph : @causal_graph.CausalGraph,
@@ -434,56 +455,6 @@ fn Document::preflight_remote_origin(
       } else {
         None
       }
-  }
-}
-
-///|
-/// Validate remote Fugue origins for the complete pending-drain admission before
-/// the OpLog can allocate any of its local versions.
-fn Document::preflight_remote_targets(
-  self : Document,
-  ops : ArrayView[@core.Op],
-) -> Unit raise DocumentError {
-  let graph = self.oplog.causal_graph()
-  let planned_inserts : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  let planned_noninserts : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([],
-  )
-  for op in ops {
-    let raw = @core.RawVersion(op.agent(), op.seq())
-    match op.content() {
-      @core.Insert(_) => planned_inserts.add(raw)
-      @core.Delete | @core.Undelete => planned_noninserts.add(raw)
-    }
-  }
-  let mut failure : DocumentError? = None
-  let invalid_roots : Array[@core.RawVersion] = []
-  for op in ops {
-    let raw = @core.RawVersion(op.agent(), op.seq())
-    for origin in [op.origin_left(), op.origin_right()] {
-      match origin {
-        None => ()
-        Some(origin) =>
-          match
-            self.preflight_remote_origin(
-              graph, origin, planned_inserts, planned_noninserts,
-            ) {
-            None => ()
-            Some(error) => {
-              invalid_roots.push(raw)
-              if failure is None {
-                failure = Some(error)
-              }
-            }
-          }
-      }
-    }
-  }
-  if !invalid_roots.is_empty() {
-    self.oplog.discard_pending_dependents(invalid_roots)
-  }
-  match failure {
-    None => ()
-    Some(error) => raise error
   }
 }
 
@@ -550,6 +521,7 @@ pub fn Document::undelete(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   self.commit_undelete_by_lv(target_lv)
 }
@@ -560,6 +532,7 @@ pub fn Document::delete_by_lv(
   self : Document,
   target_lv : Int,
 ) -> @core.Op raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   self.commit_delete_by_lv(target_lv)
 }
@@ -570,6 +543,7 @@ pub fn Document::delete_if_visible(
   self : Document,
   target_lv : Int,
 ) -> TargetEditResult raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
     Some(_) => {
@@ -586,6 +560,7 @@ pub fn Document::undelete_if_deleted(
   self : Document,
   target_lv : Int,
 ) -> TargetEditResult raise DocumentError {
+  self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
   match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
     Some(_) => Stale
@@ -597,27 +572,6 @@ pub fn Document::undelete_if_deleted(
 }
 
 ///|
-priv enum RemoteAdmissionOutcome {
-  Complete(Array[@core.Op])
-  Partial(Array[@core.Op], @causal_graph.CausalGraphError)
-}
-
-///|
-/// Translate only partial admission into a projection-ready outcome.
-fn commit_prepared_admission(
-  prepared : @oplog.PreparedAdmission,
-  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
-) -> RemoteAdmissionOutcome raise DocumentError {
-  try commit(prepared) catch {
-    @oplog.OpLogError::PartialRemoteAdmission(committed~, error~) =>
-      RemoteAdmissionOutcome::Partial(committed, error)
-    error => raise DocumentError::OpLog(error)
-  } noraise {
-    applied => RemoteAdmissionOutcome::Complete(applied)
-  }
-}
-
-///|
 /// Project operations already committed by OpLog into Fugue and its cache.
 fn Document::project_remote_ops(
   self : Document,
@@ -625,6 +579,15 @@ fn Document::project_remote_ops(
 ) -> Unit raise DocumentError {
   if applied_ops.length() == 0 {
     return
+  }
+  self.observe_projection_finalization(applied_ops)
+  match self.admission_projection_failure() {
+    Some(failure) =>
+      match failure(applied_ops) {
+        Some(error) => raise error
+        None => ()
+      }
+    None => ()
   }
   // For small batches with a warm cache, update incrementally to avoid
   // the O(n) full rebuild. For large batches, invalidate and rebuild lazily.
@@ -678,116 +641,35 @@ fn Document::project_remote_ops(
 }
 
 ///|
-/// Apply a remote operation with an injectable prepared-admission commit shell.
-fn Document::apply_remote_with(
-  self : Document,
-  op : @core.Op,
-  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
-) -> Unit raise DocumentError {
-  self.cursor = None
-  // Validate Insert content before touching the oplog so malformed peer ops
-  // can't persist (issue #31).
-  validate_remote_ops([op][:])
-  let prepared = self.oplog.prepare_remote([op]) catch {
-    e => raise DocumentError::OpLog(e)
-  }
-  self.preflight_remote_targets(prepared.operations())
-  // Check the incoming operation independently so an unready operation with
-  // a graph-known but structurally missing origin is rejected before pending.
-  self.preflight_remote_targets([op][:])
-  // Detach before admission so a fallible commit cannot observe a stale
-  // canonical cache. The exact cache is restored once the outcome is known.
-  let detached_cache = self.indexed_state.take_cache()
-  let outcome = try commit_prepared_admission(prepared, commit) catch {
-    error => {
-      self.indexed_state.restore_cache(detached_cache)
-      raise error
-    }
-  } noraise {
-    outcome => outcome
-  }
-  match outcome {
-    RemoteAdmissionOutcome::Complete(applied_ops) => {
-      self.indexed_state.restore_cache(detached_cache)
-      self.project_remote_ops(applied_ops[:])
-    }
-    RemoteAdmissionOutcome::Partial(committed, error) => {
-      self.indexed_state.restore_cache(detached_cache)
-      self.project_remote_ops(committed[:])
-      raise DocumentError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
-      )
-    }
-  }
-}
-
-///|
-/// Apply a remote operation to this document
+/// Apply one remote operation through the typed batch-admission shell while
+/// preserving the legacy Unit-returning error contract.
 pub fn Document::apply_remote(
   self : Document,
   op : @core.Op,
 ) -> Unit raise DocumentError {
-  self.apply_remote_with(op, prepared => self.oplog.commit_remote(prepared))
+  let admission = self.admit_remote([op])
+  admission.raise_legacy_remote_error()
 }
 
 ///|
-/// Merge remote operations with an injectable prepared-admission commit shell.
-fn Document::merge_remote_with(
-  self : Document,
-  remote_ops : Array[@core.Op],
-  remote_frontier : Array[@core.RawVersion],
-  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
-) -> Unit raise DocumentError {
-  self.cursor = None
-  // Validate the complete batch before touching state, so malformed content
-  // and invalid batch closure fail atomically (issue #31).
-  validate_remote_ops(remote_ops[:])
-  self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
-    e => raise DocumentError::OpLog(e)
-  }
-  let prepared = self.oplog.prepare_remote(remote_ops) catch {
-    e => raise DocumentError::OpLog(e)
-  }
-  self.preflight_remote_targets(prepared.operations())
-  // Retain the pre-commit frontier. Branch advances this shared tree once
-  // admission has committed the prepared admission.
-  let branch = @branch.Branch::from_tree_and_oplog(self.tree, self.oplog)
-  // Invalidate before merge so admission and partial-merge failures cannot
-  // leave a stale position cache behind.
-  self.invalidate_cache()
-  let outcome = commit_prepared_admission(prepared, commit)
-  match outcome {
-    RemoteAdmissionOutcome::Complete(_) => {
-      let _ = branch.advance(self.oplog.get_frontier()) catch {
-        e => raise DocumentError::Branch(e)
-      }
-    }
-    RemoteAdmissionOutcome::Partial(committed, error) => {
-      let _ = branch.advance(self.oplog.get_frontier()) catch {
-        e => raise DocumentError::Branch(e)
-      }
-      raise DocumentError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
-      )
-    }
-  }
-}
-
-///|
-/// Merge remote operations into this document
+/// Merge a complete-frontier remote batch through the typed admission shell.
+/// Closure validation remains the only merge-specific responsibility.
 pub fn Document::merge_remote(
   self : Document,
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise DocumentError {
-  self.merge_remote_with(remote_ops, remote_frontier, prepared => {
-    self.oplog.commit_remote(prepared)
-  })
+  self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
+    e => raise DocumentError::OpLog(e)
+  }
+  let admission = self.admit_remote(remote_ops)
+  admission.raise_legacy_remote_error()
 }
 
 ///|
 /// Get the number of visible characters in the document.
 pub fn Document::visible_count(self : Document) -> Int {
+  self.ensure_projection_ready_for_read()
   self.tree.visible_count()
 }
 
@@ -830,6 +712,7 @@ pub fn Document::checkout_branch(
 pub fn Document::get_visible_items(
   self : Document,
 ) -> Array[(@fugue.Lv, @fugue.Item[String])] {
+  self.ensure_projection_ready_for_read()
   // Delegate to tree traversal — VisibleRun doesn't store enough
   // information to reconstruct full Item structs.
   self.tree.get_visible_items()
@@ -838,5 +721,6 @@ pub fn Document::get_visible_items(
 ///|
 /// Map a local version to its visible position in the document.
 pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
+  self.ensure_projection_ready_for_read()
   self.indexed_state.lv_to_position(self.tree, lv)
 }
