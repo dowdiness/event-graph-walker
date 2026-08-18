@@ -97,8 +97,7 @@ test "version cache tracks remote admission and concurrent convergence" {
   let initial = alice.sync().export_all()
   let _ = try! bob.sync().apply(initial)
   inspect(cached_version_matches_log(alice), content="true")
-  inspect(cache_is_invalid(bob), content="true")
-  inspect(version_matches_log(bob), content="true")
+  inspect(cached_version_matches_log(bob), content="true")
 
   let shared = alice.version()
   try! alice.insert(Pos::at(1), "C")
@@ -110,16 +109,14 @@ test "version cache tracks remote admission and concurrent convergence" {
   let _ = try! alice.sync().apply(bob_delta)
   let _ = try! bob.sync().apply(alice_delta)
 
-  inspect(cache_is_invalid(alice), content="true")
-  inspect(cache_is_invalid(bob), content="true")
-  inspect(version_matches_log(alice), content="true")
-  inspect(version_matches_log(bob), content="true")
+  inspect(cached_version_matches_log(alice), content="true")
+  inspect(cached_version_matches_log(bob), content="true")
   inspect(alice.version() == bob.version(), content="true")
   inspect(alice.text() == bob.text(), content="true")
 }
 
 ///|
-test "version cache preserves three replica entries after remote rebuild" {
+test "version cache preserves three replica entries after remote advancement" {
   let alice = try! TextState::new("alice")
   let bob = try! TextState::new("bob")
   let carol = try! TextState::new("carol")
@@ -129,19 +126,15 @@ test "version cache preserves three replica entries after remote rebuild" {
   let initial = alice.sync().export_all()
   let _ = try! bob.sync().apply(initial)
   let _ = try! carol.sync().apply(initial)
+  inspect(cached_version_matches_log(bob), content="true")
+  inspect(cached_version_matches_log(carol), content="true")
 
-  // Warm the receivers after remote admission so the following local edits
-  // exercise the populated-cache path rather than the invalid fallback.
-  ignore(bob.version())
-  ignore(carol.version())
   try! bob.insert(Pos::at(bob.len()), "B")
   try! carol.insert(Pos::at(carol.len()), "C")
 
-  // Deliver Carol's concurrent operation to Bob, then rebuild Bob's cache.
   let carol_delta = carol.sync().export_since(shared)
   let _ = try! bob.sync().apply(carol_delta)
-  inspect(cache_is_invalid(bob), content="true")
-  ignore(bob.version())
+  inspect(cached_version_matches_log(bob), content="true")
 
   // A subsequent local edit must retain Alice, Bob, and Carol maxima.
   try! bob.insert(Pos::at(bob.len()), "D")

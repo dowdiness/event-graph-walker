@@ -920,13 +920,12 @@ pub fn SyncSession::apply_with_limits(
   }
   let outcome = admission.outcome
   let projection = admission.projection
-  let committed_count = match outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => receipt.committed().length()
-    @oplog.AdmissionOutcome::Partial(receipt~, ..) =>
-      receipt.committed().length()
+  let receipt = match outcome {
+    @oplog.AdmissionOutcome::Complete(receipt) => receipt
+    @oplog.AdmissionOutcome::Partial(receipt~, ..) => receipt
   }
-  if committed_count > 0 {
-    self.doc.invalidate_cached_version()
+  for op in receipt.committed() {
+    self.doc.advance_cached_version(op)
   }
   match projection {
     @document.ProjectionStatus::RecoveryRequired(..) =>
