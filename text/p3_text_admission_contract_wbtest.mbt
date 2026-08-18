@@ -50,7 +50,7 @@ test "P3 one message invokes one Document admission boundary" {
 }
 
 ///|
-test "P3 complete report maps committed evidence and invalidates version cache" {
+test "P3 complete report advances the ready version cache" {
   let source = try! TextState::new("p3-complete-source")
   try! source.insert(Pos::at(0), "A")
   let message = try! source.sync().export_all()
@@ -63,7 +63,30 @@ test "P3 complete report maps committed evidence and invalidates version cache" 
   assert_eq(report.applied_operations(), 1)
   assert_eq(report.duplicate_operations(), 0)
   assert_eq(report.pending_operations(), 0)
+  match session.doc.cached_version {
+    Ready(version) =>
+      assert_eq(version, Version::from_ops(session.doc.inner.get_all_ops()))
+    Invalid => fail("committed admission invalidated a ready version cache")
+  }
+}
+
+///|
+test "P3 committed admission preserves an invalid version cache until read" {
+  let source = try! TextState::new("p3-invalid-cache-source")
+  try! source.insert(Pos::at(0), "A")
+  let message = try! source.sync().export_all()
+  let receiver = try! TextState::new("p3-invalid-cache-receiver")
+  let session = receiver.sync()
+  session.doc.invalidate_cached_version()
   assert_true(session.doc.cached_version is Invalid)
+
+  let report = try! session.apply(message)
+
+  assert_eq(report.applied_operations(), 1)
+  assert_true(session.doc.cached_version is Invalid)
+  let rebuilt = session.current_version()
+  assert_eq(rebuilt, Version::from_ops(session.doc.inner.get_all_ops()))
+  assert_true(session.doc.cached_version is Ready(_))
 }
 
 ///|
@@ -139,5 +162,10 @@ test "P3 parent-after drains core pending without outer replay" {
   assert_eq(second.applied_operations(), 2)
   assert_eq(second.pending_operations(), 0)
   assert_eq(receiver.sync().doc.inner.pending_count(), 0)
+  match receiver.cached_version {
+    Ready(version) =>
+      assert_eq(version, Version::from_ops(receiver.inner.get_all_ops()))
+    Invalid => fail("dependency drain invalidated a ready version cache")
+  }
   assert_eq(receiver.text(), "AB")
 }
