@@ -111,10 +111,12 @@ fn IndexedState::insert_at(
       } else {
         locator.add_item(item)
       }
-      if located {
+      if located && locator.position(run.start_lv) == Some(position) {
         cache.insert_at(position, run)
+        true
+      } else {
+        false
       }
-      located
     }
     _ => false
   }
