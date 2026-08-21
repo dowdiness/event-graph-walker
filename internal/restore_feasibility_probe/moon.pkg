@@ -1,5 +1,7 @@
 import {
   "dowdiness/event-graph-walker/text",
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/oplog",
   "moonbitlang/core/json",
 }
 

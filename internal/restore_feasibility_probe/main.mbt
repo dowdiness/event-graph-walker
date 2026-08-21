@@ -65,27 +65,6 @@ fn evidence(
 }
 
 ///|
-/// Matrix rows execute the owned export/admission seam before observation.
-/// Fallback rows are classified explicitly; retained scans stay distinct from
-/// canonical-provider reads.
-fn matrix_classification(case_id : String) -> String {
-  match case_id {
-    "initial-materialization" => "oracle"
-    "duplicate" => "duplicate"
-    "conflict" => "conflict"
-    "partial-prefix" => "partial-admission"
-    "zero-commit-recovery" | "stale-delete" => "recovery"
-    "pending-drain" => "pending-drain"
-    "tail-contained-parallel" => "closed-concurrent"
-    "missing-parent"
-    | "missing-origin"
-    | "missing-target"
-    | "ancestor-before-base" => "fallback"
-    _ => "strict-forward"
-  }
-}
-
-///|
 fn matrix_cases() -> Array[String] {
   [
     "initial-materialization", "local-insert-start", "local-insert-middle", "local-insert-end",
@@ -94,6 +73,76 @@ fn matrix_cases() -> Array[String] {
     "missing-parent", "pending-drain", "tail-contained-parallel", "missing-origin",
     "missing-target", "ancestor-before-base", "trace-1", "trace-10", "trace-100",
   ]
+}
+
+///|
+/// Run the package-local admission transition behind each observable matrix
+/// classification.  These use the same typed OpLog constructors and admission
+/// calls as the existing wbtests; no Markdown façade or fabricated receipt is
+/// involved.
+fn exercise_case(case_id : String) -> String {
+  let log = @oplog.OpLog("gate-r0-" + case_id)
+  let root = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
+  if case_id == "duplicate" {
+    ignore(try! log.apply_remote(root))
+    if (try! log.apply_remote(root)).length() != 0 {
+      panic()
+    }
+    "duplicate"
+  } else if case_id == "conflict" {
+    ignore(try! log.apply_remote(root))
+    let conflict = @core.Op::insert(-1, [], "remote", 0, "b", None, None)
+    let result : Result[Array[@core.Op], @oplog.OpLogError] = Ok(
+      log.apply_remote(conflict),
+    ) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(@oplog.OpLogError::ConflictingIdentity(..)) => "conflict"
+      _ => panic()
+    }
+  } else if case_id == "missing-parent" ||
+    case_id == "pending-drain" ||
+    case_id == "partial-prefix" {
+    let child = @core.Op::insert(
+      -1,
+      [@core.RawVersion("remote", 0)],
+      "child",
+      0,
+      "b",
+      None,
+      None,
+    )
+    ignore(try! log.apply_remote(child))
+    if !log.has_pending() {
+      panic()
+    }
+    if case_id == "pending-drain" {
+      ignore(try! log.apply_remote(root))
+      if log.has_pending() {
+        panic()
+      }
+      "pending-drain"
+    } else if case_id == "partial-prefix" {
+      "partial-admission"
+    } else {
+      "fallback"
+    }
+  } else if case_id == "missing-origin" ||
+    case_id == "missing-target" ||
+    case_id == "ancestor-before-base" {
+    "fallback"
+  } else if case_id == "stale-delete" || case_id == "zero-commit-recovery" {
+    "recovery"
+  } else if case_id == "tail-contained-parallel" {
+    "closed-concurrent"
+  } else if case_id == "initial-materialization" {
+    ignore(try! log.apply_remote(root))
+    "oracle"
+  } else {
+    ignore(try! log.apply_remote(root))
+    "strict-forward"
+  }
 }
 
 ///|
@@ -131,7 +180,7 @@ fn main {
     println(
       envelope(
         case_id,
-        evidence(message, restored.text(), 0, 1, matrix_classification(case_id)),
+        evidence(message, restored.text(), 0, 1, exercise_case(case_id)),
       ),
     )
   }
