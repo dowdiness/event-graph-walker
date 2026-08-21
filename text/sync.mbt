@@ -901,7 +901,8 @@ fn SyncSession::admit_remote(
   }
 }
 
-///| Apply one canonical message and retain its authority-owned settlement.
+///|
+/// Apply one canonical message and retain its authority-owned settlement.
 pub fn SyncSession::apply_transition_with_limits(
   self : SyncSession,
   message : SyncMessage,
@@ -936,9 +937,11 @@ pub fn SyncSession::apply_transition_with_limits(
             effects.push(TextEffect::Insert(Pos::at(position), text))
           @document.ProjectionEffect::Delete(start~, end~) =>
             effects.push(
-              TextEffect::Delete(Range::from_ints(start, end) catch {
-                error => raise error
-              }),
+              TextEffect::Delete(
+                Range::from_ints(start, end) catch {
+                  error => raise error
+                },
+              ),
             )
         }
       }
@@ -981,7 +984,8 @@ pub fn SyncSession::apply_transition_with_limits(
   )
 }
 
-///| Apply one canonical message through the Document-owned authority boundary.
+///|
+/// Apply one canonical message through the Document-owned authority boundary.
 pub fn SyncSession::apply_with_limits(
   self : SyncSession,
   message : SyncMessage,
@@ -990,7 +994,8 @@ pub fn SyncSession::apply_with_limits(
   self.apply_transition_with_limits(message, limits).finish()
 }
 
-///| Apply a message and retain its authority-owned settlement.
+///|
+/// Apply a message and retain its authority-owned settlement.
 pub fn SyncSession::apply_transition(
   self : SyncSession,
   message : SyncMessage,

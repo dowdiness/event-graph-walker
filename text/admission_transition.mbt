@@ -1,23 +1,26 @@
-///| One authority-owned visible-text effect in Unicode-scalar coordinates.
+///|
+/// One authority-owned visible-text effect in Unicode-scalar coordinates.
 pub(all) enum TextEffect {
   Insert(Pos, String)
   Delete(Range)
 } derive(Debug, Eq)
 
-///| Availability of an exact incremental effect for one admission.
+///|
+/// Availability of an exact incremental effect for one admission.
 pub(all) enum TextEffectAvailability {
   Exact(ArrayView[TextEffect])
   SnapshotRequired
   Unavailable
 }
 
-///| Opaque settlement for one Text authority admission.
+///|
+/// Opaque settlement for one Text authority admission.
 pub struct TextAdmissionTransition {
-  version_before : Version
-  version_after : Version
-  effects : Array[TextEffect]
-  availability : TextEffectAvailability
-  result : Result[SyncReport, TextError]
+  priv version_before : Version
+  priv version_after : Version
+  priv effects : Array[TextEffect]
+  priv availability : TextEffectAvailability
+  priv result : Result[SyncReport, TextError]
 }
 
 ///|
@@ -49,10 +52,13 @@ pub fn TextAdmissionTransition::version_after(
 pub fn TextAdmissionTransition::availability(
   self : TextAdmissionTransition,
 ) -> TextEffectAvailability {
+  // Keep the transition-owned backing storage live for the returned view.
+  ignore(self.effects)
   self.availability
 }
 
-///| Complete settlement after the consumer has reconciled derived state.
+///|
+/// Complete settlement after the consumer has reconciled derived state.
 pub fn TextAdmissionTransition::finish(
   self : TextAdmissionTransition,
 ) -> SyncReport raise TextError {

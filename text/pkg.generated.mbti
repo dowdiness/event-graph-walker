@@ -61,6 +61,8 @@ pub(all) struct SyncSession {
   // private fields
 }
 pub fn SyncSession::apply(Self, SyncMessage) -> SyncReport raise TextError
+pub fn SyncSession::apply_transition(Self, SyncMessage) -> TextAdmissionTransition raise TextError
+pub fn SyncSession::apply_transition_with_limits(Self, SyncMessage, @sync.Limits) -> TextAdmissionTransition raise TextError
 pub fn SyncSession::apply_with_limits(Self, SyncMessage, @sync.Limits) -> SyncReport raise TextError
 pub fn SyncSession::clear_pending_sync(Self) -> Unit
 pub fn SyncSession::current_version(Self) -> Version
@@ -68,6 +70,25 @@ pub fn SyncSession::decode_json(Self, String) -> SyncMessage raise TextError
 pub fn SyncSession::export_all(Self) -> SyncMessage raise TextError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TextError
 pub fn SyncSession::pending_sync_count(Self) -> Int
+
+pub struct TextAdmissionTransition {
+  // private fields
+}
+pub fn TextAdmissionTransition::availability(Self) -> TextEffectAvailability
+pub fn TextAdmissionTransition::finish(Self) -> SyncReport raise TextError
+pub fn TextAdmissionTransition::version_after(Self) -> Version
+pub fn TextAdmissionTransition::version_before(Self) -> Version
+
+pub(all) enum TextEffect {
+  Insert(Pos, String)
+  Delete(Range)
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TextEffectAvailability {
+  Exact(ArrayView[TextEffect])
+  SnapshotRequired
+  Unavailable
+}
 
 pub(all) struct TextState {
   // private fields
@@ -113,4 +134,3 @@ pub impl Show for Version
 // Type aliases
 
 // Traits
-

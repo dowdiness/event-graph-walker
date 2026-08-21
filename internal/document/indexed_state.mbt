@@ -10,18 +10,21 @@
 ///|
 struct IndexedState {
   mut cache : @order_tree.OrderTree[VisibleRun]?
+  mut locator : LvLocator?
 }
 
 ///|
 fn IndexedState::new() -> IndexedState {
-  { cache: Some(@order_tree.OrderTree::new()) }
+  { cache: Some(@order_tree.OrderTree::new()), locator: Some(LvLocator::new()) }
 }
 
-///| Own a cache detached from the canonical Document slot.
-fn IndexedState::from_cache(
-  cache : @order_tree.OrderTree[VisibleRun]?,
+///|
+/// Own a cache detached from the canonical Document slot.
+fn IndexedState::from_snapshot(
+  snapshot : (@order_tree.OrderTree[VisibleRun]?, LvLocator?),
 ) -> IndexedState {
-  { cache, }
+  let (cache, locator) = snapshot
+  { cache, locator }
 }
 
 ///|
@@ -34,7 +37,10 @@ fn IndexedState::from_tree(tree : @fugue.FugueTree[String]) -> IndexedState {
     let (lv, item) = items[i]
     runs.push({ start_lv: lv.0, text: item.content, count: 1 })
   }
-  { cache: Some(@order_tree.OrderTree::from_array(runs)) }
+  {
+    cache: Some(@order_tree.OrderTree::from_array(runs)),
+    locator: Some(LvLocator::from_tree(tree)),
+  }
 }
 
 ///|
@@ -48,6 +54,7 @@ fn IndexedState::ensure(
     None => {
       let rebuilt = IndexedState::from_tree(tree)
       self.cache = rebuilt.cache
+      self.locator = rebuilt.locator
       self.cache.unwrap()
     }
   }
@@ -55,12 +62,13 @@ fn IndexedState::ensure(
 
 ///|
 fn IndexedState::is_ready(self : IndexedState) -> Bool {
-  self.cache is Some(_)
+  self.cache is Some(_) && self.locator is Some(_)
 }
 
 ///|
 fn IndexedState::invalidate(self : IndexedState) -> Unit {
   self.cache = None
+  self.locator = None
 }
 
 ///|
@@ -68,19 +76,23 @@ fn IndexedState::invalidate(self : IndexedState) -> Unit {
 /// empty while the caller performs a fallible commit.
 fn IndexedState::take_cache(
   self : IndexedState,
-) -> @order_tree.OrderTree[VisibleRun]? {
+) -> (@order_tree.OrderTree[VisibleRun]?, LvLocator?) {
   let cache = self.cache
+  let locator = self.locator
   self.cache = None
-  cache
+  self.locator = None
+  (cache, locator)
 }
 
 ///|
 /// Restore a cache detached by `take_cache` without cloning it.
 fn IndexedState::restore_cache(
   self : IndexedState,
-  cache : @order_tree.OrderTree[VisibleRun]?,
+  snapshot : (@order_tree.OrderTree[VisibleRun]?, LvLocator?),
 ) -> Unit {
+  let (cache, locator) = snapshot
   self.cache = cache
+  self.locator = locator
 }
 
 ///|
@@ -90,13 +102,52 @@ fn IndexedState::insert_at(
   self : IndexedState,
   position : Int,
   run : VisibleRun,
+  item : @fugue.Item[String],
 ) -> Bool {
-  match self.cache {
-    Some(cache) => {
-      cache.insert_at(position, run)
-      true
+  match (self.cache, self.locator) {
+    (Some(cache), Some(locator)) => {
+      let located = if locator.contains(run.start_lv) {
+        locator.show(run.start_lv)
+      } else {
+        locator.add_item(item)
+      }
+      if located {
+        cache.insert_at(position, run)
+      }
+      located
     }
-    None => false
+    _ => false
+  }
+}
+
+///|
+/// Integrate one became-visible identity into the warm topology locator and
+/// visible sequence, returning its authority-owned sequential scalar rank.
+fn IndexedState::insert_visible(
+  self : IndexedState,
+  tree : @fugue.FugueTree[String],
+  lv : Int,
+  run : VisibleRun,
+) -> Int? {
+  match (self.cache, self.locator, tree.get(@fugue.Lv(lv))) {
+    (Some(cache), Some(locator), Some(item)) => {
+      let located = if locator.contains(lv) {
+        locator.show(lv)
+      } else {
+        locator.add_item(item)
+      }
+      if !located {
+        return None
+      }
+      match locator.position(lv) {
+        Some(position) => {
+          cache.insert_at(position, run)
+          Some(position)
+        }
+        None => None
+      }
+    }
+    _ => None
   }
 }
 
@@ -107,7 +158,11 @@ fn IndexedState::delete_at(self : IndexedState, position : Int) -> Bool {
   match self.cache {
     Some(cache) =>
       match cache.delete_at(position) {
-        Some(_) => true
+        Some(deleted) =>
+          match self.locator {
+            Some(locator) => locator.hide(deleted.start_lv)
+            None => false
+          }
         None => false
       }
     None => false
@@ -179,13 +234,9 @@ fn IndexedState::lv_to_position(
   tree : @fugue.FugueTree[String],
   lv : Int,
 ) -> Int? {
-  let cache = self.ensure(tree)
-  let mut position = 0
-  for run in cache.iter() {
-    if lv >= run.start_lv && lv < run.start_lv + run.count {
-      return Some(position + (lv - run.start_lv))
-    }
-    position = position + run.count
+  ignore(self.ensure(tree))
+  match self.locator {
+    Some(locator) => locator.position(lv)
+    None => None
   }
-  None
 }

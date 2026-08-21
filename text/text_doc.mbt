@@ -212,7 +212,8 @@ pub fn TextState::version(self : TextState) -> Version {
   }
 }
 
-///| Read authority Version for a transition without changing cache readiness.
+///|
+/// Read authority Version for a transition without changing cache readiness.
 fn TextState::transition_version(self : TextState) -> Version {
   match self.cached_version {
     VersionCache::Ready(version) => version

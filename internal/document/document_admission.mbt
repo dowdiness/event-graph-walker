@@ -8,13 +8,15 @@ pub enum ProjectionStatus {
   RecoveryRequired(error~ : @branch.BranchError)
 }
 
-///| Package-internal scalar effect produced by Document projection.
+///|
+/// Package-internal scalar effect produced by Document projection.
 pub(all) enum ProjectionEffect {
   Insert(position~ : Int, text~ : String)
   Delete(start~ : Int, end~ : Int)
 }
 
-///| Whether Document can prove an exact ordered projection effect.
+///|
+/// Whether Document can prove an exact ordered projection effect.
 pub(all) enum ProjectionEffectAvailability {
   Exact(ArrayView[ProjectionEffect])
   SnapshotRequired
@@ -329,10 +331,7 @@ fn Document::admit_remote_with(
       ProjectionEffectAvailability::Exact(effects[:])
     }
     return DocumentAdmission::DocumentAdmission(
-      outcome,
-      status,
-      effects,
-      availability,
+      outcome, status, effects, availability,
     )
   }
 
@@ -340,9 +339,13 @@ fn Document::admit_remote_with(
   // a projection failure must remain visibly invalid until recovery succeeds.
   self.invalidate_cache()
   self.cursor = None
+  let detached_ready = match detached_cache {
+    (Some(_), Some(_)) => true
+    _ => false
+  }
   let workspace = ProjectionWorkspace::new(
     detached_cache,
-    committed.length() <= 3 && detached_cache is Some(_),
+    committed.length() <= 3 && detached_ready,
   )
   let projection_result : Result[Unit, DocumentError] = Ok(
     (capabilities.project)(committed, workspace),
@@ -364,10 +367,7 @@ fn Document::admit_remote_with(
         ProjectionEffectAvailability::Exact(effects[:])
       }
       DocumentAdmission::DocumentAdmission(
-        outcome,
-        status,
-        effects,
-        availability,
+        outcome, status, effects, availability,
       )
     }
     Err(_) => {
@@ -392,10 +392,7 @@ fn Document::admit_remote_with(
           ProjectionEffectAvailability::SnapshotRequired
       }
       DocumentAdmission::DocumentAdmission(
-        outcome,
-        status,
-        effects,
-        availability,
+        outcome, status, effects, availability,
       )
     }
   }
@@ -457,8 +454,9 @@ pub fn Document::admit_remote(
       )
     },
     commit: prepared => self.commit_admission_for_document(prepared),
-    project: (committed, workspace) =>
-      self.project_remote_ops(committed, workspace),
+    project: (committed, workspace) => {
+      self.project_remote_ops(committed, workspace)
+    },
     recover: frontier => self.recover_projection_for_admission(frontier),
   })
 }

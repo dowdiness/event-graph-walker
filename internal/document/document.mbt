@@ -236,11 +236,11 @@ pub fn Document::insert(
       agent: @fugue.ReplicaId(agent),
     })
     if cache_valid {
-      cache_valid = self.indexed_state.insert_at(current_pos, {
-        start_lv: op.lv(),
-        text: ch_str,
-        count: 1,
-      })
+      cache_valid = self.indexed_state.insert_at(
+        current_pos,
+        { start_lv: op.lv(), text: ch_str, count: 1 },
+        self.tree.get(@fugue.Lv(op.lv())).unwrap(),
+      )
     }
     last_op = Some(op)
     current_pos = current_pos + 1
