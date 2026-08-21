@@ -3,6 +3,7 @@ import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/oplog",
   "moonbitlang/core/json",
+  "moonbitlang/core/env",
 }
 
 pkgtype(kind: "executable")
