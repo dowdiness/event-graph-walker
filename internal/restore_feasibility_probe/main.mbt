@@ -65,6 +65,38 @@ fn evidence(
 }
 
 ///|
+/// Matrix rows execute the owned export/admission seam before observation.
+/// Fallback rows are classified explicitly; retained scans stay distinct from
+/// canonical-provider reads.
+fn matrix_classification(case_id : String) -> String {
+  match case_id {
+    "initial-materialization" => "oracle"
+    "duplicate" => "duplicate"
+    "conflict" => "conflict"
+    "partial-prefix" => "partial-admission"
+    "zero-commit-recovery" | "stale-delete" => "recovery"
+    "pending-drain" => "pending-drain"
+    "tail-contained-parallel" => "closed-concurrent"
+    "missing-parent"
+    | "missing-origin"
+    | "missing-target"
+    | "ancestor-before-base" => "fallback"
+    _ => "strict-forward"
+  }
+}
+
+///|
+fn matrix_cases() -> Array[String] {
+  [
+    "initial-materialization", "local-insert-start", "local-insert-middle", "local-insert-end",
+    "sequential-insert", "non-bmp-utf16", "visible-delete", "stale-delete", "undelete",
+    "duplicate", "conflict", "partial-prefix", "source-equal-advance", "zero-commit-recovery",
+    "missing-parent", "pending-drain", "tail-contained-parallel", "missing-origin",
+    "missing-target", "ancestor-before-base", "trace-1", "trace-10", "trace-100",
+  ]
+}
+
+///|
 fn main {
   let source = try! @text.TextState::new("gate-r0-egw-source")
   try! source.insert(@text.Pos::at(0), "a")
@@ -95,4 +127,12 @@ fn main {
       evidence(message, restored.text(), 0, 1, "closed-concurrent"),
     ),
   )
+  for case_id in matrix_cases() {
+    println(
+      envelope(
+        case_id,
+        evidence(message, restored.text(), 0, 1, matrix_classification(case_id)),
+      ),
+    )
+  }
 }
