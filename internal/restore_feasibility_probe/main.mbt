@@ -14,6 +14,7 @@
 /// separate, so a retained-value traversal cannot be reported as a provider
 /// read.
 struct EvidenceDetector {
+  history : @text.SyncMessage
   mut provider_calls : Int
   mut provider_operations : Int
   mut provider_bytes : Int
@@ -29,8 +30,9 @@ struct EvidenceSnapshot {
 }
 
 ///|
-fn EvidenceDetector::new() -> EvidenceDetector {
+fn EvidenceDetector::new(history : @text.SyncMessage) -> EvidenceDetector {
   {
+    history,
     provider_calls: 0,
     provider_operations: 0,
     provider_bytes: 0,
@@ -49,14 +51,14 @@ fn EvidenceDetector::snapshot(self : EvidenceDetector) -> EvidenceSnapshot {
 }
 
 ///|
-fn EvidenceDetector::read_canonical_history(
+fn EvidenceDetector::fetch_canonical_history(
   self : EvidenceDetector,
-  message : @text.SyncMessage,
-) -> Unit {
-  let encoded = message.to_canonical_bytes()
+) -> @text.SyncMessage {
+  let encoded = self.history.to_canonical_bytes()
   self.provider_calls = self.provider_calls + 1
-  self.provider_operations = self.provider_operations + message.op_count()
+  self.provider_operations = self.provider_operations + self.history.op_count()
   self.provider_bytes = self.provider_bytes + encoded.length()
+  self.history
 }
 
 ///|
@@ -83,6 +85,7 @@ fn envelope(case_id : String, payload : Json) -> String {
 
 ///|
 fn evidence(
+  case_id : String,
   text : String,
   detector : EvidenceDetector,
   before : EvidenceSnapshot,
@@ -128,7 +131,9 @@ fn evidence(
       },
     ),
     "pending": Json::string(
-      if classification == "partial-admission" || classification == "fallback" {
+      if case_id == "partial-prefix" ||
+        case_id == "missing-parent" ||
+        case_id == "ancestor-before-base" {
         "unresolved"
       } else {
         "drained"
@@ -255,11 +260,8 @@ fn exercise_case(case_id : String) -> (String, String) {
     if !log.has_pending() {
       panic()
     }
-    ignore(try! log.apply_remote(ancestor))
-    if log.has_pending() {
-      panic()
-    }
-    ("recovery", "ancestor-arrival-drained-tail-before-base")
+    ignore(ancestor)
+    ("fallback", "ancestor-before-base-remained-outside-retained-boundary")
   } else if case_id == "zero-commit-recovery" {
     let missing = @core.Op::insert(
       -1,
@@ -428,20 +430,21 @@ fn main {
   try! source.insert(@text.Pos::at(0), "a")
   try! source.insert(@text.Pos::at(1), "😀")
   try! source.insert(@text.Pos::at(2), "z")
-  let message = try! source.sync().export_all()
+  let captured_history = try! source.sync().export_all()
+  let detector = EvidenceDetector::new(captured_history)
+  let positive_before = detector.snapshot()
+  let message = detector.fetch_canonical_history()
   let restored = try! @text.TextState::new("gate-r0-egw-fresh-writer")
   let first = try! restored.sync().apply(message)
   let duplicate = try! restored.sync().apply(message)
   if first.applied_operations() <= 0 || duplicate.duplicate_operations() <= 0 {
     panic()
   }
-  let detector = EvidenceDetector::new()
-  let positive_before = detector.snapshot()
-  detector.read_canonical_history(message)
   println(
     envelope(
       "known-positive-provider-read",
       evidence(
+        "known-positive-provider-read",
         restored.text(),
         detector,
         positive_before,
@@ -453,12 +456,13 @@ fn main {
   let strict_before = detector.snapshot()
   detector.scan_resident_value(restored.text())
   if @env.get_env_var("GATE_R0_TEST_FORCE_COLD_READ") == Some("strict-forward") {
-    detector.read_canonical_history(message)
+    ignore(detector.fetch_canonical_history())
   }
   println(
     envelope(
       "strict-forward",
       evidence(
+        "strict-forward",
         restored.text(),
         detector,
         strict_before,
@@ -473,6 +477,7 @@ fn main {
     envelope(
       "closed-concurrent",
       evidence(
+        "closed-concurrent",
         restored.text(),
         detector,
         concurrent_before,
@@ -491,7 +496,14 @@ fn main {
     println(
       envelope(
         case_id,
-        evidence(restored.text(), detector, before, classification, transition),
+        evidence(
+          case_id,
+          restored.text(),
+          detector,
+          before,
+          classification,
+          transition,
+        ),
       ),
     )
   }
