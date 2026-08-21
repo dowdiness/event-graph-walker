@@ -8,6 +8,50 @@
 /// cannot be manufactured by merely hiding an in-memory scan.
 
 ///|
+/// Test-only capability ledger.  Only `read_canonical_history` may advance
+/// provider counters; matrix records receive this object by reference and can
+/// only serialize its snapshot.  `scan_resident_value` is deliberately
+/// separate, so a retained-value traversal cannot be reported as a provider
+/// read.
+struct EvidenceDetector {
+  mut provider_calls : Int
+  mut provider_operations : Int
+  mut provider_bytes : Int
+  mut in_memory_scans : Int
+}
+
+///|
+fn EvidenceDetector::new() -> EvidenceDetector {
+  {
+    provider_calls: 0,
+    provider_operations: 0,
+    provider_bytes: 0,
+    in_memory_scans: 0,
+  }
+}
+
+///|
+fn EvidenceDetector::read_canonical_history(
+  self : EvidenceDetector,
+  message : @text.SyncMessage,
+) -> Unit {
+  let encoded = message.to_canonical_bytes()
+  self.provider_calls = self.provider_calls + 1
+  self.provider_operations = self.provider_operations + message.op_count()
+  self.provider_bytes = self.provider_bytes + encoded.length()
+}
+
+///|
+fn EvidenceDetector::scan_resident_value(
+  self : EvidenceDetector,
+  text : String,
+) -> Unit {
+  // `length` is the actual retained-value observation under test.
+  ignore(text.length())
+  self.in_memory_scans = self.in_memory_scans + 1
+}
+
+///|
 fn envelope(case_id : String, payload : Json) -> String {
   Json::object({
     "schema_version": Json::number(1.0),
@@ -21,42 +65,29 @@ fn envelope(case_id : String, payload : Json) -> String {
 
 ///|
 fn evidence(
-  message : @text.SyncMessage,
   text : String,
-  provider_calls : Int,
-  in_memory_scans : Int,
+  detector : EvidenceDetector,
   classification : String,
   transition : String,
 ) -> Json {
-  let bytes = message.to_canonical_bytes().length()
   Json::object({
     "text": Json::string(text),
     "frontier": Json::string("captured-by-egw"),
     "classification": Json::string(classification),
     "transition": Json::string(transition),
-    "provider_calls": Json::number(provider_calls.to_double()),
+    "provider_calls": Json::number(detector.provider_calls.to_double()),
     "provider_operations": Json::number(
-      if provider_calls == 0 {
-        0.0
-      } else {
-        message.op_count().to_double()
-      },
+      detector.provider_operations.to_double(),
     ),
-    "provider_bytes": Json::number(
-      if provider_calls == 0 {
-        0.0
-      } else {
-        bytes.to_double()
-      },
-    ),
+    "provider_bytes": Json::number(detector.provider_bytes.to_double()),
     "requested_boundary": Json::string(
-      if provider_calls == 0 {
+      if detector.provider_calls == 0 {
         "none"
       } else {
         "canonical-full-history"
       },
     ),
-    "in_memory_scans": Json::number(in_memory_scans.to_double()),
+    "in_memory_scans": Json::number(detector.in_memory_scans.to_double()),
     "duplicate": Json::string("observed"),
     "conflict": Json::string("not-triggered"),
     "pending": Json::string("drained"),
@@ -317,40 +348,40 @@ fn main {
   if first.applied_operations() <= 0 || duplicate.duplicate_operations() <= 0 {
     panic()
   }
+  let positive_detector = EvidenceDetector::new()
+  positive_detector.read_canonical_history(message)
   println(
     envelope(
       "known-positive-provider-read",
       evidence(
-        message,
         restored.text(),
-        1,
-        0,
+        positive_detector,
         "preflight-positive-control",
         "canonical-provider-read",
       ),
     ),
   )
+  let strict_detector = EvidenceDetector::new()
+  strict_detector.scan_resident_value(restored.text())
   println(
     envelope(
       "strict-forward",
       evidence(
-        message,
         restored.text(),
-        0,
-        1,
+        strict_detector,
         "strict-forward",
         "fresh-text-admission",
       ),
     ),
   )
+  let concurrent_detector = EvidenceDetector::new()
+  concurrent_detector.scan_resident_value(restored.text())
   println(
     envelope(
       "closed-concurrent",
       evidence(
-        message,
         restored.text(),
-        0,
-        1,
+        concurrent_detector,
         "closed-concurrent",
         "fresh-text-concurrent-admission",
       ),
@@ -358,10 +389,12 @@ fn main {
   )
   for case_id in matrix_cases() {
     let (classification, transition) = exercise_case(case_id)
+    let detector = EvidenceDetector::new()
+    detector.scan_resident_value(restored.text())
     println(
       envelope(
         case_id,
-        evidence(message, restored.text(), 0, 1, classification, transition),
+        evidence(restored.text(), detector, classification, transition),
       ),
     )
   }
