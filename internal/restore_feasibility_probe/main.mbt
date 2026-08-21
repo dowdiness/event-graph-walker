@@ -140,7 +140,45 @@ fn evidence(
       },
     ),
     "closed_tail": Json::string(
-      "declared-parents+implicit-predecessor+origin+target",
+      if case_id == "tail-contained-parallel" {
+        "declared-base+implicit-same-agent-predecessor+parallel-ancestor"
+      } else {
+        "not-applicable"
+      },
+    ),
+    "product_mode": Json::string(
+      if case_id == "immediate-insert-zero-read" {
+        "insert"
+      } else if case_id == "immediate-delete-zero-read" {
+        "delete"
+      } else if case_id == "immediate-undelete-zero-read" {
+        "undelete"
+      } else {
+        "not-applicable"
+      },
+    ),
+    "operation_count": Json::number(
+      (if case_id == "immediate-insert-zero-read" {
+        1
+      } else if case_id == "immediate-delete-zero-read" {
+        2
+      } else if case_id == "immediate-undelete-zero-read" {
+        3
+      } else {
+        0
+      }).to_double(),
+    ),
+    "source_equal_text_unchanged": Json::boolean(
+      case_id == "source-equal-advance",
+    ),
+    "source_equal_frontier_advanced": Json::boolean(
+      case_id == "source-equal-advance",
+    ),
+    "implicit_predecessor_observed": Json::boolean(
+      case_id == "tail-contained-parallel",
+    ),
+    "ancestor_closure_observed": Json::boolean(
+      case_id == "tail-contained-parallel",
     ),
   })
 }
@@ -164,7 +202,28 @@ fn matrix_cases() -> Array[String] {
 fn exercise_case(case_id : String) -> (String, String) {
   let log = @oplog.OpLog("gate-r0-" + case_id)
   let root = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
-  if case_id == "duplicate" {
+  if case_id == "immediate-insert-zero-read" {
+    ignore(try! log.insert("x", -1, -1))
+    if log.op_count() != 1 {
+      panic()
+    }
+    ("strict-forward", "one-local-insert-with-resident-history")
+  } else if case_id == "immediate-delete-zero-read" {
+    ignore(try! log.insert("x", -1, -1))
+    ignore(try! log.delete(0))
+    if log.op_count() != 2 {
+      panic()
+    }
+    ("strict-forward", "local-insert-then-visible-delete")
+  } else if case_id == "immediate-undelete-zero-read" {
+    ignore(try! log.insert("x", -1, -1))
+    ignore(try! log.delete(0))
+    ignore(try! log.undelete(0))
+    if log.op_count() != 3 {
+      panic()
+    }
+    ("strict-forward", "local-insert-delete-undelete")
+  } else if case_id == "duplicate" {
     ignore(try! log.apply_remote(root))
     if (try! log.apply_remote(root)).length() != 0 {
       panic()
@@ -301,19 +360,36 @@ fn exercise_case(case_id : String) -> (String, String) {
       None,
       None,
     )
+    let left_successor = @core.Op::insert(-1, [], "left", 1, "s", None, None)
+    ignore(try! log.apply_remote(left_successor))
+    if !log.has_pending() {
+      panic()
+    }
     ignore(try! log.apply_remote(base))
+    if !log.has_pending() {
+      panic()
+    }
     ignore(try! log.apply_remote(left))
+    if log.has_pending() || log.op_count() != 3 {
+      panic()
+    }
     ignore(try! log.apply_remote(right))
-    if log.op_count() != 3 {
+    if log.op_count() != 4 || log.has_pending() {
       panic()
     }
-    ("closed-concurrent", "parallel-tail-pair-admitted-after-shared-base")
+    (
+      "closed-concurrent", "implicit-predecessor-drained-with-parallel-shared-base",
+    )
   } else if case_id == "source-equal-advance" {
-    ignore(try! log.apply_remote(root))
-    if (try! log.apply_remote(root)).length() != 0 {
+    let state = try! @text.TextState::new("source-equal")
+    let before_text = state.text()
+    let before_version = state.version()
+    try! state.insert(@text.Pos::at(0), "x")
+    try! state.delete(@text.Pos::at(0))
+    if state.text() != before_text || state.version() == before_version {
       panic()
     }
-    ("strict-forward", "source-equal-delivery-returned-zero")
+    ("strict-forward", "frontier-advanced-with-source-equal-visible-text")
   } else if case_id == "local-insert-start" {
     ignore(try! log.insert("start", -1, -1))
     if log.op_count() != 1 {
@@ -486,6 +562,27 @@ fn main {
       ),
     ),
   )
+  for
+    case_id in [
+      "immediate-insert-zero-read", "immediate-delete-zero-read", "immediate-undelete-zero-read",
+    ] {
+    let (classification, transition) = exercise_case(case_id)
+    let before = detector.snapshot()
+    detector.scan_resident_value(restored.text())
+    println(
+      envelope(
+        case_id,
+        evidence(
+          case_id,
+          restored.text(),
+          detector,
+          before,
+          classification,
+          transition,
+        ),
+      ),
+    )
+  }
   for case_id in matrix_cases() {
     if @env.get_env_var("GATE_R0_TEST_OMIT_CASE") == Some(case_id) {
       continue
