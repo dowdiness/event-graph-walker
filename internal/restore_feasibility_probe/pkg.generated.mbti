@@ -8,6 +8,8 @@ package "dowdiness/event-graph-walker/internal/restore_feasibility_probe"
 // Types and methods
 type EvidenceDetector
 
+type EvidenceSnapshot
+
 // Type aliases
 
 // Traits
