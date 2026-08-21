@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/internal/restore_feasibility_probe"
+
+// Values
+
+// Errors
+
+// Types and methods
+type EvidenceDetector
+
+// Type aliases
+
+// Traits
