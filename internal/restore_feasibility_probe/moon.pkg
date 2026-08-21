@@ -1,0 +1,6 @@
+import {
+  "dowdiness/event-graph-walker/text",
+  "moonbitlang/core/json",
+}
+
+pkgtype(kind: "executable")
