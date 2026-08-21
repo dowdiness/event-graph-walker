@@ -14,7 +14,14 @@ struct IndexedState {
 
 ///|
 fn IndexedState::new() -> IndexedState {
-  { cache: None }
+  { cache: Some(@order_tree.OrderTree::new()) }
+}
+
+///| Own a cache detached from the canonical Document slot.
+fn IndexedState::from_cache(
+  cache : @order_tree.OrderTree[VisibleRun]?,
+) -> IndexedState {
+  { cache, }
 }
 
 ///|

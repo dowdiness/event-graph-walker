@@ -8,10 +8,25 @@ pub enum ProjectionStatus {
   RecoveryRequired(error~ : @branch.BranchError)
 }
 
+///| Package-internal scalar effect produced by Document projection.
+pub(all) enum ProjectionEffect {
+  Insert(position~ : Int, text~ : String)
+  Delete(start~ : Int, end~ : Int)
+}
+
+///| Whether Document can prove an exact ordered projection effect.
+pub(all) enum ProjectionEffectAvailability {
+  Exact(ArrayView[ProjectionEffect])
+  SnapshotRequired
+  Unavailable
+}
+
 ///|
 pub struct DocumentAdmission {
   outcome : @oplog.AdmissionOutcome
   projection : ProjectionStatus
+  effects : Array[ProjectionEffect]
+  effect_availability : ProjectionEffectAvailability
 }
 
 ///|
@@ -20,8 +35,10 @@ pub struct DocumentAdmission {
 fn DocumentAdmission::DocumentAdmission(
   outcome : @oplog.AdmissionOutcome,
   projection : ProjectionStatus,
+  effects : Array[ProjectionEffect],
+  effect_availability : ProjectionEffectAvailability,
 ) -> DocumentAdmission {
-  { outcome, projection }
+  { outcome, projection, effects, effect_availability }
 }
 
 ///|
@@ -58,7 +75,7 @@ fn merge_projection_recovery_targets(
 priv struct AdmissionCapabilities {
   prepare : (Array[@core.Op], Int?, Int?) -> @oplog.PreparedAdmission raise @oplog.OpLogError
   commit : (@oplog.PreparedAdmission) -> @oplog.AdmissionOutcome raise @oplog.OpLogError
-  project : (ArrayView[@core.Op]) -> Unit raise DocumentError
+  project : (ArrayView[@core.Op], ProjectionWorkspace) -> Unit raise DocumentError
   recover : (@core.Frontier) -> Unit raise DocumentError
 }
 
@@ -305,15 +322,30 @@ fn Document::admit_remote_with(
     } else {
       ProjectionStatus::Skipped
     }
-    return DocumentAdmission::DocumentAdmission(outcome, status)
+    let effects : Array[ProjectionEffect] = []
+    let availability = if recovered {
+      ProjectionEffectAvailability::SnapshotRequired
+    } else {
+      ProjectionEffectAvailability::Exact(effects[:])
+    }
+    return DocumentAdmission::DocumentAdmission(
+      outcome,
+      status,
+      effects,
+      availability,
+    )
   }
 
   // Authority has advanced. Never restore the detached cache before projection;
   // a projection failure must remain visibly invalid until recovery succeeds.
   self.invalidate_cache()
   self.cursor = None
+  let workspace = ProjectionWorkspace::new(
+    detached_cache,
+    committed.length() <= 3 && detached_cache is Some(_),
+  )
   let projection_result : Result[Unit, DocumentError] = Ok(
-    (capabilities.project)(committed),
+    (capabilities.project)(committed, workspace),
   ) catch {
     error => Err(error)
   }
@@ -324,7 +356,19 @@ fn Document::admit_remote_with(
       } else {
         ProjectionStatus::Projected
       }
-      DocumentAdmission::DocumentAdmission(outcome, status)
+      self.indexed_state.restore_cache(workspace.take_cache())
+      let effects = workspace.effects
+      let availability = if recovered || !workspace.exact {
+        ProjectionEffectAvailability::SnapshotRequired
+      } else {
+        ProjectionEffectAvailability::Exact(effects[:])
+      }
+      DocumentAdmission::DocumentAdmission(
+        outcome,
+        status,
+        effects,
+        availability,
+      )
     }
     Err(_) => {
       self.invalidate_cache()
@@ -338,7 +382,21 @@ fn Document::admit_remote_with(
       } noraise {
         _ => ProjectionStatus::Recovered
       }
-      DocumentAdmission::DocumentAdmission(outcome, status)
+      let effects : Array[ProjectionEffect] = []
+      let availability = match status {
+        ProjectionStatus::Recovered =>
+          ProjectionEffectAvailability::SnapshotRequired
+        ProjectionStatus::RecoveryRequired(..) =>
+          ProjectionEffectAvailability::Unavailable
+        ProjectionStatus::Skipped | ProjectionStatus::Projected =>
+          ProjectionEffectAvailability::SnapshotRequired
+      }
+      DocumentAdmission::DocumentAdmission(
+        outcome,
+        status,
+        effects,
+        availability,
+      )
     }
   }
 }
@@ -399,7 +457,8 @@ pub fn Document::admit_remote(
       )
     },
     commit: prepared => self.commit_admission_for_document(prepared),
-    project: committed => self.project_remote_ops(committed),
+    project: (committed, workspace) =>
+      self.project_remote_ops(committed, workspace),
     recover: frontier => self.recover_projection_for_admission(frontier),
   })
 }

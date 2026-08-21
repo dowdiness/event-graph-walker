@@ -212,6 +212,14 @@ pub fn TextState::version(self : TextState) -> Version {
   }
 }
 
+///| Read authority Version for a transition without changing cache readiness.
+fn TextState::transition_version(self : TextState) -> Version {
+  match self.cached_version {
+    VersionCache::Ready(version) => version
+    VersionCache::Invalid => Version::from_ops(self.inner.get_all_ops())
+  }
+}
+
 ///|
 /// Get a sync session for this document
 pub fn TextState::sync(self : TextState) -> SyncSession {
