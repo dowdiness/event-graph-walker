@@ -80,6 +80,86 @@ test "transition exact delete exposes scalar range" {
 }
 
 ///|
+/// A remote undo revives deleted text with an exact insert effect.
+test "transition exact remote undelete exposes visible insert effect" {
+  let source = try! TextState::new("transition-undelete-source")
+  let source_undo = @undo.UndoManager::new("transition-undelete-source")
+  try! source.insert_and_record(Pos::at(0), "A", source_undo, timestamp_ms=0)
+  try! source.delete_and_record(Pos::at(0), source_undo, timestamp_ms=1000)
+  let receiver = try! TextState::new("transition-undelete-receiver")
+  ignore(try! receiver.sync().apply(try! source.sync().export_all()))
+  assert_eq(receiver.text(), "")
+  let receiver_version = receiver.version()
+  assert_true(try! source_undo.undo(source))
+
+  let before = receiver.text()
+  let transition = try! receiver
+    .sync()
+    .apply_transition(try! source.sync().export_since(receiver_version))
+  assert_eq(transition.version_before(), receiver_version)
+  assert_eq(transition.version_after(), receiver.version())
+  match transition.availability() {
+    Exact(effects) => {
+      assert_eq(effects.length(), 1)
+      assert_eq(effects[0], Insert(Pos::at(0), "A"))
+      assert_eq(
+        apply_transition_effects_for_test(before, effects),
+        receiver.text(),
+      )
+    }
+    SnapshotRequired => fail("remote undelete required a snapshot")
+    Unavailable => fail("remote undelete was unavailable")
+  }
+  let report = try! transition.finish()
+  assert_eq(report.applied_operations(), 1)
+  assert_eq(report.duplicate_operations(), 0)
+  assert_eq(report.pending_operations(), 0)
+}
+
+///|
+/// A losing remote LWW delete is admitted, advances the version, and changes
+/// no visible text, so its exact effect sequence is empty.
+test "transition exact losing LWW delete reports admission with empty effects" {
+  let source = try! TextState::new("transition-losing-delete-source")
+  try! source.insert(Pos::at(0), "A")
+  let receiver = try! TextState::new("transition-losing-delete-receiver")
+  ignore(try! receiver.sync().apply(try! source.sync().export_all()))
+
+  let receiver_undo = @undo.UndoManager::new(
+    "transition-losing-delete-receiver",
+  )
+  try! receiver.delete_and_record(Pos::at(0), receiver_undo, timestamp_ms=0)
+  assert_true(try! receiver_undo.undo(receiver))
+  assert_eq(receiver.text(), "A")
+  let before = receiver.text()
+  let before_version = receiver.version()
+
+  try! source.delete(Pos::at(0))
+  let transition = try! receiver
+    .sync()
+    .apply_transition(try! source.sync().export_all())
+  assert_eq(transition.version_before(), before_version)
+  assert_true(transition.version_after() != before_version)
+  assert_eq(transition.version_after(), receiver.version())
+  match transition.availability() {
+    Exact(effects) => {
+      assert_eq(effects.length(), 0)
+      assert_eq(
+        apply_transition_effects_for_test(before, effects),
+        receiver.text(),
+      )
+    }
+    SnapshotRequired => fail("losing LWW delete required a snapshot")
+    Unavailable => fail("losing LWW delete was unavailable")
+  }
+  let report = try! transition.finish()
+  assert_eq(report.applied_operations(), 1)
+  assert_eq(report.duplicate_operations(), 1)
+  assert_eq(report.pending_operations(), 0)
+  assert_eq(receiver.text(), "A")
+}
+
+///|
 /// Duplicate and pending authority no-ops remain exact empty effects.
 test "transition duplicate-only and pending-only expose exact empty effects" {
   let source = try! TextState::new("transition-noop-source")
