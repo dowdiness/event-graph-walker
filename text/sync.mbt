@@ -902,12 +902,13 @@ fn SyncSession::admit_remote(
 }
 
 ///|
-/// Apply one canonical message through the Document-owned authority boundary.
-pub fn SyncSession::apply_with_limits(
+/// Apply one canonical message and retain its authority-owned settlement.
+pub fn SyncSession::apply_transition_with_limits(
   self : SyncSession,
   message : SyncMessage,
   limits : @sync.Limits,
-) -> SyncReport raise TextError {
+) -> TextAdmissionTransition raise TextError {
+  let version_before = self.doc.transition_version()
   self.prepare_for_admission()
   map_sync_failure(fn() raise @sync.Failure {
     validate_message_limits(message, limits)
@@ -927,27 +928,79 @@ pub fn SyncSession::apply_with_limits(
   for op in receipt.committed() {
     self.doc.advance_cached_version(op)
   }
-  match projection {
+  let effects : Array[TextEffect] = []
+  let availability = match admission.effect_availability {
+    @document.ProjectionEffectAvailability::Exact(projected) => {
+      for effect in projected {
+        match effect {
+          @document.ProjectionEffect::Insert(position~, text~) =>
+            effects.push(TextEffect::Insert(Pos::at(position), text))
+          @document.ProjectionEffect::Delete(start~, end~) =>
+            effects.push(
+              TextEffect::Delete(
+                Range::from_ints(start, end) catch {
+                  error => raise error
+                },
+              ),
+            )
+        }
+      }
+      TextEffectAvailability::Exact(effects[:])
+    }
+    @document.ProjectionEffectAvailability::SnapshotRequired =>
+      TextEffectAvailability::SnapshotRequired
+    @document.ProjectionEffectAvailability::Unavailable =>
+      TextEffectAvailability::Unavailable
+  }
+  let result : Result[SyncReport, TextError] = match projection {
     @document.ProjectionStatus::RecoveryRequired(..) =>
-      raise TextError::ProjectionRecoveryRequired
+      Err(TextError::ProjectionRecoveryRequired)
     @document.ProjectionStatus::Skipped
     | @document.ProjectionStatus::Projected
     | @document.ProjectionStatus::Recovered =>
       match outcome {
         @oplog.AdmissionOutcome::Complete(receipt) =>
-          {
+          Ok({
             applied_operations: receipt.committed().length(),
             duplicate_operations: receipt.redelivery_count(),
             pending_operations: receipt.pending_after_count(),
-          }
+          })
         @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
           let _ = receipt
-          raise TextError::from_oplog_error(
-            @oplog.OpLogError::CausalGraphError(error~),
+          Err(
+            TextError::from_oplog_error(
+              @oplog.OpLogError::CausalGraphError(error~),
+            ),
           )
         }
       }
   }
+  TextAdmissionTransition::new(
+    version_before,
+    self.doc.transition_version(),
+    effects,
+    availability,
+    result,
+  )
+}
+
+///|
+/// Apply one canonical message through the Document-owned authority boundary.
+pub fn SyncSession::apply_with_limits(
+  self : SyncSession,
+  message : SyncMessage,
+  limits : @sync.Limits,
+) -> SyncReport raise TextError {
+  self.apply_transition_with_limits(message, limits).finish()
+}
+
+///|
+/// Apply a message and retain its authority-owned settlement.
+pub fn SyncSession::apply_transition(
+  self : SyncSession,
+  message : SyncMessage,
+) -> TextAdmissionTransition raise TextError {
+  self.apply_transition_with_limits(message, self.doc.sync_limits)
 }
 
 ///|

@@ -236,11 +236,11 @@ pub fn Document::insert(
       agent: @fugue.ReplicaId(agent),
     })
     if cache_valid {
-      cache_valid = self.indexed_state.insert_at(current_pos, {
-        start_lv: op.lv(),
-        text: ch_str,
-        count: 1,
-      })
+      cache_valid = self.indexed_state.insert_at(
+        current_pos,
+        { start_lv: op.lv(), text: ch_str, count: 1 },
+        self.tree.get(@fugue.Lv(op.lv())).unwrap(),
+      )
     }
     last_op = Some(op)
     current_pos = current_pos + 1
@@ -588,6 +588,7 @@ pub fn Document::undelete_if_deleted(
 fn Document::project_remote_ops(
   self : Document,
   applied_ops : ArrayView[@core.Op],
+  workspace : ProjectionWorkspace,
 ) -> Unit raise DocumentError {
   if applied_ops.length() == 0 {
     return
@@ -601,54 +602,9 @@ fn Document::project_remote_ops(
       }
     None => ()
   }
-  // For small batches with a warm cache, update incrementally to avoid
-  // the O(n) full rebuild. For large batches, invalidate and rebuild lazily.
-  let mut incremental = applied_ops.length() <= 3 &&
-    self.indexed_state.is_ready()
-  if !incremental {
-    self.invalidate_cache()
-  }
   let cg = self.oplog.causal_graph()
   for applied in applied_ops {
-    if incremental {
-      let change = apply_projection_with_visible_change(self.tree, applied, cg)
-      if @fugue_projection.is_became_hidden(change) {
-        let lv = @fugue_projection.visibility_identity(change)
-        // The tree has changed, but IndexedState has not. Resolve the old
-        // visible position before removing its run from the cache.
-        match self.lv_to_position(lv.0) {
-          Some(pos) =>
-            if !self.indexed_state.delete_at(pos) {
-              self.invalidate_cache()
-              incremental = false
-            }
-          None => {
-            self.invalidate_cache()
-            incremental = false
-          }
-        }
-      } else if @fugue_projection.is_became_visible(change) {
-        let lv = @fugue_projection.visibility_identity(change)
-        // Both the post-mutation position and content come from Fugue.
-        match (self.tree.lv_to_position(lv), self.tree.get(lv)) {
-          (Some(pos), Some(item)) =>
-            if !self.indexed_state.insert_at(pos, {
-                start_lv: lv.0,
-                text: item.content,
-                count: 1,
-              }) {
-              self.invalidate_cache()
-              incremental = false
-            }
-          _ => {
-            self.invalidate_cache()
-            incremental = false
-          }
-        }
-      }
-    } else {
-      apply_projection(self.tree, applied, cg)
-    }
+    workspace.project(self.tree, applied, cg)
   }
 }
 

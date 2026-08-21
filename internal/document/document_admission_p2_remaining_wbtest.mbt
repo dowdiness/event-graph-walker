@@ -373,6 +373,10 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
     | ProjectionStatus::RecoveryRequired(..) =>
       fail("successful preflight recovery must be reported")
   }
+  assert_true(
+    admission.effect_availability
+    is ProjectionEffectAvailability::SnapshotRequired,
+  )
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
 }
@@ -421,6 +425,10 @@ test "P2 green preflight recovery remains sticky for projected batch" {
     | ProjectionStatus::RecoveryRequired(..) =>
       fail("successful preflight recovery must remain sticky")
   }
+  assert_true(
+    admission.effect_availability
+    is ProjectionEffectAvailability::SnapshotRequired,
+  )
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
 }
@@ -611,6 +619,9 @@ test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
     | ProjectionStatus::Skipped =>
       fail("failed checkout must return RecoveryRequired")
   }
+  assert_true(
+    admission.effect_availability is ProjectionEffectAvailability::Unavailable,
+  )
   assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
@@ -654,6 +665,11 @@ test "P2 red retry drains only core pending suffix" {
   })
 
   let first = try! doc.admit_remote(incoming)
+  match first.effect_availability {
+    ProjectionEffectAvailability::Exact(effects) =>
+      assert_eq(effects.length(), 1)
+    _ => fail("warm committed partial prefix must publish exact effects")
+  }
   match first.outcome {
     @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
       p2_assert_operation_prefix(receipt.committed(), incoming, 1)
@@ -987,6 +1003,10 @@ test "P2 red recovered admission resets cursor before local insert" {
     | ProjectionStatus::RecoveryRequired(..) =>
       fail("expected successful recovery")
   }
+  assert_true(
+    admission.effect_availability
+    is ProjectionEffectAvailability::SnapshotRequired,
+  )
   ignore(try! doc.insert(doc.visible_count(), "l"))
   p2_assert_fresh_cursor_convergence(doc)
 }
@@ -1057,6 +1077,10 @@ test "P2 green entry recovery is sticky for duplicate-only admission" {
     | ProjectionStatus::RecoveryRequired(..) =>
       fail("entry recovery must remain sticky for duplicate-only admission")
   }
+  assert_true(
+    admission.effect_availability
+    is ProjectionEffectAvailability::SnapshotRequired,
+  )
   assert_true(doc.projection_health is ProjectionHealth::Ready)
 }
 
