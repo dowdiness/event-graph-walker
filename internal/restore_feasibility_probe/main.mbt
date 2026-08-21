@@ -337,26 +337,48 @@ fn exercise_case(case_id : String) -> (String, String) {
 
 ///|
 fn trace_mode(case_id : String) -> Unit {
-  let count = if case_id == "trace-1" { 1 } else if case_id == "trace-10" { 10 } else { 100 }
+  let count = if case_id == "trace-1" {
+    1
+  } else if case_id == "trace-10" {
+    10
+  } else {
+    100
+  }
   let log = @oplog.OpLog("gate-r0-measure-" + case_id)
   let mut previous = -1
   for _ in 0..<count {
     let operation = try! log.insert("x", previous, -1)
     previous = operation.lv()
   }
-  if log.op_count() != count { panic() }
-  println(envelope(case_id, Json::object({
-    "measurement_mode": Json::string(case_id),
-    "operation_count": Json::number(count.to_double()),
-  })))
+  if log.op_count() != count {
+    panic()
+  }
+  println(
+    envelope(
+      case_id,
+      Json::object({
+        "measurement_mode": Json::string(case_id),
+        "operation_count": Json::number(count.to_double()),
+      }),
+    ),
+  )
 }
 
 ///|
 fn main {
   match @env.args().get(1) {
-    Some("trace-1") => { trace_mode("trace-1"); return }
-    Some("trace-10") => { trace_mode("trace-10"); return }
-    Some("trace-100") => { trace_mode("trace-100"); return }
+    Some("trace-1") => {
+      trace_mode("trace-1")
+      return
+    }
+    Some("trace-10") => {
+      trace_mode("trace-10")
+      return
+    }
+    Some("trace-100") => {
+      trace_mode("trace-100")
+      return
+    }
     _ => ()
   }
   let source = try! @text.TextState::new("gate-r0-egw-source")
