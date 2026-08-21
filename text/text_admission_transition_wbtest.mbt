@@ -1,4 +1,5 @@
-///| Observable contract tracer for authority-owned Text admission effects.
+///|
+/// Observable contract tracer for authority-owned Text admission effects.
 test "transition exact insert exposes sequential scalar effect and finishes report" {
   let source = try! TextState::new("transition-source")
   try! source.insert(Pos::at(0), "A")
@@ -30,15 +31,16 @@ test "transition exact insert exposes sequential scalar effect and finishes repo
   assert_eq(report.pending_operations(), 0)
 }
 
-///| Sequential coordinates are relative to each preceding effect.
+///|
+/// Sequential coordinates are relative to each preceding effect.
 test "transition exact batch exposes ordered scalar insert coordinates" {
   let source = try! TextState::new("transition-batch-source")
   try! source.insert(Pos::at(0), "AB")
   let receiver = try! TextState::new("transition-batch-receiver")
 
-  let transition = try! receiver.sync().apply_transition(
-    try! source.sync().export_all(),
-  )
+  let transition = try! receiver
+    .sync()
+    .apply_transition(try! source.sync().export_all())
 
   match transition.availability() {
     Exact(effects) => {
@@ -52,7 +54,8 @@ test "transition exact batch exposes ordered scalar insert coordinates" {
   ignore(try! transition.finish())
 }
 
-///| Delete coordinates name the visible scalar interval before that effect.
+///|
+/// Delete coordinates name the visible scalar interval before that effect.
 test "transition exact delete exposes scalar range" {
   let source = try! TextState::new("transition-delete-source")
   try! source.insert(Pos::at(0), "A")
@@ -61,9 +64,9 @@ test "transition exact delete exposes scalar range" {
   let receiver_version = receiver.version()
   try! source.delete(Pos::at(0))
 
-  let transition = try! receiver.sync().apply_transition(
-    try! source.sync().export_since(receiver_version),
-  )
+  let transition = try! receiver
+    .sync()
+    .apply_transition(try! source.sync().export_since(receiver_version))
 
   match transition.availability() {
     Exact(effects) => {
@@ -76,7 +79,8 @@ test "transition exact delete exposes scalar range" {
   ignore(try! transition.finish())
 }
 
-///| Duplicate and pending authority no-ops remain exact empty effects.
+///|
+/// Duplicate and pending authority no-ops remain exact empty effects.
 test "transition duplicate-only and pending-only expose exact empty effects" {
   let source = try! TextState::new("transition-noop-source")
   try! source.insert(Pos::at(0), "A")
@@ -104,7 +108,8 @@ test "transition duplicate-only and pending-only expose exact empty effects" {
   assert_eq(pending_report.pending_operations(), 1)
 }
 
-///| A dependency drain publishes every newly committed effect in commit order.
+///|
+/// A dependency drain publishes every newly committed effect in commit order.
 test "transition dependency drain exposes one sequential effect stream" {
   let receiver = try! TextState::new("transition-drain-receiver")
   let child = try! SyncMessage::from_json_string(
@@ -128,4 +133,94 @@ test "transition dependency drain exposes one sequential effect stream" {
   let report = try! transition.finish()
   assert_eq(report.applied_operations(), 2)
   assert_eq(report.pending_operations(), 0)
+}
+
+///|
+/// Test-only scalar oracle; production consumers must not compare snapshots.
+fn apply_transition_effects_for_test(
+  source : String,
+  effects : ArrayView[TextEffect],
+) -> String {
+  let chars = source.to_array()
+  for effect in effects {
+    match effect {
+      Insert(position, text) => {
+        let inserted = text.to_array()
+        for offset = 0; offset < inserted.length(); offset = offset + 1 {
+          chars.insert(position.value() + offset, inserted[offset])
+        }
+      }
+      Delete(range) => {
+        let start = range.start().value()
+        let count = range.end().value() - start
+        for _ in 0..<count {
+          ignore(chars.remove(start))
+        }
+      }
+    }
+  }
+  String::from_array(chars[:])
+}
+
+///|
+/// Exact effects remain a complete sequential description across randomized
+/// concurrent insert/delete histories and Unicode scalar content.
+test "property: exact transition effects reproduce authority text" {
+  let seeds : Array[Int] = @quickcheck.samples(20)
+  for raw_seed in seeds {
+    let alice = try! TextState::new("transition-property-alice")
+    let bob = try! TextState::new("transition-property-bob")
+    let receiver = try! TextState::new("transition-property-receiver")
+    let sources = [alice, bob]
+    let alphabet = ["a", "你", "😀", "\u{0301}", "\r", "\n"]
+    let mut state = raw_seed % 997
+    if state < 0 {
+      state = -state
+    }
+    for step = 0; step < 60; step = step + 1 {
+      state = (state * 37 + 17) % 997
+      let source = sources[state % sources.length()]
+      if state % 4 != 0 || source.len() == 0 {
+        let position = state % (source.len() + 1)
+        try! source.insert(
+          Pos::at(position),
+          alphabet[state % alphabet.length()],
+        )
+      } else {
+        try! source.delete(Pos::at(state % source.len()))
+      }
+      let before = receiver.text()
+      let transition = try! receiver
+        .sync()
+        .apply_transition(try! source.sync().export_all())
+      match transition.availability() {
+        Exact(effects) =>
+          assert_eq(
+            apply_transition_effects_for_test(before, effects),
+            receiver.text(),
+          )
+        SnapshotRequired =>
+          fail(
+            "one-step warm randomized admission unexpectedly required snapshot",
+          )
+        Unavailable => fail("randomized admission unexpectedly unavailable")
+      }
+      ignore(try! transition.finish())
+    }
+  }
+}
+
+///|
+/// The accepted initial policy sends oversized committed batches to the one
+/// coherent snapshot fallback rather than publishing unproved partial effects.
+test "transition oversized batch requires snapshot" {
+  let source = try! TextState::new("transition-oversized-source")
+  try! source.insert(Pos::at(0), "ABCD")
+  let receiver = try! TextState::new("transition-oversized-receiver")
+  let transition = try! receiver
+    .sync()
+    .apply_transition(try! source.sync().export_all())
+  assert_true(transition.availability() is SnapshotRequired)
+  let report = try! transition.finish()
+  assert_eq(report.applied_operations(), 4)
 }
