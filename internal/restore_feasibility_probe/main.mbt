@@ -407,6 +407,9 @@ fn main {
   )
   let strict_detector = EvidenceDetector::new()
   strict_detector.scan_resident_value(restored.text())
+  if @env.get_env_var("GATE_R0_TEST_FORCE_COLD_READ") == Some("strict-forward") {
+    strict_detector.read_canonical_history(message)
+  }
   println(
     envelope(
       "strict-forward",
@@ -432,6 +435,9 @@ fn main {
     ),
   )
   for case_id in matrix_cases() {
+    if @env.get_env_var("GATE_R0_TEST_OMIT_CASE") == Some(case_id) {
+      continue
+    }
     let (classification, transition) = exercise_case(case_id)
     let detector = EvidenceDetector::new()
     detector.scan_resident_value(restored.text())
