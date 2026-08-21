@@ -149,7 +149,7 @@ fn replica_text_unadmitted_operations(
   destination : Document,
   source_operations : Array[@core.Op],
 ) -> Array[@core.Op] {
-  let known : Map[@core.RawVersion, @core.Op] = Map::default()
+  let known : Map[@core.RawVersion, @core.Op] = Default::default()
   for operation in destination.get_all_ops() {
     known.set(@core.RawVersion(operation.agent(), operation.seq()), operation)
   }

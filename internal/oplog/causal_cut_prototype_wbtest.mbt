@@ -29,7 +29,7 @@ priv struct CausalCutSnapshot {
 
 ///|
 fn CausalCut::new() -> CausalCut {
-  { nodes: @hashmap.HashMap::default(), frontier: @hashset.HashSet::default() }
+  { nodes: Default::default(), frontier: Default::default() }
 }
 
 ///|

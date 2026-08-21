@@ -274,7 +274,7 @@ pub fn OpLog::validate_remote_batch(
   remote_ops : Array[@core.Op],
   remote_frontier : Array[@core.RawVersion],
 ) -> Unit raise OpLogError {
-  let batch : Map[@core.RawVersion, @core.Op] = Map::default()
+  let batch : Map[@core.RawVersion, @core.Op] = Default::default()
   for op in remote_ops {
     let raw = @core.RawVersion(op.agent(), op.seq())
     match batch.get(raw) {
