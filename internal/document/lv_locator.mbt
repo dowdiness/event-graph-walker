@@ -86,7 +86,7 @@ fn LvLocator::push_rank_node(self : LvLocator, visible : Bool) -> Int {
 ///|
 fn LvLocator::new() -> LvLocator {
   let locator : LvLocator = {
-    items: {},
+    items: Map([]),
     nodes: [],
     rank_root: -1,
     root_divider: -1,
