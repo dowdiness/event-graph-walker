@@ -26,12 +26,14 @@ fn evidence(
   provider_calls : Int,
   in_memory_scans : Int,
   classification : String,
+  transition : String,
 ) -> Json {
   let bytes = message.to_canonical_bytes().length()
   Json::object({
     "text": Json::string(text),
     "frontier": Json::string("captured-by-egw"),
     "classification": Json::string(classification),
+    "transition": Json::string(transition),
     "provider_calls": Json::number(provider_calls.to_double()),
     "provider_operations": Json::number(
       if provider_calls == 0 {
@@ -80,7 +82,7 @@ fn matrix_cases() -> Array[String] {
 /// classification.  These use the same typed OpLog constructors and admission
 /// calls as the existing wbtests; no Markdown façade or fabricated receipt is
 /// involved.
-fn exercise_case(case_id : String) -> String {
+fn exercise_case(case_id : String) -> (String, String) {
   let log = @oplog.OpLog("gate-r0-" + case_id)
   let root = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
   if case_id == "duplicate" {
@@ -88,7 +90,7 @@ fn exercise_case(case_id : String) -> String {
     if (try! log.apply_remote(root)).length() != 0 {
       panic()
     }
-    "duplicate"
+    ("duplicate", "second-delivery-returned-zero")
   } else if case_id == "conflict" {
     ignore(try! log.apply_remote(root))
     let conflict = @core.Op::insert(-1, [], "remote", 0, "b", None, None)
@@ -98,7 +100,8 @@ fn exercise_case(case_id : String) -> String {
       error => Err(error)
     }
     match result {
-      Err(@oplog.OpLogError::ConflictingIdentity(..)) => "conflict"
+      Err(@oplog.OpLogError::ConflictingIdentity(..)) =>
+        ("conflict", "same-identity-different-payload-rejected")
       _ => panic()
     }
   } else if case_id == "missing-parent" ||
@@ -122,26 +125,182 @@ fn exercise_case(case_id : String) -> String {
       if log.has_pending() {
         panic()
       }
-      "pending-drain"
+      ("pending-drain", "parent-arrival-drained-pending-child")
     } else if case_id == "partial-prefix" {
-      "partial-admission"
+      ("partial-admission", "child-retained-pending-without-parent")
     } else {
-      "fallback"
+      ("fallback", "missing-parent-retained-pending")
     }
-  } else if case_id == "missing-origin" ||
-    case_id == "missing-target" ||
-    case_id == "ancestor-before-base" {
-    "fallback"
-  } else if case_id == "stale-delete" || case_id == "zero-commit-recovery" {
-    "recovery"
+  } else if case_id == "visible-delete" {
+    ignore(try! log.insert("a", -1, -1))
+    ignore(try! log.delete(0))
+    ("strict-forward", "local-delete-applied-to-inserted-target")
+  } else if case_id == "undelete" {
+    ignore(try! log.insert("a", -1, -1))
+    ignore(try! log.delete(0))
+    ignore(try! log.undelete(0))
+    ("strict-forward", "local-undelete-applied-after-delete")
+  } else if case_id == "stale-delete" {
+    let result : Result[@core.Op, @oplog.OpLogError] = Ok(log.delete(99)) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(_) => ("recovery", "stale-delete-target-rejected")
+      _ => panic()
+    }
+  } else if case_id == "missing-origin" || case_id == "missing-target" {
+    let result : Result[@core.Op, @oplog.OpLogError] = Ok(
+      log.insert("a", 99, -1),
+    ) catch {
+      error => Err(error)
+    }
+    match result {
+      Err(_) =>
+        (
+          "fallback",
+          if case_id == "missing-origin" {
+            "missing-origin-rejected"
+          } else {
+            "missing-target-rejected"
+          },
+        )
+      _ => panic()
+    }
+  } else if case_id == "ancestor-before-base" {
+    let ancestor = @core.Op::insert(-1, [], "ancestor", 0, "a", None, None)
+    let tail = @core.Op::insert(
+      -1,
+      [@core.RawVersion("ancestor", 0)],
+      "tail",
+      0,
+      "b",
+      None,
+      None,
+    )
+    ignore(try! log.apply_remote(tail))
+    if !log.has_pending() {
+      panic()
+    }
+    ignore(try! log.apply_remote(ancestor))
+    if log.has_pending() {
+      panic()
+    }
+    ("recovery", "ancestor-arrival-drained-tail-before-base")
+  } else if case_id == "zero-commit-recovery" {
+    let missing = @core.Op::insert(
+      -1,
+      [@core.RawVersion("missing", 0)],
+      "recovery",
+      0,
+      "x",
+      None,
+      None,
+    )
+    ignore(try! log.apply_remote(missing))
+    if !log.has_pending() {
+      panic()
+    }
+    log.clear_pending()
+    if log.has_pending() {
+      panic()
+    }
+    ("recovery", "zero-commit-pending-discarded")
   } else if case_id == "tail-contained-parallel" {
-    "closed-concurrent"
+    let base = @core.Op::insert(-1, [], "base", 0, "b", None, None)
+    let left = @core.Op::insert(
+      -1,
+      [@core.RawVersion("base", 0)],
+      "left",
+      0,
+      "l",
+      None,
+      None,
+    )
+    let right = @core.Op::insert(
+      -1,
+      [@core.RawVersion("base", 0)],
+      "right",
+      0,
+      "r",
+      None,
+      None,
+    )
+    ignore(try! log.apply_remote(base))
+    ignore(try! log.apply_remote(left))
+    ignore(try! log.apply_remote(right))
+    if log.op_count() != 3 {
+      panic()
+    }
+    ("closed-concurrent", "parallel-tail-pair-admitted-after-shared-base")
+  } else if case_id == "source-equal-advance" {
+    ignore(try! log.apply_remote(root))
+    if (try! log.apply_remote(root)).length() != 0 {
+      panic()
+    }
+    ("strict-forward", "source-equal-delivery-returned-zero")
+  } else if case_id == "local-insert-start" {
+    ignore(try! log.insert("start", -1, -1))
+    if log.op_count() != 1 {
+      panic()
+    }
+    ("strict-forward", "start-insert-created-first-operation")
+  } else if case_id == "local-insert-middle" {
+    ignore(try! log.insert("left", -1, -1))
+    ignore(try! log.insert("middle", 0, -1))
+    if log.op_count() != 2 {
+      panic()
+    }
+    ("strict-forward", "middle-insert-referenced-existing-origin")
+  } else if case_id == "local-insert-end" {
+    ignore(try! log.insert("left", -1, -1))
+    ignore(try! log.insert("end", 0, -1))
+    if log.op_count() != 2 {
+      panic()
+    }
+    ("strict-forward", "end-insert-advanced-frontier")
+  } else if case_id == "sequential-insert" {
+    ignore(try! log.insert("a", -1, -1))
+    ignore(try! log.insert("b", 0, -1))
+    ignore(try! log.insert("c", 1, -1))
+    if log.op_count() != 3 {
+      panic()
+    }
+    ("strict-forward", "three-step-sequential-origin-chain")
+  } else if case_id == "non-bmp-utf16" {
+    let operation = try! log.insert("😀", -1, -1)
+    let is_non_bmp = match operation.content() {
+      @core.OpContent::Insert(content) => content == "😀"
+      _ => false
+    }
+    if log.op_count() != 1 || !is_non_bmp {
+      panic()
+    }
+    ("strict-forward", "non-bmp-payload-admitted")
   } else if case_id == "initial-materialization" {
     ignore(try! log.apply_remote(root))
-    "oracle"
+    ("oracle", "remote-root-materialized")
+  } else if case_id == "trace-1" ||
+    case_id == "trace-10" ||
+    case_id == "trace-100" {
+    let count = if case_id == "trace-1" {
+      1
+    } else if case_id == "trace-10" {
+      10
+    } else {
+      100
+    }
+    let mut previous = -1
+    for _ in 0..<count {
+      let op = try! log.insert("x", previous, -1)
+      previous = op.lv()
+    }
+    if log.op_count() != count {
+      panic()
+    }
+    ("strict-forward", "trace-op-count-" + count.to_string())
   } else {
     ignore(try! log.apply_remote(root))
-    "strict-forward"
+    ("strict-forward", "local-typed-insert-admitted")
   }
 }
 
@@ -161,26 +320,48 @@ fn main {
   println(
     envelope(
       "known-positive-provider-read",
-      evidence(message, restored.text(), 1, 0, "preflight-positive-control"),
+      evidence(
+        message,
+        restored.text(),
+        1,
+        0,
+        "preflight-positive-control",
+        "canonical-provider-read",
+      ),
     ),
   )
   println(
     envelope(
       "strict-forward",
-      evidence(message, restored.text(), 0, 1, "strict-forward"),
+      evidence(
+        message,
+        restored.text(),
+        0,
+        1,
+        "strict-forward",
+        "fresh-text-admission",
+      ),
     ),
   )
   println(
     envelope(
       "closed-concurrent",
-      evidence(message, restored.text(), 0, 1, "closed-concurrent"),
+      evidence(
+        message,
+        restored.text(),
+        0,
+        1,
+        "closed-concurrent",
+        "fresh-text-concurrent-admission",
+      ),
     ),
   )
   for case_id in matrix_cases() {
+    let (classification, transition) = exercise_case(case_id)
     println(
       envelope(
         case_id,
-        evidence(message, restored.text(), 0, 1, exercise_case(case_id)),
+        evidence(message, restored.text(), 0, 1, classification, transition),
       ),
     )
   }
