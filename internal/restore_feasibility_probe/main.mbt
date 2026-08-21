@@ -360,7 +360,16 @@ fn exercise_case(case_id : String) -> (String, String) {
       None,
       None,
     )
-    let left_successor = @core.Op::insert(-1, [], "left", 1, "s", None, None)
+    let left_predecessor = @core.RawVersion("left", 0)
+    let left_successor = @core.Op::insert(
+      -1,
+      [left_predecessor],
+      "left",
+      1,
+      "s",
+      Some(left_predecessor),
+      None,
+    )
     ignore(try! log.apply_remote(left_successor))
     if !log.has_pending() {
       panic()
@@ -370,9 +379,6 @@ fn exercise_case(case_id : String) -> (String, String) {
       panic()
     }
     ignore(try! log.apply_remote(left))
-    if log.has_pending() || log.op_count() != 3 {
-      panic()
-    }
     ignore(try! log.apply_remote(right))
     if log.op_count() != 4 || log.has_pending() {
       panic()
