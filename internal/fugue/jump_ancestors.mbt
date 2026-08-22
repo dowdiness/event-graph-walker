@@ -33,7 +33,9 @@ fn JumpAncestors::add_item_id(
       self.jump[idx] = []
     }
     Some(parent_id) => {
-      guard! self.depth[parent_id.0] != -1
+      if self.depth[parent_id.0] == -1 {
+        panic()
+      }
       self.depth[idx] = self.depth[parent_id.0] + 1
       let jumps : Array[ItemId] = [parent_id]
       while true {
