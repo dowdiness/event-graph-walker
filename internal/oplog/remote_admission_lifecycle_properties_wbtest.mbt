@@ -811,7 +811,7 @@ fn prop_remote_admission_planner_lifecycle(
   let fixture = planner_lifecycle_fixture(trace)
   let planner = RemoteAdmissionPlanner()
   let model = PlannerLifecycleModel()
-  let original_arrivals : Map[@core.RawVersion, Int] = Map::default()
+  let original_arrivals : Map[@core.RawVersion, Int] = Default::default()
   let mut active_plan : PreparedAdmission? = None
   let mut active_model_plan : PlannerLifecycleModelPlan? = None
   let mut drain_operations : Array[@core.Op] = []

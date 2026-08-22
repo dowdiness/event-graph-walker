@@ -45,7 +45,7 @@ struct FixtureCatalog {
 
 ///|
 /// Stable JSON summary used to prove repeated generation is byte-identical.
-fn FixtureCatalog::to_json_string(self : FixtureCatalog) -> String {
+fn FixtureCatalog::_to_json_string(self : FixtureCatalog) -> String {
   let fixtures : Array[Json] = []
   for fixture in self.fixtures {
     fixtures.push(
@@ -309,7 +309,7 @@ fn visible_text(visible : Array[VisibleScalar]) -> String {
 
 ///|
 /// Construct an event directly for ordering conformance tests.
-fn fixture_event_for_order(
+fn _fixture_event_for_order(
   ordinal : Int,
   identity : RawIdentity,
   parents : Array[RawIdentity],
@@ -769,7 +769,7 @@ fn catalog_fixture(
 
 ///|
 /// Generate every scale fixed by the R0 decision contract.
-fn generate_required_catalog() -> FixtureCatalog raise FixtureError {
+fn _generate_required_catalog() -> FixtureCatalog raise FixtureError {
   let fixtures : Array[CatalogFixture] = []
   for spec in required_fixture_specs() {
     let (shape, count) = spec

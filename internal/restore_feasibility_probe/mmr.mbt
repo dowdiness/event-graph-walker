@@ -95,7 +95,7 @@ fn build_peaks(leaves : Array[Bytes]) -> Array[MmrPeak] {
 }
 
 ///|
-fn R0Mmr::from_leaf_hashes(leaves : ArrayView[Bytes]) -> R0Mmr {
+fn R0Mmr::_from_leaf_hashes(leaves : ArrayView[Bytes]) -> R0Mmr {
   let owned : Array[Bytes] = []
   for leaf in leaves {
     if leaf.length() != 32 {
@@ -125,8 +125,8 @@ fn writer_root_from_peaks(
 }
 
 ///|
-fn R0Mmr::writer_root(self : R0Mmr, agent : String) -> Bytes {
-  let peaks = try! build_peaks(self.leaf_hashes)
+fn R0Mmr::_writer_root(self : R0Mmr, agent : String) -> Bytes {
+  let peaks = build_peaks(self.leaf_hashes)
   writer_root_from_peaks(agent, self.leaf_hashes.length(), peaks)
 }
 
@@ -159,7 +159,7 @@ fn collect_siblings(
 }
 
 ///|
-fn R0Mmr::inclusion_proof(
+fn R0Mmr::_inclusion_proof(
   self : R0Mmr,
   position : Int,
 ) -> R0MmrProof raise R0ProofError {
@@ -232,12 +232,15 @@ fn R0MmrProof::copy_with(
 }
 
 ///|
-fn R0MmrProof::with_leaf_position(self : R0MmrProof, value : Int) -> R0MmrProof {
+fn R0MmrProof::_with_leaf_position(
+  self : R0MmrProof,
+  value : Int,
+) -> R0MmrProof {
   self.copy_with(leaf_position=value)
 }
 
 ///|
-fn R0MmrProof::with_containing_peak_height(
+fn R0MmrProof::_with_containing_peak_height(
   self : R0MmrProof,
   value : Int,
 ) -> R0MmrProof {
@@ -245,12 +248,15 @@ fn R0MmrProof::with_containing_peak_height(
 }
 
 ///|
-fn R0MmrProof::with_sibling_count(self : R0MmrProof, value : Int) -> R0MmrProof {
+fn R0MmrProof::_with_sibling_count(
+  self : R0MmrProof,
+  value : Int,
+) -> R0MmrProof {
   self.copy_with(declared_sibling_count=value)
 }
 
 ///|
-fn R0MmrProof::with_other_peak_count(
+fn R0MmrProof::_with_other_peak_count(
   self : R0MmrProof,
   value : Int,
 ) -> R0MmrProof {
@@ -258,7 +264,7 @@ fn R0MmrProof::with_other_peak_count(
 }
 
 ///|
-fn R0MmrProof::with_reversed_other_peaks(self : R0MmrProof) -> R0MmrProof {
+fn R0MmrProof::_with_reversed_other_peaks(self : R0MmrProof) -> R0MmrProof {
   let peaks = self.other_peaks.copy()
   for index in 0..<(peaks.length() / 2) {
     let other = peaks.length() - index - 1
@@ -273,7 +279,7 @@ fn R0MmrProof::with_reversed_other_peaks(self : R0MmrProof) -> R0MmrProof {
 }
 
 ///|
-fn R0MmrProof::with_invalid_direction(self : R0MmrProof) -> R0MmrProof {
+fn R0MmrProof::_with_invalid_direction(self : R0MmrProof) -> R0MmrProof {
   let siblings = self.siblings.copy()
   if siblings.length() > 0 {
     siblings[0] = { ..siblings[0], direction: 2 }
@@ -282,12 +288,12 @@ fn R0MmrProof::with_invalid_direction(self : R0MmrProof) -> R0MmrProof {
 }
 
 ///|
-fn R0MmrProof::with_trailing_byte(self : R0MmrProof) -> R0MmrProof {
+fn R0MmrProof::_with_trailing_byte(self : R0MmrProof) -> R0MmrProof {
   self.copy_with(trailing_byte=true)
 }
 
 ///|
-fn verify_mmr_inclusion(
+fn _verify_mmr_inclusion(
   agent~ : String,
   leaf_count~ : Int,
   leaf_hash~ : Bytes,

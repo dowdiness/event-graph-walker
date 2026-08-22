@@ -199,7 +199,7 @@ fn sha256(value : Bytes) -> Bytes {
 }
 
 ///|
-fn canonical_body_digest(body : CanonicalBody) -> Bytes raise R0CodecError {
+fn _canonical_body_digest(body : CanonicalBody) -> Bytes raise R0CodecError {
   let buffer = Buffer()
   write_domain(buffer, "loomark-r0-event-body:v1")
   buffer.write_bytes(encode_canonical_body(body))
@@ -219,7 +219,7 @@ struct R0Decoder {
 }
 
 ///|
-fn R0Decoder::new(bytes : Bytes) -> R0Decoder {
+fn R0Decoder::_new(bytes : Bytes) -> R0Decoder {
   { bytes, position: 0 }
 }
 
@@ -234,7 +234,7 @@ fn R0Decoder::read_byte(self : R0Decoder) -> Byte raise R0CodecError {
 }
 
 ///|
-fn R0Decoder::read_uvarint(self : R0Decoder) -> Int raise R0CodecError {
+fn R0Decoder::_read_uvarint(self : R0Decoder) -> Int raise R0CodecError {
   let start = self.position
   let mut value = 0
   let mut shift = 0
@@ -257,7 +257,7 @@ fn R0Decoder::read_uvarint(self : R0Decoder) -> Int raise R0CodecError {
 }
 
 ///|
-fn R0Decoder::finish(self : R0Decoder) -> Unit raise R0CodecError {
+fn R0Decoder::_finish(self : R0Decoder) -> Unit raise R0CodecError {
   if self.position != self.bytes.length() {
     raise R0CodecError::MalformedEncoding(detail="trailing bytes")
   }

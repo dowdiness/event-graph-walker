@@ -59,18 +59,18 @@ test "R0 replacement unicode and mixed morphologies preserve exact scalars" {
 
 ///|
 test "R0 stable replay ignores reversed generation order and UTF-16 order" {
-  let root_z = fixture_event_for_order(0, RawIdentity(agent="z", sequence=0), [])
-  let root_astral = fixture_event_for_order(
+  let root_z = _fixture_event_for_order(0, RawIdentity(agent="z", sequence=0), [])
+  let root_astral = _fixture_event_for_order(
     1,
     RawIdentity(agent="😀", sequence=0),
     [],
   )
-  let root_accent = fixture_event_for_order(
+  let root_accent = _fixture_event_for_order(
     2,
     RawIdentity(agent="é", sequence=0),
     [],
   )
-  let merge = fixture_event_for_order(
+  let merge = _fixture_event_for_order(
     3,
     RawIdentity(agent="merge", sequence=0),
     [root_accent.identity, root_astral.identity, root_z.identity],
@@ -106,11 +106,11 @@ test "R0 concurrent morphologies pin exact replay IDs" {
 
 ///|
 test "R0 required catalog is complete deterministic and seedless" {
-  let first = try! generate_required_catalog()
-  let second = try! generate_required_catalog()
+  let first = try! _generate_required_catalog()
+  let second = try! _generate_required_catalog()
   assert_eq(first.fixtures.length(), 19)
   assert_eq(first.fixture_seed, "none")
-  assert_eq(first.to_json_string(), second.to_json_string())
+  assert_eq(first._to_json_string(), second._to_json_string())
   assert_true(first.fixtures.all(fixture => fixture.event_count > 0))
   assert_true(
     first.fixtures.all(fixture => fixture.canonical_sha256.length() == 64),

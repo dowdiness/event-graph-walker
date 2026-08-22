@@ -98,7 +98,7 @@ pub struct TreeOpLog {
 ///|
 /// Create a new empty operation log.
 pub fn TreeOpLog::new() -> TreeOpLog {
-  { entries: [], seen: Map::default(), ordering_comparisons: 0 }
+  { entries: [], seen: Default::default(), ordering_comparisons: 0 }
 }
 
 ///|

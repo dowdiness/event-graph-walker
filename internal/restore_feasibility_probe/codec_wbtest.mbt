@@ -22,9 +22,9 @@ test "R0 codec has frozen minimal-uvarint vectors" {
   for vector in vectors {
     let (value, expected) = vector
     assert_eq(bytes_hex(encode_uvarint(value)), expected)
-    let decoder = R0Decoder::new(encode_uvarint(value))
-    assert_eq(try! decoder.read_uvarint(), value)
-    try! decoder.finish()
+    let decoder = R0Decoder::_new(encode_uvarint(value))
+    assert_eq(try! decoder._read_uvarint(), value)
+    try! decoder._finish()
   }
 }
 
@@ -37,8 +37,8 @@ test "R0 codec rejects invalid and non-minimal uvarints" {
     Bytes::from_array([b'\x80']),
   ]
   for encoded in invalid {
-    let decoder = R0Decoder::new(encoded)
-    let result : Result[Int, R0CodecError] = Ok(decoder.read_uvarint()) catch {
+    let decoder = R0Decoder::_new(encoded)
+    let result : Result[Int, R0CodecError] = Ok(decoder._read_uvarint()) catch {
       error => Err(error)
     }
     inspect(result is Err(_), content="true")
@@ -56,7 +56,7 @@ test "R0 canonical body and SHA-256 vectors are frozen" {
     "0101000161",
   )
   assert_eq(
-    bytes_hex(canonical_body_digest(InsertScalar(0, "a"))),
+    bytes_hex(_canonical_body_digest(InsertScalar(0, "a"))),
     "687235689e54b2f2ff3b5758f13e811be42e684efab36604c25661910b1c7bff",
   )
   assert_eq(
@@ -144,15 +144,15 @@ test "R0 MMR roots have frozen one-to-four-leaf vectors" {
     "6abc04f7b7634609c77d01d32f22d87198cd40a7d40e72c4a303590a24ef2a56", "30fedd648be4ce1aa099c5c774f378dbfdcc797cddb2af80c7baff35051992f0",
   ]
   for count in 1..<=4 {
-    let mmr = R0Mmr::from_leaf_hashes(leaves[:count])
-    assert_eq(bytes_hex(mmr.writer_root("r0-a")), expected[count - 1])
+    let mmr = R0Mmr::_from_leaf_hashes(leaves[:count])
+    assert_eq(bytes_hex(mmr._writer_root("r0-a")), expected[count - 1])
     for position in 0..<count {
-      let proof = try! mmr.inclusion_proof(position)
-      try! verify_mmr_inclusion(
+      let proof = try! mmr._inclusion_proof(position)
+      try! _verify_mmr_inclusion(
         agent="r0-a",
         leaf_count=count,
         leaf_hash=leaves[position],
-        expected_root=mmr.writer_root("r0-a"),
+        expected_root=mmr._writer_root("r0-a"),
         proof~,
       )
     }
@@ -166,21 +166,21 @@ test "R0 MMR verifier rejects every malformed proof dimension" {
     repeated_digest(b'\x02'),
     repeated_digest(b'\x03'),
   ]
-  let mmr = R0Mmr::from_leaf_hashes(leaves[:])
-  let root = mmr.writer_root("r0-a")
-  let proof = try! mmr.inclusion_proof(0)
+  let mmr = R0Mmr::_from_leaf_hashes(leaves[:])
+  let root = mmr._writer_root("r0-a")
+  let proof = try! mmr._inclusion_proof(0)
   let mutations = [
-    proof.with_leaf_position(1),
-    proof.with_containing_peak_height(proof.containing_peak_height + 1),
-    proof.with_sibling_count(proof.siblings.length() + 1),
-    proof.with_other_peak_count(proof.other_peaks.length() + 1),
-    proof.with_reversed_other_peaks(),
-    proof.with_invalid_direction(),
-    proof.with_trailing_byte(),
+    proof._with_leaf_position(1),
+    proof._with_containing_peak_height(proof.containing_peak_height + 1),
+    proof._with_sibling_count(proof.siblings.length() + 1),
+    proof._with_other_peak_count(proof.other_peaks.length() + 1),
+    proof._with_reversed_other_peaks(),
+    proof._with_invalid_direction(),
+    proof._with_trailing_byte(),
   ]
   for invalid in mutations {
     let result : Result[Unit, R0ProofError] = Ok(
-      verify_mmr_inclusion(
+      _verify_mmr_inclusion(
         agent="r0-a",
         leaf_count=3,
         leaf_hash=leaves[0],
@@ -194,7 +194,7 @@ test "R0 MMR verifier rejects every malformed proof dimension" {
   }
   let wrong_root = repeated_digest(b'\xff')
   let mismatch : Result[Unit, R0ProofError] = Ok(
-    verify_mmr_inclusion(
+    _verify_mmr_inclusion(
       agent="r0-a",
       leaf_count=3,
       leaf_hash=leaves[0],
@@ -209,9 +209,9 @@ test "R0 MMR verifier rejects every malformed proof dimension" {
 
 ///|
 test "R0 decoder rejects trailing bytes" {
-  let decoder = R0Decoder::new(Bytes::from_array([b'\x00', b'\x00']))
-  assert_eq(try! decoder.read_uvarint(), 0)
-  let result : Result[Unit, R0CodecError] = Ok(decoder.finish()) catch {
+  let decoder = R0Decoder::_new(Bytes::from_array([b'\x00', b'\x00']))
+  assert_eq(try! decoder._read_uvarint(), 0)
+  let result : Result[Unit, R0CodecError] = Ok(decoder._finish()) catch {
     error => Err(error)
   }
   inspect(result is Err(_), content="true")

@@ -89,4 +89,3 @@ pub fn PreparedAdmission::operations(Self) -> ArrayView[@core.Op]
 // Type aliases
 
 // Traits
-

@@ -35,4 +35,3 @@ pub(all) suberror FugueProjectionError {
 pub type VisibilityChange = Double
 
 // Traits
-
