@@ -63,3 +63,4 @@ pub impl @shrink.Shrink for VersionVector
 // Type aliases
 
 // Traits
+

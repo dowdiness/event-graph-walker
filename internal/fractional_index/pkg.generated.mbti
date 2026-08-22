@@ -25,3 +25,4 @@ pub impl @debug.Debug for FractionalIndex
 // Type aliases
 
 // Traits
+

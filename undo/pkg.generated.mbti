@@ -53,3 +53,4 @@ pub(open) trait Undoable {
   fn delete_lv(Self, Int) -> CompensatingEditResult raise UndoError
   fn undelete_lv(Self, Int) -> CompensatingEditResult raise UndoError
 }
+

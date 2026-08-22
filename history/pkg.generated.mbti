@@ -26,3 +26,4 @@ pub fn SnapshotEntry::seq(Self) -> Int
 // Type aliases
 
 // Traits
+
