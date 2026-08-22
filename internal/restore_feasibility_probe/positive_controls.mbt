@@ -5,6 +5,9 @@ struct PositiveControlObservation {
   case_id : String
   logical_queries : Int
   physical_reads : Int
+  provider_operations : Int
+  provider_bytes : Int
+  in_memory_scans : Int
   metadata_records : Int
   metadata_bytes : Int
   proof_bytes : Int
@@ -106,6 +109,9 @@ fn EvidenceDetector::observe_positive_control(
     logical_queries: self.control_logical_queries -
     before.control_logical_queries,
     physical_reads: self.provider_calls - before.provider_calls,
+    provider_operations: self.provider_operations - before.provider_operations,
+    provider_bytes: self.provider_bytes - before.provider_bytes,
+    in_memory_scans: self.in_memory_scans - before.in_memory_scans,
     metadata_records: self.metadata_records - before.metadata_records,
     metadata_bytes: self.metadata_bytes - before.metadata_bytes,
     proof_bytes: self.proof_bytes - before.proof_bytes,
@@ -176,6 +182,9 @@ fn PositiveControlObservation::to_json(
     "record": "positive_control".to_json(),
     "logical_queries": self.logical_queries.to_json(),
     "physical_reads": self.physical_reads.to_json(),
+    "provider_operations": self.provider_operations.to_json(),
+    "provider_bytes": self.provider_bytes.to_json(),
+    "in_memory_scans": self.in_memory_scans.to_json(),
     "metadata_records": self.metadata_records.to_json(),
     "metadata_bytes": self.metadata_bytes.to_json(),
     "proof_bytes": self.proof_bytes.to_json(),
