@@ -53,14 +53,13 @@ test "IndexedState agrees with Fugue after remote apply" {
 
   let delete_op = try! alice.delete(1)
   try! bob.apply_remote(delete_op)
-  // The batch shell invalidates derived state before projection; the next
-  // indexed read lazily rebuilds it.
-  assert_true(!bob.indexed_state.is_ready())
+  // Successful detached publication installs the matching warm generation.
+  assert_true(bob.indexed_state.is_ready())
   assert_indexed_state_matches_tree(bob)
 
   let undelete_op = try! alice.undelete(1)
   try! bob.apply_remote(undelete_op)
-  assert_true(!bob.indexed_state.is_ready())
+  assert_true(bob.indexed_state.is_ready())
   assert_indexed_state_matches_tree(bob)
 }
 
@@ -82,11 +81,47 @@ test "IndexedState agrees with Fugue after Document::merge_remote" {
   let remote_ops = remote.get_all_ops()
   let remote_frontier = try! remote.get_frontier_raw()
   try! destination.merge_remote(remote_ops, remote_frontier)
-  // Merge invalidates the derived cache; the next projection read rebuilds it.
-  assert_true(!destination.indexed_state.is_ready())
+  // Merge atomically publishes the matching warm projection generation.
+  assert_true(destination.indexed_state.is_ready())
 
   // The indexed projection must match Fugue's visible order after the merge.
   assert_indexed_state_matches_tree(destination)
   assert_true(destination.indexed_state.is_ready())
   assert_true(destination.to_text() == remote.to_text())
+}
+
+///|
+test "property: published LV locator agrees with Fugue after randomized structural mutation" {
+  let seeds : Array[Int] = @quickcheck.samples(24)
+  for raw_seed in seeds {
+    let doc = Document::new("locator-property")
+    let deleted : Array[Int] = []
+    let mut state = raw_seed % 997
+    if state < 0 {
+      state = -state
+    }
+    for step = 0; step < 80; step = step + 1 {
+      state = (state * 37 + 17) % 997
+      let action = state % 5
+      if action < 3 || doc.tree.visible_count() == 0 {
+        let position = state % (doc.tree.visible_count() + 1)
+        let text = if state % 3 == 0 { "😀" } else { "x" }
+        ignore(try! doc.insert(position, text))
+      } else if action == 3 {
+        let position = state % doc.tree.visible_count()
+        match doc.lv_at_position(position) {
+          Some(lv) => {
+            ignore(try! doc.delete(position))
+            deleted.push(lv)
+          }
+          None => ()
+        }
+      } else if deleted.length() > 0 {
+        let index = state % deleted.length()
+        ignore(try! doc.undelete(deleted[index]))
+        ignore(deleted.remove(index))
+      }
+      assert_indexed_state_matches_tree(doc)
+    }
+  }
 }

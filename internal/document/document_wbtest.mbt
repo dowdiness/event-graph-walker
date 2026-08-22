@@ -410,9 +410,8 @@ test "incremental insert: remote op between local inserts resets cache" {
   // Export Bob's op and apply to Alice
   let bob_op = doc_b.oplog.get_all_ops()[0]
   try! doc_a.apply_remote(bob_op)
-  // The batch shell invalidates derived state before projection; the next
-  // read lazily rebuilds the cache.
-  assert_true(!doc_a.indexed_state.is_ready())
+  // Successful detached publication installs the matching warm generation.
+  assert_true(doc_a.indexed_state.is_ready())
   assert_true(doc_a.cursor is None)
   // Verify cache content is correct: position queries return right LVs
   // Bob's "x" goes to the front (FugueMax ordering), so doc is "xabc"
