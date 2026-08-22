@@ -49,8 +49,8 @@ priv struct TextBlock {
 fn TextBlock::new() -> TextBlock {
   {
     tree: @fugue.FugueTree::new(),
-    stable_to_local: Map::default(),
-    local_to_stable: Map::default(),
+    stable_to_local: Default::default(),
+    local_to_stable: Default::default(),
     next_local_id: 0,
     text_cache: None,
   }

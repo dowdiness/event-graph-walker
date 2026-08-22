@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/event-graph-walker/internal/restore_feasibility_probe"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+type R0CodecError
+
+type R0ProofError
+
+// Types and methods
+type CanonicalBody derive(Eq, @debug.Debug)
+
+type MmrPeak derive(Eq, @debug.Debug)
+
+type MmrSibling derive(Eq, @debug.Debug)
+
+type R0Decoder
+
+type R0Mmr
+
+type R0MmrProof derive(Eq, @debug.Debug)
+
+type RawIdentity derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits

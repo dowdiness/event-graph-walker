@@ -1,0 +1,17 @@
+import {
+  "dowdiness/event-graph-walker/internal/core",
+  "dowdiness/event-graph-walker/internal/document",
+  "dowdiness/event-graph-walker/internal/oplog",
+  "dowdiness/event-graph-walker/undo",
+  "dowdiness/event-graph-walker/text",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
+}
+
+supported_targets = "js+native"
+
+pkgtype(kind: "executable")

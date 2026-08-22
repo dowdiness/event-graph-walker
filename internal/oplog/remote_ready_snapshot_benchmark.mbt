@@ -46,7 +46,7 @@ fn benchmark_ready_matrix_order(
   rebuild : Bool,
 ) -> Array[@core.RawVersion] {
   let ready = if rebuild {
-    let rebuilt : @priority_queue.PriorityQueue[RemoteAdmissionReady] = @priority_queue.PriorityQueue::default()
+    let rebuilt : @priority_queue.PriorityQueue[RemoteAdmissionReady] = Default::default()
     for entry in planner.pending_order {
       match planner.pending.get(entry.raw) {
         Some(node) =>

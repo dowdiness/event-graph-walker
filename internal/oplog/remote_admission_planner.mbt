@@ -147,10 +147,10 @@ priv struct RemoteAdmissionRejectionClosure {
 /// Construct an empty planner; Commit 2 deliberately has no OpLog integration.
 fn RemoteAdmissionPlanner::RemoteAdmissionPlanner() -> RemoteAdmissionPlanner {
   {
-    pending: Map::default(),
+    pending: Default::default(),
     pending_order: [],
-    waiters: Map::default(),
-    ready: @priority_queue.PriorityQueue::default(),
+    waiters: Default::default(),
+    ready: Default::default(),
     next_arrival: 0,
     generation: 0,
     stale_order_tombstones: 0,
@@ -361,7 +361,7 @@ fn remote_admission_parents_reach(
   lookup : (@core.RawVersion) -> @core.Op?,
 ) -> (Bool, Bool) {
   let queue = parents.copy()
-  let visited : Map[@core.RawVersion, Bool] = Map::default()
+  let visited : Map[@core.RawVersion, Bool] = Default::default()
   let mut unknown = false
   let mut index = 0
   while index < queue.length() {
@@ -899,7 +899,7 @@ fn RemoteAdmissionPlanner::prepare_ready_snapshot(
   if live_pending == 0 || self.stale_ready_refs / live_pending < 16 {
     return self.ready.copy()
   }
-  let ready : @priority_queue.PriorityQueue[RemoteAdmissionReady] = @priority_queue.PriorityQueue::default()
+  let ready : @priority_queue.PriorityQueue[RemoteAdmissionReady] = Default::default()
   for entry in self.pending_order {
     match self.pending.get(entry.raw) {
       Some(node) =>
@@ -930,7 +930,7 @@ fn RemoteAdmissionPlanner::prepare_fast(
   }
   let planned : Array[@core.Op] = []
   let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  let staged : Map[@core.RawVersion, @core.Op] = Map::default()
+  let staged : Map[@core.RawVersion, @core.Op] = Default::default()
   let mut next_arrival = self.next_arrival
   for op in incoming {
     let raw = remote_admission_raw(op)
@@ -1000,18 +1000,18 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
     None => ()
   }
   let overlay = {
-    staged: Map::default(),
+    staged: Default::default(),
     staged_order: [],
-    staged_unresolved: Map::default(),
-    touched_deltas: Map::default(),
-    waiter_edges: Map::default(),
+    staged_unresolved: Default::default(),
+    touched_deltas: Default::default(),
+    waiter_edges: Default::default(),
     planned: @hashset.HashSet([]),
     discard_roots: [],
-    ready_rounds: Map::default(),
+    ready_rounds: Default::default(),
     ready: self.prepare_ready_snapshot(),
     planned_operations: [],
   }
-  let incoming_staged : Map[@core.RawVersion, @core.Op] = Map::default()
+  let incoming_staged : Map[@core.RawVersion, @core.Op] = Default::default()
   let mut next_overlay_arrival = self.next_arrival
   for op in incoming {
     let raw = remote_admission_raw(op)
@@ -1395,11 +1395,11 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
 
       // Build disposable indexes so compatibility-order validation remains
       // linear even when queue order reverses arrival order.
-      let staged_index : Map[@core.RawVersion, RemoteAdmissionPreparedNode] = Map::default()
+      let staged_index : Map[@core.RawVersion, RemoteAdmissionPreparedNode] = Default::default()
       for node in nodes {
         staged_index.set(node.raw, node)
       }
-      let planned_states : Map[@core.RawVersion, (Int, Int)] = Map::default()
+      let planned_states : Map[@core.RawVersion, (Int, Int)] = Default::default()
       let mut previous_round = -1
       let mut previous_arrival = -1
       for op in plan.planned {
@@ -1550,10 +1550,10 @@ fn RemoteAdmissionPlanner::compact(
   self : RemoteAdmissionPlanner,
   is_admitted : (@core.RawVersion) -> Bool,
 ) -> Unit {
-  let new_pending : Map[@core.RawVersion, RemoteAdmissionNode] = Map::default()
+  let new_pending : Map[@core.RawVersion, RemoteAdmissionNode] = Default::default()
   let new_order : Array[RemoteAdmissionOrderEntry] = []
-  let new_waiters : Map[@core.RawVersion, Array[RemoteAdmissionWaiter]] = Map::default()
-  let new_ready : @priority_queue.PriorityQueue[RemoteAdmissionReady] = @priority_queue.PriorityQueue::default()
+  let new_waiters : Map[@core.RawVersion, Array[RemoteAdmissionWaiter]] = Default::default()
+  let new_ready : @priority_queue.PriorityQueue[RemoteAdmissionReady] = Default::default()
   for entry in self.pending_order {
     if !remote_admission_order_entry_is_live(self.pending, entry) {
       continue
@@ -1670,10 +1670,10 @@ fn RemoteAdmissionPlanner::clear_pending(self : RemoteAdmissionPlanner) -> Unit 
   if self.pending.is_empty() {
     return
   }
-  self.pending = Map::default()
+  self.pending = Default::default()
   self.pending_order = []
-  self.waiters = Map::default()
-  self.ready = @priority_queue.PriorityQueue::default()
+  self.waiters = Default::default()
+  self.ready = Default::default()
   self.stale_order_tombstones = 0
   self.stale_waiter_refs = 0
   self.stale_ready_refs = 0
