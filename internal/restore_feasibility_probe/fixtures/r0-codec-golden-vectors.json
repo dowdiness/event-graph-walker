@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "codec": "r0-shared-test",
+  "vectors": [
+    {"name": "uvarint-0", "kind": "uvarint", "input": 0, "expected_hex": "00"},
+    {"name": "uvarint-1", "kind": "uvarint", "input": 1, "expected_hex": "01"},
+    {"name": "uvarint-127", "kind": "uvarint", "input": 127, "expected_hex": "7f"},
+    {"name": "uvarint-128", "kind": "uvarint", "input": 128, "expected_hex": "8001"},
+    {"name": "uvarint-0x7ffffffe", "kind": "uvarint", "input": 2147483646, "expected_hex": "feffffff07"},
+    {"name": "lp_bytes-ab", "kind": "lp_bytes", "input_utf8": "ab", "expected_hex": "026162"},
+    {"name": "lp_utf8-é", "kind": "lp_utf8", "input_utf8": "é", "expected_hex": "02c3a9"},
+    {"name": "domain-é", "kind": "domain", "input_utf8": "é", "expected_hex": "02c3a9"},
+    {"name": "raw_version-a-128", "kind": "RawVersion", "agent": "a", "sequence": 128, "expected_hex": "01618001"},
+    {"name": "sha256-empty", "kind": "sha256", "input_hex": "", "expected_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+  ]
+}
