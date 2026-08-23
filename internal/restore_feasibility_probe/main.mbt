@@ -173,6 +173,12 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
     fixture,
     capture.candidate_bytes,
   )
+  let working_state_observations = try! working_state_observations(
+    run_id,
+    "egw_authority_native",
+    capture_overlay.snapshot,
+    fixture.final_text,
+  )
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -214,6 +220,7 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
           "used_typed_admission_receipts": authority.used_typed_admission_receipts.to_json(),
           "full_history_walks": authority.full_history_walks.to_json(),
         }),
+        "working_state_observations": working_state_observations.to_json(),
       }),
     }).stringify(),
   )
@@ -368,6 +375,12 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
     restored.snapshot,
     decoded_provider,
   )
+  let working_state_observations = try! working_state_observations(
+    run_id,
+    "egw_candidate_js",
+    restored.snapshot,
+    restored.document_text,
+  )
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -437,6 +450,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
         }),
         "provider_fixture_bytes_sha256": provider_sha256.to_json(),
         "ordinary_admission_observations": ordinary_admission_observations.to_json(),
+        "working_state_observations": working_state_observations.to_json(),
         "independent_process_validation": "candidate base64+length+sha256+snapshot+catalog".to_json(),
       }),
     }).stringify(),
