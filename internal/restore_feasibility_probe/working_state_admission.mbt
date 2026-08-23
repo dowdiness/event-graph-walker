@@ -4,12 +4,19 @@
 /// The reducer owns only the validated Document Snapshot sidecar and the bounded
 /// incoming region.  Provider capabilities deliberately stop at the shell;
 /// this file has no provider dependency.
+enum WorkingStateEvidenceSource {
+  SelfContained
+  MetadataBacked
+} derive(Eq, Debug)
+
+///|
 enum WorkingStateAdmissionOutcome {
   Complete
   Duplicate
   Pending(missing~ : RawIdentity)
   Partial(missing~ : RawIdentity, reason~ : String)
   Rejected(reason~ : String)
+  Fallback(reason~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -30,6 +37,8 @@ struct WorkingStateAdmissionResult {
   outcome : WorkingStateAdmissionOutcome
   committed : Array[OrdinaryEventMetaV2]
   reads : OrdinaryReadAccounting
+  evidence_source : WorkingStateEvidenceSource
+  fetched_cold_identities : Array[RawIdentity]
 }
 
 ///|
@@ -292,6 +301,7 @@ fn working_state_validate_shape(
 }
 
 ///|
+#warnings("-unused_value")
 /// Return whether a predecessor is reachable from the declared parent closure.
 /// The walk is over only the bounded incoming region and exact resident heads.
 fn working_state_closure_contains(
@@ -326,20 +336,16 @@ fn working_state_writer_expected_sequence(
   state : WorkingState,
   agent : String,
 ) -> Int? {
-  match state.writer_metas.get(agent) {
-    Some(metas) => Some(metas.length())
-    None => {
-      for writer in state.snapshot.writer_commitments {
-        if writer.agent == agent {
-          return Some(writer.leaf_count)
-        }
-      }
-      Some(0)
+  for writer in state.snapshot.writer_commitments {
+    if writer.agent == agent {
+      return Some(writer.leaf_count)
     }
   }
+  Some(0)
 }
 
 ///|
+#warnings("-unused_value")
 fn working_state_missing_dependency(
   state : WorkingState,
   incoming : OrdinaryEventMetaV2,
@@ -408,6 +414,7 @@ fn working_state_update_snapshot(
   state : WorkingState,
   incoming : OrdinaryEventMetaV2,
   document_text : String,
+  commitment_overrides : Map[String, OrdinaryWriterCommitment],
 ) -> OrdinarySnapshot {
   let old_heads = state.snapshot.exact_head_records
   let next_heads : Array[OrdinaryHeadRecord] = []
@@ -430,10 +437,11 @@ fn working_state_update_snapshot(
   let next_raw_heads = next_heads.map(record => record.identity)
   let next_writers = state.snapshot.writer_commitments.copy()
   for agent, metas in state.writer_metas {
-    let commitment = try! writer_commitment(
-      agent,
-      working_state_copy_meta_array(metas),
-    )
+    let commitment = match commitment_overrides.get(agent) {
+      Some(commitment) => commitment
+      None =>
+        try! writer_commitment(agent, working_state_copy_meta_array(metas))
+    }
     let mut found : Int? = None
     for index, writer in next_writers {
       if writer.agent == agent {
@@ -475,9 +483,11 @@ enum WorkingStateTryCommit {
 }
 
 ///|
-fn working_state_try_commit(
+fn working_state_try_commit_with_metadata(
   state : WorkingState,
   incoming : OrdinaryEventMetaV2,
+  metadata : Map[String, OrdinaryEventMetaV2],
+  commitment_overrides : Map[String, OrdinaryWriterCommitment],
 ) -> WorkingStateTryCommit {
   let shaped : Result[Unit, String] = Ok(working_state_validate_shape(incoming)) catch {
     R0CodecError::InvalidValue(detail~) => Err(detail)
@@ -487,13 +497,15 @@ fn working_state_try_commit(
     Err(reason) => return WorkingStateTryCommit::Invalid(reason)
     Ok(_) => ()
   }
-  match working_state_missing_dependency(state, incoming) {
+  match
+    working_state_missing_dependency_with_metadata(state, incoming, metadata) {
     Some(missing) => return WorkingStateTryCommit::Missing(missing)
     None => ()
   }
   for item in incoming.declared_parents {
     let (identity, digest) = item
-    guard working_state_known_record(state, identity) is Some(record) else {
+    guard working_state_known_record_with_metadata(state, identity, metadata)
+      is Some(record) else {
       return WorkingStateTryCommit::Missing(identity)
     }
     if record.event_digest_v2 != digest {
@@ -503,16 +515,18 @@ fn working_state_try_commit(
   match incoming.implicit_predecessor {
     None => ()
     Some((identity, digest)) => {
-      guard working_state_known_record(state, identity) is Some(record) else {
+      guard working_state_known_record_with_metadata(state, identity, metadata)
+        is Some(record) else {
         return WorkingStateTryCommit::Missing(identity)
       }
       if record.event_digest_v2 != digest {
         return WorkingStateTryCommit::Invalid("predecessor_digest_mismatch")
       }
-      if !working_state_closure_contains(
+      if !working_state_closure_contains_with_metadata(
           state,
           incoming.declared_parents,
           identity,
+          metadata,
         ) {
         return WorkingStateTryCommit::Invalid("predecessor_not_reachable")
       }
@@ -527,7 +541,11 @@ fn working_state_try_commit(
     let mut maximum = 0
     let mut first = true
     for item in incoming.declared_parents {
-      let record = working_state_known_record(state, item.0).unwrap()
+      let record = working_state_known_record_with_metadata(
+        state,
+        item.0,
+        metadata,
+      ).unwrap()
       if first || record.causal_rank_timestamp > maximum {
         maximum = record.causal_rank_timestamp
         first = false
@@ -548,22 +566,34 @@ fn working_state_try_commit(
   if incoming.identity.sequence != expected_sequence {
     return WorkingStateTryCommit::Invalid("identity_sequence_not_contiguous")
   }
-  if state.writer_metas.get(incoming.identity.agent) is None {
-    for writer in state.snapshot.writer_commitments {
-      if writer.agent == incoming.identity.agent {
-        return WorkingStateTryCommit::Invalid("writer_history_not_hot")
-      }
-    }
+  let expected_leaf_count = expected_sequence
+  let local_count = state.writer_metas
+    .get(incoming.identity.agent)
+    .map_or(0, metas => metas.length())
+  if expected_leaf_count > local_count &&
+    commitment_overrides.get(incoming.identity.agent) is None {
+    return WorkingStateTryCommit::Invalid("writer_history_not_hot")
   }
   let parent_text = if incoming.declared_parents.is_empty() {
     state.document_text
   } else {
-    let first_parent = working_state_known_text(
-      state,
-      incoming.declared_parents[0].0,
-    ).unwrap()
+    let first_parent = match
+      working_state_known_text_with_metadata(
+        state,
+        incoming.declared_parents[0].0,
+        metadata,
+      ) {
+      Some(text) => text
+      None =>
+        return WorkingStateTryCommit::Invalid("parent_projection_unavailable")
+    }
     for item in incoming.declared_parents {
-      let other = working_state_known_text(state, item.0).unwrap()
+      let other = match
+        working_state_known_text_with_metadata(state, item.0, metadata) {
+        Some(text) => text
+        None =>
+          return WorkingStateTryCommit::Invalid("parent_projection_unavailable")
+      }
       if other != first_parent {
         return WorkingStateTryCommit::Invalid("parent_projection_divergence")
       }
@@ -590,7 +620,9 @@ fn working_state_try_commit(
   let next_group = working_state_copy_meta_array(group)
   next_group.push(working_state_copy_meta(incoming))
   next.writer_metas[incoming.identity.agent] = next_group
-  let next_snapshot = working_state_update_snapshot(next, incoming, next_text)
+  let next_snapshot = working_state_update_snapshot(
+    next, incoming, next_text, commitment_overrides,
+  )
   let final_state = {
     ..next,
     document_text: next_text,
@@ -601,16 +633,34 @@ fn working_state_try_commit(
 }
 
 ///|
+fn working_state_try_commit(
+  state : WorkingState,
+  incoming : OrdinaryEventMetaV2,
+) -> WorkingStateTryCommit {
+  working_state_try_commit_with_metadata(
+    state,
+    incoming,
+    Default::default(),
+    Default::default(),
+  )
+}
+
+///|
 fn working_state_result(
   state : WorkingState,
   outcome : WorkingStateAdmissionOutcome,
   committed : Array[OrdinaryEventMetaV2],
+  reads? : OrdinaryReadAccounting = working_state_zero_reads(),
+  evidence_source? : WorkingStateEvidenceSource = SelfContained,
+  fetched_cold_identities? : Array[RawIdentity] = [],
 ) -> WorkingStateAdmissionResult {
   {
     state: working_state_copy_state(state),
     outcome,
     committed: working_state_copy_meta_array(committed),
-    reads: working_state_zero_reads(),
+    reads,
+    evidence_source,
+    fetched_cold_identities: fetched_cold_identities.copy(),
   }
 }
 
@@ -1106,7 +1156,15 @@ fn working_state_observation_json(
 ) -> Json {
   let outcome_json = match outcome {
     WorkingStateAdmissionOutcome::Complete =>
-      Json::object({ "kind": "complete".to_json() })
+      match result.evidence_source {
+        WorkingStateEvidenceSource::SelfContained =>
+          Json::object({ "kind": "complete".to_json() })
+        WorkingStateEvidenceSource::MetadataBacked =>
+          Json::object({
+            "kind": "fast_forward".to_json(),
+            "evidence_source": "metadata_backed".to_json(),
+          })
+      }
     WorkingStateAdmissionOutcome::Duplicate =>
       Json::object({ "kind": "duplicate".to_json() })
     WorkingStateAdmissionOutcome::Pending(missing~) =>
@@ -1122,6 +1180,8 @@ fn working_state_observation_json(
       })
     WorkingStateAdmissionOutcome::Rejected(reason~) =>
       Json::object({ "kind": "rejected".to_json(), "reason": reason.to_json() })
+    WorkingStateAdmissionOutcome::Fallback(reason~) =>
+      Json::object({ "kind": "fallback".to_json(), "reason": reason.to_json() })
   }
   let pending = working_state_pending_identities(result.state)
   Json::object({

@@ -160,6 +160,37 @@ test "R0 MMR roots have frozen one-to-four-leaf vectors" {
 }
 
 ///|
+test "R0 Append from an authenticated proof matches full recomputation" {
+  let leaves = [
+    repeated_digest(b'\x01'),
+    repeated_digest(b'\x02'),
+    repeated_digest(b'\x03'),
+    repeated_digest(b'\x04'),
+    repeated_digest(b'\x05'),
+    repeated_digest(b'\x06'),
+    repeated_digest(b'\x07'),
+    repeated_digest(b'\x08'),
+    repeated_digest(b'\x09'),
+  ]
+  for count in [1, 2, 3, 4, 5, 7, 8] {
+    let mmr = R0Mmr::_from_leaf_hashes(leaves[:count])
+    let proof = try! mmr._inclusion_proof(count - 1)
+    let peaks = try! _verify_mmr_inclusion_peaks(
+      agent="r0-a",
+      leaf_count=count,
+      leaf_hash=leaves[count - 1],
+      expected_root=mmr._writer_root("r0-a"),
+      proof~,
+    )
+    let appended_root = mmr_append_root("r0-a", count, peaks, leaves[count])
+    let all_leaves = leaves[:count].to_owned()
+    all_leaves.push(leaves[count])
+    let expected = R0Mmr::_from_leaf_hashes(all_leaves)._writer_root("r0-a")
+    assert_eq(appended_root, expected)
+  }
+}
+
+///|
 test "R0 MMR verifier rejects every malformed proof dimension" {
   let leaves = [
     repeated_digest(b'\x01'),

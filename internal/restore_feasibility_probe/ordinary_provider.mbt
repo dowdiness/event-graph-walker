@@ -24,6 +24,9 @@ struct OrdinaryProviderPayloadRecord {
 /// Exact operation accounting for the three provider capabilities.
 struct OrdinaryProviderCounters {
   mut logical_query_count : Int
+  mut metadata_query_count : Int
+  mut payload_query_count : Int
+  mut full_history_query_count : Int
   mut physical_read_calls : Int
   mut requested_id_count : Int
   mut returned_record_count : Int
@@ -77,6 +80,9 @@ enum PayloadReadResult {
 fn empty_provider_counters() -> OrdinaryProviderCounters {
   {
     logical_query_count: 0,
+    metadata_query_count: 0,
+    payload_query_count: 0,
+    full_history_query_count: 0,
     physical_read_calls: 0,
     requested_id_count: 0,
     returned_record_count: 0,
@@ -284,6 +290,9 @@ fn build_ordinary_capture_overlay(
 ///|
 fn OrdinaryProviderCounters::total(self : OrdinaryProviderCounters) -> Int {
   self.logical_query_count +
+  self.metadata_query_count +
+  self.payload_query_count +
+  self.full_history_query_count +
   self.physical_read_calls +
   self.requested_id_count +
   self.returned_record_count +
@@ -465,10 +474,11 @@ fn OrdinaryProvider::lookup_event_meta_batch(
   identities : Array[RawIdentity],
 ) -> Array[MetaLookupResult] raise R0CodecError {
   validate_sorted_unique_identities(identities)
+  self.counters.logical_query_count += 1
+  self.counters.metadata_query_count += 1
   if !self._check_snapshot(snapshot_commit_id) {
     return identities.map(_ => MetaLookupResult::Corrupt)
   }
-  self.counters.logical_query_count += 1
   self.counters.physical_read_calls += 1
   self.counters.requested_id_count += identities.length()
   if self.metadata_unavailable {
@@ -535,10 +545,11 @@ fn OrdinaryProvider::read_event_payload_batch(
   identities : Array[RawIdentity],
 ) -> Array[PayloadReadResult] raise R0CodecError {
   validate_sorted_unique_identities(identities)
+  self.counters.logical_query_count += 1
+  self.counters.payload_query_count += 1
   if !self._check_snapshot(snapshot_commit_id) {
     return identities.map(_ => PayloadReadResult::Corrupt)
   }
-  self.counters.logical_query_count += 1
   self.counters.physical_read_calls += 1
   self.counters.requested_id_count += identities.length()
   if self.payload_unavailable {
@@ -585,10 +596,11 @@ fn OrdinaryProvider::read_full_history(
   self : OrdinaryProvider,
   snapshot_commit_id : Bytes,
 ) -> Bytes raise R0CodecError {
+  self.counters.logical_query_count += 1
+  self.counters.full_history_query_count += 1
   if !self._check_snapshot(snapshot_commit_id) {
     raise R0CodecError::InvalidValue(detail="full-history snapshot mismatch")
   }
-  self.counters.logical_query_count += 1
   self.counters.physical_read_calls += 1
   self.counters.full_history_events += self.payload_records.length()
   self.counters.full_history_bytes += self.full_history_bytes.length()

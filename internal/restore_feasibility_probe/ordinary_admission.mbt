@@ -17,6 +17,9 @@ enum OrdinaryAdmissionResponse {
 #warnings("-unused_field")
 struct OrdinaryAdmissionCounterDelta {
   logical_query_count : Int
+  metadata_query_count : Int
+  payload_query_count : Int
+  full_history_query_count : Int
   physical_read_calls : Int
   requested_id_count : Int
   returned_record_count : Int
@@ -67,6 +70,9 @@ fn ordinary_copy_provider_counters(
 ) -> OrdinaryProviderCounters {
   {
     logical_query_count: counters.logical_query_count,
+    metadata_query_count: counters.metadata_query_count,
+    payload_query_count: counters.payload_query_count,
+    full_history_query_count: counters.full_history_query_count,
     physical_read_calls: counters.physical_read_calls,
     requested_id_count: counters.requested_id_count,
     returned_record_count: counters.returned_record_count,
@@ -95,6 +101,11 @@ fn ordinary_counter_delta(
 ) -> OrdinaryAdmissionCounterDelta {
   {
     logical_query_count: after.logical_query_count - before.logical_query_count,
+    metadata_query_count: after.metadata_query_count -
+    before.metadata_query_count,
+    payload_query_count: after.payload_query_count - before.payload_query_count,
+    full_history_query_count: after.full_history_query_count -
+    before.full_history_query_count,
     physical_read_calls: after.physical_read_calls - before.physical_read_calls,
     requested_id_count: after.requested_id_count - before.requested_id_count,
     returned_record_count: after.returned_record_count -
@@ -162,6 +173,9 @@ fn _ordinary_compare_metadata(
       }
       let writer = try! resident_writer_for(snapshot, incoming.identity)
       let proof = try! decode_mmr_proof(bytes.proof_bytes)
+      if proof.leaf_position != incoming.identity.sequence {
+        return OrdinaryAdmissionDecision::Fallback("provider_corrupt")
+      }
       let leaf_hash = try! meta_leaf_hash_v2(resident)
       let proof_check : Result[Unit, R0ProofError] = Ok(
         _verify_mmr_inclusion(

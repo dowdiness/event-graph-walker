@@ -293,13 +293,13 @@ fn R0MmrProof::_with_trailing_byte(self : R0MmrProof) -> R0MmrProof {
 }
 
 ///|
-fn _verify_mmr_inclusion(
+fn _verify_mmr_inclusion_peaks(
   agent~ : String,
   leaf_count~ : Int,
   leaf_hash~ : Bytes,
   expected_root~ : Bytes,
   proof~ : R0MmrProof,
-) -> Unit raise R0ProofError {
+) -> Array[MmrPeak] raise R0ProofError {
   validate_digest(leaf_hash)
   validate_digest(expected_root)
   if leaf_count <= 0 ||
@@ -374,4 +374,66 @@ fn _verify_mmr_inclusion(
   if writer_root_from_peaks(agent, leaf_count, all_peaks) != expected_root {
     raise R0ProofError::InvalidProof(detail="writer root mismatch")
   }
+  all_peaks
+}
+
+///|
+/// Verify a proof while discarding the authenticated peak reconstruction.
+fn _verify_mmr_inclusion(
+  agent~ : String,
+  leaf_count~ : Int,
+  leaf_hash~ : Bytes,
+  expected_root~ : Bytes,
+  proof~ : R0MmrProof,
+) -> Unit raise R0ProofError {
+  ignore(
+    _verify_mmr_inclusion_peaks(
+      agent~,
+      leaf_count~,
+      leaf_hash~,
+      expected_root~,
+      proof~,
+    ),
+  )
+}
+
+///|
+/// Binary-carry Append over peaks authenticated by a writer-tip proof.
+fn mmr_append_peaks(
+  peaks : Array[MmrPeak],
+  leaf_count : Int,
+  leaf_hash : Bytes,
+) -> Array[MmrPeak] raise R0ProofError {
+  validate_digest(leaf_hash)
+  if leaf_count <= 0 {
+    raise R0ProofError::InvalidProof(detail="append requires a resident writer")
+  }
+  let next = peaks.copy()
+  let mut height = 0
+  let mut start = leaf_count
+  let mut digest = leaf_hash
+  while !next.is_empty() && next[next.length() - 1].height == height {
+    let left = next[next.length() - 1]
+    next.remove(next.length() - 1) |> ignore
+    digest = meta_node_hash(height + 1, left.digest, digest)
+    start = left.start
+    height = height + 1
+  }
+  next.push({ height, start, digest })
+  next
+}
+
+///|
+#warnings("-unused_value")
+fn mmr_append_root(
+  agent : String,
+  leaf_count : Int,
+  peaks : Array[MmrPeak],
+  leaf_hash : Bytes,
+) -> Bytes raise R0ProofError {
+  writer_root_from_peaks(
+    agent,
+    leaf_count + 1,
+    mmr_append_peaks(peaks, leaf_count, leaf_hash),
+  )
 }

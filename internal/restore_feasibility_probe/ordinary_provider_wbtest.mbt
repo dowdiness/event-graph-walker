@@ -93,6 +93,9 @@ test "ProviderFixtureEnvelopeV1 S-linear-4 verifies metadata proofs and payloads
     }
   }
   assert_eq(provider.counters.logical_query_count, 2)
+  assert_eq(provider.counters.metadata_query_count, 1)
+  assert_eq(provider.counters.payload_query_count, 1)
+  assert_eq(provider.counters.full_history_query_count, 0)
   assert_eq(provider.counters.physical_read_calls, 2)
   assert_eq(provider.counters.requested_id_count, 8)
   assert_eq(provider.counters.returned_record_count, 8)
@@ -109,6 +112,40 @@ test "ProviderFixtureEnvelopeV1 S-linear-4 verifies metadata proofs and payloads
   assert_true(provider.counters.metadata_bytes > 0)
   assert_true(provider.counters.proof_bytes > 0)
   assert_true(provider.counters.payload_bytes > 0)
+  let payload_queries_before = provider.counters.payload_query_count
+  let payload_events_before = provider.counters.payload_events
+  ignore(
+    try! provider.read_event_payload_batch(
+      overlay.snapshot.snapshot_commit_id,
+      [],
+    ),
+  )
+  ignore(
+    try! provider.read_event_payload_batch(
+      overlay.snapshot.snapshot_commit_id,
+      [RawIdentity(agent="missing", sequence=0)],
+    ),
+  )
+  assert_eq(provider.counters.payload_query_count - payload_queries_before, 2)
+  assert_eq(provider.counters.payload_events, payload_events_before)
+  let empty_history_provider = try! OrdinaryProvider::new(
+    try! encode_provider_fixture({
+      ..overlay,
+      full_history_bytes: Bytes::new(0),
+    }),
+  )
+  let history_queries_before = empty_history_provider.counters.full_history_query_count
+  assert_eq(
+    try! empty_history_provider.read_full_history(
+      overlay.snapshot.snapshot_commit_id,
+    ),
+    Bytes::new(0),
+  )
+  assert_eq(
+    empty_history_provider.counters.full_history_query_count -
+    history_queries_before,
+    1,
+  )
 }
 
 ///|

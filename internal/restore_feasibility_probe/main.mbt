@@ -84,6 +84,9 @@ fn ordinary_admission_observation_json(
       "decision": ordinary_admission_decision_json(result.decision),
       "counter_delta": Json::object({
         "logical_query_count": counters.logical_query_count.to_json(),
+        "metadata_query_count": counters.metadata_query_count.to_json(),
+        "payload_query_count": counters.payload_query_count.to_json(),
+        "full_history_query_count": counters.full_history_query_count.to_json(),
         "physical_read_calls": counters.physical_read_calls.to_json(),
         "requested_id_count": counters.requested_id_count.to_json(),
         "returned_record_count": counters.returned_record_count.to_json(),
@@ -179,6 +182,15 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
     capture_overlay.snapshot,
     fixture.final_text,
   )
+  let metadata_backed_bundle = try! metadata_backed_capture_bundle()
+  let metadata_backed_observations = try! metadata_backed_observations_from_bytes(
+    run_id,
+    "egw_authority_native",
+    metadata_backed_bundle.fast_forward_candidate,
+    metadata_backed_bundle.fast_forward_provider,
+    metadata_backed_bundle.unreachable_candidate,
+    metadata_backed_bundle.unreachable_provider,
+  )
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -221,6 +233,21 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
           "full_history_walks": authority.full_history_walks.to_json(),
         }),
         "working_state_observations": working_state_observations.to_json(),
+        "metadata_backed_fixture": Json::object({
+          "fast_forward_candidate": metadata_backed_bytes_json(
+            metadata_backed_bundle.fast_forward_candidate,
+          ),
+          "fast_forward_provider": metadata_backed_bytes_json(
+            metadata_backed_bundle.fast_forward_provider,
+          ),
+          "unreachable_candidate": metadata_backed_bytes_json(
+            metadata_backed_bundle.unreachable_candidate,
+          ),
+          "unreachable_provider": metadata_backed_bytes_json(
+            metadata_backed_bundle.unreachable_provider,
+          ),
+        }),
+        "metadata_backed_observations": metadata_backed_observations.to_json(),
       }),
     }).stringify(),
   )
@@ -381,6 +408,34 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
     restored.snapshot,
     restored.document_text,
   )
+  let metadata_backed_fixture = match
+    object_field(payload, "metadata_backed_fixture") {
+    Json::Object(object) => object
+    _ => panic()
+  }
+  let metadata_backed_observations = try! metadata_backed_observations_from_bytes(
+    run_id,
+    "egw_candidate_js",
+    try! metadata_backed_bytes_from_json(
+      object_field(metadata_backed_fixture, "fast_forward_candidate"),
+    ),
+    try! metadata_backed_bytes_from_json(
+      object_field(metadata_backed_fixture, "fast_forward_provider"),
+    ),
+    try! metadata_backed_bytes_from_json(
+      object_field(metadata_backed_fixture, "unreachable_candidate"),
+    ),
+    try! metadata_backed_bytes_from_json(
+      object_field(metadata_backed_fixture, "unreachable_provider"),
+    ),
+  )
+  let native_metadata_backed_observations : Array[Json] = @json.from_json(
+    object_field(payload, "metadata_backed_observations"),
+  )
+  if metadata_backed_normalize_observations(native_metadata_backed_observations) !=
+    metadata_backed_normalize_observations(metadata_backed_observations) {
+    panic()
+  }
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -451,6 +506,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
         "provider_fixture_bytes_sha256": provider_sha256.to_json(),
         "ordinary_admission_observations": ordinary_admission_observations.to_json(),
         "working_state_observations": working_state_observations.to_json(),
+        "metadata_backed_observations": metadata_backed_observations.to_json(),
         "independent_process_validation": "candidate base64+length+sha256+snapshot+catalog".to_json(),
       }),
     }).stringify(),
