@@ -32,6 +32,7 @@ struct OrdinarySnapshot {
 struct OrdinaryCandidateCapture {
   candidate_bytes : Bytes
   snapshot_commit_id : Bytes
+  verification_projection : Json
 }
 
 ///|
@@ -318,7 +319,7 @@ fn encode_candidate(
 ///|
 struct OrdinaryEventMetaV2 {
   identity : RawIdentity
-  body : CanonicalBody
+  body : CanonicalBody?
   kind : Int
   event_digest_v2 : Bytes
   body_digest : Bytes
@@ -335,6 +336,36 @@ fn event_kind(body : CanonicalBody) -> Int {
     InsertScalar(_, _) => 1
     DeleteScalar(_) => 2
     Undelete(_) => 3
+  }
+}
+
+///|
+#warnings("-unused_value")
+fn ordinary_event_meta(
+  identity : RawIdentity,
+  body : CanonicalBody,
+  causal_rank_timestamp : Int,
+  declared_parents : Array[(RawIdentity, Bytes)],
+  implicit_predecessor : (RawIdentity, Bytes)?,
+  semantic_references : Array[(Int, RawIdentity, Bytes, Int)],
+) -> OrdinaryEventMetaV2 raise R0CodecError {
+  let canonical_body_bytes = encode_canonical_body(body)
+  let body_digest = _canonical_body_digest(body)
+  let event_digest_v2 = encode_event_digest_v2(
+    identity, body_digest, causal_rank_timestamp, declared_parents, implicit_predecessor,
+    semantic_references,
+  )
+  {
+    identity,
+    body: Some(body),
+    kind: event_kind(body),
+    event_digest_v2,
+    body_digest,
+    causal_rank_timestamp,
+    declared_parents,
+    implicit_predecessor,
+    semantic_references,
+    payload_byte_length: canonical_body_bytes.length(),
   }
 }
 
@@ -463,9 +494,9 @@ fn writer_commitment(
 }
 
 ///|
-fn build_nonempty_snapshot(
+fn build_nonempty_overlay(
   fixture : GeneratedFixture,
-) -> OrdinarySnapshot raise R0CodecError {
+) -> OrdinaryOverlay raise R0CodecError {
   let events_by_key : Map[String, FixtureEvent] = Default::default()
   for event in fixture.events {
     validate_raw_identity(event.identity)
@@ -566,7 +597,7 @@ fn build_nonempty_snapshot(
     )
     let meta : OrdinaryEventMetaV2 = {
       identity: event.identity,
-      body: event.body,
+      body: Some(event.body),
       kind: event_kind(event.body),
       event_digest_v2,
       body_digest,
@@ -632,7 +663,11 @@ fn build_nonempty_snapshot(
     document_text_sha256: sha256(text_bytes),
     snapshot_commit_id: Bytes::new(0),
   }
-  { ..snapshot, snapshot_commit_id: derive_snapshot_commit_id(snapshot) }
+  let committed_snapshot = {
+    ..snapshot,
+    snapshot_commit_id: derive_snapshot_commit_id(snapshot),
+  }
+  { snapshot: committed_snapshot, metas, full_history_bytes: Bytes::new(0) }
 }
 
 ///|
@@ -718,6 +753,72 @@ fn decode_snapshot(
 }
 
 ///|
+fn identity_projection(identity : RawIdentity) -> Json {
+  Json::object({
+    "agent": identity.agent.to_json(),
+    "sequence": identity.sequence.to_json(),
+  })
+}
+
+///|
+fn snapshot_verification_projection(
+  snapshot : OrdinarySnapshot,
+  document_text : String,
+) -> Json {
+  let exact_raw_heads_sorted : Array[Json] = snapshot.exact_raw_heads.map(identity => {
+    identity_projection(identity)
+  })
+  let exact_head_records_sorted : Array[Json] = snapshot.exact_head_records.map(record => {
+      Json::object({
+        "agent": record.identity.agent.to_json(),
+        "sequence": record.identity.sequence.to_json(),
+        "event_digest_v2": bytes_hex(record.event_digest_v2).to_json(),
+        "causal_rank_timestamp": record.causal_rank_timestamp.to_json(),
+      })
+    },
+  )
+  let writer_commitments_sorted : Array[Json] = snapshot.writer_commitments.map(writer => {
+      Json::object({
+        "agent": writer.agent.to_json(),
+        "leaf_count": writer.leaf_count.to_json(),
+        "tip_event_digest_v2": bytes_hex(writer.tip_event_digest_v2).to_json(),
+        "event_meta_mmr_root_v2": bytes_hex(writer.event_meta_mmr_root_v2).to_json(),
+      })
+    },
+  )
+  Json::object({
+    "document_text": document_text.to_json(),
+    "document_id_sha256": bytes_hex(snapshot.document_id_sha256).to_json(),
+    "graph_root_v2": bytes_hex(snapshot.graph_root_v2).to_json(),
+    "exact_raw_heads_sorted": exact_raw_heads_sorted.to_json(),
+    "exact_raw_heads_sha256": bytes_hex(snapshot.exact_raw_heads_sha256).to_json(),
+    "exact_head_records_sorted": exact_head_records_sorted.to_json(),
+    "writer_commitments_sorted": writer_commitments_sorted.to_json(),
+    "document_text_byte_length": snapshot.document_text_byte_length.to_json(),
+    "document_text_scalar_length": snapshot.document_text_scalar_length.to_json(),
+    "document_text_sha256": bytes_hex(snapshot.document_text_sha256).to_json(),
+    "snapshot_commit_id": bytes_hex(snapshot.snapshot_commit_id).to_json(),
+  })
+}
+
+///|
+fn capture_paper_branch_candidate_from_overlay(
+  fixture : GeneratedFixture,
+  overlay : OrdinaryOverlay,
+) -> OrdinaryCandidateCapture raise R0CodecError {
+  let snapshot = overlay.snapshot
+  {
+    candidate_bytes: encode_candidate(snapshot, fixture.final_text),
+    snapshot_commit_id: snapshot.snapshot_commit_id,
+    verification_projection: snapshot_verification_projection(
+      snapshot,
+      fixture.final_text,
+    ),
+  }
+}
+
+///|
+#warnings("-unused_value")
 fn capture_paper_branch_candidate(
   fixture : GeneratedFixture,
 ) -> OrdinaryCandidateCapture raise R0CodecError {
@@ -727,17 +828,20 @@ fn capture_paper_branch_candidate(
       return {
         candidate_bytes: encode_candidate(snapshot, fixture.final_text),
         snapshot_commit_id: snapshot.snapshot_commit_id,
+        verification_projection: snapshot_verification_projection(
+          snapshot,
+          fixture.final_text,
+        ),
       }
     }
     raise R0CodecError::InvalidValue(
       detail="fixture is not a settled candidate",
     )
   }
-  let snapshot = build_nonempty_snapshot(fixture)
-  {
-    candidate_bytes: encode_candidate(snapshot, fixture.final_text),
-    snapshot_commit_id: snapshot.snapshot_commit_id,
-  }
+  capture_paper_branch_candidate_from_overlay(
+    fixture,
+    build_nonempty_overlay(fixture),
+  )
 }
 
 ///|
@@ -908,7 +1012,7 @@ fn apply_local_insert(
   let canonical_body_bytes = encode_canonical_body(body)
   let event : OrdinaryEventMetaV2 = {
     identity,
-    body,
+    body: Some(body),
     kind: event_kind(body),
     event_digest_v2,
     body_digest,
@@ -1065,7 +1169,7 @@ fn apply_local_delete(
   let canonical_body_bytes = encode_canonical_body(body)
   let event : OrdinaryEventMetaV2 = {
     identity,
-    body,
+    body: Some(body),
     kind: event_kind(body),
     event_digest_v2,
     body_digest,

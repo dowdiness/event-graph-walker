@@ -32,11 +32,143 @@ fn self_test() -> Unit {
 }
 
 ///|
+fn ordinary_admission_decision_json(
+  decision : OrdinaryAdmissionDecision,
+) -> Json {
+  match decision {
+    OrdinaryAdmissionDecision::Tier0Nonmembership =>
+      Json::object({ "outcome": "tier0_nonmembership".to_json() })
+    OrdinaryAdmissionDecision::Duplicate =>
+      Json::object({ "outcome": "duplicate".to_json() })
+    OrdinaryAdmissionDecision::Conflict(conflict) => {
+      let name = match conflict {
+        OrdinaryAdmissionConflict::BodyDigest => "body_digest"
+        OrdinaryAdmissionConflict::DeclaredParents => "declared_parents"
+        OrdinaryAdmissionConflict::ImplicitPredecessor => "implicit_predecessor"
+        OrdinaryAdmissionConflict::SemanticReferences => "semantic_references"
+        OrdinaryAdmissionConflict::RankOrEventDigest => "rank_or_event_digest"
+      }
+      Json::object({
+        "outcome": "conflict".to_json(),
+        "conflict": name.to_json(),
+      })
+    }
+    OrdinaryAdmissionDecision::Fallback(reason) =>
+      Json::object({
+        "outcome": "fallback".to_json(),
+        "reason": reason.to_json(),
+      })
+  }
+}
+
+///|
+fn ordinary_admission_observation_json(
+  run_id : String,
+  case_id : String,
+  phase : String,
+  operation : String,
+  result : OrdinaryAdmissionResult,
+) -> Json {
+  let counters = result.counter_delta
+  Json::object({
+    "schema_version": (1).to_json(),
+    "run_id": run_id.to_json(),
+    "case_id": case_id.to_json(),
+    "producer": "egw_candidate_js".to_json(),
+    "status": "pass".to_json(),
+    "payload": Json::object({
+      "record": "ordinary_admission_observation".to_json(),
+      "candidate": "A".to_json(),
+      "phase": phase.to_json(),
+      "operation": operation.to_json(),
+      "decision": ordinary_admission_decision_json(result.decision),
+      "counter_delta": Json::object({
+        "logical_query_count": counters.logical_query_count.to_json(),
+        "physical_read_calls": counters.physical_read_calls.to_json(),
+        "requested_id_count": counters.requested_id_count.to_json(),
+        "returned_record_count": counters.returned_record_count.to_json(),
+        "metadata_records": counters.metadata_records.to_json(),
+        "payload_events": counters.payload_events.to_json(),
+        "metadata_bytes": counters.metadata_bytes.to_json(),
+        "proof_bytes": counters.proof_bytes.to_json(),
+        "payload_bytes": counters.payload_bytes.to_json(),
+        "index_nodes_read": counters.index_nodes_read.to_json(),
+        "resident_records_visited": counters.resident_records_visited.to_json(),
+        "scan_records_visited": counters.scan_records_visited.to_json(),
+        "full_history_events": counters.full_history_events.to_json(),
+        "full_history_bytes": counters.full_history_bytes.to_json(),
+      }),
+    }),
+  })
+}
+
+///|
+fn emit_ordinary_admission_observation(observation : Json) -> Unit {
+  println(observation.stringify())
+}
+
+///|
+fn run_ordinary_admission_probe(
+  run_id : String,
+  case_id : String,
+  snapshot : OrdinarySnapshot,
+  provider : OrdinaryProvider,
+) -> Array[Json] raise R0CodecError {
+  guard provider.meta_records.get(0) is Some(first_record) else {
+    raise R0CodecError::InvalidValue(detail="provider metadata is empty")
+  }
+  let resident = decode_event_meta_v2(first_record.meta_bytes)
+  let tier0 : OrdinaryEventMetaV2 = {
+    ..resident,
+    identity: RawIdentity(agent="r0-tier0-absent", sequence=0),
+  }
+  let conflict : OrdinaryEventMetaV2 = {
+    ..resident,
+    body_digest: Bytes::new(32),
+  }
+  let cases = [
+    (
+      "admission-tier0",
+      "absent-writer",
+      ordinary_admit_event(snapshot, provider, tier0),
+    ),
+    (
+      "admission-duplicate",
+      "exact-duplicate",
+      ordinary_admit_event(snapshot, provider, resident),
+    ),
+    (
+      "admission-conflict",
+      "body-digest-conflict",
+      ordinary_admit_event(snapshot, provider, conflict),
+    ),
+  ]
+  let observations : Array[Json] = []
+  for item in cases {
+    let (phase, operation, result) = item
+    let observation = ordinary_admission_observation_json(
+      run_id, case_id, phase, operation, result,
+    )
+    emit_ordinary_admission_observation(observation)
+    observations.push(observation)
+  }
+  observations
+}
+
+///|
 /// Emit one immutable native candidate/process capture.
 fn native_produce(case_id : String, run_id : String) -> Unit {
   let fixture = try! generate_required_fixture(case_id)
-  let provider = try! canonical_fixture_bytes(fixture)
-  let capture = try! capture_paper_branch_candidate(fixture)
+  let capture_overlay = try! build_ordinary_capture_overlay(fixture)
+  let capture = try! capture_paper_branch_candidate_from_overlay(
+    fixture, capture_overlay,
+  )
+  let provider_overlay = {
+    ..capture_overlay,
+    full_history_bytes: legacy_oracle_history_bytes(fixture),
+  }
+  let provider = try! encode_provider_fixture(provider_overlay)
+  let fixture_catalog_sha256 = sha256_hex(try! canonical_fixture_bytes(fixture))
   let authority = try! validate_capture_against_egw_authority(
     fixture,
     capture.candidate_bytes,
@@ -57,9 +189,11 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
         "candidate_bytes_length": capture.candidate_bytes.length().to_json(),
         "candidate_bytes_sha256": sha256_hex(capture.candidate_bytes).to_json(),
         "snapshot_commit_id": bytes_hex(capture.snapshot_commit_id).to_json(),
+        "verification_projection": capture.verification_projection,
         "provider_fixture_bytes_base64": base64_encode(provider).to_json(),
         "provider_fixture_bytes_length": provider.length().to_json(),
         "provider_fixture_bytes_sha256": sha256_hex(provider).to_json(),
+        "fixture_catalog_sha256": fixture_catalog_sha256.to_json(),
         "expected_replay_order": fixture.replay_order
         .map(identity => identity.agent + ":" + identity.sequence.to_string())
         .to_json(),
@@ -151,9 +285,16 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   let provider_length : Int = @json.from_json(
     object_field(payload, "provider_fixture_bytes_length"),
   )
+  let fixture_catalog_sha256 : String = @json.from_json(
+    object_field(payload, "fixture_catalog_sha256"),
+  )
   let provider = try! base64_decode(provider_base64)
   if provider.length() != provider_length ||
     sha256_hex(provider) != provider_sha256 {
+    panic()
+  }
+  let decoded_provider = try! OrdinaryProvider::new(provider)
+  if decoded_provider.snapshot_commit_id != restored.snapshot.snapshot_commit_id {
     panic()
   }
   let catalog_source = @fs.read_file_to_string(catalog_path)
@@ -166,6 +307,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   )
   let mut catalog_hash : String? = None
   let mut catalog_text : String? = None
+  let mut catalog_event_count : Int? = None
   for entry in fixtures {
     match entry {
       Json::Object(object) => {
@@ -179,8 +321,12 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
           let final_text : String = @json.from_json(
             object_field(object, "final_text"),
           )
+          let event_count : Int = @json.from_json(
+            object_field(object, "event_count"),
+          )
           catalog_hash = Some(hash)
           catalog_text = Some(final_text)
+          catalog_event_count = Some(event_count)
         }
       }
       _ => panic()
@@ -188,7 +334,11 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   }
   guard catalog_hash is Some(catalog_hash) else { panic() }
   guard catalog_text is Some(catalog_text) else { panic() }
-  if catalog_hash != provider_sha256 || restored.document_text != catalog_text {
+  guard catalog_event_count is Some(catalog_event_count) else { panic() }
+  if catalog_hash != fixture_catalog_sha256 ||
+    restored.document_text != catalog_text ||
+    decoded_provider.meta_records.length() != catalog_event_count ||
+    decoded_provider.payload_records.length() != catalog_event_count {
     panic()
   }
   let first_branch = try! begin_ordinary_paper_branch(
@@ -212,6 +362,12 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   }
   let sequential = try! apply_local_delete(inserted.state, position=0)
   let undo = request_pre_capture_undo(first_branch)
+  let ordinary_admission_observations = try! run_ordinary_admission_probe(
+    run_id,
+    case_id,
+    restored.snapshot,
+    decoded_provider,
+  )
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -257,14 +413,14 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
           "content_commit_equal_before_edit": (first_branch.snapshot.snapshot_commit_id ==
           second_branch.snapshot.snapshot_commit_id).to_json(),
           "insert_body_hex": bytes_hex(
-            try! encode_canonical_body(inserted.event.body),
+            try! encode_canonical_body(inserted.event.body.unwrap()),
           ).to_json(),
           "insert_text_sha256": sha256_hex(
             try! strict_utf8(inserted.state.document_text),
           ).to_json(),
           "delete_body_hex": deleted
           .map(result => {
-            bytes_hex(try! encode_canonical_body(result.event.body))
+            bytes_hex(try! encode_canonical_body(result.event.body.unwrap()))
           })
           .to_json(),
           "delete_text_sha256": deleted
@@ -280,6 +436,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
           first_branch.document_text).to_json(),
         }),
         "provider_fixture_bytes_sha256": provider_sha256.to_json(),
+        "ordinary_admission_observations": ordinary_admission_observations.to_json(),
         "independent_process_validation": "candidate base64+length+sha256+snapshot+catalog".to_json(),
       }),
     }).stringify(),
