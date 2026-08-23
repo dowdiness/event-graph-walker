@@ -36,8 +36,11 @@ fn self_test() -> Unit {
 fn native_produce(case_id : String, run_id : String) -> Unit {
   let fixture = try! generate_required_fixture(case_id)
   let provider = try! canonical_fixture_bytes(fixture)
-  let empty = Bytes::new(0)
-  let empty_hash = sha256_hex(empty)
+  let capture = try! capture_paper_branch_candidate(fixture)
+  let authority = try! validate_capture_against_egw_authority(
+    fixture,
+    capture.candidate_bytes,
+  )
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -49,12 +52,11 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
         "record": "candidate_capture".to_json(),
         "candidate": "A".to_json(),
         "phase": "capture".to_json(),
-        "outcome": "not_applicable".to_json(),
-        "reason": "candidate implementation is owned by #1291".to_json(),
-        "candidate_bytes_base64": base64_encode(empty).to_json(),
-        "candidate_bytes_length": empty.length().to_json(),
-        "candidate_bytes_sha256": empty_hash.to_json(),
-        "snapshot_commit_id": empty_hash.to_json(),
+        "outcome": "pass".to_json(),
+        "candidate_bytes_base64": base64_encode(capture.candidate_bytes).to_json(),
+        "candidate_bytes_length": capture.candidate_bytes.length().to_json(),
+        "candidate_bytes_sha256": sha256_hex(capture.candidate_bytes).to_json(),
+        "snapshot_commit_id": bytes_hex(capture.snapshot_commit_id).to_json(),
         "provider_fixture_bytes_base64": base64_encode(provider).to_json(),
         "provider_fixture_bytes_length": provider.length().to_json(),
         "provider_fixture_bytes_sha256": sha256_hex(provider).to_json(),
@@ -65,6 +67,19 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
         "adapter_observation_sha256": sha256_hex(
           try! strict_utf8(fixture.final_text),
         ).to_json(),
+        "authority_capture": Json::object({
+          "committed_events": authority.committed_events.to_json(),
+          "pending_after_count": authority.pending_after_count.to_json(),
+          "authority_text_sha256": sha256_hex(
+            try! strict_utf8(authority.authority_text),
+          ).to_json(),
+          "exact_heads": authority.exact_heads
+          .map(identity => identity.agent + ":" + identity.sequence.to_string())
+          .to_json(),
+          "head_ranks": authority.head_ranks.to_json(),
+          "used_typed_admission_receipts": authority.used_typed_admission_receipts.to_json(),
+          "full_history_walks": authority.full_history_walks.to_json(),
+        }),
       }),
     }).stringify(),
   )
@@ -106,6 +121,27 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   }
   let case_id : String = @json.from_json(object_field(capture, "case_id"))
   let run_id : String = @json.from_json(object_field(capture, "run_id"))
+  let candidate_base64 : String = @json.from_json(
+    object_field(payload, "candidate_bytes_base64"),
+  )
+  let candidate_sha256 : String = @json.from_json(
+    object_field(payload, "candidate_bytes_sha256"),
+  )
+  let candidate_length : Int = @json.from_json(
+    object_field(payload, "candidate_bytes_length"),
+  )
+  let expected_snapshot_commit_id : String = @json.from_json(
+    object_field(payload, "snapshot_commit_id"),
+  )
+  let candidate = try! base64_decode(candidate_base64)
+  if candidate.length() != candidate_length ||
+    sha256_hex(candidate) != candidate_sha256 {
+    panic()
+  }
+  let restored = try! validate_published_paper_branch_candidate(
+    candidate,
+    expected_snapshot_commit_id_hex=expected_snapshot_commit_id,
+  )
   let provider_base64 : String = @json.from_json(
     object_field(payload, "provider_fixture_bytes_base64"),
   )
@@ -129,6 +165,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
     object_field(catalog, "fixtures"),
   )
   let mut catalog_hash : String? = None
+  let mut catalog_text : String? = None
   for entry in fixtures {
     match entry {
       Json::Object(object) => {
@@ -139,16 +176,42 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
           let hash : String = @json.from_json(
             object_field(object, "canonical_sha256"),
           )
+          let final_text : String = @json.from_json(
+            object_field(object, "final_text"),
+          )
           catalog_hash = Some(hash)
+          catalog_text = Some(final_text)
         }
       }
       _ => panic()
     }
   }
   guard catalog_hash is Some(catalog_hash) else { panic() }
-  if catalog_hash != provider_sha256 {
+  guard catalog_text is Some(catalog_text) else { panic() }
+  if catalog_hash != provider_sha256 || restored.document_text != catalog_text {
     panic()
   }
+  let first_branch = try! begin_ordinary_paper_branch(
+    restored,
+    fresh_writer="r0-gate-fresh-a",
+  )
+  let second_branch = try! begin_ordinary_paper_branch(
+    restored,
+    fresh_writer="r0-gate-fresh-b",
+  )
+  let end_position = try! unicode_scalar_length(restored.document_text)
+  let inserted = try! apply_local_insert(
+    first_branch,
+    position=end_position,
+    scalar="Z",
+  )
+  let deleted = if end_position == 0 {
+    None
+  } else {
+    Some(try! apply_local_delete(second_branch, position=0))
+  }
+  let sequential = try! apply_local_delete(inserted.state, position=0)
+  let undo = request_pre_capture_undo(first_branch)
   println(
     Json::object({
       "schema_version": (1).to_json(),
@@ -160,10 +223,64 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
         "record": "candidate_result".to_json(),
         "candidate": "A".to_json(),
         "phase": "consume".to_json(),
-        "outcome": "not_applicable".to_json(),
-        "reason": "candidate implementation is owned by #1291".to_json(),
+        "outcome": "pass".to_json(),
+        "snapshot_commit_id": expected_snapshot_commit_id.to_json(),
+        "candidate_bytes_sha256": candidate_sha256.to_json(),
+        "restored_text_sha256": sha256_hex(
+          try! strict_utf8(restored.document_text),
+        ).to_json(),
+        "read_accounting": Json::object({
+          "metadata_queries": (restored.reads.metadata_queries +
+          inserted.reads.metadata_queries +
+          deleted.map_or(0, result => result.reads.metadata_queries) +
+          sequential.reads.metadata_queries +
+          undo.reads.metadata_queries).to_json(),
+          "payload_queries": (restored.reads.payload_queries +
+          inserted.reads.payload_queries +
+          deleted.map_or(0, result => result.reads.payload_queries) +
+          sequential.reads.payload_queries +
+          undo.reads.payload_queries).to_json(),
+          "full_history_queries": (restored.reads.full_history_queries +
+          inserted.reads.full_history_queries +
+          deleted.map_or(0, result => result.reads.full_history_queries) +
+          sequential.reads.full_history_queries +
+          undo.reads.full_history_queries).to_json(),
+          "scan_records_visited": (restored.reads.scan_records_visited +
+          inserted.reads.scan_records_visited +
+          deleted.map_or(0, result => result.reads.scan_records_visited) +
+          sequential.reads.scan_records_visited +
+          undo.reads.scan_records_visited).to_json(),
+        }),
+        "local_edit_observations": Json::object({
+          "fresh_writer_a": first_branch.fresh_writer.to_json(),
+          "fresh_writer_b": second_branch.fresh_writer.to_json(),
+          "content_commit_equal_before_edit": (first_branch.snapshot.snapshot_commit_id ==
+          second_branch.snapshot.snapshot_commit_id).to_json(),
+          "insert_body_hex": bytes_hex(
+            try! encode_canonical_body(inserted.event.body),
+          ).to_json(),
+          "insert_text_sha256": sha256_hex(
+            try! strict_utf8(inserted.state.document_text),
+          ).to_json(),
+          "delete_body_hex": deleted
+          .map(result => {
+            bytes_hex(try! encode_canonical_body(result.event.body))
+          })
+          .to_json(),
+          "delete_text_sha256": deleted
+          .map(result => {
+            sha256_hex(try! strict_utf8(result.state.document_text))
+          })
+          .to_json(),
+          "sequential_sequence": sequential.event.identity.sequence.to_json(),
+          "sequential_predecessor_present": (sequential.event.implicit_predecessor
+          is Some(_)).to_json(),
+          "undo_outcome": undo.reason.to_json(),
+          "undo_text_unchanged": (undo.state.document_text ==
+          first_branch.document_text).to_json(),
+        }),
         "provider_fixture_bytes_sha256": provider_sha256.to_json(),
-        "independent_process_validation": "base64+length+sha256+catalog".to_json(),
+        "independent_process_validation": "candidate base64+length+sha256+snapshot+catalog".to_json(),
       }),
     }).stringify(),
   )
