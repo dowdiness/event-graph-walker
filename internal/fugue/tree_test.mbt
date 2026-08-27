@@ -37,7 +37,7 @@ test "create empty tree" {
 ///|
 test "insert single item" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
   inspect(tree.visible_count(), content="1")
   inspect(tree.to_text(), content="A")
 }
@@ -45,11 +45,11 @@ test "insert single item" {
 ///|
 test "insert multiple items" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "H", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "e", 0, -1, 1, "agent0"))
-  tree.insert(ins(2, "l", 1, -1, 2, "agent0"))
-  tree.insert(ins(3, "l", 2, -1, 3, "agent0"))
-  tree.insert(ins(4, "o", 3, -1, 4, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "H", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "e", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "l", 1, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(3, "l", 2, -1, 3, "agent0"))
+  insert_with_test_sequence(tree, ins(4, "o", 3, -1, 4, "agent0"))
   inspect(tree.visible_count(), content="5")
   inspect(tree.to_text(), content="Hello")
 }
@@ -57,9 +57,9 @@ test "insert multiple items" {
 ///|
 test "delete item" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
-  tree.insert(ins(2, "C", 1, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 1, -1, 2, "agent0"))
   inspect(tree.visible_count(), content="3")
   try! tree.delete(@fugue.Lv(1)) // Delete "B"
   inspect(tree.visible_count(), content="2")
@@ -69,10 +69,10 @@ test "delete item" {
 ///|
 test "lv_to_position matches visible traversal and skips tombstones" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(2, "C", 0, -1, 2, "agent0"))
-  tree.insert(ins(1, "X", 0, 2, 1, "agent1"))
-  tree.insert(ins(3, "Y", 0, 2, 3, "agent2"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 0, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "X", 0, 2, 1, "agent1"))
+  insert_with_test_sequence(tree, ins(3, "Y", 0, 2, 3, "agent2"))
   try! tree.delete(@fugue.Lv(1))
 
   inspect(tree.to_text(), content="AYC")
@@ -86,7 +86,7 @@ test "lv_to_position matches visible traversal and skips tombstones" {
 ///|
 test "get item by id" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
   match tree[@fugue.Lv(0)] {
     Some(item) => {
       inspect(item.content, content="A")
@@ -101,13 +101,13 @@ test "concurrent inserts ordering with FugueMax" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert initial text "AC"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(2, "C", 0, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 0, -1, 2, "agent0"))
 
   // Two users concurrently insert "X" and "Y" between A and C
   // Both reference A as origin_left and C as origin_right
-  tree.insert(ins(1, "X", 0, 2, 1, "agent1"))
-  tree.insert(ins(3, "Y", 0, 2, 3, "agent2"))
+  insert_with_test_sequence(tree, ins(1, "X", 0, 2, 1, "agent1"))
+  insert_with_test_sequence(tree, ins(3, "Y", 0, 2, 3, "agent2"))
   let text = tree.to_text()
 
   // With FugueMax integration:
@@ -124,14 +124,14 @@ test "concurrent inserts with different ancestors" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "AB"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent0"))
 
   // Two users concurrently insert between A and B
   // X: origin_left=A(0), origin_right=B(1), timestamp=2
   // Y: origin_left=A(0), origin_right=B(1), timestamp=3
-  tree.insert(ins(2, "X", 0, 1, 2, "agent1"))
-  tree.insert(ins(3, "Y", 0, 1, 3, "agent2"))
+  insert_with_test_sequence(tree, ins(2, "X", 0, 1, 2, "agent1"))
+  insert_with_test_sequence(tree, ins(3, "Y", 0, 1, 3, "agent2"))
   let text = tree.to_text()
   // Both X and Y will be left children of B (since A is ancestor of B)
   // Sorted by timestamp: X(2), Y(3)
@@ -144,13 +144,13 @@ test "three-way concurrent insert" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "AD"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(3, "D", 0, -1, 3, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(3, "D", 0, -1, 3, "agent0"))
 
   // Three users concurrently insert between A and D
-  tree.insert(ins(1, "B", 0, 3, 1, "agent1"))
-  tree.insert(ins(2, "C", 0, 3, 2, "agent2"))
-  tree.insert(ins(4, "E", 0, 3, 4, "agent3"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, 3, 1, "agent1"))
+  insert_with_test_sequence(tree, ins(2, "C", 0, 3, 2, "agent2"))
+  insert_with_test_sequence(tree, ins(4, "E", 0, 3, 4, "agent3"))
   let text = tree.to_text()
   // All B, C, E will be left children of D (since A is ancestor of D)
   // Sorted by timestamp: B(1), C(2), E(4)
@@ -163,15 +163,15 @@ test "nested concurrent inserts" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "AC"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(2, "C", 0, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 0, -1, 2, "agent0"))
 
   // First level: insert B between A and C
-  tree.insert(ins(1, "B", 0, 2, 1, "agent1"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, 2, 1, "agent1"))
 
   // Second level: insert X between B and C
   // B is NOT an ancestor of C, so X becomes right child of B
-  tree.insert(ins(3, "X", 1, 2, 3, "agent2"))
+  insert_with_test_sequence(tree, ins(3, "X", 1, 2, 3, "agent2"))
   let text = tree.to_text()
   // Tree structure:
   // A → B → X (right child of B)
@@ -185,12 +185,12 @@ test "concurrent inserts with no right constraint" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "A"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
 
   // Multiple concurrent inserts at end (no right constraint)
-  tree.insert(ins(1, "B", 0, -1, 1, "agent1"))
-  tree.insert(ins(2, "C", 0, -1, 2, "agent2"))
-  tree.insert(ins(3, "D", 0, -1, 3, "agent3"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent1"))
+  insert_with_test_sequence(tree, ins(2, "C", 0, -1, 2, "agent2"))
+  insert_with_test_sequence(tree, ins(3, "D", 0, -1, 3, "agent3"))
   let text = tree.to_text()
   // All become right children of A, sorted by timestamp
   // Expected: ABCD
@@ -202,17 +202,17 @@ test "interleaved operations" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Build text progressively with concurrent inserts
-  tree.insert(ins(0, "H", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "e", 0, -1, 1, "agent0"))
-  tree.insert(ins(2, "l", 1, -1, 2, "agent0"))
-  tree.insert(ins(3, "l", 2, -1, 3, "agent0"))
-  tree.insert(ins(4, "o", 3, -1, 4, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "H", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "e", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "l", 1, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(3, "l", 2, -1, 3, "agent0"))
+  insert_with_test_sequence(tree, ins(4, "o", 3, -1, 4, "agent0"))
 
   // Concurrent insert at beginning: origin_left=-1, origin_right=0
-  tree.insert(ins(5, ">", -1, 0, 5, "agent1"))
+  insert_with_test_sequence(tree, ins(5, ">", -1, 0, 5, "agent1"))
 
   // Concurrent insert in middle
-  tree.insert(ins(6, "-", 2, 3, 6, "agent2"))
+  insert_with_test_sequence(tree, ins(6, "-", 2, 3, 6, "agent2"))
   let text = tree.to_text()
   // Fugue Algorithm 1: insert at pos 0 (origin_left=root, origin_right=H)
   // → root is ancestor of H → left child of H → ">" before "Hello"
@@ -224,13 +224,13 @@ test "delete in concurrent scenario" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert "ABC"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
-  tree.insert(ins(2, "C", 1, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 1, -1, 2, "agent0"))
 
   // Concurrent: delete B and insert X between A and C
   try! tree.delete(@fugue.Lv(1))
-  tree.insert(ins(3, "X", 0, 2, 3, "agent1"))
+  insert_with_test_sequence(tree, ins(3, "X", 0, 2, 3, "agent1"))
   let text = tree.to_text()
   // B is deleted, X is inserted
   // Expected: AXC
@@ -238,22 +238,31 @@ test "delete in concurrent scenario" {
 }
 
 ///|
-test "reverse timestamp ordering" {
+test "RawVersion ordering ignores Lamport timestamp" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Insert with decreasing timestamps (simulating clock skew)
-  tree.insert(ins(0, "A", -1, -1, 100, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 90, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 100, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 90, "agent0"))
 
   // Concurrent inserts between A and B with mixed timestamps
-  tree.insert(ins(2, "X", 0, 1, 95, "agent1"))
-  tree.insert(ins(3, "Y", 0, 1, 85, "agent2"))
-  tree.insert(ins(4, "Z", 0, 1, 92, "agent3"))
+  insert_with_test_sequence(tree, ins(2, "X", 0, 1, 95, "agent1"))
+  insert_with_test_sequence(tree, ins(3, "Y", 0, 1, 85, "agent2"))
+  insert_with_test_sequence(tree, ins(4, "Z", 0, 1, 92, "agent3"))
   let text = tree.to_text()
-  // All X, Y, Z are left children of B
-  // Sorted by timestamp: Y(85), Z(92), X(95)
-  // Expected: AYZXB
-  inspect(text, content="AYZXB")
+  // All X, Y, Z are left children of B.
+  // Reference ordering uses stable agent/sequence identity, not timestamp.
+  inspect(text, content="AXYZB")
+}
+
+///|
+test "RawVersion sequence overrides destination-local LV" {
+  let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
+  tree.insert(ins(0, "L", -1, -1, 0, "base"), sequence=0)
+  tree.insert(ins(1, "R", 0, -1, 1, "base"), sequence=1)
+  tree.insert(ins(10, "X", 0, 1, 10, "same-agent"), sequence=2)
+  tree.insert(ins(11, "Y", 0, 1, 11, "same-agent"), sequence=1)
+  inspect(tree.to_text(), content="LYXR")
 }
 
 ///|
@@ -261,27 +270,27 @@ test "collaborative editing simulation" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // User 1: Types "Hello"
-  tree.insert(ins(0, "H", -1, -1, 0, "user1"))
-  tree.insert(ins(1, "e", 0, -1, 1, "user1"))
-  tree.insert(ins(2, "l", 1, -1, 2, "user1"))
-  tree.insert(ins(3, "l", 2, -1, 3, "user1"))
-  tree.insert(ins(4, "o", 3, -1, 4, "user1"))
+  insert_with_test_sequence(tree, ins(0, "H", -1, -1, 0, "user1"))
+  insert_with_test_sequence(tree, ins(1, "e", 0, -1, 1, "user1"))
+  insert_with_test_sequence(tree, ins(2, "l", 1, -1, 2, "user1"))
+  insert_with_test_sequence(tree, ins(3, "l", 2, -1, 3, "user1"))
+  insert_with_test_sequence(tree, ins(4, "o", 3, -1, 4, "user1"))
   inspect(tree.to_text(), content="Hello")
 
   // User 2: Concurrently inserts "World" after "Hello"
-  tree.insert(ins(10, " ", 4, -1, 10, "user2"))
-  tree.insert(ins(11, "W", 10, -1, 11, "user2"))
-  tree.insert(ins(12, "o", 11, -1, 12, "user2"))
-  tree.insert(ins(13, "r", 12, -1, 13, "user2"))
-  tree.insert(ins(14, "l", 13, -1, 14, "user2"))
-  tree.insert(ins(15, "d", 14, -1, 15, "user2"))
+  insert_with_test_sequence(tree, ins(10, " ", 4, -1, 10, "user2"))
+  insert_with_test_sequence(tree, ins(11, "W", 10, -1, 11, "user2"))
+  insert_with_test_sequence(tree, ins(12, "o", 11, -1, 12, "user2"))
+  insert_with_test_sequence(tree, ins(13, "r", 12, -1, 13, "user2"))
+  insert_with_test_sequence(tree, ins(14, "l", 13, -1, 14, "user2"))
+  insert_with_test_sequence(tree, ins(15, "d", 14, -1, 15, "user2"))
   inspect(tree.to_text(), content="Hello World")
 
   // User 1: Concurrently inserts "!" at end (based on seeing "Hello")
-  tree.insert(ins(5, "!", 4, -1, 5, "user1"))
+  insert_with_test_sequence(tree, ins(5, "!", 4, -1, 5, "user1"))
 
   // User 3: Inserts "," between "Hello" and "World"
-  tree.insert(ins(20, ",", 4, 10, 20, "user3"))
+  insert_with_test_sequence(tree, ins(20, ",", 4, 10, 20, "user3"))
   let final_text = tree.to_text()
   // Result should deterministically merge all edits
   inspect(final_text, content="Hello!, World")
@@ -292,16 +301,16 @@ test "fugue property - non-interleaving" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Initial text "AB"
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent0"))
 
   // User 1 inserts "XX" between A and B
-  tree.insert(ins(2, "X", 0, 1, 2, "user1"))
-  tree.insert(ins(3, "X", 2, 1, 3, "user1"))
+  insert_with_test_sequence(tree, ins(2, "X", 0, 1, 2, "user1"))
+  insert_with_test_sequence(tree, ins(3, "X", 2, 1, 3, "user1"))
 
   // User 2 inserts "YY" between A and B (concurrent with user 1)
-  tree.insert(ins(4, "Y", 0, 1, 4, "user2"))
-  tree.insert(ins(5, "Y", 4, 1, 5, "user2"))
+  insert_with_test_sequence(tree, ins(4, "Y", 0, 1, 4, "user2"))
+  insert_with_test_sequence(tree, ins(5, "Y", 4, 1, 5, "user2"))
   let text = tree.to_text()
   // FugueMax should not interleave: should get AXXYYB or AYYXXB
   // Based on timestamps and tree structure, we get AXXYYB
@@ -321,7 +330,7 @@ test "fugue property - non-interleaving" {
 /// Calling undelete multiple times on a visible item should not change state
 test "undelete is idempotent on visible items" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
   inspect(tree.to_text(), content="A")
 
   // Item is visible, undelete should be a no-op
@@ -344,9 +353,9 @@ test "undelete is idempotent on visible items" {
 /// Test: undelete after delete restores item; second undelete is no-op
 test "undelete after delete changes state" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
-  tree.insert(ins(2, "C", 1, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 1, -1, 2, "agent0"))
   inspect(tree.to_text(), content="ABC")
 
   // Delete B
@@ -370,7 +379,7 @@ test "undelete after delete changes state" {
 test "delete/undelete root_lv does not corrupt visible_count" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   // Insert one visible item so the counter is non-trivial
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
   inspect(tree.visible_count(), content="1")
 
   // delete(root_lv) must be a full no-op
@@ -387,7 +396,7 @@ test "delete/undelete root_lv does not corrupt visible_count" {
 /// Test: undelete on missing item raises MissingItem error
 test "undelete on missing item raises MissingItem" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
 
   // Try to undelete a non-existent item
   let result : Result[Unit, @fugue.FugueError] = try {
@@ -410,7 +419,7 @@ test "undelete on missing item raises MissingItem" {
 test "delete_with_ts: higher timestamp wins" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: lv,
     content: "x",
     origin_left: None,
@@ -432,7 +441,7 @@ test "delete_with_ts: higher timestamp wins" {
 test "delete_with_ts: add-wins at same timestamp" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: lv,
     content: "x",
     origin_left: None,
@@ -454,7 +463,7 @@ test "delete_with_ts: add-wins at same timestamp" {
 test "delete_with_ts: commutativity" {
   let make_tree = fn() {
     let tree = @fugue.FugueTree::new()
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(0),
       content: "x",
       origin_left: None,
@@ -482,7 +491,7 @@ test "delete_with_ts: commutativity" {
 test "set_delete_winner: restores winner state" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: lv,
     content: "x",
     origin_left: None,
@@ -505,7 +514,7 @@ test "set_delete_winner: restores winner state" {
 test "adjust_delete_count: updates merge-time tracker without changing visibility" {
   let tree = @fugue.FugueTree::new()
   let lv = @fugue.Lv(0)
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: lv,
     content: "x",
     origin_left: None,
@@ -536,7 +545,7 @@ test "adjust_delete_count: updates merge-time tracker without changing visibilit
 ///|
 test "LCA: missing node returns false" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
   inspect(tree.is_ancestor(@fugue.Lv(999), @fugue.Lv(0)), content="false")
   inspect(tree.is_ancestor(@fugue.Lv(0), @fugue.Lv(999)), content="false")
 }
@@ -544,10 +553,10 @@ test "LCA: missing node returns false" {
 ///|
 test "children index matches filtered scan" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(1, "B", 0, -1, 1, "agent0"))
-  tree.insert(ins(2, "C", 1, -1, 2, "agent0"))
-  tree.insert(ins(3, "D", 0, -1, 3, "agent1"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, -1, 1, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 1, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(3, "D", 0, -1, 3, "agent1"))
   let children_of_a = tree.get_children_index(@fugue.Lv(0))
   inspect(children_of_a.length(), content="2")
   let children_of_b = tree.get_children_index(@fugue.Lv(1))
@@ -559,9 +568,9 @@ test "children index matches filtered scan" {
 ///|
 test "children index: same parent, different sides" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(ins(0, "A", -1, -1, 0, "agent0"))
-  tree.insert(ins(2, "C", 0, -1, 2, "agent0"))
-  tree.insert(ins(1, "B", 0, 2, 1, "agent1"))
+  insert_with_test_sequence(tree, ins(0, "A", -1, -1, 0, "agent0"))
+  insert_with_test_sequence(tree, ins(2, "C", 0, -1, 2, "agent0"))
+  insert_with_test_sequence(tree, ins(1, "B", 0, 2, 1, "agent1"))
   inspect(tree.to_text(), content="ABC")
   let children_of_c = tree.get_children_index(@fugue.Lv(2))
   inspect(children_of_c.length(), content="1")
@@ -570,7 +579,7 @@ test "children index: same parent, different sides" {
 ///|
 test "LCA: root is ancestor of all items" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -601,7 +610,7 @@ test "get(root_lv) returns None — root is a virtual sentinel" {
 ///|
 test "LCA: not invalidated by delete/undelete" {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -609,7 +618,7 @@ test "LCA: not invalidated by delete/undelete" {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("a"),
   })
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(1),
     content: "B",
     origin_left: Some(@fugue.Lv(0)),

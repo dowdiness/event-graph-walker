@@ -81,7 +81,7 @@ Peer A types "Hello" at position 0
 Peer B types "World" at position 0 (concurrently)
 
 Result: Both peers converge to either "HelloWorld" or "WorldHello"
-(Deterministic ordering based on agent IDs and Lamport timestamps)
+(Deterministic ordering based on stable agent ID and per-agent sequence)
 ```
 
 ### Network Messages

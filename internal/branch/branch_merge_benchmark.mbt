@@ -2,6 +2,14 @@
 // Run with: moon bench --package branch --release
 
 ///|
+fn insert_benchmark_item(
+  tree : @fugue.FugueTree[String],
+  op : @fugue.InsertOp[String],
+) -> Unit {
+  tree.insert(op, sequence=op.id.0)
+}
+
+///|
 fn resolve_origin_lv(
   oplog : @oplog.OpLog,
   raw : @core.RawVersion?,
@@ -28,7 +36,7 @@ test "merge - concurrent edits (2 agents x 10)" (b : @bench.T) {
     let mut prev_a = -1
     for i = 0; i < 10; i = i + 1 {
       let op = try! oplog_a.insert("a", prev_a, -1)
-      tree_a.insert({
+      insert_benchmark_item(tree_a, {
         id: @fugue.Lv(op.lv()),
         content: "a",
         origin_left: resolve_origin_lv(oplog_a, op.origin_left()),
@@ -66,7 +74,7 @@ test "merge - concurrent edits (2 agents x 50)" (b : @bench.T) {
     let mut prev_a = -1
     for i = 0; i < 50; i = i + 1 {
       let op = try! oplog_a.insert("a", prev_a, -1)
-      tree_a.insert({
+      insert_benchmark_item(tree_a, {
         id: @fugue.Lv(op.lv()),
         content: "a",
         origin_left: resolve_origin_lv(oplog_a, op.origin_left()),
@@ -104,7 +112,7 @@ test "merge - concurrent edits (2 agents x 200)" (b : @bench.T) {
     let mut prev_a = -1
     for i = 0; i < 200; i = i + 1 {
       let op = try! oplog_a.insert("a", prev_a, -1)
-      tree_a.insert({
+      insert_benchmark_item(tree_a, {
         id: @fugue.Lv(op.lv()),
         content: "a",
         origin_left: resolve_origin_lv(oplog_a, op.origin_left()),
@@ -141,7 +149,7 @@ test "merge - many agents (5 agents x 20)" (b : @bench.T) {
     let mut prev = -1
     for i = 0; i < 20; i = i + 1 {
       let op = try! oplog_main.insert("m", prev, -1)
-      tree.insert({
+      insert_benchmark_item(tree, {
         id: @fugue.Lv(op.lv()),
         content: "m",
         origin_left: resolve_origin_lv(oplog_main, op.origin_left()),
@@ -192,7 +200,7 @@ test "merge - with deletes (50 inserts, 25 deletes)" (b : @bench.T) {
     let ops_a : Array[@core.Op] = []
     for i = 0; i < 50; i = i + 1 {
       let op = try! oplog_a.insert("a", prev_a, -1)
-      tree_a.insert({
+      insert_benchmark_item(tree_a, {
         id: @fugue.Lv(op.lv()),
         content: "a",
         origin_left: resolve_origin_lv(oplog_a, op.origin_left()),
@@ -236,7 +244,7 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
     let mut prev = -1
     for i = 0; i < 50; i = i + 1 {
       let op = try! oplog.insert("a", prev, -1)
-      tree.insert({
+      insert_benchmark_item(tree, {
         id: @fugue.Lv(op.lv()),
         content: "a",
         origin_left: resolve_origin_lv(oplog, op.origin_left()),
@@ -251,7 +259,7 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
     // Add 20 more operations
     for i = 0; i < 20; i = i + 1 {
       let op = try! oplog.insert("b", prev, -1)
-      tree.insert({
+      insert_benchmark_item(tree, {
         id: @fugue.Lv(op.lv()),
         content: "b",
         origin_left: resolve_origin_lv(oplog, op.origin_left()),
@@ -271,7 +279,7 @@ test "merge - graph_diff advance (20 ops)" (b : @bench.T) {
         Some(op) =>
           match op.content() {
             @core.Insert(text) =>
-              tree2.insert({
+              insert_benchmark_item(tree2, {
                 id: @fugue.Lv(op.lv()),
                 content: text,
                 origin_left: resolve_origin_lv(oplog, op.origin_left()),
@@ -310,7 +318,7 @@ test "merge - repeated small (10 iterations x 5 ops)" (b : @bench.T) {
     let mut prev_a = -1
     for i = 0; i < 20; i = i + 1 {
       let op = try! oplog_a.insert("a", prev_a, -1)
-      tree.insert({
+      insert_benchmark_item(tree, {
         id: @fugue.Lv(op.lv()),
         content: "a",
         origin_left: resolve_origin_lv(oplog_a, op.origin_left()),
@@ -347,7 +355,7 @@ test "merge - retreat concurrent deletes (500 items, 50 deletes)" (b : @bench.T)
   let mut prev_lv = -1
   for i = 0; i < 500; i = i + 1 {
     let op = try! oplog_a.insert("x", prev_lv, -1)
-    tree.insert({
+    insert_benchmark_item(tree, {
       id: @fugue.Lv(op.lv()),
       content: "x",
       origin_left: if prev_lv == -1 {
@@ -392,7 +400,7 @@ test "merge - retreat concurrent deletes (500 items, 50 deletes)" (b : @bench.T)
     // Build fresh tree from template
     let tree_copy : @fugue.FugueTree[String] = @fugue.FugueTree::new()
     for ins in template_inserts {
-      tree_copy.insert(ins)
+      insert_benchmark_item(tree_copy, ins)
     }
     for i = 0; i < 50; i = i + 1 {
       try! tree_copy.delete_with_ts(@fugue.Lv(i * 10), 500 + i, "agent_a")

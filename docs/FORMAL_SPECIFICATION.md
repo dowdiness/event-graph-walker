@@ -609,8 +609,9 @@ struct Item {
   parent    : Int      // Parent item ID (-1 for root)
   side      : Side     // Left or Right child
   deleted   : Bool     // Tombstone flag
-  timestamp : Int      // Lamport timestamp
+  timestamp : Int      // Lamport timestamp (causal metadata)
   agent     : String   // Creating agent
+  sequence  : Int      // Per-agent stable operation sequence
 }
 ```
 
@@ -618,9 +619,8 @@ The **total order** on items is defined by (`event-graph-walker/fugue/item.mbt:4
 
 ```
 compare(a, b) =
-  1. Compare by timestamp (ascending)
-  2. If equal, compare by agent (lexicographic)
-  3. If equal, compare by id (ascending)
+  1. Compare by agent (`String::lexical_compare`, ascending)
+  2. If equal, compare by per-agent sequence (ascending)
 ```
 
 The **find_parent_and_side** algorithm (`event-graph-walker/fugue/tree.mbt`) determines
@@ -647,8 +647,8 @@ left children (sorted) -> node -> right children (sorted).
 ### Laws
 
 **L5.1 Insertion Determinism.**
-Given the same `(origin_left, origin_right, timestamp, agent)` tuple,
-`find_parent_and_side` always produces the same `(parent, side)`.
+Given the same `(origin_left, origin_right, agent, sequence)` tuple,
+`find_parent_and_side` and sibling ordering always produce the same result.
 
 - **Test:** `"find parent and side at start"` in `event-graph-walker/fugue/tree.mbt:209`
 - **Test:** `"find parent and side with origin_left"` in `event-graph-walker/fugue/tree.mbt:217`
@@ -682,7 +682,7 @@ forall a, b, c:
   (random chains; verifies transitivity).
 
 **L5.4 Strong List Specification (Insert).**
-After `insert(id, content, origin_left, origin_right, ts, agent)`:
+After `insert(id, content, origin_left, origin_right, ts, agent, sequence)`:
 
 ```
 exists position p in visible sequence:
@@ -720,14 +720,15 @@ A's items contiguously and B's items contiguously (no interleaving).
   `event-graph-walker/fugue/tree_test.mbt:255`
   (example case).
 
-**L5.7 Deterministic Tie-Breaking.**
-For concurrent inserts at the same position with the same timestamp,
-ordering is determined by lexicographic agent comparison.
+**L5.7 Stable RawVersion Ordering.**
+Concurrent same-side siblings are ordered by their stable `(agent, sequence)`
+identity. Agent strings use lexical UTF-16 code-unit order; Lamport timestamps
+and destination-local LVs do not affect sibling order.
 
-- **Rationale:** Ensures all replicas produce identical sequences.
-- **Test (property):** `"property: fugue tie-breaking (agent then id)"` in
-  `event-graph-walker/fugue/tree_properties_test.mbt:532`
-  (random agents/ids with equal timestamps).
+- **Rationale:** Ensures all replicas produce identical sequences and matches
+  the EG-walker reference implementation's event-ID order.
+- **Test (property):** `"property: fugue RawVersion ordering (agent then sequence)"`
+  in `event-graph-walker/fugue/tree_properties_test.mbt`.
 
 **L5.8 Position Round-Trip.**
 
@@ -1130,10 +1131,10 @@ forall editor:
    captures the union of known operations.
 3. The FugueMax tree (**L5.1**, **L5.4**, **L5.5**) is a deterministic
    function of the operation set: given the same items with the same
-   `(origin_left, origin_right, timestamp, agent)` tuples, the tree
-   structure and in-order traversal are identical.
-4. By **L4.15** (Lamport clock) and **L5.7** (deterministic tie-breaking),
-   concurrent operations are resolved identically on all replicas.
+   `(origin_left, origin_right, agent, sequence)` tuples, the tree structure
+   and in-order traversal are identical.
+4. By **L5.7** (stable RawVersion ordering), concurrent operations are resolved
+   identically on all replicas without destination-local ordering state.
 
 **Tested via:** L7.1, L7.2, L7.3 (convergence, idempotence, bidirectional).
 

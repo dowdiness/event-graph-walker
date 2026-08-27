@@ -51,7 +51,7 @@ fn benchmark_fugue_sequential_right_insert(b : @bench.T, count : Int) -> Unit {
   b.bench(fn() {
     let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
     for op in ops {
-      tree.insert(op)
+      tree.insert(op, sequence=op.id.0)
     }
     b.keep(tree.visible_count())
   })

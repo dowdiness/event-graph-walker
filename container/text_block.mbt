@@ -168,14 +168,17 @@ fn TextBlock::apply_op(
       }
       self.stable_to_local[insert_op.id] = local_id
       self.local_to_stable[local_id] = insert_op.id
-      self.tree.insert({
-        id: @fugue.Lv(local_id),
-        content: insert_op.content,
-        origin_left,
-        origin_right,
-        timestamp: @fugue.Timestamp(insert_op.timestamp),
-        agent: @fugue.ReplicaId(insert_op.agent),
-      })
+      self.tree.insert(
+        {
+          id: @fugue.Lv(local_id),
+          content: insert_op.content,
+          origin_left,
+          origin_right,
+          timestamp: @fugue.Timestamp(insert_op.timestamp),
+          agent: @fugue.ReplicaId(insert_op.agent),
+        },
+        sequence=insert_op.id.seq,
+      )
     }
     Delete(delete_op) =>
       self.tree.delete_with_ts(

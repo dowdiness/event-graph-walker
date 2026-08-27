@@ -1,5 +1,13 @@
 ///|
 /// Tests for merge module
+fn insert_test_item(
+  tree : @fugue.FugueTree[String],
+  op : @fugue.InsertOp[String],
+) -> Unit {
+  tree.insert(op, sequence=op.id.0)
+}
+
+///|
 fn resolve_origin_lv(
   oplog : @oplog.OpLog,
   raw : @core.RawVersion?,
@@ -30,7 +38,7 @@ test "merge_remote_ops - basic concurrent inserts" {
 
   // Agent A inserts "He"
   let op_a1 = try! oplog_a.insert("H", -1, -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op_a1.lv()),
     content: "H",
     origin_left: resolve_origin_lv(oplog_a, op_a1.origin_left()),
@@ -39,7 +47,7 @@ test "merge_remote_ops - basic concurrent inserts" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op_a2 = try! oplog_a.insert("e", op_a1.lv(), -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op_a2.lv()),
     content: "e",
     origin_left: resolve_origin_lv(oplog_a, op_a2.origin_left()),
@@ -50,7 +58,7 @@ test "merge_remote_ops - basic concurrent inserts" {
 
   // Agent B concurrently inserts "Wo" (starting from same state)
   let op_b1 = try! oplog_b.insert("W", -1, -1)
-  tree_b.insert({
+  insert_test_item(tree_b, {
     id: @fugue.Lv(op_b1.lv()),
     content: "W",
     origin_left: resolve_origin_lv(oplog_b, op_b1.origin_left()),
@@ -59,7 +67,7 @@ test "merge_remote_ops - basic concurrent inserts" {
     agent: @fugue.ReplicaId("agent_b"),
   })
   let op_b2 = try! oplog_b.insert("o", op_b1.lv(), -1)
-  tree_b.insert({
+  insert_test_item(tree_b, {
     id: @fugue.Lv(op_b2.lv()),
     content: "o",
     origin_left: resolve_origin_lv(oplog_b, op_b2.origin_left()),
@@ -92,7 +100,7 @@ test "merge_remote_ops - insert and delete" {
 
   // Agent A inserts "ABC"
   let op_a1 = try! oplog_a.insert("A", -1, -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op_a1.lv()),
     content: "A",
     origin_left: resolve_origin_lv(oplog_a, op_a1.origin_left()),
@@ -101,7 +109,7 @@ test "merge_remote_ops - insert and delete" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op_a2 = try! oplog_a.insert("B", op_a1.lv(), -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op_a2.lv()),
     content: "B",
     origin_left: resolve_origin_lv(oplog_a, op_a2.origin_left()),
@@ -110,7 +118,7 @@ test "merge_remote_ops - insert and delete" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op_a3 = try! oplog_a.insert("C", op_a2.lv(), -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op_a3.lv()),
     content: "C",
     origin_left: resolve_origin_lv(oplog_a, op_a3.origin_left()),
@@ -152,7 +160,7 @@ test "merge - simple merge using graph_diff" {
 
   // Insert "Hello"
   let op1 = try! oplog.insert("H", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op1.lv()),
     content: "H",
     origin_left: resolve_origin_lv(oplog, op1.origin_left()),
@@ -161,7 +169,7 @@ test "merge - simple merge using graph_diff" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op2 = try! oplog.insert("e", op1.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op2.lv()),
     content: "e",
     origin_left: resolve_origin_lv(oplog, op2.origin_left()),
@@ -175,7 +183,7 @@ test "merge - simple merge using graph_diff" {
 
   // Add more operations
   let op3 = try! oplog.insert("l", op2.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op3.lv()),
     content: "l",
     origin_left: resolve_origin_lv(oplog, op3.origin_left()),
@@ -184,7 +192,7 @@ test "merge - simple merge using graph_diff" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op4 = try! oplog.insert("l", op3.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op4.lv()),
     content: "l",
     origin_left: resolve_origin_lv(oplog, op4.origin_left()),
@@ -193,7 +201,7 @@ test "merge - simple merge using graph_diff" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op5 = try! oplog.insert("o", op4.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op5.lv()),
     content: "o",
     origin_left: resolve_origin_lv(oplog, op5.origin_left()),
@@ -210,7 +218,7 @@ test "merge - simple merge using graph_diff" {
   let tree2 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // First apply operations up to frontier_before
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(op1.lv()),
     content: "H",
     origin_left: resolve_origin_lv(oplog, op1.origin_left()),
@@ -218,7 +226,7 @@ test "merge - simple merge using graph_diff" {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(op2.lv()),
     content: "e",
     origin_left: resolve_origin_lv(oplog, op2.origin_left()),
@@ -245,7 +253,7 @@ test "merge error - missing op during apply" {
 
   // Insert one valid operation
   let op1 = try! oplog.insert("A", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: resolve_origin_lv(oplog, op1.origin_left()),
@@ -278,7 +286,7 @@ test "merge error - apply operations succeeds for valid ops" {
 
   // Insert first operation
   let op1 = try! oplog.insert("A", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: resolve_origin_lv(oplog, op1.origin_left()),
@@ -293,7 +301,7 @@ test "merge error - apply operations succeeds for valid ops" {
   // Create a fresh tree and use MergeContext to apply op2
   let tree2 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   // First add op1 to tree2
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: resolve_origin_lv(oplog, op1.origin_left()),
@@ -326,7 +334,7 @@ test "merge error - state unchanged after failure" {
 
   // Build initial state "ABC"
   let op1 = try! oplog.insert("A", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: None,
@@ -335,7 +343,7 @@ test "merge error - state unchanged after failure" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op2 = try! oplog.insert("B", op1.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op2.lv()),
     content: "B",
     origin_left: Some(@fugue.Lv(op1.lv())),
@@ -344,7 +352,7 @@ test "merge error - state unchanged after failure" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op3 = try! oplog.insert("C", op2.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op3.lv()),
     content: "C",
     origin_left: Some(@fugue.Lv(op2.lv())),
@@ -392,7 +400,7 @@ test "retreat then apply with missing item" {
 
   // Insert "AB"
   let op1 = try! oplog.insert("A", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: None,
@@ -401,7 +409,7 @@ test "retreat then apply with missing item" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op2 = try! oplog.insert("B", op1.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op2.lv()),
     content: "B",
     origin_left: Some(@fugue.Lv(op1.lv())),
@@ -437,7 +445,7 @@ test "merge - concurrent delete retreat convergence" {
 
   // Both agents start with "ABC"
   let op1 = try! oplog_a.insert("A", -1, -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: None,
@@ -446,7 +454,7 @@ test "merge - concurrent delete retreat convergence" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op2 = try! oplog_a.insert("B", op1.lv(), -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op2.lv()),
     content: "B",
     origin_left: Some(@fugue.Lv(op1.lv())),
@@ -455,7 +463,7 @@ test "merge - concurrent delete retreat convergence" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op3 = try! oplog_a.insert("C", op2.lv(), -1)
-  tree_a.insert({
+  insert_test_item(tree_a, {
     id: @fugue.Lv(op3.lv()),
     content: "C",
     origin_left: Some(@fugue.Lv(op2.lv())),
@@ -503,7 +511,7 @@ test "merge - frontier retreat exercises two-count path" {
 
   // Insert "ABC"
   let op1 = try! oplog.insert("A", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op1.lv()),
     content: "A",
     origin_left: None,
@@ -512,7 +520,7 @@ test "merge - frontier retreat exercises two-count path" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op2 = try! oplog.insert("B", op1.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op2.lv()),
     content: "B",
     origin_left: Some(@fugue.Lv(op1.lv())),
@@ -521,7 +529,7 @@ test "merge - frontier retreat exercises two-count path" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op3 = try! oplog.insert("C", op2.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(op3.lv()),
     content: "C",
     origin_left: Some(@fugue.Lv(op2.lv())),
@@ -551,7 +559,7 @@ test "merge - retreat insert hides items correctly" {
 
   // Insert "ABCDE"
   let op1 = try! oplog.insert("A", -1, -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -560,7 +568,7 @@ test "merge - retreat insert hides items correctly" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op2 = try! oplog.insert("B", op1.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(1),
     content: "B",
     origin_left: Some(@fugue.Lv(0)),
@@ -569,7 +577,7 @@ test "merge - retreat insert hides items correctly" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op3 = try! oplog.insert("C", op2.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(2),
     content: "C",
     origin_left: Some(@fugue.Lv(1)),
@@ -581,7 +589,7 @@ test "merge - retreat insert hides items correctly" {
   let frontier_abc = oplog.get_frontier()
 
   let op4 = try! oplog.insert("D", op3.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(3),
     content: "D",
     origin_left: Some(@fugue.Lv(2)),
@@ -590,7 +598,7 @@ test "merge - retreat insert hides items correctly" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   let op5 = try! oplog.insert("E", op4.lv(), -1)
-  tree.insert({
+  insert_test_item(tree, {
     id: @fugue.Lv(4),
     content: "E",
     origin_left: Some(@fugue.Lv(3)),
@@ -605,7 +613,7 @@ test "merge - retreat insert hides items correctly" {
 
   // Build tree2 at ABCDE state
   let tree2 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -613,7 +621,7 @@ test "merge - retreat insert hides items correctly" {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(1),
     content: "B",
     origin_left: Some(@fugue.Lv(0)),
@@ -621,7 +629,7 @@ test "merge - retreat insert hides items correctly" {
     timestamp: @fugue.Timestamp(1),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(2),
     content: "C",
     origin_left: Some(@fugue.Lv(1)),
@@ -629,7 +637,7 @@ test "merge - retreat insert hides items correctly" {
     timestamp: @fugue.Timestamp(2),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(3),
     content: "D",
     origin_left: Some(@fugue.Lv(2)),
@@ -637,7 +645,7 @@ test "merge - retreat insert hides items correctly" {
     timestamp: @fugue.Timestamp(3),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  tree2.insert({
+  insert_test_item(tree2, {
     id: @fugue.Lv(4),
     content: "E",
     origin_left: Some(@fugue.Lv(3)),

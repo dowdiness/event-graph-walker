@@ -7,14 +7,17 @@ fn locator_sibling_fixture(
 ) -> (@fugue.FugueTree[String], IndexedState) {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   for index in 0..<count {
-    tree.insert({
-      id: @fugue.Lv(index),
-      content: "x",
-      origin_left: None,
-      origin_right: None,
-      timestamp: @fugue.Timestamp(index),
-      agent: @fugue.ReplicaId("sibling"),
-    })
+    tree.insert(
+      {
+        id: @fugue.Lv(index),
+        content: "x",
+        origin_left: None,
+        origin_right: None,
+        timestamp: @fugue.Timestamp(index),
+        agent: @fugue.ReplicaId("sibling"),
+      },
+      sequence=index,
+    )
   }
   (tree, IndexedState::from_tree(tree))
 }
@@ -44,18 +47,21 @@ fn locator_chain_fixture(
 ) -> (@fugue.FugueTree[String], IndexedState) {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   for index in 0..<count {
-    tree.insert({
-      id: @fugue.Lv(index),
-      content: "x",
-      origin_left: if index == 0 {
-        None
-      } else {
-        Some(@fugue.Lv(index - 1))
+    tree.insert(
+      {
+        id: @fugue.Lv(index),
+        content: "x",
+        origin_left: if index == 0 {
+          None
+        } else {
+          Some(@fugue.Lv(index - 1))
+        },
+        origin_right: None,
+        timestamp: @fugue.Timestamp(index),
+        agent: @fugue.ReplicaId("chain"),
       },
-      origin_right: None,
-      timestamp: @fugue.Timestamp(index),
-      agent: @fugue.ReplicaId("chain"),
-    })
+      sequence=index,
+    )
   }
   (tree, IndexedState::from_tree(tree))
 }

@@ -1,0 +1,8 @@
+# U+10000 sorts before U+E000 by UTF-16 code unit order, despite scalar order.
+replica 𐀀
+replica 
+insert 𐀀 0 A
+insert  0 B
+sync 𐀀 
+sync  𐀀
+expect-converged 𐀀 

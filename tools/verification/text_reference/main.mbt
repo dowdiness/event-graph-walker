@@ -100,12 +100,52 @@ fn Driver::apply_line(
 }
 
 ///|
+struct CorpusCase {
+  expected : String
+  message : Json
+} derive(FromJson)
+
+///|
+fn replay_corpus(encoded : String) -> Unit raise {
+  let cases : Array[CorpusCase] = @json.from_json(@json.parse(encoded))
+  for index, case in cases {
+    let document = @text.TextState::new("corpus-receiver-\{index}")
+    let message = @text.SyncMessage::from_json_string(case.message.stringify())
+    let report = document.sync().apply(message) catch {
+        error =>
+          raise Failure::Failure(
+            "corpus run \{index}: sync failed: \{error.debug()}",
+          )
+      }
+    if report.pending_operations() != 0 {
+      raise Failure::Failure(
+        "corpus run \{index}: \{report.pending_operations()} pending operations",
+      )
+    }
+    let actual = document.text()
+    if actual != case.expected {
+      raise Failure::Failure(
+        "corpus run \{index}: expected \{@debug.to_string(case.expected)}, " +
+        "got \{@debug.to_string(actual)}",
+      )
+    }
+  }
+  println("PASS: \{cases.length()} official conformance runs matched")
+}
+
+///|
 async fn main {
   let args = @env.args()
-  guard args.length() == 2 else {
-    raise Failure::Failure("usage: moon run . -- TRACE")
+  if args is [_, "--corpus", corpus_path] {
+    replay_corpus(@fs.read_file(corpus_path).text())
+    return
   }
-  let trace = @fs.read_file(args[1]).text()
+  guard args is [_, trace_path] else {
+    raise Failure::Failure(
+      "usage: moon run . -- TRACE | --corpus TRANSLATED_JSON",
+    )
+  }
+  let trace = @fs.read_file(trace_path).text()
   let driver = Driver()
   for index, raw_line in trace.split("\n") {
     let line = raw_line.trim()

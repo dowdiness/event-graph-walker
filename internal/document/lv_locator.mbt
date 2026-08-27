@@ -13,8 +13,8 @@ priv enum LocatorSiblings {
 ///|
 /// Stable Euler-tour handles and Fugue sibling ownership for one LV.
 priv struct LocatorItem {
-  timestamp : @fugue.Timestamp
   agent : @fugue.ReplicaId
+  sequence : Int
   open_node : Int
   content_node : Int
   close_node : Int
@@ -267,19 +267,15 @@ fn LocatorSiblings::height(self : LocatorSiblings) -> Int {
 }
 
 ///|
-/// Compare two siblings using Fugue's canonical timestamp/agent/LV order.
+/// Compare two siblings using the reference RawVersion `(agent, sequence)` order.
 fn LvLocator::compare_lvs(self : LvLocator, a : Int, b : Int) -> Int {
   let a_item = self.items.get(a).unwrap()
   let b_item = self.items.get(b).unwrap()
-  let timestamp = Compare::compare(a_item.timestamp, b_item.timestamp)
-  if timestamp != 0 {
-    return timestamp
-  }
-  let agent = Compare::compare(a_item.agent, b_item.agent)
+  let agent = a_item.agent.0.lexical_compare(b_item.agent.0)
   if agent != 0 {
     return agent
   }
-  a.compare(b)
+  Compare::compare(a_item.sequence, b_item.sequence)
 }
 
 ///|
@@ -439,8 +435,8 @@ fn LvLocator::add_item(self : LvLocator, item : @fugue.Item[String]) -> Bool {
   let content_node = self.push_rank_node(!item.deleted)
   let close_node = self.push_rank_node(false)
   self.items.set(item.id.0, {
-    timestamp: item.timestamp,
     agent: item.agent,
+    sequence: item.sequence,
     open_node,
     content_node,
     close_node,

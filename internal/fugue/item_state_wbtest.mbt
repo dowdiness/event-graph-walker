@@ -35,14 +35,14 @@ test "ItemState - update_from_delete_count" {
 
 ///|
 test "Item - new fields initialized correctly" {
-  let item = Item::new(Lv(0), "A", None, Left, Timestamp(0), ReplicaId("a"))
+  let item = Item::new(Lv(0), "A", None, Left, Timestamp(0), ReplicaId("a"), 0)
   inspect(item.state, content="Inserted")
   inspect(item.delete_count, content="0")
 }
 
 ///|
 test "Item - delete_count and state after operations" {
-  let item = Item::new(Lv(0), "A", None, Left, Timestamp(0), ReplicaId("a"))
+  let item = Item::new(Lv(0), "A", None, Left, Timestamp(0), ReplicaId("a"), 0)
   // Simulate retreat_insert
   item.state = item.state.retreat_insert()
   inspect(item.state, content="Retreated")

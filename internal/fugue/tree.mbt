@@ -163,18 +163,29 @@ pub fn FugueTree::to_text(self : FugueTree[String]) -> String {
 }
 
 ///|
-/// Insert an item using FugueMax integration algorithm
-pub fn[T] FugueTree::insert(self : FugueTree[T], op : InsertOp[T]) -> Unit {
-  // Find correct parent and side using FugueMax algorithm
+/// Insert using an explicit stable per-replica operation sequence.
+///
+/// Same-side siblings are ordered by `(agent, sequence)`, matching the
+/// EG-walker reference implementation's RawVersion order. Callers must not
+/// substitute a destination-local LV for `sequence`.
+pub fn[T] FugueTree::insert(
+  self : FugueTree[T],
+  op : InsertOp[T],
+  sequence~ : Int,
+) -> Unit {
   let (parent, side) = self.find_parent_and_side(
     op.origin_left,
     op.origin_right,
   )
-
-  // Create item with found parent and side
-  let item = Item::new(op.id, op.content, parent, side, op.timestamp, op.agent)
-
-  // Add to tree
+  let item = Item::new(
+    op.id,
+    op.content,
+    parent,
+    side,
+    op.timestamp,
+    op.agent,
+    sequence,
+  )
   self.add_item(item)
 }
 
@@ -452,11 +463,10 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
 }
 
 ///|
-/// Compare children for sibling ordering in the Fugue tree.
+/// Compare children by stable RawVersion `(agent, sequence)` order.
 ///
-/// Uses Lamport timestamp as primary sort key, with agent ID as tiebreaker.
-/// This deterministic ordering ensures all peers converge to the same tree
-/// structure regardless of operation arrival order.
+/// This deterministic ordering matches the EG-walker reference and does not
+/// depend on destination-local operation arrival order.
 ///
 /// **Complexity**: O(1) for numeric comparison, O(k) for string tiebreaker
 /// where k = agent ID length.
@@ -500,30 +510,39 @@ test "ancestor check correctness" {
   let tree : FugueTree[String] = FugueTree::new()
 
   // Build chain: root → A(0) → B(1) → C(2)
-  tree.insert({
-    id: Lv(0),
-    content: "A",
-    origin_left: None,
-    origin_right: None,
-    timestamp: Timestamp(0),
-    agent: ReplicaId("agent0"),
-  })
-  tree.insert({
-    id: Lv(1),
-    content: "B",
-    origin_left: Some(Lv(0)),
-    origin_right: None,
-    timestamp: Timestamp(1),
-    agent: ReplicaId("agent0"),
-  })
-  tree.insert({
-    id: Lv(2),
-    content: "C",
-    origin_left: Some(Lv(1)),
-    origin_right: None,
-    timestamp: Timestamp(2),
-    agent: ReplicaId("agent0"),
-  })
+  tree.insert(
+    {
+      id: Lv(0),
+      content: "A",
+      origin_left: None,
+      origin_right: None,
+      timestamp: Timestamp(0),
+      agent: ReplicaId("agent0"),
+    },
+    sequence=0,
+  )
+  tree.insert(
+    {
+      id: Lv(1),
+      content: "B",
+      origin_left: Some(Lv(0)),
+      origin_right: None,
+      timestamp: Timestamp(1),
+      agent: ReplicaId("agent0"),
+    },
+    sequence=1,
+  )
+  tree.insert(
+    {
+      id: Lv(2),
+      content: "C",
+      origin_left: Some(Lv(1)),
+      origin_right: None,
+      timestamp: Timestamp(2),
+      agent: ReplicaId("agent0"),
+    },
+    sequence=2,
+  )
 
   // Test ancestor relationships
   inspect(tree.is_ancestor(Lv(0), Lv(0)), content="true") // Self is ancestor
@@ -643,14 +662,17 @@ test "find parent and side at start" {
 ///|
 test "find parent and side with origin_left" {
   let tree : FugueTree[String] = FugueTree::new()
-  tree.insert({
-    id: Lv(0),
-    content: "A",
-    origin_left: None,
-    origin_right: None,
-    timestamp: Timestamp(0),
-    agent: ReplicaId("agent0"),
-  })
+  tree.insert(
+    {
+      id: Lv(0),
+      content: "A",
+      origin_left: None,
+      origin_right: None,
+      timestamp: Timestamp(0),
+      agent: ReplicaId("agent0"),
+    },
+    sequence=0,
+  )
   let (parent, side) = tree.find_parent_and_side(Some(Lv(0)), None)
   @debug.debug_inspect(parent, content="Some(Lv(0))")
   inspect(side, content="Right")
@@ -724,7 +746,7 @@ fn[T] FugueTree::children_with_items(
 
 ///|
 /// In-order tree traversal: Left children → Node → Right children
-/// For nodes with same parent and side, sort by timestamp then ID.
+/// For nodes with the same parent and side, sort by RawVersion identity.
 /// Uses an explicit stack to avoid call-stack overflow on deep trees (500+ nodes).
 ///
 /// Calls `visit(node_id, item, position)` for each emitted node. `position` is

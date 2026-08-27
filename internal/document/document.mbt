@@ -219,22 +219,25 @@ pub fn Document::insert(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
-    self.tree.insert({
-      id: @fugue.Lv(op.lv()),
-      content: ch_str,
-      origin_left: if origin_left == -1 {
-        None
-      } else {
-        Some(@fugue.Lv(origin_left))
+    self.tree.insert(
+      {
+        id: @fugue.Lv(op.lv()),
+        content: ch_str,
+        origin_left: if origin_left == -1 {
+          None
+        } else {
+          Some(@fugue.Lv(origin_left))
+        },
+        origin_right: if origin_right == -1 {
+          None
+        } else {
+          Some(@fugue.Lv(origin_right))
+        },
+        timestamp: @fugue.Timestamp(timestamp),
+        agent: @fugue.ReplicaId(agent),
       },
-      origin_right: if origin_right == -1 {
-        None
-      } else {
-        Some(@fugue.Lv(origin_right))
-      },
-      timestamp: @fugue.Timestamp(timestamp),
-      agent: @fugue.ReplicaId(agent),
-    })
+      sequence=op.seq(),
+    )
     if cache_valid {
       cache_valid = self.indexed_state.insert_at(
         current_pos,
