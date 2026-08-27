@@ -1,0 +1,9 @@
+replica alice
+replica bob
+insert alice 0 A
+sync alice bob
+insert bob 1 B
+sync bob alice
+insert alice 1 X
+sync alice bob
+expect-converged alice bob
