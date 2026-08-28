@@ -5,12 +5,11 @@
 priv struct InsertPlan {
   position : Int
   text : String
-  operation_count : Int
 }
 
 ///|
 fn InsertPlan::InsertPlan(position : Int, text : String) -> InsertPlan {
-  { position, text, operation_count: text.iter().count() }
+  { position, text }
 }
 
 ///|
@@ -37,7 +36,6 @@ fn plan_insert(
 pub(all) struct TextState {
   priv inner : @document.Document
   priv sync_limits : @sync.Limits
-  priv mut cached_version : VersionCache
 }
 
 ///|
@@ -60,11 +58,7 @@ pub fn TextState::new_with_sync_limits(
   if agent_id == "" {
     raise TextError::EmptyReplicaId
   }
-  TextState::{
-    inner: @document.Document::new(agent_id),
-    sync_limits: limits,
-    cached_version: VersionCache::empty(),
-  }
+  TextState::{ inner: @document.Document::new(agent_id), sync_limits: limits }
 }
 
 ///|
@@ -76,27 +70,6 @@ fn TextState::prepare_for_mutation(self : TextState) -> Unit raise TextError {
         self.inner.visible_count()
       })
   }
-}
-
-///|
-fn TextState::advance_cached_version(self : TextState, op : @core.Op) -> Unit {
-  self.cached_version = self.cached_version.advance(op)
-}
-
-///|
-fn TextState::advance_cached_local_insert(
-  self : TextState,
-  last_op : @core.Op,
-  operation_count : Int,
-) -> Unit {
-  self.cached_version = self.cached_version.advance_local_insert(
-    last_op, operation_count,
-  )
-}
-
-///|
-fn TextState::invalidate_cached_version(self : TextState) -> Unit {
-  self.cached_version = self.cached_version.invalidate()
 }
 
 ///|
@@ -143,14 +116,8 @@ pub fn TextState::insert(
   if plan.text.length() == 0 {
     return
   }
-  try {
-    let last_op = self.inner.insert(plan.position, plan.text)
-    self.advance_cached_local_insert(last_op, plan.operation_count)
-  } catch {
-    err => {
-      self.invalidate_cached_version()
-      raise TextError::from_document_error(err, () => doc_len)
-    }
+  ignore(self.inner.insert(plan.position, plan.text)) catch {
+    err => raise TextError::from_document_error(err, () => doc_len)
   }
 }
 
@@ -163,14 +130,8 @@ pub fn TextState::delete(self : TextState, pos : Pos) -> Unit raise TextError {
   if pos_val >= doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
-  try {
-    let op = self.inner.delete(pos_val)
-    self.advance_cached_version(op)
-  } catch {
-    err => {
-      self.invalidate_cached_version()
-      raise TextError::from_document_error(err, () => doc_len)
-    }
+  ignore(self.inner.delete(pos_val)) catch {
+    err => raise TextError::from_document_error(err, () => doc_len)
   }
 }
 
@@ -183,9 +144,6 @@ pub fn TextState::delete_range(
   self.prepare_for_mutation()
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
-  if start != end {
-    self.invalidate_cached_version()
-  }
   self.inner.delete_range(start, end) catch {
     err => raise TextError::from_document_error(err, () => doc_len)
   }
@@ -202,9 +160,6 @@ pub fn TextState::replace_range(
   let doc_len = self.len()
   let (start, end) = checked_range_bounds(range, doc_len)
   let plan = plan_insert(start, text, doc_len)
-  if start != end || plan.text.length() > 0 {
-    self.invalidate_cached_version()
-  }
   // Keep replacement and cursor-reset semantics owned by Document.
   self.inner.replace_range(start, end, plan.text) catch {
     err => raise TextError::from_document_error(err, () => doc_len)
@@ -214,23 +169,12 @@ pub fn TextState::replace_range(
 ///|
 /// Get the current version of the document
 pub fn TextState::version(self : TextState) -> Version {
-  match self.cached_version {
-    VersionCache::Ready(version) => version
-    VersionCache::Invalid => {
-      let version = Version::from_ops(self.inner.get_all_ops())
-      self.cached_version = VersionCache::Ready(version)
-      version
-    }
-  }
+  Version::from_graph_version(self.inner.current_graph_version())
 }
 
 ///|
-/// Read authority Version for a transition without changing cache readiness.
 fn TextState::transition_version(self : TextState) -> Version {
-  match self.cached_version {
-    VersionCache::Ready(version) => version
-    VersionCache::Invalid => Version::from_ops(self.inner.get_all_ops())
-  }
+  self.version()
 }
 
 ///|
@@ -249,20 +193,12 @@ pub fn TextState::checkout(
   self : TextState,
   version : Version,
 ) -> TextView raise TextError {
-  let frontier : Array[Int] = []
-  for raw in version.frontier {
-    match self.inner.raw_to_lv(raw) {
-      Some(lv) => frontier.push(lv)
-      None => raise TextError::VersionNotFound
-    }
-  }
-  if !version.matches_snapshot_closure(self.causal_snapshot(), frontier) {
-    raise TextError::VersionNotFound
+  let frontier = match self.inner.resolve_graph_version(version.graph()) {
+    Some(value) => value
+    None => raise TextError::VersionNotFound
   }
   try {
-    let branch = self.inner.checkout_branch(
-      @core.Frontier::from_array_dedup(frontier),
-    )
+    let branch = self.inner.checkout_branch(frontier)
     TextView::from_branch(branch, version)
   } catch {
     err => raise TextError::from_document_error(err, () => self.len())
@@ -274,7 +210,7 @@ pub impl Show for TextState with fn output(self, logger) {
   logger.write_string("TextState { text: \"")
   logger.write_string(truncate_display(self.text()))
   logger.write_string("\", version: ")
-  self.version().output(logger)
+  Show::output(self.version(), logger)
   logger.write_string(" }")
 }
 

@@ -190,6 +190,12 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
       TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~))
     CausalGraphError(error~) =>
       match error {
+        @causal_graph.CausalGraphError::InvalidIdentity(raw~) =>
+          TextError::SyncFailed(
+            @sync.Failure::MalformedMessage(
+              detail="invalid operation identity \{raw.agent}:\{raw.seq}",
+            ),
+          )
         @causal_graph.CausalGraphError::MissingParent(lv~) =>
           TextError::SyncFailed(
             @sync.Failure::MalformedMessage(

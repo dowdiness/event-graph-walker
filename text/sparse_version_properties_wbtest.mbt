@@ -9,6 +9,26 @@ fn sparse_root_message(sequence : Int) -> SyncMessage {
 /// Sparse knowledge may arrive in any sequence order. Reconnection must export
 /// every missing identity, drain pending membership, and reproduce the exact
 /// checkpoint without treating sequence order as causality.
+test "delete and undelete versions round-trip checkout and delta" {
+  let doc = try! TextState::new("edit-version")
+  try! doc.insert(Pos::at(0), "A")
+  let inserted = doc.version()
+
+  try! doc.delete(Pos::at(0))
+  let deleted = doc.version()
+  assert_eq(try! doc.checkout(inserted).text(), "A")
+  assert_eq(try! doc.checkout(deleted).text(), "")
+
+  ignore(try! doc.inner.undelete(0))
+  let undeleted = doc.version()
+  let decoded = try! Version::from_json_string(undeleted.to_json_string())
+  assert_eq(decoded, undeleted)
+  assert_eq(try! doc.checkout(decoded).text(), "A")
+  assert_eq(try! doc.sync().export_since(inserted).op_count(), 2)
+  assert_eq(try! doc.sync().export_since(deleted).op_count(), 1)
+}
+
+///|
 test "property: sparse same-agent disconnect reconnect converges" {
   let seeds : Array[Int] = @quickcheck.samples(40)
   for raw_seed in seeds {

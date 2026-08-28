@@ -13,6 +13,8 @@ pub struct CausalGraph {
   priv mut next_lv : Int
   priv mut frontier : @core.Frontier
   priv mut agent_seqs : @immut/hashmap.HashMap[String, Int]
+  // Sparse membership is graph authority; it is deliberately lazy.
+  priv mut version_cache : GraphVersionCache
   // Reusable query buffers — amortize allocation across repeated calls.
   // Two gen-counter visited buffers (independent counters).
   // One in-degree buffer for toposort (manually zeroed before/after use).
@@ -39,6 +41,7 @@ pub fn CausalGraph::new() -> CausalGraph {
     next_lv: 0,
     frontier: @core.Frontier::from_array([]),
     agent_seqs: @immut/hashmap.new(),
+    version_cache: GraphVersionCache::Cold,
     query_visited: [],
     query_gen: 0,
     query_visited2: [],
@@ -55,6 +58,10 @@ fn CausalGraph::ensure_query_buffers(self : CausalGraph) -> Unit {
     self.query_visited.resize(cap, 0)
     self.query_visited2.resize(cap, 0)
     self.query_int_buf.resize(cap, 0)
+    // Resetting generation counters makes old marks visible again unless the
+    // reused portion of both buffers is cleared as well.
+    self.query_visited.fill(0)
+    self.query_visited2.fill(0)
     self.query_gen = 0
     self.query_gen2 = 0
   }
@@ -103,7 +110,13 @@ pub fn CausalGraph::get_entry(
   if lv < 0 || lv >= self.next_lv {
     return None
   }
-  Some(self.entries[lv])
+  let entry = self.entries[lv]
+  Some(@core.GraphEntry::{
+    parents: entry.parents.copy(),
+    agent: entry.agent,
+    seq: entry.seq,
+    timestamp: entry.timestamp,
+  })
 }
 
 ///|
@@ -115,6 +128,9 @@ fn CausalGraph::add_version_inner(
   seq : Int,
 ) -> Int raise CausalGraphError {
   let raw = @core.RawVersion(agent, seq)
+  if agent == "" || seq < 0 {
+    raise CausalGraphError::InvalidIdentity(raw~)
+  }
   if self.version_map.get(raw) is Some(_) {
     raise CausalGraphError::DuplicateVersion(raw~)
   }
@@ -134,7 +150,12 @@ fn CausalGraph::add_version_inner(
     }
   }
   let lv = self.next_lv
-  let entry = @core.GraphEntry::{ parents, agent, seq, timestamp }
+  let entry = @core.GraphEntry::{
+    parents: parents.copy(),
+    agent,
+    seq,
+    timestamp,
+  }
   self.entries.push(entry)
   self.children.push([])
   for p in parents {
@@ -143,6 +164,10 @@ fn CausalGraph::add_version_inner(
   self.version_map = self.version_map.add(raw, lv)
   self.next_lv = lv + 1
   self.update_frontier(lv, parents)
+  match self.version_cache {
+    GraphVersionCache::Cold => ()
+    GraphVersionCache::Hot(summary) => summary.insert(raw)
+  }
   lv
 }
 

@@ -30,6 +30,21 @@ test "text - insert append (1000 chars)" (b : @bench.T) {
 }
 
 ///|
+/// Benchmark the post-sync shape where Version knowledge is already hot.
+test "text - insert append after version observation (1000 chars)" (
+  b : @bench.T,
+) {
+  b.bench(fn() {
+    let doc = try! TextState::new("alice")
+    ignore(doc.version())
+    for i = 0; i < 1000; i = i + 1 {
+      ignore(try! doc.insert(Pos::at(i), "x"))
+    }
+    b.keep(doc)
+  })
+}
+
+///|
 /// Benchmark: Prepend — insert at position 0 every time (100 chars)
 /// Every insert triggers FugueMax conflict resolution against the head.
 test "text - insert prepend (100 chars)" (b : @bench.T) {

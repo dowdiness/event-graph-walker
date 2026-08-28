@@ -2,6 +2,8 @@
 
 ///|
 pub(all) suberror CausalGraphError {
+  /// An operation identity has an empty agent or negative sequence.
+  InvalidIdentity(raw~ : @core.RawVersion)
   /// A parent LV was not found in the graph.
   /// Parents must be added before their children.
   MissingParent(lv~ : Int)

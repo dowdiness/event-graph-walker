@@ -75,6 +75,31 @@ test "duplicate RawVersion is rejected without graph mutation" {
 }
 
 ///|
+test "graph admission owns parent storage and rejects invalid identities" {
+  let graph = CausalGraph::new()
+  let root = try! graph.add_version([], "agent")
+  let caller_parents = [root]
+  let child = try! graph.add_version(caller_parents, "agent")
+  caller_parents.clear()
+  assert_true(graph.is_ancestor(root, child))
+
+  let exposed = graph[child].unwrap()
+  exposed.parents.clear()
+  assert_true(graph.is_ancestor(root, child))
+  assert_eq(graph[child].unwrap().parents, [root])
+
+  for raw in [@core.RawVersion("", 0), @core.RawVersion("agent", -1)] {
+    try graph.add_version_with_seq([], raw.agent, raw.seq) catch {
+      InvalidIdentity(raw=actual) => assert_eq(actual, raw)
+      _ => fail("expected invalid identity")
+    } noraise {
+      _ => fail("invalid identity must be rejected")
+    }
+  }
+  assert_eq(graph.op_count(), 2)
+}
+
+///|
 test "is_ancestor simple case" {
   let graph = CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")

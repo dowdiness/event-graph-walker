@@ -479,23 +479,19 @@ fn version_frontier_json(frontier : Array[@core.RawVersion]) -> Json {
 }
 
 ///|
-fn version_ranges_json(ranges : Array[VersionRangeEntry]) -> Json {
+fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
   let values : Array[Json] = []
   for entry in ranges {
+    let agent = entry.0
+    let entry_ranges = entry.1
     let parts : Array[Json] = []
-    for range in entry.ranges {
+    for range in entry_ranges {
       parts.push(
-        Json::object({
-          "start": range.start.to_json(),
-          "end": range.end.to_json(),
-        }),
+        Json::object({ "start": range.0.to_json(), "end": range.1.to_json() }),
       )
     }
     values.push(
-      Json::object({
-        "replica_id": entry.replica_id.to_json(),
-        "ranges": parts.to_json(),
-      }),
+      Json::object({ "replica_id": agent.to_json(), "ranges": parts.to_json() }),
     )
   }
   values.to_json()
@@ -506,8 +502,8 @@ pub fn Version::to_json_string(self : Version) -> String {
   Json::object({
     "schema": (2).to_json(),
     "format": text_version_format.to_json(),
-    "frontier": version_frontier_json(self.frontier),
-    "ranges": version_ranges_json(self.ranges),
+    "frontier": version_frontier_json(self.graph_version.frontier()),
+    "ranges": version_ranges_json(self.graph_version.ranges()),
   }).stringify()
 }
 
@@ -619,26 +615,18 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
         guard exact_object_fields(object, ["schema", "format", "entries"]) else {
           fail("version envelope contains missing or unknown fields")
         }
-        let legacy = envelope.entries.unwrap()
         let frontier : Array[@core.RawVersion] = []
-        let ranges : Array[VersionRangeEntry] = []
-        let seen : Map[String, Bool] = Map([])
-        for value in legacy {
+        let ranges : Array[(String, Array[(UInt, UInt)])] = []
+        for value in envelope.entries.unwrap() {
           let raw = decode_identity(value)
-          guard seen.get(raw.agent) is None else {
-            fail("duplicate version entry")
-          }
-          seen[raw.agent] = true
           frontier.push(raw)
-          ranges.push({
-            replica_id: raw.agent,
-            ranges: [{ start: 0U, end: raw.seq.reinterpret_as_uint() + 1U }],
-          })
+          ranges.push((raw.agent, [(0U, raw.seq.reinterpret_as_uint() + 1U)]))
         }
-        frontier.sort_by(compare_raw)
-        ranges.sort_by(fn(a, b) { a.replica_id.compare(b.replica_id) })
-        let result : Version = { frontier, ranges }
-        result
+        Version::from_graph_version(
+          @causal_graph.GraphVersion::from_parts(frontier, ranges) catch {
+            _ => fail("invalid version")
+          },
+        )
       }
       2 => {
         guard exact_object_fields(object, [
@@ -647,18 +635,10 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
           fail("version envelope contains missing or unknown fields")
         }
         let frontier_values : Array[@core.RawVersion] = []
-        let seen_frontier : Map[@core.RawVersion, Bool] = Map([])
         for value in envelope.frontier.unwrap() {
-          let raw = decode_identity(value)
-          guard seen_frontier.get(raw) is None else {
-            fail("duplicate frontier identity")
-          }
-          seen_frontier[raw] = true
-          frontier_values.push(raw)
+          frontier_values.push(decode_identity(value))
         }
-        frontier_values.sort_by(compare_raw)
-        let range_values : Array[VersionRangeEntry] = []
-        let seen_agents : Map[String, Bool] = Map([])
+        let range_values : Array[(String, Array[(UInt, UInt)])] = []
         for value in envelope.ranges.unwrap() {
           let obj = match value {
             Json::Object(v) => v
@@ -668,13 +648,8 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
             fail("range entry contains missing or unknown fields")
           }
           let id : String = @json.from_json(obj["replica_id"])
-          guard id != "" && seen_agents.get(id) is None else {
-            fail("invalid or duplicate range entry")
-          }
-          seen_agents[id] = true
           let raw_ranges : Array[Json] = @json.from_json(obj["ranges"])
-          let parsed : Array[VersionRange] = []
-          let mut previous_end : UInt? = None
+          let parsed : Array[(UInt, UInt)] = []
           for item in raw_ranges {
             let r = match item {
               Json::Object(v) => v
@@ -685,38 +660,15 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
             }
             let start : UInt = @json.from_json(r["start"])
             let end : UInt = @json.from_json(r["end"])
-            let ordered = match previous_end {
-              None => true
-              Some(previous) => start > previous
-            }
-            guard start <= 0x7fffffffU &&
-              end > start &&
-              end <= 0x80000000U &&
-              ordered else {
-              fail("invalid or overlapping range")
-            }
-            parsed.push({ start, end })
-            previous_end = Some(end)
+            parsed.push((start, end))
           }
-          guard parsed.length() > 0 else {
-            fail("range summary must be nonempty")
-          }
-          range_values.push({ replica_id: id, ranges: parsed })
+          range_values.push((id, parsed))
         }
-        range_values.sort_by(fn(a, b) { a.replica_id.compare(b.replica_id) })
-        guard frontier_values.is_empty() == range_values.is_empty() else {
-          fail("version frontier and range summary emptiness differ")
-        }
-        let result : Version = {
-          frontier: frontier_values,
-          ranges: range_values,
-        }
-        for raw in frontier_values {
-          guard result.includes(raw.agent, raw.seq) else {
-            fail("version frontier is absent from range summary")
-          }
-        }
-        result
+        Version::from_graph_version(
+          @causal_graph.GraphVersion::from_parts(frontier_values, range_values) catch {
+            _ => fail("invalid version")
+          },
+        )
       }
       _ => fail("unsupported version envelope")
     }
@@ -949,7 +901,7 @@ pub fn SyncSession::export_since(
 ) -> SyncMessage raise TextError {
   let operations : Array[@core.Op] = []
   for op in self.doc.inner.get_all_ops() {
-    if !peer_version.includes(op.agent(), op.seq()) {
+    if !peer_version.graph().contains(@core.RawVersion(op.agent(), op.seq())) {
       operations.push(op)
     }
   }
@@ -1032,13 +984,6 @@ pub fn SyncSession::apply_transition_with_limits(
   }
   let outcome = admission.outcome
   let projection = admission.projection
-  let receipt = match outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => receipt
-    @oplog.AdmissionOutcome::Partial(receipt~, ..) => receipt
-  }
-  for op in receipt.committed() {
-    self.doc.advance_cached_version(op)
-  }
   let effects : Array[TextEffect] = []
   let availability = match admission.effect_availability {
     @document.ProjectionEffectAvailability::Exact(projected) => {
@@ -1047,13 +992,7 @@ pub fn SyncSession::apply_transition_with_limits(
           @document.ProjectionEffect::Insert(position~, text~) =>
             effects.push(TextEffect::Insert(Pos::at(position), text))
           @document.ProjectionEffect::Delete(start~, end~) =>
-            effects.push(
-              TextEffect::Delete(
-                Range::from_ints(start, end) catch {
-                  error => raise error
-                },
-              ),
-            )
+            effects.push(TextEffect::Delete(Range::from_ints(start, end)))
         }
       }
       TextEffectAvailability::Exact(effects[:])

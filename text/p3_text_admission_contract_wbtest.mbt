@@ -50,62 +50,22 @@ test "P3 one message invokes one Document admission boundary" {
 }
 
 ///|
-test "P3 complete report advances the ready version cache" {
-  let source = try! TextState::new("p3-complete-source")
+test "P3 complete and duplicate admission preserve exact graph version" {
+  let source = try! TextState::new("p3-version-source")
   try! source.insert(Pos::at(0), "A")
   let message = try! source.sync().export_all()
-  let receiver = try! TextState::new("p3-complete-receiver")
-  let session = receiver.sync()
-  assert_true(session.doc.cached_version is Ready(_))
+  let receiver = try! TextState::new("p3-version-receiver")
+  let first = try! receiver.sync().apply(message)
+  let after_first = receiver.version()
 
-  let report = try! session.apply(message)
+  assert_eq(first.applied_operations(), 1)
+  assert_eq(after_first, source.version())
+  assert_eq(try! receiver.checkout(after_first).text(), "A")
 
-  assert_eq(report.applied_operations(), 1)
-  assert_eq(report.duplicate_operations(), 0)
-  assert_eq(report.pending_operations(), 0)
-  match session.doc.cached_version {
-    Ready(version) =>
-      assert_eq(version, Version::from_ops(session.doc.inner.get_all_ops()))
-    Invalid => fail("committed admission invalidated a ready version cache")
-  }
-}
-
-///|
-test "P3 committed admission preserves an invalid version cache until read" {
-  let source = try! TextState::new("p3-invalid-cache-source")
-  try! source.insert(Pos::at(0), "A")
-  let message = try! source.sync().export_all()
-  let receiver = try! TextState::new("p3-invalid-cache-receiver")
-  let session = receiver.sync()
-  session.doc.invalidate_cached_version()
-  assert_true(session.doc.cached_version is Invalid)
-
-  let report = try! session.apply(message)
-
-  assert_eq(report.applied_operations(), 1)
-  assert_true(session.doc.cached_version is Invalid)
-  let rebuilt = session.current_version()
-  assert_eq(rebuilt, Version::from_ops(session.doc.inner.get_all_ops()))
-  assert_true(session.doc.cached_version is Ready(_))
-}
-
-///|
-test "P3 duplicate-only report keeps the version cache valid" {
-  let source = try! TextState::new("p3-duplicate-source")
-  try! source.insert(Pos::at(0), "A")
-  let message = try! source.sync().export_all()
-  let receiver = try! TextState::new("p3-duplicate-receiver")
-  let session = receiver.sync()
-  ignore(try! session.apply(message))
-  ignore(session.current_version())
-  assert_true(session.doc.cached_version is Ready(_))
-
-  let duplicate = try! session.apply(message)
-
+  let duplicate = try! receiver.sync().apply(message)
   assert_eq(duplicate.applied_operations(), 0)
   assert_eq(duplicate.duplicate_operations(), 1)
-  assert_eq(duplicate.pending_operations(), 0)
-  assert_true(session.doc.cached_version is Ready(_))
+  assert_eq(receiver.version(), after_first)
 }
 
 ///|
@@ -162,10 +122,7 @@ test "P3 parent-after drains core pending without outer replay" {
   assert_eq(second.applied_operations(), 2)
   assert_eq(second.pending_operations(), 0)
   assert_eq(receiver.sync().doc.inner.pending_count(), 0)
-  match receiver.cached_version {
-    Ready(version) =>
-      assert_eq(version, Version::from_ops(receiver.inner.get_all_ops()))
-    Invalid => fail("dependency drain invalidated a ready version cache")
-  }
   assert_eq(receiver.text(), "AB")
+  let settled = receiver.version()
+  assert_eq(try! receiver.checkout(settled).text(), "AB")
 }
