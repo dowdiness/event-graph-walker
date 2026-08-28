@@ -922,6 +922,27 @@ forall doc:
 - **Test:** `"property: checkout preserves text"` in `event-graph-walker/text/text_properties_test.mbt:259`
 - **Property fn:** `prop_checkout_preserves_text` at `event-graph-walker/text/text_properties_test.mbt:231`
 
+**L7.7a Exact Text Version.**
+A text `Version` carries both an exact RawVersion frontier and a canonical
+per-agent range summary of the frontier's causal closure. Checkout uses the
+frontier and rejects a decoded Version unless its ranges equal the resident
+closure. Delta export uses exact range membership; sequence order alone does
+not imply causality.
+
+```text
+Version.frontier = maximal identities in the checkpoint
+Version.ranges   = identities in closure(Version.frontier)
+causal(op)       = transitive closure of op.parents
+```
+
+Schema 2 serializes both values. Schema 1 decoding is retained only as the
+legacy contiguous-prefix contract established by the former same-agent chain
+invariant.
+
+- **Tests:** `"same-agent causal fork round-trips an exact checkout version"`,
+  `"sparse same-agent knowledge exports the missing operation only"`, and
+  `"checkout rejects a range summary missing a frontier ancestor"`
+
 **L7.8 Empty Document.**
 A new document has length zero and is empty.
 
@@ -965,7 +986,9 @@ forall msg: msg.is_empty() == (msg.op_count() == 0)
 - **Property fn:** `prop_sync_message_empty_consistent` at `event-graph-walker/text/text_properties_test.mbt:304`
 
 **L7.12 Export Since Current Is Empty.**
-Exporting since the current version produces an empty message.
+Exporting since the current version produces an empty message. For sparse
+same-agent histories, membership is tested against canonical sequence ranges,
+not `sequence <= maximum`.
 
 ```
 forall doc:
@@ -1126,7 +1149,10 @@ forall editor:
 
 1. By **L7.1** (sync convergence), two `TextDoc` instances receiving the
    same operations produce identical text.
-2. Operations are identified by `(agent, seq)` pairs via version vectors.
+2. Operations are identified by stable `(agent, seq)` pairs. Text causality is
+   represented by declared parents and exact frontiers; text delta knowledge is
+   summarized by per-agent sequence ranges. Flat version vectors remain valid
+   only in packages that enforce a same-agent causal chain.
    By **L4.4-L4.7** (semilattice properties), `merge(vv_A, vv_B)` correctly
    captures the union of known operations.
 3. The FugueMax tree (**L5.1**, **L5.4**, **L5.5**) is a deterministic

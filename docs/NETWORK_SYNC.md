@@ -3,8 +3,10 @@
 Event Graph Walker v0.5 supplies strict JSON codecs and synchronization state
 machines, but no transport, signaling, authentication, persistence, or key
 management. The Canopy parent repository supplies the demo WebRTC integration.
-v0.4 and v0.5 peers share the same schema-1 wire envelopes and can
-synchronize with each other. v0.3 is incompatible with both v0.4 and v0.5.
+v0.4 and v0.5 sync messages share schema-1 envelopes. The experimental text
+Version contract on this branch uses schema 2 for exact frontier and sparse
+knowledge; its mixed-version migration policy is not yet settled. v0.3 is
+incompatible with both v0.4 and v0.5.
 
 This document describes how to use the network synchronization feature for real-time collaborative editing.
 
@@ -96,9 +98,12 @@ interface SyncMessage {
 ```
 
 Do not parse or rewrite `payload` in the transport. Decode it with the matching
-MoonBit façade. Each envelope has `schema: 1`, a façade-specific `format`, and
-strictly validated logical records. Unknown fields and other schema versions
-are rejected.
+MoonBit façade. SyncMessage envelopes have `schema: 1`, a façade-specific
+`format`, and strictly validated logical records. Text Version serialization is
+a separate envelope: schema 2 carries an exact RawVersion frontier and
+canonical per-agent half-open sequence ranges; the decoder also accepts legacy
+schema 1 contiguous-prefix versions. Unknown fields and unsupported schemas are
+rejected.
 
 ## API Reference
 
@@ -114,9 +119,17 @@ API (exposed via WASM FFI):
 - **Export full state**: `state.sync().export_all()`
 - **Version tracking**: `Version::to_json_string` / `Version::from_json_string`
 
-The same shape applies independently to `TextState`, `TreeState`, and
-container `Document`. Their opaque messages and versions are not
-interchangeable.
+The façades expose parallel operations, but their opaque messages and versions
+are not interchangeable. The text Version schema-2 experiment does not change
+tree or container version semantics.
+
+For text, `Version` separates two responsibilities behind one opaque value:
+its frontier names the exact checkout checkpoint, while its range summary names
+the operations known in that frontier's causal closure. `export_since` uses the
+summary for exact set difference. `checkout` resolves the frontier and validates
+that the resident closure equals the supplied summary before returning a view.
+Declared operation parents, not adjacent sequence numbers, define text
+causality.
 
 `to_canonical_bytes()` produces deterministic domain-separated bytes for
 hashing or signing after validation. It is not a binary transport decoder.
@@ -254,7 +267,8 @@ pm2 start signaling-server.js --name canopy-signaling
 
 - Reduce broadcast frequency (increase debounce timeout)
 - Use delta encoding for large documents
-- Version vectors are used for efficient frontier tracking (already implemented)
+- Text uses exact frontiers plus per-agent sequence ranges; flat version vectors
+  remain limited to chain-preserving package contracts
 
 ## Advanced: Custom Network Layer
 
@@ -293,7 +307,8 @@ myTransport.onMessage((data) => {
 ## Future Improvements
 
 - [ ] Persistent storage with operation log replay
-- [x] Version vectors for efficient frontier compression (implemented)
+- [x] Exact text frontier plus sparse sequence-range delta summary (prototype)
+- [ ] Define text Version schema-1/schema-2 mixed-peer migration
 - [ ] Delta encoding for reduced bandwidth
 - [ ] Document rooms/channels
 - [ ] Presence awareness (cursor positions, user names)

@@ -106,6 +106,20 @@ struct CorpusCase {
 } derive(FromJson)
 
 ///|
+fn validate_corpus_checkpoint(
+  document : @text.TextState,
+  expected : String,
+  context : String,
+) -> Unit raise {
+  let version = document.version()
+  let decoded = @text.Version::from_json_string(version.to_json_string())
+  let view = document.checkout(decoded)
+  if decoded != version || view.version() != version || view.text() != expected {
+    raise Failure::Failure("\{context}: Version round-trip or checkout diverged")
+  }
+}
+
+///|
 fn replay_corpus(encoded : String) -> Unit raise {
   let cases : Array[CorpusCase] = @json.from_json(@json.parse(encoded))
   for index, case in cases {
@@ -129,8 +143,83 @@ fn replay_corpus(encoded : String) -> Unit raise {
         "got \{@debug.to_string(actual)}",
       )
     }
+    validate_corpus_checkpoint(
+      document,
+      case.expected,
+      "corpus run \{index}",
+    )
   }
-  println("PASS: \{cases.length()} official conformance runs matched")
+  println(
+    "PASS: \{cases.length()} official conformance runs matched (full batch)",
+  )
+}
+
+///|
+struct CorpusMessage {
+  operations : Array[Json]
+  heads : Array[Json]
+} derive(FromJson)
+
+///|
+fn single_operation_message(operation : Json, heads : Array[Json]) -> String {
+  Json::object({
+    "schema": (1).to_json(),
+    "format": "event-graph-walker/text-sync".to_json(),
+    "operations": [operation].to_json(),
+    "heads": heads.to_json(),
+  }).stringify()
+}
+
+///|
+fn replay_corpus_reversed_duplicates(encoded : String) -> Unit raise {
+  let cases : Array[CorpusCase] = @json.from_json(@json.parse(encoded))
+  for index, case in cases {
+    let wire : CorpusMessage = @json.from_json(case.message)
+    let document = @text.TextState::new("corpus-receiver-reversed-\{index}")
+    let mut delivery = wire.operations.length() - 1
+    while delivery >= 0 {
+      let heads = if delivery == 0 { wire.heads } else { [] }
+      let message = @text.SyncMessage::from_json_string(
+        single_operation_message(wire.operations[delivery], heads),
+      )
+      let _first = document.sync().apply(message) catch {
+          error =>
+            raise Failure::Failure(
+              "reversed corpus run \{index}, operation \{delivery}: sync failed: " +
+              error.debug(),
+            )
+        }
+      let duplicate = document.sync().apply(message) catch {
+          error =>
+            raise Failure::Failure(
+              "reversed corpus run \{index}, operation \{delivery}: duplicate failed: " +
+              error.debug(),
+            )
+        }
+      if duplicate.applied_operations() != 0 ||
+        duplicate.duplicate_operations() == 0 {
+        raise Failure::Failure(
+          "reversed corpus run \{index}, operation \{delivery}: duplicate was not idempotent",
+        )
+      }
+      delivery = delivery - 1
+    }
+    if document.sync().pending_sync_count() != 0 ||
+      document.text() != case.expected {
+      raise Failure::Failure(
+        "reversed corpus run \{index}: final pending/text check failed",
+      )
+    }
+    validate_corpus_checkpoint(
+      document,
+      case.expected,
+      "reversed corpus run \{index}",
+    )
+  }
+  println(
+    "PASS: \{cases.length()} official conformance runs matched " +
+    "(reversed duplicate delivery)",
+  )
 }
 
 ///|
@@ -140,9 +229,14 @@ async fn main {
     replay_corpus(@fs.read_file(corpus_path).text())
     return
   }
+  if args is [_, "--corpus-reversed-duplicates", corpus_path] {
+    replay_corpus_reversed_duplicates(@fs.read_file(corpus_path).text())
+    return
+  }
   guard args is [_, trace_path] else {
     raise Failure::Failure(
-      "usage: moon run . -- TRACE | --corpus TRANSLATED_JSON",
+      "usage: moon run . -- TRACE | --corpus TRANSLATED_JSON | " +
+      "--corpus-reversed-duplicates TRANSLATED_JSON",
     )
   }
   let trace = @fs.read_file(trace_path).text()

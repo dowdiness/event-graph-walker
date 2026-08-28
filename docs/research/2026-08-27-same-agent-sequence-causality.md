@@ -209,6 +209,39 @@ The first run also shows why deleting the check without migrating `Version` is u
 5. **Run exact conformance and migration evidence.** Require all hand-written traces and all 1,000 official runs without identity embedding, plus saved-version/canonical-byte fixtures and partial-sync tests. Benchmark one-range, many-agent, and pathological sparse-range cases.
 6. **Choose the compatibility boundary explicitly.** Either version the text-version/sync schema or document a deliberate breaking release. Only after that decision should the old flat `Version`, sequence-fork rejection tests, and strict-chain documentation be removed.
 
+## Gate V0 validation update
+
+The prototype now implements the recommended representation behind the opaque
+text `Version`: schema 2 carries an exact RawVersion frontier and canonical
+per-agent half-open sequence ranges, while schema 1 decoding retains the legacy
+contiguous-prefix interpretation. Checkout validates the decoded summary
+against the resident frontier closure, and `export_since` uses exact range
+membership.
+
+Validation on this branch establishes:
+
+- 15/15 hand-written public traces match `reference-frh`;
+- 1,000/1,000 official runs pass with original identities as full batches;
+- 1,000/1,000 pass as reverse-order, one-operation messages with each delivery
+  duplicated;
+- both corpus modes round-trip Version schema 2 and checkout the expected
+  terminal text;
+- 40 seeded sparse same-agent disconnect/reconnect schedules converge through
+  exact `export_since`; and
+- text, causal-graph, OpLog, document, branch, and container targeted native
+  suites pass.
+
+The initial implementation rebuilt Version after every local insert and caused
+a measured regression. Incremental local frontier/range maintenance restored
+the 1,000-character append benchmark from 211.91 ms to 5.65 ms native and from
+114.54 ms to 7.28 ms JS (baselines 5.39 ms and 7.72 ms). Full 1,000-operation
+Version reconstruction remains slower: 166.51→384.50 µs native and
+82.33→204.30 µs JS. These figures characterize the prototype; they are not a
+production optimization claim.
+
+Persistence, mixed-version migration, container causality, arbitrary
+mixed-operation partition schedules, and symbolic proof remain outside Gate V0.
+
 ## Final recommendation
 
 Adopt **frontier plus sparse sequence ranges**, with fresh per-session agent IDs as a producer optimization rather than a receiver validity rule. This is stronger than the earlier “range-based Version” proposal: it preserves exact causal checkout, exact delta knowledge, official EG-walker identities, and compact linear histories without conflating sequence allocation with causality.

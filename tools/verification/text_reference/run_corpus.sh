@@ -19,31 +19,9 @@ npm ci --ignore-scripts --silent
 oracle=node_modules/reference-frh/dist/test/list-fugue-simple.js
 printf '%s  %s\n' "$oracle_sha" "$oracle" | sha256sum --check --status
 
-# The unmodified corpus's first run branches one replica's sequence history.
-# Preserve that exact identity and prove the current public admission boundary
-# rejects it for the characterized reason rather than silently changing it.
-node corpus_translate.mjs "$corpus" --limit 1 > .cache/exact-first.json
-set +e
-moon run . --target native -- --corpus .cache/exact-first.json \
-  > .cache/exact-first.stdout 2> .cache/exact-first.stderr
-exact_status=$?
-set -e
-if [[ "$exact_status" -eq 0 ]]; then
-  echo "UNEXPECTED: exact corpus identity is now accepted; update this characterization"
-  exit 1
-fi
-if ! grep -q 'does not causally descend from its replica predecessor' \
-    .cache/exact-first.stderr .cache/exact-first.stdout; then
-  cat .cache/exact-first.stdout .cache/exact-first.stderr
-  echo "FAIL: exact corpus identity failed for an unrecognized reason"
-  exit 1
-fi
-echo "EXPECTED BLOCKER: exact corpus identities violate MoonBit's linear per-replica admission rule"
-
-# Give each event a unique synthetic replica ID whose lexical order is an
-# order-isomorphic embedding of the original (agent, sequence) RawVersion.
-# This removes only the linear-agent admission mismatch; origins, parents,
-# operations, delivery order, and expected visible text remain unchanged.
-node corpus_translate.mjs "$corpus" --order-embedding \
-  > .cache/order-embedded-corpus.json
-moon run . --target native -- --corpus .cache/order-embedded-corpus.json
+# Keep the original (agent, sequence) identities: this is the canonical
+# delivery-validation corpus. The order-embedding option remains available in
+# corpus_translate.mjs for diagnostics, but is intentionally not used here.
+node corpus_translate.mjs "$corpus" > .cache/exact-all.json
+moon run . --target native -- --corpus .cache/exact-all.json
+moon run . --target native -- --corpus-reversed-duplicates .cache/exact-all.json

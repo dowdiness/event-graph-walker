@@ -7,9 +7,9 @@ implementation.
 It tests two distinct boundaries:
 
 1. hand-written distributed command traces with unchanged replica identities;
-2. the official diamond-types conformance corpus after an order-preserving
-   identity embedding that isolates Fugue ordering from MoonBit's stricter
-   admission policy.
+2. the official diamond-types conformance corpus with its exact original
+   identities, delivered both as a full batch and one operation at a time in
+   reverse order with each delivery duplicated.
 
 ## Verdict
 
@@ -18,18 +18,9 @@ from `(Lamport timestamp, MoonBit String order, destination-local LV)` to stable
 `(agent, sequence)` RawVersion order makes all 15 hand-written traces match
 `reference-frh@1.0.0` exactly.
 
-**Not yet GO for full diamond-types compatibility.** The first official corpus
-run contains a later operation from replica `c` that branches without causally
-descending from `c`'s previous sequence. `reference-frh` accepts this event
-graph; MoonBit's public sync admission rejects it with:
-
-```text
-operation does not causally descend from its replica predecessor
-```
-
-This is the first observed protocol/admission blocker. Because admission stops
-there, the exact-identity check does not establish that it is the only remaining
-incompatibility.
+**GO for Gate V0 delivery validation.** All 1,000 official corpus runs pass
+with direct original identities in both full-batch and reverse/duplicate
+single-operation delivery modes.
 
 ## Hand-written public-API traces
 
@@ -105,28 +96,29 @@ every translated origin is uniquely faithful.
 MoonBit decodes that JSON with `SyncMessage::from_json_string` and applies it to
 a fresh public `TextState`.
 
-The runner performs two checks:
+The runner performs two checks using the exact original `(agent, sequence)`
+identities:
 
-1. **Exact identity characterization.** It preserves original `(agent,
-   sequence)` identities and confirms that the first reported rejection is
-   MoonBit's linear per-replica predecessor rule.
-2. **Ordering isolation.** It maps every original event ID to a unique synthetic
-   replica ID. The mapping is order-isomorphic to JavaScript's UTF-16 lexical
-   `(agent, sequence)` order. Parents, origins, operation kinds, content,
-   delivery order, and expected text are unchanged.
+1. **Full-batch delivery.** Each translated graph is applied as one public
+   `SyncMessage`.
+2. **Delivery validation.** Every graph is replayed in reverse operation order,
+   one operation per `SyncMessage`; each message is sent twice before the next
+   operation. Final heads are preserved on the final wire message, but current
+   admission authority is derived from operations, so this is not a separate
+   head-integrity check. Both modes require zero pending operations, the
+   corpus's terminal expected text, idempotent duplicate admission, Version
+   JSON round-trip, and exact checkout text.
 
 Current result:
 
 ```text
-EXPECTED BLOCKER: exact corpus identities violate MoonBit's linear per-replica admission rule
-PASS: 1000 official conformance runs matched
+PASS: 1000 official conformance runs matched (full batch)
+PASS: 1000 official conformance runs matched (reversed duplicate delivery)
 ```
 
-The second result establishes terminal visible-text compatibility of the
-experimental Fugue ordering and projection for these translated runs. It does
-**not** prove exact wire/event-history compatibility, faithful origins by an
-independent oracle, or partial-delivery behavior because the identity embedding
-deliberately bypasses one admission rule and each graph is applied as one batch.
+The order-preserving identity embedding remains available to
+`corpus_translate.mjs --order-embedding` as a diagnostic, but is not part of
+canonical execution.
 
 ## Experimental MoonBit change
 
@@ -137,15 +129,42 @@ This branch is a prototype, not a production migration. It experimentally:
 - uses the same comparator in `LvLocator`, preventing the indexed projection
   from drifting from Fugue tree order;
 - threads `Op::seq()` through local and remote text projection; and
-- keeps Lamport timestamp metadata for delete/undelete conflict handling.
+- keeps Lamport timestamp metadata for delete/undelete conflict handling;
+- treats declared parents and origins, not the same-agent predecessor, as text
+  admission dependencies;
+- stores an exact RawVersion frontier and canonical per-agent sequence ranges
+  inside the opaque text `Version`;
+- uses the frontier for checkout and exact range membership for
+  `export_since`; and
+- emits text Version schema 2 while retaining schema 1 decoding as a legacy
+  contiguous-prefix contract.
 
-No external `text` API or v1 sync JSON shape changes. The internal Fugue
-`insert` API now requires an explicit `sequence` argument, preventing projection
-adapters from silently substituting a local LV for a stable event sequence.
+Public text method signatures and the v1 sync-message JSON shape remain
+unchanged. The serialized text Version shape is intentionally experimental and
+changes to schema 2. The internal Fugue `insert` API requires an explicit
+`sequence` argument, preventing projection adapters from silently substituting
+a local LV for a stable event sequence.
 
 A production change would still require an explicit compatibility decision,
-persisted-state/mixed-version analysis, documentation updates, and review of
-the linear per-replica admission rule.
+persisted-state/mixed-version analysis, schema migration policy, and downstream
+Canopy API validation. Container sequence semantics are unchanged.
+
+## Gate V0 performance evidence
+
+The first cache prototype rebuilt Version history after every local insert and
+regressed the existing 1,000-character append benchmark to 211.91 ms native and
+114.54 ms JS. Incremental local range/frontier maintenance removed that
+regression:
+
+| 1,000-character append | baseline | Gate V0 |
+|---|---:|---:|
+| native | 5.39 ms | 5.65 ms |
+| JS | 7.72 ms | 7.28 ms |
+
+Full Version reconstruction remains slower because it now derives exact
+frontier and ranges: native 166.51→384.50 µs and JS 82.33→204.30 µs for 1,000
+operations. This is an observed prototype cost in the lazy recovery path, not a
+production optimization claim.
 
 ## Guarantee boundary
 
@@ -153,14 +172,18 @@ This prototype establishes:
 
 - exact visible-text agreement for 15 public distributed traces;
 - duplicate sync idempotence and zero pending operations in those traces;
-- exact expected-text agreement for all 1,000 official runs after the stated
-  order-preserving identity embedding; and
-- a deterministic counterexample to exact corpus admission.
+- exact expected-text agreement for all 1,000 official runs with direct,
+  original identities, in both full-batch and reverse/duplicate delivery; and
+- Version schema-2 round-trip and exact terminal checkout for every corpus run
+  in both delivery modes; and
+- bounded seeded sparse same-agent disconnect/reconnect convergence in the text
+  package property suite (40 generated schedules).
 
 It does not establish:
 
-- full diamond-types wire compatibility;
-- acceptance of arbitrary branching histories from one replica ID;
+- arbitrary mixed-operation network partitions or random transport schedules;
+- persistence behavior;
+- full wire migration compatibility;
 - compatibility between mixed old/new MoonBit replicas; or
 - a migration policy for persisted operation logs.
 
