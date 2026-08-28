@@ -936,9 +936,8 @@ Version.ranges   = identities in closure(Version.frontier)
 causal(op)       = transitive closure of op.parents
 ```
 
-Schema 2 serializes both values. Schema 1 decoding is retained only as the
-legacy contiguous-prefix contract established by the former same-agent chain
-invariant.
+Schema 2 serializes both values. Text Version schema 1 is rejected: a flat
+maximum cannot represent sparse identity knowledge or an exact causal cut.
 
 - **Tests:** `"graph version canonicalizes sparse identities with one union algorithm"`,
   `"resolve rejects a redundant nonmaximal checkpoint"`,

@@ -33,7 +33,7 @@ test "text malformed invalid conflict and limit failures never request" {
     text_failure(@egw_text.TextError::EmptyReplicaId) is None,
     content="true",
   )
-  let malformed = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"delete\",\"content\":null,\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}"
+  let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"delete\",\"content\":null,\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}"
   let malformed_message = try! @egw_text.SyncMessage::from_json_string(
     malformed,
   )
@@ -55,7 +55,7 @@ test "text malformed invalid conflict and limit failures never request" {
     _ => fail("malformed fixture must fail")
   }
 
-  let invalid = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
+  let invalid = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
   try @egw_text.SyncMessage::from_json_string(invalid) catch {
     error => {
       expect_terminal_text(error)
@@ -79,7 +79,7 @@ test "text malformed invalid conflict and limit failures never request" {
   let first = try! source.sync().export_all()
   let _ = try! receiver.sync().apply(first)
   let conflict = try! @egw_text.SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
   )
   try receiver.sync().apply(conflict) catch {
     error => {

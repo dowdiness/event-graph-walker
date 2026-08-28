@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Text causality from declared parents with sparse Version summaries
@@ -10,7 +10,7 @@ reference found that this policy rejects valid reference histories: sequence
 numbers allocate stable operation identities across independently edited
 branches, while declared parents name causal context.
 
-## Proposed decision
+## Decision
 
 For text only:
 
@@ -26,9 +26,8 @@ For text only:
   mutation paths do not maintain a second version cache.
 - Checkout resolves a maximal frontier and validates that the resident closure
   equals the supplied range summary.
-- Delta export uses exact range membership. Schema-1 text Versions retain their
-  legacy contiguous-prefix interpretation; schema 2 serializes frontier and
-  ranges.
+- Delta export uses exact range membership. Text Version and SyncMessage use
+  schema 2. Schema 1 is rejected because it cannot encode the new semantics.
 - Local producers continue allocating monotonically and should normally use a
   fresh agent ID per editing session. This is a producer policy, not receiver
   validation.
@@ -61,16 +60,15 @@ text-owned sparse implementation; fragmented warm snapshots have a dedicated
 
 ## Consequences and unresolved migration work
 
-This is a proposed replacement for ADR 0008's text sequence-ancestry rule, not
-for its ownership and atomic-admission decisions. Production adoption still
-requires:
+This replaces ADR 0008's text sequence-ancestry rule, not its ownership and
+atomic-admission decisions. Release preparation still requires:
 
-- a mixed schema-1/schema-2 Version migration policy;
-- persisted-Version and saved-document compatibility evidence;
+- persisted-Version and saved-document breaking-release evidence;
 - downstream Canopy consumer validation;
 - explicit resource limits for hostile range fragmentation if encoded-byte
   limits prove insufficient; and
 - a separate decision before changing container sequence semantics.
 
 Gate V0 does not prove arbitrary mixed-operation partition schedules,
-persistence, symbolic safety, or mixed-version interoperability.
+persistence, or symbolic safety. Mixed text schemas are intentionally
+non-interoperable.

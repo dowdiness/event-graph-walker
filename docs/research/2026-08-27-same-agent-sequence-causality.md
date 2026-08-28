@@ -215,8 +215,8 @@ The first run also shows why deleting the check without migrating `Version` is u
 The prototype now implements the recommended representation at the causal
 authority. `CausalGraph` owns the exact frontier, RawVersion index, and a
 cold-to-hot canonical per-agent range summary. The opaque text `Version` is only
-a façade over a defensive graph snapshot. Schema 2 carries that snapshot while
-schema 1 decoding retains the legacy contiguous-prefix interpretation.
+a façade over a defensive graph snapshot. Schema 2 carries that snapshot;
+schema 1 is rejected because a flat maximum cannot represent sparse knowledge.
 Checkout asks the graph to resolve a maximal frontier and prove summary equality
 against its resident closure; `export_since` uses exact range membership.
 
@@ -255,8 +255,9 @@ text-owned sparse prototype. Warm one-range snapshots are sub-microsecond; a
 These figures characterize the prototype; they are not production optimization
 claims.
 
-Persistence, mixed-version migration, container causality, arbitrary
-mixed-operation partition schedules, and symbolic proof remain outside Gate V0.
+Persistence, container causality, arbitrary mixed-operation partition
+schedules, and symbolic proof remain outside Gate V0. Text schema 1/2
+interoperability is deliberately excluded by the breaking schema-2 contract.
 
 ## Final recommendation
 

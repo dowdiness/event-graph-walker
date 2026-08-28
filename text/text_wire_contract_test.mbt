@@ -38,7 +38,7 @@ test "SyncSession admission uses per-call limits atomically" {
 test "text sync rejects conflicting duplicate identities in one message atomically" {
   let receiver = try! TextState::new("receiver")
   let before_version = receiver.version()
-  let conflict = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
+  let conflict = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
     "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}," +
     "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[]}"
   try SyncMessage::from_json_string(conflict) catch {
@@ -58,14 +58,14 @@ test "text sync rejects conflicting duplicate identities in one message atomical
 test "text sync retains authoritative pending payload after identity conflict" {
   let receiver = try! TextState::new("receiver")
   let future = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let deferred = try! receiver.sync().apply(future)
   inspect(deferred.applied_operations(), content="0")
   inspect(receiver.sync().pending_sync_count(), content="1")
   let before_version = receiver.version()
   let conflict = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   try receiver.sync().apply(conflict) catch {
     TextError::SyncFailed(
@@ -81,7 +81,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
 
   // The identical authoritative retransmission is still eligible to drain.
   let authoritative = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let admitted = try! receiver
     .sync()
@@ -167,7 +167,7 @@ test "empty replica id is rejected" {
 test "empty remote insert record is rejected" {
   try
     SyncMessage::from_json_string(
-      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
+      "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
     )
   catch {
     TextError::SyncFailed(@sync.Failure::InvalidContent(detail=_)) => ()
@@ -203,7 +203,7 @@ test "checkout rejects an unavailable version without changing live state" {
   let before_text = document.text()
   let before_version = document.version()
   let unknown = try! Version::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"ghost\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"ghost\",\"sequence\":0}],\"ranges\":[{\"replica_id\":\"ghost\",\"ranges\":[{\"start\":0,\"end\":1}]}]}",
   )
   try document.checkout(unknown) catch {
     TextError::VersionNotFound => ()
@@ -219,7 +219,7 @@ test "checkout rejects an unavailable version without changing live state" {
 test "same-agent causal fork round-trips an exact checkout version" {
   let receiver = try! TextState::new("receiver")
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let report = try! receiver.sync().apply(message)
   inspect(report.applied_operations(), content="2")
@@ -233,30 +233,24 @@ test "same-agent causal fork round-trips an exact checkout version" {
 }
 
 ///|
-test "legacy flat version decodes as a contiguous known prefix" {
-  let source = try! TextState::new("source")
-  let source_message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
-  )
-  ignore(try! source.sync().apply(source_message))
-  let legacy = try! Version::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
-  )
-  inspect(try! source.sync().export_since(legacy).op_count(), content="0")
+test "schema 1 text version is rejected" {
+  try
+    Version::from_json_string(
+      "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    )
+  catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    _ => fail("expected malformed schema-1 version")
+  } noraise {
+    _ => fail("schema-1 version must be rejected")
+  }
 }
 
 ///|
-test "legacy maximum sequence survives schema 2 round-trip" {
-  let legacy = try! Version::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}]}",
-  )
-  let encoded = legacy.to_json_string()
-  inspect(
-    encoded,
-    content="{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":2147483648}]}]}",
-  )
-  let current = try! Version::from_json_string(encoded)
-  inspect(current == legacy, content="true")
+test "schema 2 text version preserves the maximum UInt endpoint" {
+  let encoded = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":2147483647,\"end\":2147483648}]}]}"
+  let version = try! Version::from_json_string(encoded)
+  inspect(version.to_json_string(), content=encoded)
 }
 
 ///|
@@ -264,10 +258,10 @@ test "sparse same-agent knowledge exports the missing operation only" {
   let source = try! TextState::new("source")
   let peer = try! TextState::new("peer")
   let source_message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let peer_message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   ignore(try! source.sync().apply(source_message))
   ignore(try! peer.sync().apply(peer_message))
@@ -284,9 +278,9 @@ test "out-of-order sparse roots canonicalize one Version range" {
   let receiver = try! TextState::new("receiver")
   for
     encoded in [
-      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
-      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
-      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+      "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
+      "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
+      "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
     ] {
     ignore(
       try! receiver.sync().apply(try! SyncMessage::from_json_string(encoded)),
@@ -302,7 +296,7 @@ test "out-of-order sparse roots canonicalize one Version range" {
 test "replica predecessor may be an indirect causal ancestor" {
   let receiver = try! TextState::new("receiver")
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"bob\",\"sequence\":0},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"bob\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":{\"replica_id\":\"bob\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"bob\",\"sequence\":0},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"bob\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":{\"replica_id\":\"bob\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let report = try! receiver.sync().apply(message)
   inspect(report.applied_operations(), content="3")
@@ -315,7 +309,7 @@ test "replica predecessor may be an indirect causal ancestor" {
 
 ///|
 test "receiver encoded-byte limit succeeds at boundary and rejects one under" {
-  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
+  let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
   let message = try! SyncMessage::from_json_string(json)
   let exact_limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length())
   let exact = try! TextState::new_with_sync_limits("exact", exact_limits)
@@ -375,7 +369,7 @@ test "non-insert origin is rejected before any receiver mutation" {
   let before_text = receiver.text()
   let before_version = receiver.version()
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"remote\",\"sequence\":1},\"parents\":[{\"replica_id\":\"remote\",\"sequence\":0},{\"replica_id\":\"receiver\",\"sequence\":1}],\"kind\":\"delete\",\"content\":null,\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"remote\",\"sequence\":1},\"parents\":[{\"replica_id\":\"remote\",\"sequence\":0},{\"replica_id\":\"receiver\",\"sequence\":1}],\"kind\":\"delete\",\"content\":null,\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":1}]}",
   )
   try receiver.sync().apply(message) catch {
     TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
@@ -396,7 +390,7 @@ test "known non-insert origin rejects before unrelated dependency defer" {
   let before_text = receiver.text()
   let before_version = receiver.version()
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
   )
   try receiver.sync().apply(message) catch {
     TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
@@ -426,7 +420,7 @@ test "core and text reject known invalid origin with the same atomic meaning" {
     None,
   )
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
   )
   try text_receiver.sync().apply(message) catch {
     TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
@@ -469,13 +463,13 @@ test "core and text reject known invalid origin with the same atomic meaning" {
 test "same-agent sequence hole admits without an implicit predecessor" {
   let receiver = try! TextState::new("receiver")
   let malformed_future = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
   let first = try! receiver.sync().apply(malformed_future)
   inspect(first.applied_operations(), content="1")
   inspect(receiver.sync().pending_sync_count(), content="0")
   let valid_predecessors = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
   let applied = try! receiver.sync().apply(valid_predecessors)
   inspect(applied.applied_operations(), content="2")
@@ -486,7 +480,7 @@ test "same-agent sequence hole admits without an implicit predecessor" {
 
 ///|
 test "decode accepts structurally valid JSON and apply enforces receiver limits" {
-  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
+  let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
   let receiver = try! TextState::new("receiver")
   let message = try! receiver.sync().decode_json(json)
@@ -506,7 +500,7 @@ test "decode accepts structurally valid JSON and apply enforces receiver limits"
 
 ///|
 test "receiver-specific decoder may raise the default encoded byte limit" {
-  let envelope = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
+  let envelope = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let json = envelope + " ".repeat(16 * 1024 * 1024)
   let message = try! SyncMessage::from_json_string(json)
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
@@ -531,7 +525,7 @@ test "receiver-specific decoder honors raised parent limits in validation" {
   for sequence in 0..<257 {
     parents.push("{\"replica_id\":\"parent-\{sequence}\",\"sequence\":0}")
   }
-  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
+  let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
     parents.join(",") +
     "],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
   let message = try! SyncMessage::from_json_string(json)
@@ -554,7 +548,7 @@ test "receiver-specific decoder honors raised parent limits in validation" {
 ///|
 test "duplicate-heavy decoded operation limit counts wire operations" {
   let operation = "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}"
-  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
+  let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
     operation +
     "," +
     operation +

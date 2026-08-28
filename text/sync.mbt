@@ -8,6 +8,12 @@ let text_version_format : String = "event-graph-walker/text-version"
 let text_sync_format : String = "event-graph-walker/text-sync"
 
 ///|
+let text_schema : Int = 2
+
+///|
+let text_sync_canonical_domain : Bytes = b"event-graph-walker:text-sync:v2"
+
+///|
 fn stable_id_key(replica_id : String, sequence : Int) -> String {
   replica_id.length().to_string() +
   ":" +
@@ -375,7 +381,7 @@ fn canonical_order_counted(
 }
 
 ///|
-/// A version-1 text synchronization message.
+/// A schema-2 text synchronization message.
 pub(all) struct SyncMessage {
   // Raw storage is private; the structural array carries the parse proof.
   priv operations : Array[@core.Op]
@@ -500,7 +506,7 @@ fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
 ///|
 pub fn Version::to_json_string(self : Version) -> String {
   Json::object({
-    "schema": (2).to_json(),
+    "schema": text_schema.to_json(),
     "format": text_version_format.to_json(),
     "frontier": version_frontier_json(self.graph_version.frontier()),
     "ranges": version_ranges_json(self.graph_version.ranges()),
@@ -544,9 +550,8 @@ priv struct WireIdentity {
 priv struct WireVersionEnvelope {
   schema : Int
   format : String
-  entries : Array[Json]?
-  frontier : Array[Json]?
-  ranges : Array[Json]?
+  frontier : Array[Json]
+  ranges : Array[Json]
 } derive(FromJson)
 
 ///|
@@ -606,72 +611,49 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       Json::Object(value) => value
       _ => fail("version envelope must be an object")
     }
+    guard exact_object_fields(object, ["schema", "format", "frontier", "ranges"]) else {
+      fail("version envelope contains missing or unknown fields")
+    }
     let envelope : WireVersionEnvelope = @json.from_json(root)
-    guard envelope.format == text_version_format else {
+    guard envelope.schema == text_schema &&
+      envelope.format == text_version_format else {
       fail("unsupported version envelope")
     }
-    match envelope.schema {
-      1 => {
-        guard exact_object_fields(object, ["schema", "format", "entries"]) else {
-          fail("version envelope contains missing or unknown fields")
-        }
-        let frontier : Array[@core.RawVersion] = []
-        let ranges : Array[(String, Array[(UInt, UInt)])] = []
-        for value in envelope.entries.unwrap() {
-          let raw = decode_identity(value)
-          frontier.push(raw)
-          ranges.push((raw.agent, [(0U, raw.seq.reinterpret_as_uint() + 1U)]))
-        }
-        Version::from_graph_version(
-          @causal_graph.GraphVersion::from_parts(frontier, ranges) catch {
-            _ => fail("invalid version")
-          },
-        )
-      }
-      2 => {
-        guard exact_object_fields(object, [
-          "schema", "format", "frontier", "ranges",
-        ]) else {
-          fail("version envelope contains missing or unknown fields")
-        }
-        let frontier_values : Array[@core.RawVersion] = []
-        for value in envelope.frontier.unwrap() {
-          frontier_values.push(decode_identity(value))
-        }
-        let range_values : Array[(String, Array[(UInt, UInt)])] = []
-        for value in envelope.ranges.unwrap() {
-          let obj = match value {
-            Json::Object(v) => v
-            _ => fail("range entry must be an object")
-          }
-          guard exact_object_fields(obj, ["replica_id", "ranges"]) else {
-            fail("range entry contains missing or unknown fields")
-          }
-          let id : String = @json.from_json(obj["replica_id"])
-          let raw_ranges : Array[Json] = @json.from_json(obj["ranges"])
-          let parsed : Array[(UInt, UInt)] = []
-          for item in raw_ranges {
-            let r = match item {
-              Json::Object(v) => v
-              _ => fail("range must be an object")
-            }
-            guard exact_object_fields(r, ["start", "end"]) else {
-              fail("range contains missing or unknown fields")
-            }
-            let start : UInt = @json.from_json(r["start"])
-            let end : UInt = @json.from_json(r["end"])
-            parsed.push((start, end))
-          }
-          range_values.push((id, parsed))
-        }
-        Version::from_graph_version(
-          @causal_graph.GraphVersion::from_parts(frontier_values, range_values) catch {
-            _ => fail("invalid version")
-          },
-        )
-      }
-      _ => fail("unsupported version envelope")
+    let frontier : Array[@core.RawVersion] = []
+    for value in envelope.frontier {
+      frontier.push(decode_identity(value))
     }
+    let ranges : Array[(String, Array[(UInt, UInt)])] = []
+    for value in envelope.ranges {
+      let obj = match value {
+        Json::Object(fields) => fields
+        _ => fail("range entry must be an object")
+      }
+      guard exact_object_fields(obj, ["replica_id", "ranges"]) else {
+        fail("range entry contains missing or unknown fields")
+      }
+      let agent : String = @json.from_json(obj["replica_id"])
+      let encoded_ranges : Array[Json] = @json.from_json(obj["ranges"])
+      let agent_ranges : Array[(UInt, UInt)] = []
+      for value in encoded_ranges {
+        let fields = match value {
+          Json::Object(fields) => fields
+          _ => fail("range must be an object")
+        }
+        guard exact_object_fields(fields, ["start", "end"]) else {
+          fail("range contains missing or unknown fields")
+        }
+        let start : UInt = @json.from_json(fields["start"])
+        let end : UInt = @json.from_json(fields["end"])
+        agent_ranges.push((start, end))
+      }
+      ranges.push((agent, agent_ranges))
+    }
+    Version::from_graph_version(
+      @causal_graph.GraphVersion::from_parts(frontier, ranges) catch {
+        _ => fail("invalid version")
+      },
+    )
   } catch {
     _ =>
       raise TextError::SyncFailed(
@@ -728,7 +710,7 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
     heads.push(identity_json(head))
   }
   Json::object({
-    "schema": (1).to_json(),
+    "schema": text_schema.to_json(),
     "format": text_sync_format.to_json(),
     "operations": operations.to_json(),
     "heads": heads.to_json(),
@@ -820,7 +802,7 @@ fn decode_sync_json(
       fail("sync envelope contains missing or unknown fields")
     }
     let envelope : WireSyncEnvelope = @json.from_json(root)
-    guard envelope.schema == 1 && envelope.format == text_sync_format else {
+    guard envelope.schema == text_schema && envelope.format == text_sync_format else {
       fail("unsupported sync envelope")
     }
     let operations : Array[@core.Op] = []
@@ -1116,7 +1098,7 @@ fn write_optional_raw(buf : Buffer, raw : @core.RawVersion?) -> Unit {
 /// Domain-separated canonical logical bytes for hashing and signing.
 pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   let buffer = Buffer()
-  buffer.write_bytes(b"event-graph-walker:text-sync:v1")
+  buffer.write_bytes(text_sync_canonical_domain)
   write_uvarint(buffer, self.operations.length())
   for structural in self.structural_operations {
     let op = structural.raw()

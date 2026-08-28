@@ -159,7 +159,7 @@ function translateRun(run, runIndex) {
   return {
     expected: run.endContent,
     message: {
-      schema: 1,
+      schema: 2,
       format: "event-graph-walker/text-sync",
       operations,
       heads: [...heads].sort((a, b) => a - b).map(lv => rawByLv[lv]),

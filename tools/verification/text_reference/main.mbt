@@ -163,7 +163,7 @@ struct CorpusMessage {
 ///|
 fn single_operation_message(operation : Json, heads : Array[Json]) -> String {
   Json::object({
-    "schema": (1).to_json(),
+    "schema": (2).to_json(),
     "format": "event-graph-walker/text-sync".to_json(),
     "operations": [operation].to_json(),
     "heads": heads.to_json(),

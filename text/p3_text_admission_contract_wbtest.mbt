@@ -3,7 +3,7 @@
 ///|
 test "P3 same-message raw duplicates canonicalize before admission" {
   let operation = "{\"id\":{\"replica_id\":\"p3-raw\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}"
-  let json = "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
+  let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
     operation +
     "," +
     operation +
@@ -72,7 +72,7 @@ test "P3 complete and duplicate admission preserve exact graph version" {
 test "P3 pending ingress belongs to core and leaves no outer pending owner" {
   let receiver = try! TextState::new("p3-pending-owner")
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-parent\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-parent\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-parent\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-parent\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-parent\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-parent\",\"sequence\":1}]}",
   )
   let session = receiver.sync()
   let report = try! session.apply(message)
@@ -86,7 +86,7 @@ test "P3 pending ingress belongs to core and leaves no outer pending owner" {
 test "P3 clear pending delegates live closure ownership to core" {
   let receiver = try! TextState::new("p3-clear-pending")
   let deferred = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-clear-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-clear-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":1}]}",
   )
   ignore(try! receiver.sync().apply(deferred))
   let before = receiver.version()
@@ -97,7 +97,7 @@ test "P3 clear pending delegates live closure ownership to core" {
   assert_eq(receiver.sync().pending_sync_count(), 0)
   assert_eq(receiver.version(), before)
   let parent = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-clear-pending\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-clear-pending\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-clear-pending\",\"sequence\":0}]}",
   )
   let report = try! receiver.sync().apply(parent)
   assert_eq(report.applied_operations(), 1)
@@ -108,14 +108,14 @@ test "P3 clear pending delegates live closure ownership to core" {
 test "P3 parent-after drains core pending without outer replay" {
   let receiver = try! TextState::new("p3-parent-after")
   let deferred = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-parent-after\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-parent-after\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-parent-after\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-parent-after\",\"sequence\":1},\"parents\":[{\"replica_id\":\"p3-parent-after\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-parent-after\",\"sequence\":1}]}",
   )
   let first = try! receiver.sync().apply(deferred)
   assert_eq(first.applied_operations(), 0)
   assert_eq(first.pending_operations(), 1)
 
   let parent = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-parent-after\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-parent-after\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-parent-after\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"p3-parent-after\",\"sequence\":0}]}",
   )
   let second = try! receiver.sync().apply(parent)
 

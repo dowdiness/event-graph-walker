@@ -138,18 +138,16 @@ This branch is a prototype, not a production migration. It experimentally:
   same graph admission point as RawVersion identity;
 - uses the frontier for checkout and exact range membership for
   `export_since`; and
-- emits text Version schema 2 while retaining schema 1 decoding as a legacy
-  contiguous-prefix contract.
+- emits schema 2 for text Version and SyncMessage and rejects schema 1.
 
-Public text method signatures and the v1 sync-message JSON shape remain
-unchanged. The serialized text Version shape is intentionally experimental and
-changes to schema 2. The internal Fugue `insert` API requires an explicit
+Public text method signatures remain unchanged. Text Version and SyncMessage
+JSON are intentionally breaking schema-2 contracts. The internal Fugue `insert` API requires an explicit
 `sequence` argument, preventing projection adapters from silently substituting
 a local LV for a stable event sequence.
 
-A production change would still require an explicit compatibility decision,
-persisted-state/mixed-version analysis, schema migration policy, and downstream
-Canopy API validation. Container sequence semantics are unchanged.
+A production change still requires persisted-state evidence and downstream
+Canopy API validation. Mixed text schemas are intentionally unsupported;
+container sequence and wire semantics are unchanged.
 
 ## Gate V0 performance evidence
 
@@ -192,9 +190,9 @@ It does not establish:
 
 - arbitrary mixed-operation network partitions or random transport schedules;
 - persistence behavior;
-- full wire migration compatibility;
-- compatibility between mixed old/new MoonBit replicas; or
-- a migration policy for persisted operation logs.
+- persisted operation-log migration; or
+- interoperability between schema-1 and schema-2 text peers, which the breaking
+  contract deliberately rejects.
 
 Generated outputs and downloaded corpus data are ignored under `.out/` and
 `.cache/`.

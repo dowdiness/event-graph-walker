@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-28
+
+### Breaking changes
+
+- Text synchronization now uses schema 2 for both `SyncMessage` and `Version`.
+  Schema 1 text payloads are rejected. Text operation identity follows exact
+  EG-walker semantics: `(agent, sequence)` is stable identity, declared parents
+  define causality, and versions carry an exact frontier plus sparse per-agent
+  sequence ranges. Canonical text SyncMessage bytes use the v2 domain. Tree and
+  container schemas are unchanged. See
+  [`docs/MIGRATING_TEXT_SCHEMA_2.md`](docs/MIGRATING_TEXT_SCHEMA_2.md).
+
 ## [0.7.1] - 2026-08-02
 
 ### Changed
@@ -339,7 +351,8 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.5.0...v0.6.0
