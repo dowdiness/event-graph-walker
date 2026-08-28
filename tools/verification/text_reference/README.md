@@ -132,8 +132,10 @@ This branch is a prototype, not a production migration. It experimentally:
 - keeps Lamport timestamp metadata for delete/undelete conflict handling;
 - treats declared parents and origins, not the same-agent predecessor, as text
   admission dependencies;
-- stores an exact RawVersion frontier and canonical per-agent sequence ranges
-  inside the opaque text `Version`;
+- makes the causal graph the single authority for exact frontier and canonical
+  per-agent sequence ranges, with opaque text `Version` as a façade;
+- keeps sparse knowledge cold until first observation, then advances it at the
+  same graph admission point as RawVersion identity;
 - uses the frontier for checkout and exact range membership for
   `export_since`; and
 - emits text Version schema 2 while retaining schema 1 decoding as a legacy
@@ -153,18 +155,24 @@ Canopy API validation. Container sequence semantics are unchanged.
 
 The first cache prototype rebuilt Version history after every local insert and
 regressed the existing 1,000-character append benchmark to 211.91 ms native and
-114.54 ms JS. Incremental local range/frontier maintenance removed that
-regression:
+114.54 ms JS. A later text-owned incremental cache fixed the hot path but kept
+causal authority and summary maintenance in separate modules.
 
-| 1,000-character append | baseline | Gate V0 |
+Gate V0 now places a cold-to-hot summary in the causal graph. Before first
+Version observation, admission pays no summary cost. Once observed, the same
+graph admission that records RawVersion identity advances the hot summary.
+
+| 1,000-character append | native | JS |
 |---|---:|---:|
-| native | 5.39 ms | 5.65 ms |
-| JS | 7.72 ms | 7.28 ms |
+| pre-Gate baseline | 5.39 ms | 7.72 ms |
+| graph summary still cold | 5.97 ms | 7.61 ms |
+| graph summary heated first | 6.10 ms | 7.46 ms |
 
-Full Version reconstruction remains slower because it now derives exact
-frontier and ranges: native 166.51→384.50 µs and JS 82.33→204.30 µs for 1,000
-operations. This is an observed prototype cost in the lazy recovery path, not a
-production optimization claim.
+A cold 1,000-operation reconstruction is 82.79 µs native and 58.22 µs JS,
+down from 384.50 µs and 204.30 µs in the text-owned sparse prototype. A warm
+snapshot is 190 ns native and 84 ns JS for one contiguous agent. A deliberately
+fragmented 32-agent × 32-range snapshot costs 55.38 µs native and 49.69 µs JS.
+These are prototype measurements, not production performance claims.
 
 ## Guarantee boundary
 
@@ -177,7 +185,8 @@ This prototype establishes:
 - Version schema-2 round-trip and exact terminal checkout for every corpus run
   in both delivery modes; and
 - bounded seeded sparse same-agent disconnect/reconnect convergence in the text
-  package property suite (40 generated schedules).
+  package property suite (40 generated schedules); and
+- insert/delete/undelete Version round-trip, exact checkout, and delta export.
 
 It does not establish:
 

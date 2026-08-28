@@ -923,11 +923,12 @@ forall doc:
 - **Property fn:** `prop_checkout_preserves_text` at `event-graph-walker/text/text_properties_test.mbt:231`
 
 **L7.7a Exact Text Version.**
-A text `Version` carries both an exact RawVersion frontier and a canonical
-per-agent range summary of the frontier's causal closure. Checkout uses the
-frontier and rejects a decoded Version unless its ranges equal the resident
-closure. Delta export uses exact range membership; sequence order alone does
-not imply causality.
+The causal graph owns both an exact RawVersion frontier and a canonical
+per-agent range summary. A text `Version` is an opaque snapshot façade over
+those graph facts. Checkout uses the frontier and rejects a decoded Version
+unless the frontier is maximal and its ranges equal the resident closure. Delta
+export uses exact range membership; sequence order alone does not imply
+causality.
 
 ```text
 Version.frontier = maximal identities in the checkpoint
@@ -939,9 +940,10 @@ Schema 2 serializes both values. Schema 1 decoding is retained only as the
 legacy contiguous-prefix contract established by the former same-agent chain
 invariant.
 
-- **Tests:** `"same-agent causal fork round-trips an exact checkout version"`,
-  `"sparse same-agent knowledge exports the missing operation only"`, and
-  `"checkout rejects a range summary missing a frontier ancestor"`
+- **Tests:** `"graph version canonicalizes sparse identities with one union algorithm"`,
+  `"resolve rejects a redundant nonmaximal checkpoint"`,
+  `"same-agent causal fork round-trips an exact checkout version"`, and
+  `"delete and undelete versions round-trip checkout and delta"`
 
 **L7.8 Empty Document.**
 A new document has length zero and is empty.

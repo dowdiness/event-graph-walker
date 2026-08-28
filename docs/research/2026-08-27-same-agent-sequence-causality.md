@@ -56,6 +56,7 @@ Diamond Types distinguishes:
 Its source explicitly says the flat representation is invalid when one agent submits changes on multiple branches.
 
 - [`VersionSummary` and `VersionSummaryFlat` contract](https://github.com/josephg/diamond-types/blob/e143890a596aafdd7ba3e7ae25f9f3749f45acff/src/causalgraph/summary.rs#L16-L32)
+- [Agent assignment owns full-summary construction](https://github.com/josephg/diamond-types/blob/e143890a596aafdd7ba3e7ae25f9f3749f45acff/src/causalgraph/summary.rs#L124-L137)
 - [Full-summary intersection and missing-range handling](https://github.com/josephg/diamond-types/blob/e143890a596aafdd7ba3e7ae25f9f3749f45acff/src/causalgraph/summary.rs#L138-L239)
 - [Causal graph entries retain explicit parent frontiers](https://github.com/josephg/diamond-types/blob/e143890a596aafdd7ba3e7ae25f9f3749f45acff/src/causalgraph/graph/mod.rs#L22-L52)
 
@@ -211,12 +212,21 @@ The first run also shows why deleting the check without migrating `Version` is u
 
 ## Gate V0 validation update
 
-The prototype now implements the recommended representation behind the opaque
-text `Version`: schema 2 carries an exact RawVersion frontier and canonical
-per-agent half-open sequence ranges, while schema 1 decoding retains the legacy
-contiguous-prefix interpretation. Checkout validates the decoded summary
-against the resident frontier closure, and `export_since` uses exact range
-membership.
+The prototype now implements the recommended representation at the causal
+authority. `CausalGraph` owns the exact frontier, RawVersion index, and a
+cold-to-hot canonical per-agent range summary. The opaque text `Version` is only
+a façade over a defensive graph snapshot. Schema 2 carries that snapshot while
+schema 1 decoding retains the legacy contiguous-prefix interpretation.
+Checkout asks the graph to resolve a maximal frontier and prove summary equality
+against its resident closure; `export_since` uses exact range membership.
+
+This placement was selected only after comparing four alternatives: reorganize
+the text-owned cache, feed a text reducer with new Document receipts, split
+checkpoint and peer knowledge into public types, or move summary ownership to
+the graph. The graph-owned design is the only one that removes both duplicated
+range algorithms and mutation-path cache hooks. It also matches Diamond Types'
+placement of `VersionSummary` under causal-graph agent assignment rather than a
+text façade.
 
 Validation on this branch establishes:
 
@@ -227,17 +237,23 @@ Validation on this branch establishes:
 - both corpus modes round-trip Version schema 2 and checkout the expected
   terminal text;
 - 40 seeded sparse same-agent disconnect/reconnect schedules converge through
-  exact `export_since`; and
+  exact `export_since`;
+- insert/delete/undelete versions round-trip, checkout, and export exact deltas;
+  and
 - text, causal-graph, OpLog, document, branch, and container targeted native
   suites pass.
 
 The initial implementation rebuilt Version after every local insert and caused
-a measured regression. Incremental local frontier/range maintenance restored
-the 1,000-character append benchmark from 211.91 ms to 5.65 ms native and from
-114.54 ms to 7.28 ms JS (baselines 5.39 ms and 7.72 ms). Full 1,000-operation
-Version reconstruction remains slower: 166.51→384.50 µs native and
-82.33→204.30 µs JS. These figures characterize the prototype; they are not a
-production optimization claim.
+a measured regression. A text-owned incremental cache repaired that cost but
+left duplicate authority. The graph-owned cache now stays cold until first
+observation, then advances at graph admission. A 1,000-character append is
+5.97 ms native/7.61 ms JS while cold and 6.10 ms/7.46 ms after heating
+(baselines 5.39 ms/7.72 ms). Cold 1,000-operation reconstruction is
+82.79 µs native and 58.22 µs JS, versus 384.50 µs and 204.30 µs in the
+text-owned sparse prototype. Warm one-range snapshots are sub-microsecond; a
+32-agent × 32-range fragmented snapshot is 55.38 µs native and 49.69 µs JS.
+These figures characterize the prototype; they are not production optimization
+claims.
 
 Persistence, mixed-version migration, container causality, arbitrary
 mixed-operation partition schedules, and symbolic proof remain outside Gate V0.

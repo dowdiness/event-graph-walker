@@ -19,9 +19,12 @@ For text only:
 - Declared parents are the causal authority. Admission readiness also includes
   semantic origin and target dependencies, but no implicit same-agent
   predecessor.
-- The opaque text `Version` contains an exact RawVersion frontier and canonical
-  per-agent half-open sequence ranges for the frontier's causal closure.
-- Checkout resolves the exact frontier and validates that the resident closure
+- The causal graph owns an exact RawVersion checkpoint and canonical per-agent
+  half-open ranges. Its cache remains cold until first Version observation and
+  then advances at the same admission point as RawVersion identity.
+- The opaque text `Version` is a façade over a defensive graph snapshot; text
+  mutation paths do not maintain a second version cache.
+- Checkout resolves a maximal frontier and validates that the resident closure
   equals the supplied range summary.
 - Delta export uses exact range membership. Schema-1 text Versions retain their
   legacy contiguous-prefix interpretation; schema 2 serializes frontier and
@@ -47,12 +50,14 @@ The prototype passes:
 - Version schema-2 round-trip and exact terminal checkout in both corpus modes;
   and
 - 40 seeded sparse same-agent disconnect/reconnect schedules through exact
-  delta export.
+  delta export; and
+- insert/delete/undelete version round-trip, checkout, and exact delta export.
 
 Targeted text, OpLog, causal-graph, document, branch, and container native tests
-pass. Incremental cache maintenance keeps the existing 1,000-character append
-benchmark near its prior baseline. Full lazy Version reconstruction is slower
-and remains measured prototype cost.
+pass. Cold and hot 1,000-character append remain near the prior baseline. Cold
+1,000-operation summary reconstruction is materially faster than the earlier
+text-owned sparse implementation; fragmented warm snapshots have a dedicated
+32-agent × 32-range benchmark.
 
 ## Consequences and unresolved migration work
 
