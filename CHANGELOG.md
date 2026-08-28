@@ -15,8 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Schema 1 text payloads are rejected. Text operation identity follows exact
   EG-walker semantics: `(agent, sequence)` is stable identity, declared parents
   define causality, and versions carry an exact frontier plus sparse per-agent
-  sequence ranges. Canonical text SyncMessage bytes use the v2 domain. Tree and
-  container schemas are unchanged. See
+  sequence ranges. Version decode is bounded at 512 KiB, 4,096 frontier entries,
+  4,096 agent entries, and 4,096 total ranges. Canonical text SyncMessage bytes
+  use the v2 domain. Tree and container schemas are unchanged. See
   [`docs/MIGRATING_TEXT_SCHEMA_2.md`](docs/MIGRATING_TEXT_SCHEMA_2.md).
 
 ## [0.7.1] - 2026-08-02

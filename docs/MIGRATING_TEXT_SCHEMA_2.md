@@ -49,6 +49,14 @@ schema-1 Version into synthetic ranges.
 as malformed text payloads. This fail-fast behavior prevents silent delta
 omission and incorrect checkout.
 
+Schema-2 text Versions are also rejected above any fixed wire boundary: 512 KiB
+encoded, 4,096 frontier entries, 4,096 agent entries, or 4,096 total ranges.
+The byte limit rejects the measured 773 KiB–1.025 MiB adversarial shapes before
+JSON parsing; the count limits prevent smaller fragmented Versions from
+amplifying checkout work. Do not split or truncate a Version to fit. Recreate a compact current
+checkpoint through full resynchronization, or stop and remediate the producer's
+fragmented identity history.
+
 ## Verification checklist
 
 - all connected text peers emit schema 2;

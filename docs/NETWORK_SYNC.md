@@ -131,6 +131,15 @@ supplied summary before returning a view.
 Declared operation parents, not adjacent sequence numbers, define text
 causality.
 
+Text Version decoding has a fixed wire boundary: at most 512 KiB encoded, 4,096
+frontier identities, 4,096 agent entries, and 4,096 total sequence ranges.
+Excess input fails with `LimitExceeded`: `EncodedBytes` classifies the byte
+boundary and the existing `DecodedOperations` kind classifies every decoded
+Version cardinality boundary. There is no
+truncation or schema fallback. A local history whose sparse Version exceeds the
+boundary requires full-resync or operational remediation; it must not publish a
+partial knowledge claim.
+
 `to_canonical_bytes()` produces deterministic schema-2 bytes under the
 `event-graph-walker:text-sync:v2` domain for hashing or signing after
 validation. It is not a binary transport decoder.

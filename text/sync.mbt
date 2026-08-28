@@ -14,6 +14,18 @@ let text_schema : Int = 2
 let text_sync_canonical_domain : Bytes = b"event-graph-walker:text-sync:v2"
 
 ///|
+let text_version_max_encoded_bytes : Int = 512 * 1024
+
+///|
+let text_version_max_frontier_entries : Int = 4096
+
+///|
+let text_version_max_agents : Int = 4096
+
+///|
+let text_version_max_total_ranges : Int = 4096
+
+///|
 fn stable_id_key(replica_id : String, sequence : Int) -> String {
   replica_id.length().to_string() +
   ":" +
@@ -595,13 +607,13 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       @sync.Failure::MalformedMessage(detail="invalid text version JSON"),
     )
   }
-  if @utf8.encode(json_str).length() >
-    @sync.Limits::default().max_encoded_bytes() {
+  let encoded_bytes = @utf8.encode(json_str).length()
+  if encoded_bytes > text_version_max_encoded_bytes {
     raise TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
-        limit=@sync.Limits::default().max_encoded_bytes(),
-        actual=@utf8.encode(json_str).length(),
+        limit=text_version_max_encoded_bytes,
+        actual=encoded_bytes,
       ),
     )
   }
@@ -619,11 +631,30 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       envelope.format == text_version_format else {
       fail("unsupported version envelope")
     }
+    if envelope.frontier.length() > text_version_max_frontier_entries {
+      raise TextError::SyncFailed(
+        @sync.Failure::LimitExceeded(
+          kind=@sync.LimitKind::DecodedOperations,
+          limit=text_version_max_frontier_entries,
+          actual=envelope.frontier.length(),
+        ),
+      )
+    }
     let frontier : Array[@core.RawVersion] = []
     for value in envelope.frontier {
       frontier.push(decode_identity(value))
     }
+    if envelope.ranges.length() > text_version_max_agents {
+      raise TextError::SyncFailed(
+        @sync.Failure::LimitExceeded(
+          kind=@sync.LimitKind::DecodedOperations,
+          limit=text_version_max_agents,
+          actual=envelope.ranges.length(),
+        ),
+      )
+    }
     let ranges : Array[(String, Array[(UInt, UInt)])] = []
+    let mut total_ranges = 0
     for value in envelope.ranges {
       let obj = match value {
         Json::Object(fields) => fields
@@ -634,6 +665,16 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       }
       let agent : String = @json.from_json(obj["replica_id"])
       let encoded_ranges : Array[Json] = @json.from_json(obj["ranges"])
+      total_ranges = total_ranges + encoded_ranges.length()
+      if total_ranges > text_version_max_total_ranges {
+        raise TextError::SyncFailed(
+          @sync.Failure::LimitExceeded(
+            kind=@sync.LimitKind::DecodedOperations,
+            limit=text_version_max_total_ranges,
+            actual=total_ranges,
+          ),
+        )
+      }
       let agent_ranges : Array[(UInt, UInt)] = []
       for value in encoded_ranges {
         let fields = match value {
@@ -655,6 +696,10 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       },
     )
   } catch {
+    TextError::SyncFailed(@sync.Failure::LimitExceeded(kind~, limit~, actual~)) =>
+      raise TextError::SyncFailed(
+        @sync.Failure::LimitExceeded(kind~, limit~, actual~),
+      )
     _ =>
       raise TextError::SyncFailed(
         @sync.Failure::MalformedMessage(detail="invalid text version JSON"),

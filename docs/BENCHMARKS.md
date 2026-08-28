@@ -593,11 +593,57 @@ cost that a one-agent benchmark hides. Cold reconstruction is linear in graph
 entries. These are raw prototype observations, not thresholds or browser
 latency claims; wasm/wasm-gc figures were not captured in this run.
 
+#### Gate V1 adversarial Version resources
+
+Gate V1 measured valid schema-2 Versions below 1 MiB before choosing a count
+limit. Encoded bytes alone was insufficient: one agent with 37,000 disjoint
+ranges produced a 1,025,055-byte Version whose closure resolution took 118.57
+ms on JS and 1.22 s on native.
+
+| Shape | Bytes | JS decode / export / resolve | Native decode / export / resolve |
+| --- | ---: | ---: | ---: |
+| 1 agent × 37,000 ranges | 1,025,055 | 64.39 / 20.35 / 118.57 ms | 50.08 / 69.76 ms / 1.22 s |
+| 8,000 agents × 1 range | 816,079 | 46.21 / 14.92 / 8.42 ms | 91.44 / 42.70 / 4.55 ms |
+| 512 agents × 64 ranges | 773,199 | 58.70 / 28.04 / 26.82 ms | 77.39 / 84.46 / 20.40 ms |
+
+The accepted boundary is 4,096 frontier entries, 4,096 agent entries, and
+4,096 total ranges, in addition to a 512 KiB encoded Version limit. The three
+large fixtures above now take the encoded-byte rejection path before JSON
+parsing; that rejection measured 4.11–4.98 ms on JS. A separate
+per-agent range limit is redundant because every canonical agent entry is
+nonempty and total ranges already bounds each entry.
+
+| Boundary shape | Bytes | JS decode / export / resolve | Native decode / export / resolve |
+| --- | ---: | ---: | ---: |
+| 1 agent × 4,096 ranges | 105,550 | 5.06 / 1.00 / 1.78 ms | 2.84 / 1.89 / 16.22 ms |
+| 4,096 agents × 1 range | 417,871 | 19.34 / 6.85 / 3.12 ms | 15.50 / 4.59 / 2.02 ms |
+| 64 agents × 64 ranges | 96,719 | 5.24 / 1.94 / 2.79 ms | 3.28 / 2.31 / 1.27 ms |
+
+Process-level RSS is supporting evidence rather than a per-operation allocation
+measurement because the benchmark harness retains fixtures and outputs. Native
+maximum RSS was 13,084 KiB for the baseline graph process and 17,268 KiB for
+the 37,000-range resolve process. JS was 67,244 KiB and 162,228 KiB,
+respectively.
+
+Reproduce the focused measurements with:
+
+```bash
+for target in js native; do
+  moon bench --release --target "$target" \
+    -p dowdiness/event-graph-walker/text \
+    -f version_resource_benchmark.mbt
+  moon bench --release --target "$target" \
+    -p dowdiness/event-graph-walker/internal/causal_graph \
+    -f graph_version_benchmark.mbt
+done
+```
+
 **Key Metrics:**
 - cold reconstruction by operation count
 - warm defensive snapshot by frontier/range cardinality
 - hot sparse insertion by agent/range cardinality
 - end-to-end text mutation with summary cold and hot
+- adversarial Version decode, export, and closure resolution by shape
 
 ### 5. Merge Performance (`internal/branch/branch_merge_benchmark.mbt`)
 
