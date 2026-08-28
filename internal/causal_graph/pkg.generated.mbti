@@ -17,6 +17,7 @@ import {
 // Errors
 pub(all) suberror CausalGraphError {
   MissingParent(lv~ : Int)
+  DuplicateVersion(raw~ : @core.RawVersion)
   MissingEntry(lv~ : Int)
 } derive(@debug.Debug)
 
@@ -63,4 +64,3 @@ pub impl @shrink.Shrink for VersionVector
 // Type aliases
 
 // Traits
-

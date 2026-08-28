@@ -136,11 +136,12 @@ test "version cache preserves three replica entries after remote advancement" {
   let _ = try! bob.sync().apply(carol_delta)
   inspect(cached_version_matches_log(bob), content="true")
 
-  // A subsequent local edit must retain Alice, Bob, and Carol maxima.
-  try! bob.insert(Pos::at(bob.len()), "D")
+  // A multi-scalar local edit after a concurrent frontier must collapse the
+  // checkpoint to its last operation while retaining all knowledge ranges.
+  try! bob.insert(Pos::at(bob.len()), "DE")
   let version = bob.version()
   inspect(version.includes("alice", 0), content="true")
-  inspect(version.includes("bob", 1), content="true")
+  inspect(version.includes("bob", 2), content="true")
   inspect(version.includes("carol", 0), content="true")
   inspect(version == Version::from_ops(bob.inner.get_all_ops()), content="true")
 }

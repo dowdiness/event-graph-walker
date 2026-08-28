@@ -8,19 +8,19 @@ fn version_cache_benchmark_doc(operation_count : Int) -> TextState {
 }
 
 ///|
-/// Build sorted entries so the benchmark isolates Version::advance's
-/// replica-entry copy and scan rather than operation-log reconstruction.
+/// Build one exact root operation per replica so the benchmark isolates one
+/// cached Version transition rather than operation-log reconstruction.
 fn version_cache_benchmark_version(replica_count : Int) -> Version {
-  let entries : Array[VersionEntry] = []
+  let operations : Array[@core.Op] = []
   for i = 0; i < replica_count; i = i + 1 {
     let replica_id = if i < 10 {
       "agent-0" + i.to_string()
     } else {
       "agent-" + i.to_string()
     }
-    entries.push({ replica_id, sequence: 100 })
+    operations.push(@core.Op::insert(0, [], replica_id, 100, "x", None, None))
   }
-  Version(entries)
+  Version::from_ops(operations)
 }
 
 ///|
@@ -30,7 +30,16 @@ fn bench_version_advance(
   replica_id : String,
 ) -> Unit {
   let version = version_cache_benchmark_version(replica_count)
-  b.bench(() => b.keep(version.advance(replica_id, 101)))
+  let operation = @core.Op::insert(
+    0,
+    [@core.RawVersion(replica_id, 100)],
+    replica_id,
+    101,
+    "x",
+    Some(@core.RawVersion(replica_id, 100)),
+    None,
+  )
+  b.bench(() => b.keep(version.advance_op(operation)))
 }
 
 ///|

@@ -58,6 +58,23 @@ test "concurrent versions create two frontier heads" {
 }
 
 ///|
+test "duplicate RawVersion is rejected without graph mutation" {
+  let graph = CausalGraph::new()
+  let first = try! graph.add_version_with_seq([], "alice", 0)
+  let before_frontier = graph.get_frontier()
+  try graph.add_version_with_seq([], "alice", 0) catch {
+    DuplicateVersion(raw~) => assert_eq(raw, @core.RawVersion("alice", 0))
+    _ => fail("expected duplicate RawVersion")
+  } noraise {
+    _ => fail("duplicate RawVersion must be rejected")
+  }
+  inspect(graph.op_count(), content="1")
+  inspect(graph.get_frontier() == before_frontier, content="true")
+  assert_eq(graph.raw_to_lv(@core.RawVersion("alice", 0)), Some(0))
+  inspect(first, content="0")
+}
+
+///|
 test "is_ancestor simple case" {
   let graph = CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")

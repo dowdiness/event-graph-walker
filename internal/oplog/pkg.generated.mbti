@@ -13,7 +13,6 @@ import {
 pub(all) suberror OpLogError {
   MissingLocalVersion(lv~ : Int)
   MissingOrigin
-  SequenceAncestryViolation(raw~ : @core.RawVersion)
   OriginTargetNotInsert(operation~ : @core.RawVersion, target~ : @core.RawVersion)
   InvalidOriginShape(raw~ : @core.RawVersion)
   PendingLimitExceeded(limit~ : Int, required~ : Int)
@@ -89,4 +88,3 @@ pub fn PreparedAdmission::operations(Self) -> ArrayView[@core.Op]
 // Type aliases
 
 // Traits
-

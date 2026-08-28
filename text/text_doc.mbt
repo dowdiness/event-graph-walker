@@ -5,11 +5,12 @@
 priv struct InsertPlan {
   position : Int
   text : String
+  operation_count : Int
 }
 
 ///|
 fn InsertPlan::InsertPlan(position : Int, text : String) -> InsertPlan {
-  { position, text }
+  { position, text, operation_count: text.iter().count() }
 }
 
 ///|
@@ -83,6 +84,17 @@ fn TextState::advance_cached_version(self : TextState, op : @core.Op) -> Unit {
 }
 
 ///|
+fn TextState::advance_cached_local_insert(
+  self : TextState,
+  last_op : @core.Op,
+  operation_count : Int,
+) -> Unit {
+  self.cached_version = self.cached_version.advance_local_insert(
+    last_op, operation_count,
+  )
+}
+
+///|
 fn TextState::invalidate_cached_version(self : TextState) -> Unit {
   self.cached_version = self.cached_version.invalidate()
 }
@@ -132,8 +144,8 @@ pub fn TextState::insert(
     return
   }
   try {
-    let op = self.inner.insert(plan.position, plan.text)
-    self.advance_cached_version(op)
+    let last_op = self.inner.insert(plan.position, plan.text)
+    self.advance_cached_local_insert(last_op, plan.operation_count)
   } catch {
     err => {
       self.invalidate_cached_version()
@@ -238,12 +250,14 @@ pub fn TextState::checkout(
   version : Version,
 ) -> TextView raise TextError {
   let frontier : Array[Int] = []
-  for entry in version.entries {
-    let raw = @core.RawVersion(entry.replica_id, entry.sequence)
+  for raw in version.frontier {
     match self.inner.raw_to_lv(raw) {
       Some(lv) => frontier.push(lv)
       None => raise TextError::VersionNotFound
     }
+  }
+  if !version.matches_snapshot_closure(self.causal_snapshot(), frontier) {
+    raise TextError::VersionNotFound
   }
   try {
     let branch = self.inner.checkout_branch(

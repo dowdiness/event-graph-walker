@@ -55,19 +55,12 @@ fn p0_benchmark_valid_ancestry(b : @bench.T, ops : Array[@core.Op]) -> Unit {
 }
 
 ///|
-fn p0_benchmark_invalid_ancestry(b : @bench.T, ops : Array[@core.Op]) -> Unit {
+fn p0_benchmark_sparse_fork(b : @bench.T, ops : Array[@core.Op]) -> Unit {
   b.bench(
     fn() {
       let oplog = OpLog("benchmark")
-      let result : Result[PreparedAdmission, OpLogError] = Ok(
-        oplog.prepare_remote(ops),
-      ) catch {
-        error => Err(error)
-      }
-      match result {
-        Err(SequenceAncestryViolation(_)) => b.keep(1)
-        _ => b.keep(0)
-      }
+      let plan = try! oplog.prepare_remote(ops)
+      b.keep(plan.operations().length())
     },
     count=1,
   )
@@ -104,6 +97,6 @@ test "oplog - P0 indirect ancestry prepare (100000 ops)" (b : @bench.T) {
 }
 
 ///|
-test "oplog - P0 invalid ancestry prepare (10000 ops)" (b : @bench.T) {
-  p0_benchmark_invalid_ancestry(b, p0_ancestry_indirect_ops(10000, true))
+test "oplog - P0 sparse same-agent fork prepare (10000 ops)" (b : @bench.T) {
+  p0_benchmark_sparse_fork(b, p0_ancestry_indirect_ops(10000, true))
 }

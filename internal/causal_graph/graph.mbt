@@ -114,6 +114,10 @@ fn CausalGraph::add_version_inner(
   agent : String,
   seq : Int,
 ) -> Int raise CausalGraphError {
+  let raw = @core.RawVersion(agent, seq)
+  if self.version_map.get(raw) is Some(_) {
+    raise CausalGraphError::DuplicateVersion(raw~)
+  }
   for parent in parents {
     if parent < 0 || parent >= self.next_lv {
       raise CausalGraphError::MissingParent(lv=parent)
@@ -136,7 +140,7 @@ fn CausalGraph::add_version_inner(
   for p in parents {
     self.children[p].push(lv)
   }
-  self.version_map = self.version_map.add(@core.RawVersion(agent, seq), lv)
+  self.version_map = self.version_map.add(raw, lv)
   self.next_lv = lv + 1
   self.update_frontier(lv, parents)
   lv

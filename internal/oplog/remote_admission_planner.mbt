@@ -104,8 +104,6 @@ priv struct RemoteAdmissionSemantics {
 /// retained-pending cleanup.
 priv enum RemoteAdmissionSemanticResult {
   Valid
-  Undecidable
-  Sequence(raw~ : @core.RawVersion)
   Origin(operation~ : @core.RawVersion, target~ : @core.RawVersion)
   Invalid
 }
@@ -192,24 +190,12 @@ fn remote_admission_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
 }
 
 ///|
-/// Add the implicit same-agent predecessor only to semantic applicability.
-/// It is never added to the operation's declared causal parents.
+/// Semantic applicability follows only declared causal parents and origins.
 fn remote_admission_dependencies_for(
   op : @core.Op,
-  semantics : RemoteAdmissionSemantics?,
+  _semantics : RemoteAdmissionSemantics?,
 ) -> Array[@core.RawVersion] {
-  let dependencies = remote_admission_dependencies(op)
-  match semantics {
-    Some(_) =>
-      if op.seq() > 0 {
-        let predecessor = @core.RawVersion(op.agent(), op.seq() - 1)
-        if !dependencies.contains(predecessor) {
-          dependencies.push(predecessor)
-        }
-      }
-    None => ()
-  }
-  dependencies
+  remote_admission_dependencies(op)
 }
 
 ///|
@@ -353,38 +339,6 @@ fn RemoteAdmissionPlanner::find_operation(
 }
 
 ///|
-/// Prove that a target is reachable through declared causal parents. The
-/// implicit predecessor is intentionally not traversed as a graph edge.
-fn remote_admission_parents_reach(
-  parents : Array[@core.RawVersion],
-  target : @core.RawVersion,
-  lookup : (@core.RawVersion) -> @core.Op?,
-) -> (Bool, Bool) {
-  let queue = parents.copy()
-  let visited : Map[@core.RawVersion, Bool] = Default::default()
-  let mut unknown = false
-  let mut index = 0
-  while index < queue.length() {
-    let current = queue[index]
-    index += 1
-    if current == target {
-      return (true, unknown)
-    }
-    if visited.get(current) is None {
-      visited.set(current, true)
-      match lookup(current) {
-        Some(op) =>
-          for parent in op.parents() {
-            queue.push(parent)
-          }
-        None => unknown = true
-      }
-    }
-  }
-  (false, unknown)
-}
-
-///|
 /// Check origin/target kinds that are already decidable, without requiring
 /// unrelated causal parents to be ready first.
 fn RemoteAdmissionPlanner::validate_known_origins(
@@ -428,20 +382,6 @@ fn RemoteAdmissionPlanner::validate_semantics(
     Valid => ()
     result => return result
   }
-  if op.seq() > 0 {
-    let predecessor = @core.RawVersion(op.agent(), op.seq() - 1)
-    let (reached, unknown) = remote_admission_parents_reach(
-      op.parents(),
-      predecessor,
-      lookup,
-    )
-    if !reached {
-      if unknown {
-        return Undecidable
-      }
-      return Sequence(raw=remote_admission_raw(op))
-    }
-  }
   let require_insert = fn(
     target : @core.RawVersion?,
   ) -> RemoteAdmissionSemanticResult {
@@ -476,8 +416,6 @@ fn remote_admission_raise_semantic(
 ) -> Unit raise OpLogError {
   match result {
     Valid => ()
-    Undecidable => raise OpLogError::InvalidAdmission
-    Sequence(raw~) => raise OpLogError::SequenceAncestryViolation(raw~)
     Origin(operation~, target~) =>
       raise OpLogError::OriginTargetNotInsert(operation~, target~)
     Invalid => raise OpLogError::InvalidAdmission
@@ -955,10 +893,9 @@ fn RemoteAdmissionPlanner::prepare_fast(
       Some(context) =>
         match self.validate_semantics(op, raw => staged.get(raw), context) {
           Valid => ()
-          Sequence(raw~) => raise OpLogError::SequenceAncestryViolation(raw~)
           Origin(operation~, target~) =>
             raise OpLogError::OriginTargetNotInsert(operation~, target~)
-          Undecidable | Invalid => raise OpLogError::InvalidAdmission
+          Invalid => raise OpLogError::InvalidAdmission
         }
       None => ()
     }
@@ -1146,14 +1083,6 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
     }
     match semantic_result {
       Valid => ()
-      Sequence(raw~) =>
-        if self.pending.contains(entry.raw) {
-          overlay.planned.add(entry.raw)
-          overlay.discard_roots.push(entry.raw)
-          continue
-        } else {
-          raise OpLogError::SequenceAncestryViolation(raw~)
-        }
       Origin(operation~, target~) =>
         if self.pending.contains(entry.raw) {
           overlay.planned.add(entry.raw)
@@ -1162,7 +1091,7 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
         } else {
           raise OpLogError::OriginTargetNotInsert(operation~, target~)
         }
-      Undecidable | Invalid => raise OpLogError::InvalidAdmission
+      Invalid => raise OpLogError::InvalidAdmission
     }
     overlay.planned.add(entry.raw)
     if !is_admitted(entry.raw) {
@@ -1289,9 +1218,8 @@ fn RemoteAdmissionPlanner::begin_with_semantics(
                 raw => plan.staged_operation(raw),
                 context,
               ) {
-              Sequence(_) | Origin(..) => ()
-              Valid | Undecidable | Invalid =>
-                return RemoteAdmissionBeginResult::Conflict
+              Origin(..) => ()
+              Valid | Invalid => return RemoteAdmissionBeginResult::Conflict
             }
           None => return RemoteAdmissionBeginResult::Conflict
         }

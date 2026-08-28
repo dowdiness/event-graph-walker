@@ -82,9 +82,6 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
     Some(raw) => deps.push(raw)
     None => ()
   }
-  if op.seq() > 0 {
-    deps.push(@core.RawVersion(op.agent(), op.seq() - 1))
-  }
   let by_key : Map[String, @core.RawVersion] = Map([])
   for dep in deps {
     by_key[raw_key(dep)] = dep
@@ -473,13 +470,31 @@ pub(all) struct SyncSession {
 }
 
 ///|
-fn version_entries_json(entries : Array[VersionEntry]) -> Json {
+fn version_frontier_json(frontier : Array[@core.RawVersion]) -> Json {
   let values : Array[Json] = []
-  for entry in entries {
+  for raw in frontier {
+    values.push(identity_json(raw))
+  }
+  values.to_json()
+}
+
+///|
+fn version_ranges_json(ranges : Array[VersionRangeEntry]) -> Json {
+  let values : Array[Json] = []
+  for entry in ranges {
+    let parts : Array[Json] = []
+    for range in entry.ranges {
+      parts.push(
+        Json::object({
+          "start": range.start.to_json(),
+          "end": range.end.to_json(),
+        }),
+      )
+    }
     values.push(
       Json::object({
         "replica_id": entry.replica_id.to_json(),
-        "sequence": entry.sequence.to_json(),
+        "ranges": parts.to_json(),
       }),
     )
   }
@@ -489,9 +504,10 @@ fn version_entries_json(entries : Array[VersionEntry]) -> Json {
 ///|
 pub fn Version::to_json_string(self : Version) -> String {
   Json::object({
-    "schema": (1).to_json(),
+    "schema": (2).to_json(),
     "format": text_version_format.to_json(),
-    "entries": version_entries_json(self.entries),
+    "frontier": version_frontier_json(self.frontier),
+    "ranges": version_ranges_json(self.ranges),
   }).stringify()
 }
 
@@ -532,7 +548,9 @@ priv struct WireIdentity {
 priv struct WireVersionEnvelope {
   schema : Int
   format : String
-  entries : Array[Json]
+  entries : Array[Json]?
+  frontier : Array[Json]?
+  ranges : Array[Json]?
 } derive(FromJson)
 
 ///|
@@ -592,23 +610,116 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       Json::Object(value) => value
       _ => fail("version envelope must be an object")
     }
-    guard exact_object_fields(object, ["schema", "format", "entries"]) else {
-      fail("version envelope contains missing or unknown fields")
-    }
     let envelope : WireVersionEnvelope = @json.from_json(root)
-    guard envelope.schema == 1 && envelope.format == text_version_format else {
+    guard envelope.format == text_version_format else {
       fail("unsupported version envelope")
     }
-    let entries : Array[VersionEntry] = []
-    let seen : Map[String, Bool] = Map([])
-    for value in envelope.entries {
-      let raw = decode_identity(value)
-      guard seen.get(raw.agent) is None else { fail("duplicate version entry") }
-      seen[raw.agent] = true
-      entries.push({ replica_id: raw.agent, sequence: raw.seq })
+    match envelope.schema {
+      1 => {
+        guard exact_object_fields(object, ["schema", "format", "entries"]) else {
+          fail("version envelope contains missing or unknown fields")
+        }
+        let legacy = envelope.entries.unwrap()
+        let frontier : Array[@core.RawVersion] = []
+        let ranges : Array[VersionRangeEntry] = []
+        let seen : Map[String, Bool] = Map([])
+        for value in legacy {
+          let raw = decode_identity(value)
+          guard seen.get(raw.agent) is None else {
+            fail("duplicate version entry")
+          }
+          seen[raw.agent] = true
+          frontier.push(raw)
+          ranges.push({
+            replica_id: raw.agent,
+            ranges: [{ start: 0U, end: raw.seq.reinterpret_as_uint() + 1U }],
+          })
+        }
+        frontier.sort_by(compare_raw)
+        ranges.sort_by(fn(a, b) { a.replica_id.compare(b.replica_id) })
+        let result : Version = { frontier, ranges }
+        result
+      }
+      2 => {
+        guard exact_object_fields(object, [
+          "schema", "format", "frontier", "ranges",
+        ]) else {
+          fail("version envelope contains missing or unknown fields")
+        }
+        let frontier_values : Array[@core.RawVersion] = []
+        let seen_frontier : Map[@core.RawVersion, Bool] = Map([])
+        for value in envelope.frontier.unwrap() {
+          let raw = decode_identity(value)
+          guard seen_frontier.get(raw) is None else {
+            fail("duplicate frontier identity")
+          }
+          seen_frontier[raw] = true
+          frontier_values.push(raw)
+        }
+        frontier_values.sort_by(compare_raw)
+        let range_values : Array[VersionRangeEntry] = []
+        let seen_agents : Map[String, Bool] = Map([])
+        for value in envelope.ranges.unwrap() {
+          let obj = match value {
+            Json::Object(v) => v
+            _ => fail("range entry must be an object")
+          }
+          guard exact_object_fields(obj, ["replica_id", "ranges"]) else {
+            fail("range entry contains missing or unknown fields")
+          }
+          let id : String = @json.from_json(obj["replica_id"])
+          guard id != "" && seen_agents.get(id) is None else {
+            fail("invalid or duplicate range entry")
+          }
+          seen_agents[id] = true
+          let raw_ranges : Array[Json] = @json.from_json(obj["ranges"])
+          let parsed : Array[VersionRange] = []
+          let mut previous_end : UInt? = None
+          for item in raw_ranges {
+            let r = match item {
+              Json::Object(v) => v
+              _ => fail("range must be an object")
+            }
+            guard exact_object_fields(r, ["start", "end"]) else {
+              fail("range contains missing or unknown fields")
+            }
+            let start : UInt = @json.from_json(r["start"])
+            let end : UInt = @json.from_json(r["end"])
+            let ordered = match previous_end {
+              None => true
+              Some(previous) => start > previous
+            }
+            guard start <= 0x7fffffffU &&
+              end > start &&
+              end <= 0x80000000U &&
+              ordered else {
+              fail("invalid or overlapping range")
+            }
+            parsed.push({ start, end })
+            previous_end = Some(end)
+          }
+          guard parsed.length() > 0 else {
+            fail("range summary must be nonempty")
+          }
+          range_values.push({ replica_id: id, ranges: parsed })
+        }
+        range_values.sort_by(fn(a, b) { a.replica_id.compare(b.replica_id) })
+        guard frontier_values.is_empty() == range_values.is_empty() else {
+          fail("version frontier and range summary emptiness differ")
+        }
+        let result : Version = {
+          frontier: frontier_values,
+          ranges: range_values,
+        }
+        for raw in frontier_values {
+          guard result.includes(raw.agent, raw.seq) else {
+            fail("version frontier is absent from range summary")
+          }
+        }
+        result
+      }
+      _ => fail("unsupported version envelope")
     }
-    entries.sort_by(fn(a, b) { a.replica_id.compare(b.replica_id) })
-    Version(entries)
   } catch {
     _ =>
       raise TextError::SyncFailed(

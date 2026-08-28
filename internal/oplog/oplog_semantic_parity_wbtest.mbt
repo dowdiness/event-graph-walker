@@ -27,24 +27,19 @@ fn p0_delete(
 }
 
 ///|
-test "P0 core rejects sequence fork before mutation" {
+test "P0 core accepts a same-agent causal fork atomically" {
   let receiver = OpLog("receiver")
   let root = p0_insert("alice", 0, [], "A", None)
   let fork = p0_insert("alice", 1, [], "B", Some(p0_raw("alice", 0)))
-  let result : Result[PreparedAdmission, OpLogError] = Ok(
-    receiver.prepare_remote([root, fork]),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Err(SequenceAncestryViolation(raw~)) => {
-      inspect(raw.agent, content="alice")
-      inspect(raw.seq, content="1")
-    }
-    _ => fail("expected core sequence ancestry validation")
-  }
+  let prepared = try! receiver.prepare_remote([root, fork])
+  inspect(prepared.operations().length(), content="2")
   inspect(receiver.op_count(), content="0")
+  ignore(try! receiver.commit_remote(prepared))
+  inspect(receiver.op_count(), content="2")
   inspect(receiver.has_pending(), content="false")
+  let frontier = try! receiver.get_frontier_raw()
+  inspect(frontier.contains(p0_raw("alice", 0)), content="true")
+  inspect(frontier.contains(p0_raw("alice", 1)), content="true")
 }
 
 ///|

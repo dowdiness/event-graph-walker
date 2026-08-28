@@ -122,6 +122,43 @@ test "property: Version::from_json_string fails safely on malformed JSON" {
 }
 
 ///|
+test "schema 2 Version rejects a frontier absent from its range summary" {
+  let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"ranges\":[{\"replica_id\":\"bob\",\"ranges\":[{\"start\":0,\"end\":1}]}]}"
+  try Version::from_json_string(malformed) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    _ => fail("expected malformed Version")
+  } noraise {
+    _ => fail("frontier without range membership must be rejected")
+  }
+}
+
+///|
+test "schema 2 Version rejects nonempty ranges with an empty frontier" {
+  let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":1}]}]}"
+  try Version::from_json_string(malformed) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    _ => fail("expected malformed Version")
+  } noraise {
+    _ => fail("nonempty ranges require a frontier")
+  }
+}
+
+///|
+test "checkout rejects a range summary missing a frontier ancestor" {
+  let document = try! TextState::new("alice")
+  try! document.insert(Pos::at(0), "AB")
+  let inconsistent = try! Version::from_json_string(
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":1,\"end\":2}]}]}",
+  )
+  try document.checkout(inconsistent) catch {
+    TextError::VersionNotFound => ()
+    _ => fail("expected VersionNotFound")
+  } noraise {
+    _ => fail("checkout must validate the complete frontier closure")
+  }
+}
+
+///|
 fn prop_invalid_sync_message_json_fails(seed : Int) -> Bool {
   let invalid = if seed % 2 == 0 { "" } else { "{" }
   let result : Result[SyncMessage, TextError] = Ok(

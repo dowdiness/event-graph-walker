@@ -216,21 +216,86 @@ test "checkout rejects an unavailable version without changing live state" {
 }
 
 ///|
-test "sequence fork is rejected without changing receiver state" {
+test "same-agent causal fork round-trips an exact checkout version" {
   let receiver = try! TextState::new("receiver")
-  let before_version = receiver.version()
   let message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
-  try receiver.sync().apply(message) catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
-    _ => fail("expected malformed sequence fork")
-  } noraise {
-    _ => fail("sequence fork must be rejected")
+  let report = try! receiver.sync().apply(message)
+  inspect(report.applied_operations(), content="2")
+  inspect(receiver.text(), content="AB")
+  let version = receiver.version()
+  let decoded = try! Version::from_json_string(version.to_json_string())
+  inspect(decoded == version, content="true")
+  let view = try! receiver.checkout(decoded)
+  inspect(view.text(), content="AB")
+  inspect(view.version() == version, content="true")
+}
+
+///|
+test "legacy flat version decodes as a contiguous known prefix" {
+  let source = try! TextState::new("source")
+  let source_message = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  ignore(try! source.sync().apply(source_message))
+  let legacy = try! Version::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  inspect(try! source.sync().export_since(legacy).op_count(), content="0")
+}
+
+///|
+test "legacy maximum sequence survives schema 2 round-trip" {
+  let legacy = try! Version::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}]}",
+  )
+  let encoded = legacy.to_json_string()
+  inspect(
+    encoded,
+    content="{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":2147483648}]}]}",
+  )
+  let current = try! Version::from_json_string(encoded)
+  inspect(current == legacy, content="true")
+}
+
+///|
+test "sparse same-agent knowledge exports the missing operation only" {
+  let source = try! TextState::new("source")
+  let peer = try! TextState::new("peer")
+  let source_message = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  let peer_message = try! SyncMessage::from_json_string(
+    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+  )
+  ignore(try! source.sync().apply(source_message))
+  ignore(try! peer.sync().apply(peer_message))
+  let delta = try! source.sync().export_since(peer.version())
+  inspect(delta.op_count(), content="1")
+  let report = try! peer.sync().apply(delta)
+  inspect(report.applied_operations(), content="1")
+  inspect(peer.text(), content="AB")
+  inspect(peer.version() == source.version(), content="true")
+}
+
+///|
+test "out-of-order sparse roots canonicalize one Version range" {
+  let receiver = try! TextState::new("receiver")
+  for
+    encoded in [
+      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
+      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
+      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
+    ] {
+    ignore(
+      try! receiver.sync().apply(try! SyncMessage::from_json_string(encoded)),
+    )
   }
-  inspect(receiver.text(), content="")
-  inspect(receiver.version() == before_version, content="true")
-  inspect(receiver.sync().pending_sync_count(), content="0")
+  inspect(
+    receiver.version().to_json_string(),
+    content="{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1},{\"replica_id\":\"alice\",\"sequence\":2}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":3}]}]}",
+  )
 }
 
 ///|
@@ -401,20 +466,21 @@ test "core and text reject known invalid origin with the same atomic meaning" {
 }
 
 ///|
-test "resent decidable malformed pending operation does not poison later sync" {
+test "same-agent sequence hole admits without an implicit predecessor" {
   let receiver = try! TextState::new("receiver")
   let malformed_future = try! SyncMessage::from_json_string(
     "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
-  let deferred = try! receiver.sync().apply(malformed_future)
-  inspect(deferred.applied_operations(), content="0")
-  inspect(receiver.sync().pending_sync_count(), content="1")
+  let first = try! receiver.sync().apply(malformed_future)
+  inspect(first.applied_operations(), content="1")
+  inspect(receiver.sync().pending_sync_count(), content="0")
   let valid_predecessors = try! SyncMessage::from_json_string(
     "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
   let applied = try! receiver.sync().apply(valid_predecessors)
   inspect(applied.applied_operations(), content="2")
-  inspect(receiver.text(), content="AB")
+  inspect(applied.duplicate_operations(), content="1")
+  inspect(receiver.text(), content="ABC")
   inspect(receiver.sync().pending_sync_count(), content="0")
 }
 
