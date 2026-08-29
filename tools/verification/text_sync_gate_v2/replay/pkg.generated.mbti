@@ -2,6 +2,7 @@
 package "event-graph-walker/text-sync-gate-v2-replay"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/core/json",
 }
 
@@ -13,6 +14,8 @@ import {
 type Driver
 
 type ItfTrace derive(@json.FromJson)
+
+type ObservedIdentity derive(Eq, Hash, @debug.Debug)
 
 type WireAgentRanges derive(@json.FromJson)
 

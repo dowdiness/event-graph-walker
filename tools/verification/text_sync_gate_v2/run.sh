@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+started_at=$SECONDS
 
 suite_dir="$(cd "$(dirname "$0")" && pwd -P)"
 repo_root="$(cd "$suite_dir/../../.." && pwd -P)"
 expected_quint=0.32.0
 expected_apalache=0.56.1
+mode="${1:---dev}"
+if [[ "$mode" != "--dev" && "$mode" != "--candidate" ]]; then
+  echo "usage: ./run.sh [--dev|--candidate]" >&2
+  exit 2
+fi
+if [[ "$mode" == "--candidate" ]] && \
+   [[ -n "$(git -C "$repo_root" status --short --untracked-files=all)" ]]; then
+  echo "STOPPED: --candidate requires a clean worktree" >&2
+  exit 2
+fi
 
 if [[ -n "${QUINT_BIN:-}" ]]; then
   quint_bin="$QUINT_BIN"
@@ -27,13 +38,26 @@ java_major() {
 }
 
 verify_quint() {
+  local model="$1"
+  local metrics="$tmp/${model%.qnt}.time"
+  local -a command
   if command -v java >/dev/null 2>&1 && [[ "$(java_major)" -eq 17 ]]; then
-    "$quint_bin" verify "$@"
+    command=("$quint_bin" verify "$@")
   elif command -v nix >/dev/null 2>&1; then
-    nix shell nixpkgs#jdk17_headless -c "$quint_bin" verify "$@"
+    command=(nix shell nixpkgs#jdk17_headless -c "$quint_bin" verify "$@")
   else
     echo "STOPPED: Quint verification requires Java 17 or Nix" >&2
     exit 2
+  fi
+  if [[ -x /usr/bin/time ]]; then
+    /usr/bin/time \
+      -f "VERIFY_METRIC: model=$model elapsed_seconds=%e max_rss_kib=%M" \
+      -o "$metrics" "${command[@]}"
+    cat "$metrics"
+  else
+    "${command[@]}"
+    printf 'VERIFY_METRIC: model=%s elapsed_seconds=unavailable max_rss_kib=unavailable\n' \
+      "$model"
   fi
 }
 
@@ -67,6 +91,7 @@ on_exit() {
 trap on_exit EXIT
 sparse_trace="$tmp/sparse-gap.itf.json"
 admission_trace="$tmp/admission.itf.json"
+complete_trace="$tmp/complete.itf.json"
 schedule_dir="$tmp/schedules"
 mkdir -p "$schedule_dir"
 
@@ -75,6 +100,33 @@ cd "$suite_dir"
 "$quint_bin" typecheck TextSyncDistributed.qnt
 "$quint_bin" typecheck TextSyncAdmission.qnt
 "$quint_bin" typecheck TextSyncSchedules.qnt
+"$quint_bin" typecheck TextSyncComplete.qnt
+"$quint_bin" run TextSyncComplete.qnt \
+  --main TextSyncComplete \
+  --step step \
+  --invariant safety \
+  --out-itf "$complete_trace" \
+  --max-steps 21 \
+  --seed 0x032 \
+  --verbosity 0
+expect_failure "Invariant violated" \
+  "$quint_bin" run TextSyncComplete.qnt \
+    --main TextSyncComplete \
+    --step step \
+    --invariant identityConflictMutation \
+    --max-steps 1 \
+    --seed 0x032 \
+    --verbosity 1
+
+expect_failure "Invariant violated" \
+  "$quint_bin" run TextSyncComplete.qnt \
+    --main TextSyncComplete \
+    --step step \
+    --invariant nullContentMutation \
+    --max-steps 1 \
+    --seed 0x032 \
+    --verbosity 1
+
 "$quint_bin" run TextSyncDistributed.qnt \
   --main TextSyncDistributed \
   --step replayStep \
@@ -155,11 +207,32 @@ verify_quint TextSyncSchedules.qnt \
   --apalache-version "$expected_apalache" \
   --verbosity 1
 
+verify_quint TextSyncComplete.qnt \
+  --main TextSyncComplete \
+  --step step \
+  --invariant safety \
+  --max-steps 21 \
+  --apalache-version "$expected_apalache" \
+  --verbosity 1
+
 moon -C "$suite_dir/replay" check --target native
 moon -C "$suite_dir/replay" run --target native . -- "$sparse_trace"
 moon -C "$suite_dir/replay" run --target native . -- "$admission_trace"
+moon -C "$suite_dir/replay" run --target native . -- "$complete_trace"
 schedule_traces=("$schedule_dir"/*.itf.json)
 moon -C "$suite_dir/replay" run --target native . -- "${schedule_traces[@]}"
+trace_files=(
+  "$sparse_trace"
+  "$admission_trace"
+  "$complete_trace"
+  "${schedule_traces[@]}"
+)
+replayed_states="$(node -e '
+  const fs = require("node:fs");
+  const total = process.argv.slice(1).reduce((sum, path) =>
+    sum + JSON.parse(fs.readFileSync(path, "utf8")).states.length, 0);
+  process.stdout.write(String(total));
+' "${trace_files[@]}")"
 expect_failure "schedule coverage expected" \
   moon -C "$suite_dir/replay" run --target native . -- \
     "${schedule_traces[0]}"
@@ -177,13 +250,32 @@ moon -C "$repo_root" test --target native text/sparse_version_properties_wbtest.
 )
 
 printf 'PASS: Quint %s sparse and admission traces\n' "$expected_quint"
-printf 'PASS: bounded Apalache %s safety verification (sparse=6, admission=8 steps)\n' \
+printf 'PASS: bounded Apalache %s safety verification (sparse=6, admission=8, schedules=9, complete=21 steps)\n' \
   "$expected_apalache"
-printf 'PASS: flat-maximum, premature-admission, and implicit-sequence-parent model mutations detected\n'
+printf 'PASS: flat-maximum, premature-admission, implicit-sequence-parent, exact-origin-conflict, and null-content model mutations detected\n'
 printf 'PASS: sparse, pending, duplicate, and conflict traces replayed through public MoonBit APIs\n'
 printf 'PASS: all 36 canonical two-replica delivery-order pairs replayed\n'
+printf 'PASS: exact multi-agent insert/delete/undelete, directional origins, checkout, delta, and overclaim replayed\n'
 printf 'PASS: incomplete schedule coverage detected\n'
 printf 'PASS: replay observation mutation detected\n'
 printf 'PASS: existing Version codec/resource/sparse contracts\n'
 printf 'PASS: Gate V0 reference traces and official corpus\n'
-printf 'CANDIDATE: %s\n' "$(git -C "$repo_root" rev-parse HEAD)"
+if [[ "$mode" == "--candidate" ]] && \
+   [[ -n "$(git -C "$repo_root" status --short --untracked-files=all)" ]]; then
+  echo "STOPPED: worktree changed during candidate verification" >&2
+  exit 2
+fi
+candidate="$(git -C "$repo_root" rev-parse HEAD)"
+if [[ "$mode" == "--dev" ]] && \
+   [[ -n "$(git -C "$repo_root" status --short --untracked-files=all)" ]]; then
+  candidate="$candidate+dirty"
+fi
+printf 'TOOLS: quint=%s apalache=%s java_requirement=17\n' \
+  "$($quint_bin --version)" "$expected_apalache"
+printf 'MOON_TOOL: %s\n' "$(moon version --json)"
+printf 'BOUNDS: sparse=6 admission=8 schedules=9 complete=21 seed=0x032 bounded_model_states=398\n'
+printf 'EVIDENCE: schedule_traces=%s required_schedules=36 replayed_itf_states=%s\n' \
+  "${#schedule_traces[@]}" "$replayed_states"
+printf 'EVIDENCE: total_runtime_seconds=%s\n' "$((SECONDS - started_at))"
+printf 'MODE: %s\n' "${mode#--}"
+printf 'CANDIDATE: %s\n' "$candidate"

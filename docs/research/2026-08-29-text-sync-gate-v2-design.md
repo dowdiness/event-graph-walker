@@ -1,7 +1,7 @@
 # EGW Text Sync Gate V2 design
 
 Date: 2026-08-29
-Status: implementation-ready
+Status: implemented
 
 ## Purpose
 
@@ -271,7 +271,7 @@ Event =
   | Deliver(messageId, receiver)
   | CaptureCheckpoint(replica, checkpointId)
   | RequestDelta(sender, checkpointId, messageId)
-  | RequestDeltaClaim(sender, versionJson, messageId)
+  | RequestDeltaClaim(sender, knowledge, frontier, messageId)
   | Checkout(replica, checkpointId)
 ```
 
@@ -290,7 +290,11 @@ the replay harness message table. `Deliver` performs admission. Delivery of a
 missing dependency followed by delivery of its parent exercises pending release;
 there is no separate production retry action. `RequestDelta` uses a checkpoint
 captured from the receiving replica. `RequestDeltaClaim` represents an external
-Version claim, including an overclaim. A delta becomes an ordinary stored
+Version claim, including an overclaim, as structured exact knowledge and
+frontier. The replay driver independently encodes that structure as schema-2
+Version JSON and parses it through `Version::from_json_string`; this avoids
+embedding escaped JSON inside Quint strings while still testing public wire
+ingress. A delta becomes an ordinary stored
 message and is later applied with `Deliver`.
 
 The driver reads this schema directly from ITF. Unknown tags or missing fields
@@ -374,8 +378,9 @@ When `Version::to_json_string` succeeds, the replay driver observes:
 - the normalized exact operation set from `SyncMessage::to_json_string` for
   every message produced by `export_all`, `RequestDelta`, or
   `RequestDeltaClaim`;
-- that produced message’s `to_canonical_bytes()` when byte-level payload
-  distinction is required;
+- that a produced message’s `to_canonical_bytes()` is stable across public
+  JSON round-trip; exact payload distinction is checked structurally through
+  normalized operations rather than by duplicating the private byte codec;
 - the raised `TextError` category, if any.
 
 JSON arrays are normalized as semantic sets or ordered range lists according to
@@ -411,8 +416,8 @@ event tag to one explicit harness or public action:
 | `DuplicateMessage` | Store the same immutable message under `newMessageId`; no document call |
 | `Deliver` | Apply the stored message through `SyncSession::apply` |
 | `CaptureCheckpoint` | Store public `TextState::version()` under `checkpointId` |
-| `RequestDelta` | Call `sender.sync().export_since(storedCheckpoint)`, record the returned message’s normalized exact operation set and canonical bytes, then store it by `messageId` |
-| `RequestDeltaClaim` | Parse `versionJson` with `Version::from_json_string`, call `export_since`, record the returned message observation, then store it |
+| `RequestDelta` | Call `sender.sync().export_since(storedCheckpoint)`, record the returned message’s normalized exact operation set and canonical-byte round-trip stability, then store it by `messageId` |
+| `RequestDeltaClaim` | Independently encode the modeled knowledge/frontier as schema-2 Version JSON, parse it with `Version::from_json_string`, call `export_since`, record the returned message observation, then store it |
 | `Checkout` | Call public `TextState::checkout(storedCheckpoint)` and record its text |
 
 The fixture builder maps the model shape to the exact wire keys `id`, `parents`,
