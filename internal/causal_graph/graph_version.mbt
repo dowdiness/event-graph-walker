@@ -3,26 +3,26 @@
 priv struct SequenceRange {
   start : UInt
   end : UInt
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 priv struct HaveEntry {
   agent : String
   ranges : Array[SequenceRange]
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Exact membership knowledge. Entries and ranges are canonical: sorted,
 /// unique, non-overlapping, and non-adjacent.
 priv struct HaveSummary {
   entries : Array[HaveEntry]
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Exact maximal identities for one causal cut.
 priv struct CausalCheckpoint {
   frontier : Array[@core.RawVersion]
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 /// One opaque graph version statement. The checkpoint names an exact causal
@@ -30,7 +30,7 @@ priv struct CausalCheckpoint {
 pub struct GraphVersion {
   priv checkpoint : CausalCheckpoint
   priv have : HaveSummary
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 pub suberror GraphVersionError {

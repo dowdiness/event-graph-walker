@@ -279,7 +279,7 @@ failure:
 | Persistence | Do not report a successful save and do not overwrite the last valid persisted state. |
 | FFI | Propagate an exception or typed error. Do not return an empty string or valid empty payload. |
 | Diagnostics | Report serialization failure separately from document content and sync success. |
-| Equality and change detection | Compare opaque `Version` values with `Eq`; do not serialize them for an in-memory comparison. |
+| Equality and local revision tracking | Compare opaque `Version` values with `Eq` or derive an in-memory token with `Hash`; do not serialize them for local comparison or cache invalidation. |
 | Hashing and signing | Produce no hash or signature when canonical serialization fails. Propagate the cause. |
 | Recovery loop | Do not retry the same over-limit Version. Require rematerialization or a different reconciliation protocol. |
 

@@ -115,7 +115,8 @@ API (exposed via WASM FFI):
 - **Apply remote message**: `state.sync().apply(msg) -> SyncReport`
 - **Export since a known version**: `state.sync().export_since(ver)`
 - **Export full state**: `state.sync().export_all()`
-- **Version tracking**: `Version::to_json_string` / `Version::from_json_string`
+- **Version tracking**: fallible `Version::to_json_string` /
+  `Version::from_json_string`
 
 The façades expose parallel operations, but their opaque messages and versions
 are not interchangeable. The text schema-2 contract does not change tree or
@@ -131,14 +132,18 @@ supplied summary before returning a view.
 Declared operation parents, not adjacent sequence numbers, define text
 causality.
 
-Text Version decoding has a fixed wire boundary: at most 512 KiB encoded, 4,096
-frontier identities, 4,096 agent entries, and 4,096 total sequence ranges.
-Excess input fails with `LimitExceeded`: `EncodedBytes` classifies the byte
-boundary and the existing `DecodedOperations` kind classifies every decoded
-Version cardinality boundary. There is no
-truncation or schema fallback. A local history whose sparse Version exceeds the
-boundary requires full-resync or operational remediation; it must not publish a
-partial knowledge claim.
+Text Version encoding and decoding have a fixed wire boundary: at most 512 KiB
+encoded, 4,096 frontier identities, 4,096 agent entries, and 4,096 total
+sequence ranges. Excess fails with `LimitExceeded`: `EncodedBytes` classifies
+the byte boundary and the existing `DecodedOperations` kind classifies Version
+cardinality boundaries. There is no truncation or schema fallback.
+
+A local history may remain valid after its sparse Version exceeds this wire
+boundary. `Version::to_json_string` then raises `TextError` and emits nothing.
+Adapters must not retry the same Version or substitute an empty payload.
+Ordinary full synchronization preserves the same identity history and does not
+compact the Version. Recovery requires application-controlled rematerialization
+into a new operation history or a different stateful reconciliation protocol.
 
 `to_canonical_bytes()` produces deterministic schema-2 bytes under the
 `event-graph-walker:text-sync:v2` domain for hashing or signing after

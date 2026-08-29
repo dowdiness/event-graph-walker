@@ -54,7 +54,7 @@ pub impl @debug.Debug for CausalGraph
 
 pub struct GraphVersion {
   // private fields
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 pub fn GraphVersion::contains(Self, @core.RawVersion) -> Bool
 pub fn GraphVersion::from_parts(Array[@core.RawVersion], Array[(String, Array[(UInt, UInt)])]) -> Self raise GraphVersionError
 pub fn GraphVersion::frontier(Self) -> Array[@core.RawVersion]

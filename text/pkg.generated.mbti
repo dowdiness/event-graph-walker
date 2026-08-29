@@ -125,10 +125,10 @@ pub impl Show for TextView
 
 pub(all) struct Version {
   // private fields
-} derive(Eq, @debug.Debug)
+} derive(Eq, Hash, @debug.Debug)
 pub fn Version::empty() -> Self
 pub fn Version::from_json_string(String) -> Self raise TextError
-pub fn Version::to_json_string(Self) -> String
+pub fn Version::to_json_string(Self) -> String raise TextError
 pub impl Show for Version
 
 // Type aliases

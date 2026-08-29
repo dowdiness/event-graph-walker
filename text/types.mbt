@@ -67,7 +67,7 @@ pub fn Range::end(self : Range) -> Pos {
 /// graph; this façade only preserves the public text type.
 pub(all) struct Version {
   priv graph_version : @causal_graph.GraphVersion
-} derive(Debug, Eq)
+} derive(Debug, Eq, Hash)
 
 ///|
 pub impl Show for Version with fn output(self, logger) {

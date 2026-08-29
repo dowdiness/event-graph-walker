@@ -137,6 +137,7 @@ Primary text-editing API.
 - `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange operations between replicas.
 - `checkout(version)` returns a read-only `TextView`.
 - `SyncMessage::to_json_string` / `from_json_string` provide the strict schema-2 transport codec; `to_canonical_bytes` uses the `event-graph-walker:text-sync:v2` domain for hashing or signing.
+- `Version::to_json_string` / `from_json_string` provide the bounded schema-2 checkpoint codec. Both directions raise `TextError`; encoding emits nothing when the Version exceeds the fixed wire envelope.
 
 ### `tree`
 

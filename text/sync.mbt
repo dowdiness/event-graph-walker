@@ -516,13 +516,57 @@ fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
 }
 
 ///|
-pub fn Version::to_json_string(self : Version) -> String {
-  Json::object({
+fn ensure_text_version_limit(
+  kind : @sync.LimitKind,
+  limit : Int,
+  actual : Int,
+) -> Unit raise TextError {
+  if actual > limit {
+    raise TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(kind~, limit~, actual~),
+    )
+  }
+}
+
+///|
+/// Encode this Version as canonical schema-2 JSON.
+///
+/// Raises `LimitExceeded` without emitting a partial token when the exact
+/// checkpoint or sparse knowledge cannot fit the fixed Version wire envelope.
+pub fn Version::to_json_string(self : Version) -> String raise TextError {
+  let frontier = self.graph_version.frontier()
+  ensure_text_version_limit(
+    @sync.LimitKind::DecodedOperations,
+    text_version_max_frontier_entries,
+    frontier.length(),
+  )
+  let ranges = self.graph_version.ranges()
+  ensure_text_version_limit(
+    @sync.LimitKind::DecodedOperations,
+    text_version_max_agents,
+    ranges.length(),
+  )
+  let mut total_ranges = 0
+  for entry in ranges {
+    total_ranges = total_ranges + entry.1.length()
+    ensure_text_version_limit(
+      @sync.LimitKind::DecodedOperations,
+      text_version_max_total_ranges,
+      total_ranges,
+    )
+  }
+  let encoded = Json::object({
     "schema": text_schema.to_json(),
     "format": text_version_format.to_json(),
-    "frontier": version_frontier_json(self.graph_version.frontier()),
-    "ranges": version_ranges_json(self.graph_version.ranges()),
+    "frontier": version_frontier_json(frontier),
+    "ranges": version_ranges_json(ranges),
   }).stringify()
+  ensure_text_version_limit(
+    @sync.LimitKind::EncodedBytes,
+    text_version_max_encoded_bytes,
+    @utf8.encode(encoded).length(),
+  )
+  encoded
 }
 
 ///|
@@ -601,6 +645,7 @@ fn decode_identity(json : Json) -> @core.RawVersion raise {
 }
 
 ///|
+/// Decode and structurally validate one bounded schema-2 Version token.
 pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
   if !is_well_formed_utf16(json_str) {
     raise TextError::SyncFailed(
@@ -608,15 +653,11 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
     )
   }
   let encoded_bytes = @utf8.encode(json_str).length()
-  if encoded_bytes > text_version_max_encoded_bytes {
-    raise TextError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit=text_version_max_encoded_bytes,
-        actual=encoded_bytes,
-      ),
-    )
-  }
+  ensure_text_version_limit(
+    @sync.LimitKind::EncodedBytes,
+    text_version_max_encoded_bytes,
+    encoded_bytes,
+  )
   try {
     let root = @json.parse(json_str)
     let object = match root {
@@ -631,28 +672,20 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       envelope.format == text_version_format else {
       fail("unsupported version envelope")
     }
-    if envelope.frontier.length() > text_version_max_frontier_entries {
-      raise TextError::SyncFailed(
-        @sync.Failure::LimitExceeded(
-          kind=@sync.LimitKind::DecodedOperations,
-          limit=text_version_max_frontier_entries,
-          actual=envelope.frontier.length(),
-        ),
-      )
-    }
+    ensure_text_version_limit(
+      @sync.LimitKind::DecodedOperations,
+      text_version_max_frontier_entries,
+      envelope.frontier.length(),
+    )
     let frontier : Array[@core.RawVersion] = []
     for value in envelope.frontier {
       frontier.push(decode_identity(value))
     }
-    if envelope.ranges.length() > text_version_max_agents {
-      raise TextError::SyncFailed(
-        @sync.Failure::LimitExceeded(
-          kind=@sync.LimitKind::DecodedOperations,
-          limit=text_version_max_agents,
-          actual=envelope.ranges.length(),
-        ),
-      )
-    }
+    ensure_text_version_limit(
+      @sync.LimitKind::DecodedOperations,
+      text_version_max_agents,
+      envelope.ranges.length(),
+    )
     let ranges : Array[(String, Array[(UInt, UInt)])] = []
     let mut total_ranges = 0
     for value in envelope.ranges {
@@ -666,15 +699,11 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       let agent : String = @json.from_json(obj["replica_id"])
       let encoded_ranges : Array[Json] = @json.from_json(obj["ranges"])
       total_ranges = total_ranges + encoded_ranges.length()
-      if total_ranges > text_version_max_total_ranges {
-        raise TextError::SyncFailed(
-          @sync.Failure::LimitExceeded(
-            kind=@sync.LimitKind::DecodedOperations,
-            limit=text_version_max_total_ranges,
-            actual=total_ranges,
-          ),
-        )
-      }
+      ensure_text_version_limit(
+        @sync.LimitKind::DecodedOperations,
+        text_version_max_total_ranges,
+        total_ranges,
+      )
       let agent_ranges : Array[(UInt, UInt)] = []
       for value in encoded_ranges {
         let fields = match value {

@@ -21,8 +21,9 @@ test "delete and undelete versions round-trip checkout and delta" {
 
   ignore(try! doc.inner.undelete(0))
   let undeleted = doc.version()
-  let decoded = try! Version::from_json_string(undeleted.to_json_string())
+  let decoded = try! Version::from_json_string(try! undeleted.to_json_string())
   assert_eq(decoded, undeleted)
+  assert_eq(Hash::hash(decoded), Hash::hash(undeleted))
   assert_eq(try! doc.checkout(decoded).text(), "A")
   assert_eq(try! doc.sync().export_since(inserted).op_count(), 2)
   assert_eq(try! doc.sync().export_since(deleted).op_count(), 1)
@@ -56,7 +57,7 @@ test "property: sparse same-agent disconnect reconnect converges" {
     assert_eq(peer.text(), source.text())
     assert_eq(peer.version(), source.version())
     let roundtrip = try! Version::from_json_string(
-      peer.version().to_json_string(),
+      try! peer.version().to_json_string(),
     )
     assert_eq(try! peer.checkout(roundtrip).text(), peer.text())
   }

@@ -225,7 +225,7 @@ test "same-agent causal fork round-trips an exact checkout version" {
   inspect(report.applied_operations(), content="2")
   inspect(receiver.text(), content="AB")
   let version = receiver.version()
-  let decoded = try! Version::from_json_string(version.to_json_string())
+  let decoded = try! Version::from_json_string(try! version.to_json_string())
   inspect(decoded == version, content="true")
   let view = try! receiver.checkout(decoded)
   inspect(view.text(), content="AB")
@@ -250,7 +250,7 @@ test "schema 1 text version is rejected" {
 test "schema 2 text version preserves the maximum UInt endpoint" {
   let encoded = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":2147483647,\"end\":2147483648}]}]}"
   let version = try! Version::from_json_string(encoded)
-  inspect(version.to_json_string(), content=encoded)
+  inspect(try! version.to_json_string(), content=encoded)
 }
 
 ///|
@@ -287,7 +287,7 @@ test "out-of-order sparse roots canonicalize one Version range" {
     )
   }
   inspect(
-    receiver.version().to_json_string(),
+    try! receiver.version().to_json_string(),
     content="{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1},{\"replica_id\":\"alice\",\"sequence\":2}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":3}]}]}",
   )
 }

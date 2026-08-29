@@ -593,10 +593,10 @@ cost that a one-agent benchmark hides. Cold reconstruction is linear in graph
 entries. These are raw prototype observations, not thresholds or browser
 latency claims; wasm/wasm-gc figures were not captured in this run.
 
-#### Gate V1 adversarial Version resources
+#### Adversarial Version resources
 
-Gate V1 measured valid schema-2 Versions below 1 MiB before choosing a count
-limit. Encoded bytes alone was insufficient: one agent with 37,000 disjoint
+The resource study measured valid schema-2 Versions below 1 MiB before choosing
+a count limit. Encoded bytes alone was insufficient: one agent with 37,000 disjoint
 ranges produced a 1,025,055-byte Version whose closure resolution took 118.57
 ms on JS and 1.22 s on native.
 
@@ -608,8 +608,10 @@ ms on JS and 1.22 s on native.
 
 The accepted boundary is 4,096 frontier entries, 4,096 agent entries, and
 4,096 total ranges, in addition to a 512 KiB encoded Version limit. The three
-large fixtures above now take the encoded-byte rejection path before JSON
-parsing; that rejection measured 4.11–4.98 ms on JS. A separate
+large fixtures above now take the decoder's encoded-byte rejection path before
+JSON parsing; that rejection measured 4.11–4.98 ms on JS. The local encoder
+rejects the 37,000-range Version during cardinality validation, before JSON
+construction; the focused JS benchmark measured 416.70 µs. A separate
 per-agent range limit is redundant because every canonical agent entry is
 nonempty and total ranges already bounds each entry.
 

@@ -34,7 +34,31 @@ fn version_resource_json(
   agent_count : Int,
   ranges_per_agent : Int,
 ) -> String raise Failure {
-  let encoded = version_resource_fixture(agent_count, ranges_per_agent).to_json_string()
+  let encoded = try! version_resource_fixture(agent_count, ranges_per_agent).to_json_string()
+  let encoded_bytes = @utf8.encode(encoded).length()
+  guard encoded_bytes <= 1024 * 1024 else {
+    fail("resource fixture exceeds 1 MiB: " + label)
+  }
+  println(
+    "resource fixture " + label + ": " + encoded_bytes.to_string() + " bytes",
+  )
+  encoded
+}
+
+///|
+fn version_resource_unchecked_json(
+  label : String,
+  agent_count : Int,
+  ranges_per_agent : Int,
+) -> String raise Failure {
+  let version = version_resource_fixture(agent_count, ranges_per_agent)
+  let graph_version = version.graph()
+  let encoded = Json::object({
+    "schema": text_schema.to_json(),
+    "format": text_version_format.to_json(),
+    "frontier": version_frontier_json(graph_version.frontier()),
+    "ranges": version_ranges_json(graph_version.ranges()),
+  }).stringify()
   let encoded_bytes = @utf8.encode(encoded).length()
   guard encoded_bytes <= 1024 * 1024 else {
     fail("resource fixture exceeds 1 MiB: " + label)
@@ -49,6 +73,17 @@ fn version_resource_json(
 fn version_resource_is_rejected(encoded : String) -> Bool {
   try {
     ignore(Version::from_json_string(encoded))
+    false
+  } catch {
+    TextError::SyncFailed(@sync.Failure::LimitExceeded(..)) => true
+    _ => false
+  }
+}
+
+///|
+fn version_resource_encoding_is_rejected(version : Version) -> Bool {
+  try {
+    ignore(version.to_json_string())
     false
   } catch {
     TextError::SyncFailed(@sync.Failure::LimitExceeded(..)) => true
@@ -91,26 +126,28 @@ fn version_resource_text_state(
 
 ///|
 test "resource: reject Version (1 agent x 37000 ranges)" (b : @bench.T) {
-  let encoded = version_resource_json("1x37000", 1, 37000)
+  let encoded = version_resource_unchecked_json("1x37000", 1, 37000)
   b.bench(() => b.keep(version_resource_is_rejected(encoded)))
 }
 
 ///|
 test "resource: reject Version (8000 agents x 1 range)" (b : @bench.T) {
-  let encoded = version_resource_json("8000x1", 8000, 1)
+  let encoded = version_resource_unchecked_json("8000x1", 8000, 1)
   b.bench(() => b.keep(version_resource_is_rejected(encoded)))
 }
 
 ///|
 test "resource: reject Version (512 agents x 64 ranges)" (b : @bench.T) {
-  let encoded = version_resource_json("512x64", 512, 64)
+  let encoded = version_resource_unchecked_json("512x64", 512, 64)
   b.bench(() => b.keep(version_resource_is_rejected(encoded)))
 }
 
 ///|
-test "resource: encode Version (1 agent x 37000 ranges)" (b : @bench.T) {
+test "resource: reject local Version encoding (1 agent x 37000 ranges)" (
+  b : @bench.T,
+) {
   let version = version_resource_fixture(1, 37000)
-  b.bench(() => b.keep(version.to_json_string()))
+  b.bench(() => b.keep(version_resource_encoding_is_rejected(version)))
 }
 
 ///|

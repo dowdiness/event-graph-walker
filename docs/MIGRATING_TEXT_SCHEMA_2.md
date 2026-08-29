@@ -49,20 +49,26 @@ schema-1 Version into synthetic ranges.
 as malformed text payloads. This fail-fast behavior prevents silent delta
 omission and incorrect checkout.
 
-Schema-2 text Versions are also rejected above any fixed wire boundary: 512 KiB
-encoded, 4,096 frontier entries, 4,096 agent entries, or 4,096 total ranges.
-The byte limit rejects the measured 773 KiB–1.025 MiB adversarial shapes before
-JSON parsing; the count limits prevent smaller fragmented Versions from
-amplifying checkout work. Do not split or truncate a Version to fit. Recreate a compact current
-checkpoint through full resynchronization, or stop and remediate the producer's
-fragmented identity history.
+Schema-2 text Version encoding and decoding reject values above any fixed wire
+boundary: 512 KiB encoded, 4,096 frontier entries, 4,096 agent entries, or 4,096
+total ranges. `Version::to_json_string` now raises `TextError` when a valid
+in-memory Version cannot fit this envelope. The byte limit rejects the measured
+773 KiB–1.025 MiB adversarial shapes before JSON parsing; the count limits
+prevent smaller fragmented Versions from amplifying checkout work.
+
+Do not split or truncate a Version to fit. Ordinary full synchronization
+recreates the same identity history and does not compact its Version. Stop the
+wire attempt and either rematerialize the visible text in a new document with a
+fresh operation history, or use a future stateful reconciliation protocol.
 
 ## Verification checklist
 
 - all connected text peers emit schema 2;
 - canonical-byte hashes or signatures are regenerated under the v2 domain;
 - saved schema-1 Versions are removed or deliberately invalidated;
-- a current Version round-trips through JSON;
+- every successfully encoded current Version round-trips through JSON;
+- Version encoding failure is propagated without overwriting persisted state,
+  sending an empty payload, or retrying the same Version;
 - `checkout(version())` reproduces current text;
 - `export_since(peer.version())` converges after reordered and duplicate
   delivery;

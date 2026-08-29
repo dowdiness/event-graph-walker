@@ -944,9 +944,9 @@ maximum cannot represent sparse identity knowledge or an exact causal cut.
   `"same-agent causal fork round-trips an exact checkout version"`, and
   `"delete and undelete versions round-trip checkout and delta"`
 
-**L7.7b Bounded Text Version Decode.**
-A decoded text Version must satisfy all fixed resource bounds before graph
-resolution:
+**L7.7b Bounded Text Version Codec.**
+A text Version must satisfy all fixed resource bounds before encoding succeeds
+or decoding reaches graph resolution:
 
 ```text
 encoded_utf8_bytes <= 524,288
@@ -955,16 +955,17 @@ agent_entries      <= 4,096
 total_ranges       <= 4,096
 ```
 
-The encoded-byte bound is checked before JSON parsing. Cardinality is checked
-after strict envelope decoding but before `GraphVersion` construction or graph
-resolution. The total-range bound also bounds ranges per canonical nonempty
-agent entry. Over-limit input raises a classified `LimitExceeded`; it is never truncated or
-translated into another Version.
+The decoder checks encoded bytes before JSON parsing and cardinality after
+strict envelope decoding but before `GraphVersion` construction or graph
+resolution. The encoder checks cardinality before serialization and encoded
+UTF-8 bytes before returning. The total-range bound also bounds ranges per
+canonical nonempty agent entry. Either direction raises a classified
+`LimitExceeded`; neither truncates or translates a Version.
 
 - **Tests:** `"Version accepts the 4096-entry resource boundaries"`,
-  `"Version rejects more than 4096 agent entries"`,
-  `"Version rejects more than 4096 total ranges"`,
-  `"Version rejects more than 4096 frontier entries"`, and
+  the encoder rejection tests for frontier, agent, range, and byte limits,
+  `"admitted fragmented Version reports local encoding failure"`, the matching
+  decoder rejection tests, and
   `"Version rejects encoded input above 512 KiB before parsing"`
 
 **L7.8 Empty Document.**
