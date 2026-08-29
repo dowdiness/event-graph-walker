@@ -1,0 +1,9 @@
+{
+  "name": "event-graph-walker-text-sync-gate-v2",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned Quint toolchain for EGW text sync Gate V2",
+  "devDependencies": {
+    "@informalsystems/quint": "0.32.0"
+  }
+}

@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "event-graph-walker/text-sync-gate-v2-replay"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Driver
+
+type ItfTrace derive(@json.FromJson)
+
+type WireAgentRanges derive(@json.FromJson)
+
+type WireIdentity derive(@json.FromJson)
+
+type WireOperation derive(@json.FromJson)
+
+type WireRange derive(@json.FromJson)
+
+type WireSync derive(@json.FromJson)
+
+type WireVersion derive(@json.FromJson)
+
+// Type aliases
+
+// Traits
