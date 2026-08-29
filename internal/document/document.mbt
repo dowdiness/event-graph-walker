@@ -69,6 +69,23 @@ pub fn Document::get_frontier(self : Document) -> @core.Frontier {
 }
 
 ///|
+/// Graph-owned current version snapshot.
+pub fn Document::current_graph_version(
+  self : Document,
+) -> @causal_graph.GraphVersion {
+  self.oplog.causal_graph().current_graph_version()
+}
+
+///|
+/// Resolve and validate a graph version against the resident causal graph.
+pub fn Document::resolve_graph_version(
+  self : Document,
+  version : @causal_graph.GraphVersion,
+) -> @core.Frontier? {
+  self.oplog.causal_graph().resolve_graph_version(version)
+}
+
+///|
 /// Return live core-owned remote pending membership without reading projection state.
 pub fn Document::pending_count(self : Document) -> Int {
   self.oplog.pending_count()
@@ -219,22 +236,25 @@ pub fn Document::insert(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
-    self.tree.insert({
-      id: @fugue.Lv(op.lv()),
-      content: ch_str,
-      origin_left: if origin_left == -1 {
-        None
-      } else {
-        Some(@fugue.Lv(origin_left))
+    self.tree.insert(
+      {
+        id: @fugue.Lv(op.lv()),
+        content: ch_str,
+        origin_left: if origin_left == -1 {
+          None
+        } else {
+          Some(@fugue.Lv(origin_left))
+        },
+        origin_right: if origin_right == -1 {
+          None
+        } else {
+          Some(@fugue.Lv(origin_right))
+        },
+        timestamp: @fugue.Timestamp(timestamp),
+        agent: @fugue.ReplicaId(agent),
       },
-      origin_right: if origin_right == -1 {
-        None
-      } else {
-        Some(@fugue.Lv(origin_right))
-      },
-      timestamp: @fugue.Timestamp(timestamp),
-      agent: @fugue.ReplicaId(agent),
-    })
+      sequence=op.seq(),
+    )
     if cache_valid {
       cache_valid = self.indexed_state.insert_at(
         current_pos,

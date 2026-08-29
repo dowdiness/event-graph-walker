@@ -1,0 +1,15 @@
+replica alice
+replica bob
+replica carol
+insert alice 0 X
+sync alice bob
+sync alice carol
+insert alice 0 A
+insert bob 0 B
+insert carol 0 C
+sync alice bob
+sync bob carol
+sync carol alice
+sync alice bob
+sync bob carol
+expect-converged alice bob carol

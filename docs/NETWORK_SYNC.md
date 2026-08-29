@@ -1,10 +1,12 @@
 # Network Synchronization for CRDT Collaboration
 
-Event Graph Walker v0.5 supplies strict JSON codecs and synchronization state
+Event Graph Walker supplies strict JSON codecs and synchronization state
 machines, but no transport, signaling, authentication, persistence, or key
 management. The Canopy parent repository supplies the demo WebRTC integration.
-v0.4 and v0.5 peers share the same schema-1 wire envelopes and can
-synchronize with each other. v0.3 is incompatible with both v0.4 and v0.5.
+The current text protocol is a breaking schema-2 contract for both SyncMessage
+and Version. It intentionally rejects schema 1 rather than guessing sparse
+knowledge from a flat maximum. Tree and container retain their own schema-1
+contracts; façade payloads are never interchangeable.
 
 This document describes how to use the network synchronization feature for real-time collaborative editing.
 
@@ -81,7 +83,7 @@ Peer A types "Hello" at position 0
 Peer B types "World" at position 0 (concurrently)
 
 Result: Both peers converge to either "HelloWorld" or "WorldHello"
-(Deterministic ordering based on agent IDs and Lamport timestamps)
+(Deterministic ordering based on stable agent ID and per-agent sequence)
 ```
 
 ### Network Messages
@@ -96,9 +98,10 @@ interface SyncMessage {
 ```
 
 Do not parse or rewrite `payload` in the transport. Decode it with the matching
-MoonBit façade. Each envelope has `schema: 1`, a façade-specific `format`, and
-strictly validated logical records. Unknown fields and other schema versions
-are rejected.
+MoonBit façade. Text SyncMessage and Version envelopes use schema 2 and strict
+exact-field validation. Text Version carries an exact RawVersion frontier and
+canonical per-agent half-open sequence ranges. Tree and container envelopes
+remain schema 1. Unknown fields and every unsupported schema are rejected.
 
 ## API Reference
 
@@ -112,14 +115,39 @@ API (exposed via WASM FFI):
 - **Apply remote message**: `state.sync().apply(msg) -> SyncReport`
 - **Export since a known version**: `state.sync().export_since(ver)`
 - **Export full state**: `state.sync().export_all()`
-- **Version tracking**: `Version::to_json_string` / `Version::from_json_string`
+- **Version tracking**: fallible `Version::to_json_string` /
+  `Version::from_json_string`
 
-The same shape applies independently to `TextState`, `TreeState`, and
-container `Document`. Their opaque messages and versions are not
-interchangeable.
+The façades expose parallel operations, but their opaque messages and versions
+are not interchangeable. The text schema-2 contract does not change tree or
+container version semantics.
 
-`to_canonical_bytes()` produces deterministic domain-separated bytes for
-hashing or signing after validation. It is not a binary transport decoder.
+For text, the causal graph owns two facts exposed behind one opaque `Version`:
+its frontier names the exact checkout checkpoint, while its range summary names
+the operations known in that frontier's causal closure. The graph keeps this
+summary cold until first observation and then advances it with identity
+admission. `export_since` uses the summary for exact set difference. `checkout`
+resolves a maximal frontier and validates that the resident closure equals the
+supplied summary before returning a view.
+Declared operation parents, not adjacent sequence numbers, define text
+causality.
+
+Text Version encoding and decoding have a fixed wire boundary: at most 512 KiB
+encoded, 4,096 frontier identities, 4,096 agent entries, and 4,096 total
+sequence ranges. Excess fails with `LimitExceeded`: `EncodedBytes` classifies
+the byte boundary and the existing `DecodedOperations` kind classifies Version
+cardinality boundaries. There is no truncation or schema fallback.
+
+A local history may remain valid after its sparse Version exceeds this wire
+boundary. `Version::to_json_string` then raises `TextError` and emits nothing.
+Adapters must not retry the same Version or substitute an empty payload.
+Ordinary full synchronization preserves the same identity history and does not
+compact the Version. Recovery requires application-controlled rematerialization
+into a new operation history or a different stateful reconciliation protocol.
+
+`to_canonical_bytes()` produces deterministic schema-2 bytes under the
+`event-graph-walker:text-sync:v2` domain for hashing or signing after
+validation. It is not a binary transport decoder.
 
 ### Peer-sync policy companion
 
@@ -254,31 +282,37 @@ pm2 start signaling-server.js --name canopy-signaling
 
 - Reduce broadcast frequency (increase debounce timeout)
 - Use delta encoding for large documents
-- Version vectors are used for efficient frontier tracking (already implemented)
+- Text uses exact frontiers plus per-agent sequence ranges; flat version vectors
+  remain limited to chain-preserving package contracts
 
 ## Advanced: Custom Network Layer
 
 You can implement your own network layer using the `sync()` API on `TextState`:
 
-1. Export all operations: `doc.sync().export_all()`
-2. Export operations since a known version: `doc.sync().export_since(ver)`
-3. Broadcasting via your transport (WebSocket, HTTP, etc.)
-4. Receiving operations and calling: `doc.sync().apply(msg)`
+1. Export operations with `doc.sync().export_all()` or `export_since(ver)`
+2. Encode the opaque message with `to_json_string()`
+3. Broadcast that string via your transport
+4. Decode received strings with `SyncMessage::from_json_string`
+5. Apply only the validated message with `doc.sync().apply(msg)`
 
 Example:
 
 ```typescript
-// Send all operations
-const msg = doc.sync().export_all();
-myTransport.send(msg);
+// Send all operations as the exact schema-2 string.
+const payload = doc.sync().export_all().to_json_string();
+myTransport.send(payload);
 
-// Or send only new operations since the peer's last known version
-const msg = doc.sync().export_since(peerVersion);
-myTransport.send(msg);
+// Or send only operations absent from the peer's Version.
+const deltaPayload = doc
+  .sync()
+  .export_since(peerVersion)
+  .to_json_string();
+myTransport.send(deltaPayload);
 
-// Receive operations
-myTransport.onMessage((data) => {
-  doc.sync().apply(data);
+// Decode at the façade seam before applying.
+myTransport.onMessage((payload) => {
+  const message = SyncMessage.from_json_string(payload);
+  doc.sync().apply(message);
   updateUI();
 });
 ```
@@ -293,7 +327,8 @@ myTransport.onMessage((data) => {
 ## Future Improvements
 
 - [ ] Persistent storage with operation log replay
-- [x] Version vectors for efficient frontier compression (implemented)
+- [x] Exact text frontier plus sparse sequence-range delta summary (prototype)
+- [x] Reject text schema 1 at the breaking schema-2 boundary
 - [ ] Delta encoding for reduced bandwidth
 - [ ] Document rooms/channels
 - [ ] Presence awareness (cursor positions, user names)

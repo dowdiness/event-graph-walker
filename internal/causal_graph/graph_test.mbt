@@ -58,6 +58,48 @@ test "concurrent versions create two frontier heads" {
 }
 
 ///|
+test "duplicate RawVersion is rejected without graph mutation" {
+  let graph = CausalGraph::new()
+  let first = try! graph.add_version_with_seq([], "alice", 0)
+  let before_frontier = graph.get_frontier()
+  try graph.add_version_with_seq([], "alice", 0) catch {
+    DuplicateVersion(raw~) => assert_eq(raw, @core.RawVersion("alice", 0))
+    _ => fail("expected duplicate RawVersion")
+  } noraise {
+    _ => fail("duplicate RawVersion must be rejected")
+  }
+  inspect(graph.op_count(), content="1")
+  inspect(graph.get_frontier() == before_frontier, content="true")
+  assert_eq(graph.raw_to_lv(@core.RawVersion("alice", 0)), Some(0))
+  inspect(first, content="0")
+}
+
+///|
+test "graph admission owns parent storage and rejects invalid identities" {
+  let graph = CausalGraph::new()
+  let root = try! graph.add_version([], "agent")
+  let caller_parents = [root]
+  let child = try! graph.add_version(caller_parents, "agent")
+  caller_parents.clear()
+  assert_true(graph.is_ancestor(root, child))
+
+  let exposed = graph[child].unwrap()
+  exposed.parents.clear()
+  assert_true(graph.is_ancestor(root, child))
+  assert_eq(graph[child].unwrap().parents, [root])
+
+  for raw in [@core.RawVersion("", 0), @core.RawVersion("agent", -1)] {
+    try graph.add_version_with_seq([], raw.agent, raw.seq) catch {
+      InvalidIdentity(raw=actual) => assert_eq(actual, raw)
+      _ => fail("expected invalid identity")
+    } noraise {
+      _ => fail("invalid identity must be rejected")
+    }
+  }
+  assert_eq(graph.op_count(), 2)
+}
+
+///|
 test "is_ancestor simple case" {
   let graph = CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")

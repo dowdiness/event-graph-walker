@@ -93,14 +93,17 @@ fn insert(
     None => None
   }
   let entry = resolve_causal_entry(causal_graph, op.lv())
-  tree.insert({
-    id: @fugue.Lv(op.lv()),
-    content: text,
-    origin_left,
-    origin_right,
-    timestamp: @fugue.Timestamp(entry.timestamp),
-    agent: @fugue.ReplicaId(entry.agent),
-  })
+  tree.insert(
+    {
+      id: @fugue.Lv(op.lv()),
+      content: text,
+      origin_left,
+      origin_right,
+      timestamp: @fugue.Timestamp(entry.timestamp),
+      agent: @fugue.ReplicaId(entry.agent),
+    },
+    sequence=op.seq(),
+  )
 }
 
 ///|
@@ -189,14 +192,17 @@ pub fn apply_all(
           None => None
         }
         let entry = resolve_causal_entry(causal_graph, op.lv())
-        tree.insert({
-          id: @fugue.Lv(op.lv()),
-          content: text,
-          origin_left,
-          origin_right,
-          timestamp: @fugue.Timestamp(entry.timestamp),
-          agent: @fugue.ReplicaId(entry.agent),
-        })
+        tree.insert(
+          {
+            id: @fugue.Lv(op.lv()),
+            content: text,
+            origin_left,
+            origin_right,
+            timestamp: @fugue.Timestamp(entry.timestamp),
+            agent: @fugue.ReplicaId(entry.agent),
+          },
+          sequence=op.seq(),
+        )
       }
       @core.Delete => {
         let _ = delete(tree, op, causal_graph)

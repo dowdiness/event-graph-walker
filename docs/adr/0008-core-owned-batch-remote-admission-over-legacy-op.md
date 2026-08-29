@@ -4,6 +4,11 @@ status: accepted
 
 # Core-owned batch remote admission over legacy operations
 
+> **Text causality update:** ADR 0009 supersedes this ADR's implicit
+> same-agent predecessor and sequence-ancestry rules. Ownership, atomic
+> admission, pending settlement, and projection-recovery decisions remain in
+> force.
+
 The accepted pending-owner decision in ADR 0004 establishes EGW core as the sole owner of document-local pending membership, causal validation, and pending replay. Before changing the authority payload or wire format, the production text path will therefore move semantic admission responsibility into the core while retaining the existing origin-based `@core.Op` payload.
 
 ## Decision

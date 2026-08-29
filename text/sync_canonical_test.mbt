@@ -5,7 +5,7 @@ test "canonical bytes: empty message produces non-empty output" {
   let doc = try! @text.TextState::new("alice")
   let msg = try! doc.sync().export_all()
   let bytes = msg.to_canonical_bytes()
-  @debug.assert_eq(bytes, b"event-graph-walker:text-sync:v1\x00\x00")
+  @debug.assert_eq(bytes, b"event-graph-walker:text-sync:v2\x00\x00")
 }
 
 ///|

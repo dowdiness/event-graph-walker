@@ -16,8 +16,14 @@ import {
 
 // Errors
 pub(all) suberror CausalGraphError {
+  InvalidIdentity(raw~ : @core.RawVersion)
   MissingParent(lv~ : Int)
+  DuplicateVersion(raw~ : @core.RawVersion)
   MissingEntry(lv~ : Int)
+} derive(@debug.Debug)
+
+pub suberror GraphVersionError {
+  Invalid
 } derive(@debug.Debug)
 
 // Types and methods
@@ -27,6 +33,7 @@ pub struct CausalGraph {
 pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
 pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
 pub fn CausalGraph::children_count(Self, Int) -> Int
+pub fn CausalGraph::current_graph_version(Self) -> GraphVersion
 pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange])
 #alias("_[_]")
 pub fn CausalGraph::get_entry(Self, Int) -> @core.GraphEntry?
@@ -37,12 +44,21 @@ pub fn CausalGraph::lv_to_raw(Self, Int) -> @core.RawVersion?
 pub fn CausalGraph::new() -> Self
 pub fn CausalGraph::op_count(Self) -> Int
 pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
+pub fn CausalGraph::resolve_graph_version(Self, GraphVersion) -> @core.Frontier?
 pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
 pub impl @alga.DirectedGraph for CausalGraph
 pub impl @alga.Successors for CausalGraph
 pub impl @alga.VertexSet for CausalGraph
 pub impl Show for CausalGraph
 pub impl @debug.Debug for CausalGraph
+
+pub struct GraphVersion {
+  // private fields
+} derive(Eq, Hash, @debug.Debug)
+pub fn GraphVersion::contains(Self, @core.RawVersion) -> Bool
+pub fn GraphVersion::from_parts(Array[@core.RawVersion], Array[(String, Array[(UInt, UInt)])]) -> Self raise GraphVersionError
+pub fn GraphVersion::frontier(Self) -> Array[@core.RawVersion]
+pub fn GraphVersion::ranges(Self) -> Array[(String, Array[(UInt, UInt)])]
 
 pub struct VersionVector(Map[String, Int]) derive(Default, Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn VersionVector::agents(Self) -> Array[String]
@@ -63,4 +79,3 @@ pub impl @shrink.Shrink for VersionVector
 // Type aliases
 
 // Traits
-

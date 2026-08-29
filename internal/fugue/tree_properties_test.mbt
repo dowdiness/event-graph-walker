@@ -67,17 +67,14 @@ pub impl @qc.Shrink for QcInsertOpSet with fn shrink(self) {
 }
 
 ///|
-/// Compare insert ops using Fugue ordering (ts, agent, id).
+/// Compare insert ops using reference RawVersion `(agent, sequence)` order.
+/// Test IDs serve as the per-replica sequence for direct Fugue insertion.
 fn compare_ops(a : QcInsertOp, b : QcInsertOp) -> Int {
-  let ts_cmp = a.ts.compare(b.ts)
-  if ts_cmp != 0 {
-    return ts_cmp
-  }
-  let agent_cmp = a.agent.compare(b.agent)
+  let agent_cmp = a.agent.lexical_compare(b.agent)
   if agent_cmp != 0 {
     return agent_cmp
   }
-  a.id.compare(b.id)
+  Compare::compare(a.id, b.id)
 }
 
 ///|
@@ -142,29 +139,33 @@ fn qc_to_insert_op(
 fn prop_fugue_insertion_determinism(set : QcInsertOpSet) -> Bool {
   let expected = expected_text_from_ops(set.ops)
   let tree1 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree1.insert(
+  insert_with_test_sequence(
+    tree1,
     qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
   )
-  tree1.insert(
+  insert_with_test_sequence(
+    tree1,
     qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
   )
   for op in set.ops {
-    tree1.insert(qc_to_insert_op(op, 0, 1))
+    insert_with_test_sequence(tree1, qc_to_insert_op(op, 0, 1))
   }
   let text1 = tree1.to_text()
   if text1 != expected {
     return false
   }
   let tree2 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree2.insert(
+  insert_with_test_sequence(
+    tree2,
     qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
   )
-  tree2.insert(
+  insert_with_test_sequence(
+    tree2,
     qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
   )
   for i = set.ops.length() - 1; i >= 0; i = i - 1 {
     let op = set.ops[i]
-    tree2.insert(qc_to_insert_op(op, 0, 1))
+    insert_with_test_sequence(tree2, qc_to_insert_op(op, 0, 1))
   }
   let text2 = tree2.to_text()
   if text2 != expected {
@@ -172,14 +173,16 @@ fn prop_fugue_insertion_determinism(set : QcInsertOpSet) -> Bool {
   }
   let shuffled = shuffle_ops(set.ops, set.shuffle_seed)
   let tree3 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree3.insert(
+  insert_with_test_sequence(
+    tree3,
     qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
   )
-  tree3.insert(
+  insert_with_test_sequence(
+    tree3,
     qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
   )
   for op in shuffled {
-    tree3.insert(qc_to_insert_op(op, 0, 1))
+    insert_with_test_sequence(tree3, qc_to_insert_op(op, 0, 1))
   }
   let text3 = tree3.to_text()
   text3 == expected
@@ -251,7 +254,7 @@ fn is_ancestor_naive(
 /// Property: binary-lifting is_ancestor matches naive parent-walk for every pair in a chain.
 fn prop_lca_matches_naive(chain : ChainLen) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -260,7 +263,7 @@ fn prop_lca_matches_naive(chain : ChainLen) -> Bool {
     agent: @fugue.ReplicaId("agent0"),
   })
   for i = 1; i < chain.len; i = i + 1 {
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(i),
       content: "A",
       origin_left: Some(@fugue.Lv(i - 1)),
@@ -291,7 +294,7 @@ test "property: LCA is_ancestor matches naive walk" {
 /// Guarantees is_ancestor(x, x) is true for every node.
 fn prop_fugue_ancestor_reflexive(chain : ChainLen) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -300,7 +303,7 @@ fn prop_fugue_ancestor_reflexive(chain : ChainLen) -> Bool {
     agent: @fugue.ReplicaId("agent0"),
   })
   for i = 1; i < chain.len; i = i + 1 {
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(i),
       content: "A",
       origin_left: Some(@fugue.Lv(i - 1)),
@@ -327,7 +330,7 @@ test "property: fugue ancestor reflexive" {
 /// Guarantees ancestry is a transitive relation over the tree.
 fn prop_fugue_ancestor_transitivity(chain : ChainLen) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -336,7 +339,7 @@ fn prop_fugue_ancestor_transitivity(chain : ChainLen) -> Bool {
     agent: @fugue.ReplicaId("agent0"),
   })
   for i = 1; i < chain.len; i = i + 1 {
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(i),
       content: "A",
       origin_left: Some(@fugue.Lv(i - 1)),
@@ -443,14 +446,16 @@ fn ids_contains(ids : Array[@fugue.Lv], target : @fugue.Lv) -> Bool {
 /// Guarantees each inserted id is visible exactly once.
 fn prop_fugue_insert_visibility(set : QcInsertOpSet) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
   )
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
   )
   for op in set.ops {
-    tree.insert(qc_to_insert_op(op, 0, 1))
+    insert_with_test_sequence(tree, qc_to_insert_op(op, 0, 1))
   }
   let ids = visible_ids(tree)
   let mut count_found = 0
@@ -473,14 +478,16 @@ test "property: fugue insert appears in visible list" {
 /// Asserts that deletes succeed (no silent failures).
 fn prop_fugue_delete_visibility(set : InsertSetWithDeletes) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
   )
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
   )
   for op in set.inserts {
-    tree.insert(qc_to_insert_op(op, 0, 1))
+    insert_with_test_sequence(tree, qc_to_insert_op(op, 0, 1))
   }
   let delete_count = set.delete_count
   for i = 0; i < delete_count; i = i + 1 {
@@ -628,7 +635,7 @@ fn prop_fugue_non_interleaving(seq : ConcurrentInsertSeq) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
   // Base text "LR"
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "L",
     origin_left: None,
@@ -636,7 +643,7 @@ fn prop_fugue_non_interleaving(seq : ConcurrentInsertSeq) -> Bool {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("base"),
   })
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(1),
     content: "R",
     origin_left: Some(@fugue.Lv(0)),
@@ -666,7 +673,7 @@ fn prop_fugue_non_interleaving(seq : ConcurrentInsertSeq) -> Bool {
     if i_a < ops_a.length() {
       let (id, origin_left, ts, agent) = ops_a[i_a]
       let content = if agent == "userA" { "X" } else { "Y" }
-      tree.insert({
+      insert_with_test_sequence(tree, {
         id: @fugue.Lv(id),
         content,
         origin_left: Some(@fugue.Lv(origin_left)),
@@ -679,7 +686,7 @@ fn prop_fugue_non_interleaving(seq : ConcurrentInsertSeq) -> Bool {
     if i_b < ops_b.length() {
       let (id, origin_left, ts, agent) = ops_b[i_b]
       let content = if agent == "userA" { "X" } else { "Y" }
-      tree.insert({
+      insert_with_test_sequence(tree, {
         id: @fugue.Lv(id),
         content,
         origin_left: Some(@fugue.Lv(origin_left)),
@@ -756,11 +763,11 @@ pub impl @qc.Shrink for TieBreakCase with fn shrink(_self) {
 }
 
 ///|
-/// Property (L5.7): deterministic tie-breaking by agent then id when timestamps equal.
-/// Guarantees total order for concurrent inserts with identical timestamps.
+/// Property (L5.7): deterministic ordering by stable agent then sequence.
+/// Lamport timestamps do not affect concurrent sibling order.
 fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "L",
     origin_left: None,
@@ -768,7 +775,7 @@ fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("base"),
   })
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(1),
     content: "R",
     origin_left: Some(@fugue.Lv(0)),
@@ -777,7 +784,7 @@ fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
     agent: @fugue.ReplicaId("base"),
   })
   let ts = 42
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(case.id_a),
     content: "X",
     origin_left: Some(@fugue.Lv(0)),
@@ -785,7 +792,7 @@ fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
     timestamp: @fugue.Timestamp(ts),
     agent: @fugue.ReplicaId(case.agent_a),
   })
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(case.id_b),
     content: "Y",
     origin_left: Some(@fugue.Lv(0)),
@@ -793,9 +800,9 @@ fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
     timestamp: @fugue.Timestamp(ts),
     agent: @fugue.ReplicaId(case.agent_b),
   })
-  let first = if case.agent_a.compare(case.agent_b) < 0 {
+  let first = if case.agent_a.lexical_compare(case.agent_b) < 0 {
     "X"
-  } else if case.agent_a.compare(case.agent_b) > 0 {
+  } else if case.agent_a.lexical_compare(case.agent_b) > 0 {
     "Y"
   } else if case.id_a <= case.id_b {
     "X"
@@ -808,7 +815,7 @@ fn prop_fugue_tie_breaking(case : TieBreakCase) -> Bool {
 }
 
 ///|
-test "property: fugue tie-breaking (agent then id)" {
+test "property: fugue RawVersion ordering (agent then sequence)" {
   @qc.quick_check_fn(prop_fugue_tie_breaking)
 }
 
@@ -841,7 +848,7 @@ pub impl @qc.Shrink for BranchingTree with fn shrink(self) {
 fn prop_jump_matches_naive_branching(bt : BranchingTree) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   let parents : Array[Int] = []
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -859,7 +866,7 @@ fn prop_jump_matches_naive_branching(bt : BranchingTree) -> Bool {
     } else {
       Some(@fugue.Lv(parent_idx))
     }
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(i),
       content: "A",
       origin_left: parent_lv,
@@ -890,7 +897,7 @@ test "property: binary lifting matches naive on branching trees" {
 /// Property: depth consistency — every node's parent is its ancestor.
 fn prop_jump_depth_consistency(bt : BranchingTree) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -901,7 +908,7 @@ fn prop_jump_depth_consistency(bt : BranchingTree) -> Bool {
   for i = 1; i < bt.len; i = i + 1 {
     // Spread across existing nodes for branching depth variety
     let parent_idx = (i * 3 + 1) % i
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(i),
       content: "A",
       origin_left: if parent_idx == 0 && i % 4 == 0 {
@@ -937,7 +944,7 @@ test "property: depth consistency — parent is always ancestor" {
 /// Property: binary lifting correct with concurrent inserts (origin_right set).
 fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  tree.insert({
+  insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
     origin_left: None,
@@ -946,7 +953,7 @@ fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
     agent: @fugue.ReplicaId("a"),
   })
   for i = 1; i < chain.len; i = i + 1 {
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(i),
       content: "A",
       origin_left: Some(@fugue.Lv(i - 1)),
@@ -964,7 +971,7 @@ fn prop_jump_via_concurrent_insert(chain : ChainLen) -> Bool {
     5
   }
   for i = 0; i < max_concurrent; i = i + 1 {
-    tree.insert({
+    insert_with_test_sequence(tree, {
       id: @fugue.Lv(base + i),
       content: "X",
       origin_left: Some(@fugue.Lv(i)),
@@ -1020,12 +1027,14 @@ fn append_right_chain(
   length : Int,
 ) -> Array[@fugue.Lv] {
   let ids : Array[@fugue.Lv] = []
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op({ id: 0, content: "A", ts: 0, agent: "chain" }, -1, -1),
   )
   ids.push(@fugue.Lv(0))
   for i = 1; i < length; i = i + 1 {
-    tree.insert(
+    insert_with_test_sequence(
+      tree,
       qc_to_insert_op({ id: i, content: "A", ts: i, agent: "chain" }, i - 1, -1),
     )
     ids.push(@fugue.Lv(i))
@@ -1054,17 +1063,24 @@ fn prop_ancestry_midpoint_concurrency(chain : ChainLen) -> Bool {
     ts: 77,
     agent: "same-agent",
   }
-  tree.insert(qc_to_insert_op(split, midpoint - 1, midpoint))
+  insert_with_test_sequence(
+    tree,
+    qc_to_insert_op(split, midpoint - 1, midpoint),
+  )
   ids.push(@fugue.Lv(split_id))
   if !ancestry_matches_naive(tree, ids) {
     return false
   }
-  tree.insert(qc_to_insert_op(tied_split, midpoint - 1, midpoint))
+  insert_with_test_sequence(
+    tree,
+    qc_to_insert_op(tied_split, midpoint - 1, midpoint),
+  )
   ids.push(@fugue.Lv(tied_split_id))
   if !ancestry_matches_naive(tree, ids) {
     return false
   }
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op(
       { id: right_id, content: "R", ts: 77, agent: "right-agent" },
       midpoint,
@@ -1075,7 +1091,8 @@ fn prop_ancestry_midpoint_concurrency(chain : ChainLen) -> Bool {
   if !ancestry_matches_naive(tree, ids) {
     return false
   }
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op(
       { id: nested_right_id, content: "N", ts: 77, agent: "nested-agent" },
       split_id,
@@ -1099,7 +1116,7 @@ fn prop_ancestry_out_of_order_valid_inserts(set : QcInsertOpSet) -> Bool {
   let ids = append_right_chain(tree, 2)
   let shuffled = shuffle_ops(set.ops, set.shuffle_seed)
   for op in shuffled {
-    tree.insert(qc_to_insert_op(op, 0, 1))
+    insert_with_test_sequence(tree, qc_to_insert_op(op, 0, 1))
     ids.push(@fugue.Lv(op.id))
   }
   ancestry_matches_naive(tree, ids)
@@ -1111,12 +1128,13 @@ test "property: ancestry matches naive for valid out-of-order inserts" {
 }
 
 ///|
-/// Property: equal timestamps and agents leave LV tie-breaking with a parent
-/// structure that agrees with the naive oracle.
+/// Property: equal timestamps and agents use the direct operation ID as the
+/// stable sequence and preserve ancestry.
 fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   let ids = append_right_chain(tree, 2)
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op(
       { id: case.id_a, content: "X", ts: 42, agent: case.agent_a },
       0,
@@ -1124,7 +1142,8 @@ fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
     ),
   )
   ids.push(@fugue.Lv(case.id_a))
-  tree.insert(
+  insert_with_test_sequence(
+    tree,
     qc_to_insert_op(
       { id: case.id_b, content: "Y", ts: 42, agent: case.agent_a },
       0,
@@ -1136,7 +1155,7 @@ fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
 }
 
 ///|
-test "property: ancestry matches naive for timestamp and LV ties" {
+test "property: ancestry matches naive for RawVersion ordering" {
   @qc.quick_check_fn(prop_ancestry_matches_naive_for_ties)
 }
 

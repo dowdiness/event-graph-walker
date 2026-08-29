@@ -547,74 +547,105 @@ Tests version vector operations for efficient frontier representation.
 - [ ] Bloom filters for quick includes checks
 - [ ] Cached frontier conversions
 
-### 4. Text Version Cache Performance (`text/version_cache_benchmark_wbtest.mbt`)
+### 4. Graph-owned Version Performance (`internal/causal_graph/graph_version_benchmark.mbt`)
 
-Tests the cost of cached version reads against the reconstruction oracle. Setup builds 1,000/10,000/100,000 local operations outside the timed closure, warms the cache, and the timed closure only performs `TextState::version()` plus `b.keep`. The reconstruction and lazy-rebuild oracles remain 1,000-operation comparison baselines.
-
-The `Version::advance` benchmarks construct a `Version` with `replica_count` entries and measure the cost of advancing one replica's sequence number.
+The causal graph owns exact frontier and sparse RawVersion membership. Its
+summary starts cold, so documents that never observe a Version pay no summary
+maintenance cost. First observation reconstructs membership from graph entries;
+subsequent graph admissions update the hot summary with the same canonical
+single-identity union algorithm.
 
 **Reproducible commands** (from `event-graph-walker/`):
 
 ```bash
-# JS (primary deployed target)
 moon bench --release --target js \
-  -p dowdiness/event-graph-walker/text \
-  -f version_cache_benchmark_wbtest.mbt
+  -p dowdiness/event-graph-walker/internal/causal_graph \
+  -f graph_version_benchmark.mbt
 
-# wasm-gc (comparison target)
-moon bench --release --target wasm-gc \
-  -p dowdiness/event-graph-walker/text \
-  -f version_cache_benchmark_wbtest.mbt
-
-# Native (reference baseline)
 moon bench --release --target native \
-  -p dowdiness/event-graph-walker/text \
-  -f version_cache_benchmark_wbtest.mbt
+  -p dowdiness/event-graph-walker/internal/causal_graph \
+  -f graph_version_benchmark.mbt
 ```
 
-**Raw release-mode output from one run:**
+**Raw release-mode output from one Gate V0 run:**
 
-Cached version reads (1k, 10k, 100k operations):
-
-| Backend | 1k mean | 10k mean | 100k mean |
-| --- | ---: | ---: | ---: |
-| Native | 17.08 ns | 16.49 ns | 15.48 ns |
-| JS | 11.05 ns | 10.46 ns | 9.27 ns |
-| wasm-gc | 11.40 ns | 26.86 ns | 11.66 ns |
-
-Version reconstruction and lazy rebuild oracles (1000 operations only):
-
-| Backend | Reconstruction mean | Lazy rebuild mean |
+| Benchmark | Native | JS |
 | --- | ---: | ---: |
-| Native | 205.35 µs | 240.43 µs |
-| JS | 70.25 µs | 75.60 µs |
-| wasm-gc | 155.87 µs | 156.79 µs |
+| Warm snapshot, 1 agent/1 range/1k ops | 190.03 ns | 84.11 ns |
+| Warm snapshot, 1 agent/1 range/100k ops | 350.51 ns | 110.77 ns |
+| Cold reconstruction, 1k ops | 82.79 µs | 58.22 µs |
+| Warm fragmented snapshot, 32 agents × 32 ranges | 55.38 µs | 49.69 µs |
+| Sparse insert after copying 32 agents | 1.47 µs | 654.21 ns |
 
-`Version::advance` means by replica count (1, 8, 32 replicas):
+The ordinary text append benchmark also records the cache-state distinction:
 
-| Backend | 1 replica | 8 replicas | 32 replicas |
-| --- | ---: | ---: | ---: |
-| Native | 73.26 ns | 139.59 ns | 387.95 ns |
-| JS | 34.35 ns | 84.38 ns | 265.34 ns |
-| wasm-gc | 47.34 ns | 165.90 ns | 458.33 ns |
+| 1,000-character append | Native | JS |
+| --- | ---: | ---: |
+| Summary remains cold | 5.97 ms | 7.61 ms |
+| Summary heated before first insert | 6.10 ms | 7.46 ms |
 
 **Cautious interpretation:**
 
-The cached version reads remain in the same nanosecond range as operation count grows from 1k to 100k across all three backends. These stable warmed-cache timings are consistent with subsequent `TextState::version()` calls returning the cached value without reconstructing from operations. They do not measure cache invalidation or lazy-rebuild correctness; see `text/version_cache_wbtest.mbt` for those cases.
+Warm snapshot cost follows the number of frontier heads and summary ranges, not
+total operation count; the contiguous 100k case therefore remains
+sub-microsecond. The fragmented fixture intentionally exposes defensive-copy
+cost that a one-agent benchmark hides. Cold reconstruction is linear in graph
+entries. These are raw prototype observations, not thresholds or browser
+latency claims; wasm/wasm-gc figures were not captured in this run.
 
-The wasm-gc 10k measurement has high run-to-run variance, so these numbers are directional observations rather than universal thresholds. The 1k and 100k measurements are more stable.
+#### Adversarial Version resources
 
-The reconstruction oracle (`Version::from_ops`) and lazy rebuild (invalidate + rebuild) remain available as 1k-operation comparison baselines for measuring cache-miss costs. Both paths traverse the operation log, so their cost is expected to grow with history length; this section does not claim 10k/100k rebuild measurements. Invalidation and lazy-rebuild correctness are covered by `text/version_cache_wbtest.mbt`.
+The resource study measured valid schema-2 Versions below 1 MiB before choosing
+a count limit. Encoded bytes alone was insufficient: one agent with 37,000 disjoint
+ranges produced a 1,025,055-byte Version whose closure resolution took 118.57
+ms on JS and 1.22 s on native.
 
-The `Version::advance` measurements show linear growth with replica count, consistent with the O(replicas) scan to find and update the target entry.
+| Shape | Bytes | JS decode / export / resolve | Native decode / export / resolve |
+| --- | ---: | ---: | ---: |
+| 1 agent × 37,000 ranges | 1,025,055 | 64.39 / 20.35 / 118.57 ms | 50.08 / 69.76 ms / 1.22 s |
+| 8,000 agents × 1 range | 816,079 | 46.21 / 14.92 / 8.42 ms | 91.44 / 42.70 / 4.55 ms |
+| 512 agents × 64 ranges | 773,199 | 58.70 / 28.04 / 26.82 ms | 77.39 / 84.46 / 20.40 ms |
+
+The accepted boundary is 4,096 frontier entries, 4,096 agent entries, and
+4,096 total ranges, in addition to a 512 KiB encoded Version limit. The three
+large fixtures above now take the decoder's encoded-byte rejection path before
+JSON parsing; that rejection measured 4.11–4.98 ms on JS. The local encoder
+rejects the 37,000-range Version during cardinality validation, before JSON
+construction; the focused JS benchmark measured 416.70 µs. A separate
+per-agent range limit is redundant because every canonical agent entry is
+nonempty and total ranges already bounds each entry.
+
+| Boundary shape | Bytes | JS decode / export / resolve | Native decode / export / resolve |
+| --- | ---: | ---: | ---: |
+| 1 agent × 4,096 ranges | 105,550 | 5.06 / 1.00 / 1.78 ms | 2.84 / 1.89 / 16.22 ms |
+| 4,096 agents × 1 range | 417,871 | 19.34 / 6.85 / 3.12 ms | 15.50 / 4.59 / 2.02 ms |
+| 64 agents × 64 ranges | 96,719 | 5.24 / 1.94 / 2.79 ms | 3.28 / 2.31 / 1.27 ms |
+
+Process-level RSS is supporting evidence rather than a per-operation allocation
+measurement because the benchmark harness retains fixtures and outputs. Native
+maximum RSS was 13,084 KiB for the baseline graph process and 17,268 KiB for
+the 37,000-range resolve process. JS was 67,244 KiB and 162,228 KiB,
+respectively.
+
+Reproduce the focused measurements with:
+
+```bash
+for target in js native; do
+  moon bench --release --target "$target" \
+    -p dowdiness/event-graph-walker/text \
+    -f version_resource_benchmark.mbt
+  moon bench --release --target "$target" \
+    -p dowdiness/event-graph-walker/internal/causal_graph \
+    -f graph_version_benchmark.mbt
+done
+```
 
 **Key Metrics:**
-- Cached read latency: nanoseconds per `TextState::version()` call
-- Cache state: warmed hit (not a production hit-rate measurement)
-- Reconstruction cost: microseconds for full `Version::from_ops` scan
-- Advance cost: nanoseconds per `Version::advance` call, scales with replica count
-
-These measurements are raw release-mode observations only and make no claim about attribution or end-to-end browser latency.
+- cold reconstruction by operation count
+- warm defensive snapshot by frontier/range cardinality
+- hot sparse insertion by agent/range cardinality
+- end-to-end text mutation with summary cold and hot
+- adversarial Version decode, export, and closure resolution by shape
 
 ### 5. Merge Performance (`internal/branch/branch_merge_benchmark.mbt`)
 

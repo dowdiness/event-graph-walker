@@ -4,18 +4,21 @@
 fn build_ancestry_chain(count : Int) -> FugueTree[String] {
   let tree : FugueTree[String] = FugueTree::new()
   for i = 0; i < count; i = i + 1 {
-    tree.insert({
-      id: Lv(i),
-      content: "a",
-      origin_left: if i == 0 {
-        None
-      } else {
-        Some(Lv(i - 1))
+    tree.insert(
+      {
+        id: Lv(i),
+        content: "a",
+        origin_left: if i == 0 {
+          None
+        } else {
+          Some(Lv(i - 1))
+        },
+        origin_right: None,
+        timestamp: Timestamp(i),
+        agent: ReplicaId("baseline-chain"),
       },
-      origin_right: None,
-      timestamp: Timestamp(i),
-      agent: ReplicaId("baseline-chain"),
-    })
+      sequence=i,
+    )
   }
   tree
 }
@@ -51,18 +54,21 @@ fn benchmark_sequential_right_chain(b : @bench.T, count : Int) -> Unit {
   b.bench(fn() {
     let tree : FugueTree[String] = FugueTree::new()
     for i = 0; i < count; i = i + 1 {
-      tree.insert({
-        id: Lv(i),
-        content: "a",
-        origin_left: if i == 0 {
-          None
-        } else {
-          Some(Lv(i - 1))
+      tree.insert(
+        {
+          id: Lv(i),
+          content: "a",
+          origin_left: if i == 0 {
+            None
+          } else {
+            Some(Lv(i - 1))
+          },
+          origin_right: None,
+          timestamp: Timestamp(i),
+          agent: ReplicaId("baseline-chain"),
         },
-        origin_right: None,
-        timestamp: Timestamp(i),
-        agent: ReplicaId("baseline-chain"),
-      })
+        sequence=i,
+      )
     }
     b.keep(tree.visible_count())
   })
@@ -96,14 +102,17 @@ fn benchmark_midpoint_concurrent_insert(b : @bench.T, count : Int) -> Unit {
     next_tree = (next_tree + 1) % trees.length()
     let id = next_id
     next_id = next_id + 1
-    tree.insert({
-      id: Lv(id),
-      content: "remote",
-      origin_left: Some(Lv(midpoint - 1)),
-      origin_right: Some(Lv(midpoint)),
-      timestamp: Timestamp(id),
-      agent: ReplicaId("concurrent-agent"),
-    })
+    tree.insert(
+      {
+        id: Lv(id),
+        content: "remote",
+        origin_left: Some(Lv(midpoint - 1)),
+        origin_right: Some(Lv(midpoint)),
+        timestamp: Timestamp(id),
+        agent: ReplicaId("concurrent-agent"),
+      },
+      sequence=id,
+    )
     b.keep(tree.visible_count())
   })
 }
@@ -197,14 +206,17 @@ fn benchmark_mixed_insert_and_query(b : @bench.T, count : Int) -> Unit {
     next_tree = (next_tree + 1) % trees.length()
     let id = next_id
     next_id = next_id + 1
-    tree.insert({
-      id: Lv(id),
-      content: "remote",
-      origin_left: Some(Lv(midpoint - 1)),
-      origin_right: Some(Lv(midpoint)),
-      timestamp: Timestamp(id),
-      agent: ReplicaId("mixed-agent"),
-    })
+    tree.insert(
+      {
+        id: Lv(id),
+        content: "remote",
+        origin_left: Some(Lv(midpoint - 1)),
+        origin_right: Some(Lv(midpoint)),
+        timestamp: Timestamp(id),
+        agent: ReplicaId("mixed-agent"),
+      },
+      sequence=id,
+    )
     let mut hits = 0
     for pair in pairs {
       let (ancestor, descendant) = pair

@@ -609,8 +609,9 @@ struct Item {
   parent    : Int      // Parent item ID (-1 for root)
   side      : Side     // Left or Right child
   deleted   : Bool     // Tombstone flag
-  timestamp : Int      // Lamport timestamp
+  timestamp : Int      // Lamport timestamp (causal metadata)
   agent     : String   // Creating agent
+  sequence  : Int      // Per-agent stable operation sequence
 }
 ```
 
@@ -618,9 +619,8 @@ The **total order** on items is defined by (`event-graph-walker/fugue/item.mbt:4
 
 ```
 compare(a, b) =
-  1. Compare by timestamp (ascending)
-  2. If equal, compare by agent (lexicographic)
-  3. If equal, compare by id (ascending)
+  1. Compare by agent (`String::lexical_compare`, ascending)
+  2. If equal, compare by per-agent sequence (ascending)
 ```
 
 The **find_parent_and_side** algorithm (`event-graph-walker/fugue/tree.mbt`) determines
@@ -647,8 +647,8 @@ left children (sorted) -> node -> right children (sorted).
 ### Laws
 
 **L5.1 Insertion Determinism.**
-Given the same `(origin_left, origin_right, timestamp, agent)` tuple,
-`find_parent_and_side` always produces the same `(parent, side)`.
+Given the same `(origin_left, origin_right, agent, sequence)` tuple,
+`find_parent_and_side` and sibling ordering always produce the same result.
 
 - **Test:** `"find parent and side at start"` in `event-graph-walker/fugue/tree.mbt:209`
 - **Test:** `"find parent and side with origin_left"` in `event-graph-walker/fugue/tree.mbt:217`
@@ -682,7 +682,7 @@ forall a, b, c:
   (random chains; verifies transitivity).
 
 **L5.4 Strong List Specification (Insert).**
-After `insert(id, content, origin_left, origin_right, ts, agent)`:
+After `insert(id, content, origin_left, origin_right, ts, agent, sequence)`:
 
 ```
 exists position p in visible sequence:
@@ -720,14 +720,15 @@ A's items contiguously and B's items contiguously (no interleaving).
   `event-graph-walker/fugue/tree_test.mbt:255`
   (example case).
 
-**L5.7 Deterministic Tie-Breaking.**
-For concurrent inserts at the same position with the same timestamp,
-ordering is determined by lexicographic agent comparison.
+**L5.7 Stable RawVersion Ordering.**
+Concurrent same-side siblings are ordered by their stable `(agent, sequence)`
+identity. Agent strings use lexical UTF-16 code-unit order; Lamport timestamps
+and destination-local LVs do not affect sibling order.
 
-- **Rationale:** Ensures all replicas produce identical sequences.
-- **Test (property):** `"property: fugue tie-breaking (agent then id)"` in
-  `event-graph-walker/fugue/tree_properties_test.mbt:532`
-  (random agents/ids with equal timestamps).
+- **Rationale:** Ensures all replicas produce identical sequences and matches
+  the EG-walker reference implementation's event-ID order.
+- **Test (property):** `"property: fugue RawVersion ordering (agent then sequence)"`
+  in `event-graph-walker/fugue/tree_properties_test.mbt`.
 
 **L5.8 Position Round-Trip.**
 
@@ -921,6 +922,52 @@ forall doc:
 - **Test:** `"property: checkout preserves text"` in `event-graph-walker/text/text_properties_test.mbt:259`
 - **Property fn:** `prop_checkout_preserves_text` at `event-graph-walker/text/text_properties_test.mbt:231`
 
+**L7.7a Exact Text Version.**
+The causal graph owns both an exact RawVersion frontier and a canonical
+per-agent range summary. A text `Version` is an opaque snapshot façade over
+those graph facts. Checkout uses the frontier and rejects a decoded Version
+unless the frontier is maximal and its ranges equal the resident closure. Delta
+export uses exact range membership; sequence order alone does not imply
+causality.
+
+```text
+Version.frontier = maximal identities in the checkpoint
+Version.ranges   = identities in closure(Version.frontier)
+causal(op)       = transitive closure of op.parents
+```
+
+Schema 2 serializes both values. Text Version schema 1 is rejected: a flat
+maximum cannot represent sparse identity knowledge or an exact causal cut.
+
+- **Tests:** `"graph version canonicalizes sparse identities with one union algorithm"`,
+  `"resolve rejects a redundant nonmaximal checkpoint"`,
+  `"same-agent causal fork round-trips an exact checkout version"`, and
+  `"delete and undelete versions round-trip checkout and delta"`
+
+**L7.7b Bounded Text Version Codec.**
+A text Version must satisfy all fixed resource bounds before encoding succeeds
+or decoding reaches graph resolution:
+
+```text
+encoded_utf8_bytes <= 524,288
+frontier.length    <= 4,096
+agent_entries      <= 4,096
+total_ranges       <= 4,096
+```
+
+The decoder checks encoded bytes before JSON parsing and cardinality after
+strict envelope decoding but before `GraphVersion` construction or graph
+resolution. The encoder checks cardinality before serialization and encoded
+UTF-8 bytes before returning. The total-range bound also bounds ranges per
+canonical nonempty agent entry. Either direction raises a classified
+`LimitExceeded`; neither truncates or translates a Version.
+
+- **Tests:** `"Version accepts the 4096-entry resource boundaries"`,
+  the encoder rejection tests for frontier, agent, range, and byte limits,
+  `"admitted fragmented Version reports local encoding failure"`, the matching
+  decoder rejection tests, and
+  `"Version rejects encoded input above 512 KiB before parsing"`
+
 **L7.8 Empty Document.**
 A new document has length zero and is empty.
 
@@ -964,7 +1011,9 @@ forall msg: msg.is_empty() == (msg.op_count() == 0)
 - **Property fn:** `prop_sync_message_empty_consistent` at `event-graph-walker/text/text_properties_test.mbt:304`
 
 **L7.12 Export Since Current Is Empty.**
-Exporting since the current version produces an empty message.
+Exporting since the current version produces an empty message. For sparse
+same-agent histories, membership is tested against canonical sequence ranges,
+not `sequence <= maximum`.
 
 ```
 forall doc:
@@ -1125,15 +1174,18 @@ forall editor:
 
 1. By **L7.1** (sync convergence), two `TextDoc` instances receiving the
    same operations produce identical text.
-2. Operations are identified by `(agent, seq)` pairs via version vectors.
+2. Operations are identified by stable `(agent, seq)` pairs. Text causality is
+   represented by declared parents and exact frontiers; text delta knowledge is
+   summarized by per-agent sequence ranges. Flat version vectors remain valid
+   only in packages that enforce a same-agent causal chain.
    By **L4.4-L4.7** (semilattice properties), `merge(vv_A, vv_B)` correctly
    captures the union of known operations.
 3. The FugueMax tree (**L5.1**, **L5.4**, **L5.5**) is a deterministic
    function of the operation set: given the same items with the same
-   `(origin_left, origin_right, timestamp, agent)` tuples, the tree
-   structure and in-order traversal are identical.
-4. By **L4.15** (Lamport clock) and **L5.7** (deterministic tie-breaking),
-   concurrent operations are resolved identically on all replicas.
+   `(origin_left, origin_right, agent, sequence)` tuples, the tree structure
+   and in-order traversal are identical.
+4. By **L5.7** (stable RawVersion ordering), concurrent operations are resolved
+   identically on all replicas without destination-local ordering state.
 
 **Tested via:** L7.1, L7.2, L7.3 (convergence, idempotence, bidirectional).
 

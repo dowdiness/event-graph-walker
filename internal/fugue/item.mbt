@@ -19,9 +19,9 @@
 ///   document; right children appear *after*.
 ///
 /// - **Sibling ordering**: Children on the same side of the same parent are
-///   sorted by Lamport timestamp (ascending), with agent ID as a
-///   deterministic tiebreaker (lexicographic). This ensures all replicas
-///   converge to identical ordering regardless of operation arrival order.
+///   sorted by stable RawVersion identity: agent ID in lexical UTF-16 order,
+///   then per-replica sequence. This matches the EG-walker reference ordering
+///   regardless of destination-local operation arrival order.
 ///
 /// - **Tombstones**: Deleted nodes are never removed from the tree. They
 ///   become tombstones (`deleted = true`) so that concurrent operations
@@ -114,12 +114,14 @@ pub(all) struct Item[T] {
   /// Number of active delete operations targeting this item (two-count merge).
   /// Managed exclusively by the merge code — FugueTree mutation methods do not touch it.
   mut delete_count : Int
-  /// Lamport timestamp used as the primary sort key when ordering siblings
-  /// that share the same parent and side.
+  /// Lamport timestamp retained for causal metadata and diagnostics.
   timestamp : Timestamp
-  /// Replica that created this item. Used as a deterministic tiebreaker when
-  /// two siblings have equal Lamport timestamps.
+  /// Replica that created this item. Same-side siblings are ordered by this
+  /// stable identity using lexical UTF-16 code-unit order.
   agent : ReplicaId
+  /// Per-replica operation sequence. Together with `agent`, this is the
+  /// stable event identity used by the EG-walker reference implementation.
+  sequence : Int
 } derive(Debug, Eq)
 
 ///|
@@ -139,20 +141,11 @@ pub impl[T : Debug] Show for Item[T] with fn output(self, logger) {
 /// before `other`, zero if they are equal, positive if `self` comes after
 /// `other`.
 impl[T : Eq] Compare for Item[T] with fn compare(self, other) -> Int {
-  // First compare by Lamport timestamp for causal ordering
-  let ts_cmp = self.timestamp.compare(other.timestamp)
-  if ts_cmp != 0 {
-    return ts_cmp
-  }
-
-  // If timestamps equal, compare by agent for deterministic tiebreaking
-  let agent_cmp = self.agent.compare(other.agent)
+  let agent_cmp = self.agent.0.lexical_compare(other.agent.0)
   if agent_cmp != 0 {
     return agent_cmp
   }
-
-  // If agents equal, compare by ID
-  self.id.compare(other.id)
+  Compare::compare(self.sequence, other.sequence)
 }
 
 ///|
@@ -175,6 +168,7 @@ fn[T] Item::new(
   side : Side,
   timestamp : Timestamp,
   agent : ReplicaId,
+  sequence : Int,
 ) -> Item[T] {
   {
     id,
@@ -189,6 +183,7 @@ fn[T] Item::new(
     delete_count: 0,
     timestamp,
     agent,
+    sequence,
   }
 }
 

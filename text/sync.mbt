@@ -8,6 +8,24 @@ let text_version_format : String = "event-graph-walker/text-version"
 let text_sync_format : String = "event-graph-walker/text-sync"
 
 ///|
+let text_schema : Int = 2
+
+///|
+let text_sync_canonical_domain : Bytes = b"event-graph-walker:text-sync:v2"
+
+///|
+let text_version_max_encoded_bytes : Int = 512 * 1024
+
+///|
+let text_version_max_frontier_entries : Int = 4096
+
+///|
+let text_version_max_agents : Int = 4096
+
+///|
+let text_version_max_total_ranges : Int = 4096
+
+///|
 fn stable_id_key(replica_id : String, sequence : Int) -> String {
   replica_id.length().to_string() +
   ":" +
@@ -81,9 +99,6 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
   match op.origin_right() {
     Some(raw) => deps.push(raw)
     None => ()
-  }
-  if op.seq() > 0 {
-    deps.push(@core.RawVersion(op.agent(), op.seq() - 1))
   }
   let by_key : Map[String, @core.RawVersion] = Map([])
   for dep in deps {
@@ -378,7 +393,7 @@ fn canonical_order_counted(
 }
 
 ///|
-/// A version-1 text synchronization message.
+/// A schema-2 text synchronization message.
 pub(all) struct SyncMessage {
   // Raw storage is private; the structural array carries the parse proof.
   priv operations : Array[@core.Op]
@@ -473,26 +488,85 @@ pub(all) struct SyncSession {
 }
 
 ///|
-fn version_entries_json(entries : Array[VersionEntry]) -> Json {
+fn version_frontier_json(frontier : Array[@core.RawVersion]) -> Json {
   let values : Array[Json] = []
-  for entry in entries {
+  for raw in frontier {
+    values.push(identity_json(raw))
+  }
+  values.to_json()
+}
+
+///|
+fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
+  let values : Array[Json] = []
+  for entry in ranges {
+    let agent = entry.0
+    let entry_ranges = entry.1
+    let parts : Array[Json] = []
+    for range in entry_ranges {
+      parts.push(
+        Json::object({ "start": range.0.to_json(), "end": range.1.to_json() }),
+      )
+    }
     values.push(
-      Json::object({
-        "replica_id": entry.replica_id.to_json(),
-        "sequence": entry.sequence.to_json(),
-      }),
+      Json::object({ "replica_id": agent.to_json(), "ranges": parts.to_json() }),
     )
   }
   values.to_json()
 }
 
 ///|
-pub fn Version::to_json_string(self : Version) -> String {
-  Json::object({
-    "schema": (1).to_json(),
+fn ensure_text_version_limit(
+  kind : @sync.LimitKind,
+  limit : Int,
+  actual : Int,
+) -> Unit raise TextError {
+  if actual > limit {
+    raise TextError::SyncFailed(
+      @sync.Failure::LimitExceeded(kind~, limit~, actual~),
+    )
+  }
+}
+
+///|
+/// Encode this Version as canonical schema-2 JSON.
+///
+/// Raises `LimitExceeded` without emitting a partial token when the exact
+/// checkpoint or sparse knowledge cannot fit the fixed Version wire envelope.
+pub fn Version::to_json_string(self : Version) -> String raise TextError {
+  let frontier = self.graph_version.frontier()
+  ensure_text_version_limit(
+    @sync.LimitKind::DecodedOperations,
+    text_version_max_frontier_entries,
+    frontier.length(),
+  )
+  let ranges = self.graph_version.ranges()
+  ensure_text_version_limit(
+    @sync.LimitKind::DecodedOperations,
+    text_version_max_agents,
+    ranges.length(),
+  )
+  let mut total_ranges = 0
+  for entry in ranges {
+    total_ranges = total_ranges + entry.1.length()
+    ensure_text_version_limit(
+      @sync.LimitKind::DecodedOperations,
+      text_version_max_total_ranges,
+      total_ranges,
+    )
+  }
+  let encoded = Json::object({
+    "schema": text_schema.to_json(),
     "format": text_version_format.to_json(),
-    "entries": version_entries_json(self.entries),
+    "frontier": version_frontier_json(frontier),
+    "ranges": version_ranges_json(ranges),
   }).stringify()
+  ensure_text_version_limit(
+    @sync.LimitKind::EncodedBytes,
+    text_version_max_encoded_bytes,
+    @utf8.encode(encoded).length(),
+  )
+  encoded
 }
 
 ///|
@@ -532,7 +606,8 @@ priv struct WireIdentity {
 priv struct WireVersionEnvelope {
   schema : Int
   format : String
-  entries : Array[Json]
+  frontier : Array[Json]
+  ranges : Array[Json]
 } derive(FromJson)
 
 ///|
@@ -570,46 +645,90 @@ fn decode_identity(json : Json) -> @core.RawVersion raise {
 }
 
 ///|
+/// Decode and structurally validate one bounded schema-2 Version token.
 pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
   if !is_well_formed_utf16(json_str) {
     raise TextError::SyncFailed(
       @sync.Failure::MalformedMessage(detail="invalid text version JSON"),
     )
   }
-  if @utf8.encode(json_str).length() >
-    @sync.Limits::default().max_encoded_bytes() {
-    raise TextError::SyncFailed(
-      @sync.Failure::LimitExceeded(
-        kind=@sync.LimitKind::EncodedBytes,
-        limit=@sync.Limits::default().max_encoded_bytes(),
-        actual=@utf8.encode(json_str).length(),
-      ),
-    )
-  }
+  let encoded_bytes = @utf8.encode(json_str).length()
+  ensure_text_version_limit(
+    @sync.LimitKind::EncodedBytes,
+    text_version_max_encoded_bytes,
+    encoded_bytes,
+  )
   try {
     let root = @json.parse(json_str)
     let object = match root {
       Json::Object(value) => value
       _ => fail("version envelope must be an object")
     }
-    guard exact_object_fields(object, ["schema", "format", "entries"]) else {
+    guard exact_object_fields(object, ["schema", "format", "frontier", "ranges"]) else {
       fail("version envelope contains missing or unknown fields")
     }
     let envelope : WireVersionEnvelope = @json.from_json(root)
-    guard envelope.schema == 1 && envelope.format == text_version_format else {
+    guard envelope.schema == text_schema &&
+      envelope.format == text_version_format else {
       fail("unsupported version envelope")
     }
-    let entries : Array[VersionEntry] = []
-    let seen : Map[String, Bool] = Map([])
-    for value in envelope.entries {
-      let raw = decode_identity(value)
-      guard seen.get(raw.agent) is None else { fail("duplicate version entry") }
-      seen[raw.agent] = true
-      entries.push({ replica_id: raw.agent, sequence: raw.seq })
+    ensure_text_version_limit(
+      @sync.LimitKind::DecodedOperations,
+      text_version_max_frontier_entries,
+      envelope.frontier.length(),
+    )
+    let frontier : Array[@core.RawVersion] = []
+    for value in envelope.frontier {
+      frontier.push(decode_identity(value))
     }
-    entries.sort_by(fn(a, b) { a.replica_id.compare(b.replica_id) })
-    Version(entries)
+    ensure_text_version_limit(
+      @sync.LimitKind::DecodedOperations,
+      text_version_max_agents,
+      envelope.ranges.length(),
+    )
+    let ranges : Array[(String, Array[(UInt, UInt)])] = []
+    let mut total_ranges = 0
+    for value in envelope.ranges {
+      let obj = match value {
+        Json::Object(fields) => fields
+        _ => fail("range entry must be an object")
+      }
+      guard exact_object_fields(obj, ["replica_id", "ranges"]) else {
+        fail("range entry contains missing or unknown fields")
+      }
+      let agent : String = @json.from_json(obj["replica_id"])
+      let encoded_ranges : Array[Json] = @json.from_json(obj["ranges"])
+      total_ranges = total_ranges + encoded_ranges.length()
+      ensure_text_version_limit(
+        @sync.LimitKind::DecodedOperations,
+        text_version_max_total_ranges,
+        total_ranges,
+      )
+      let agent_ranges : Array[(UInt, UInt)] = []
+      for value in encoded_ranges {
+        let fields = match value {
+          Json::Object(fields) => fields
+          _ => fail("range must be an object")
+        }
+        guard exact_object_fields(fields, ["start", "end"]) else {
+          fail("range contains missing or unknown fields")
+        }
+        let start : UInt = @json.from_json(fields["start"])
+        let end : UInt = @json.from_json(fields["end"])
+        agent_ranges.push((start, end))
+      }
+      ranges.push((agent, agent_ranges))
+    }
+    Version::from_graph_version(
+      @causal_graph.GraphVersion::from_parts(frontier, ranges) catch {
+        _ => fail("invalid version")
+      },
+    )
   } catch {
+    TextError::SyncFailed(@sync.Failure::LimitExceeded(kind~, limit~, actual~)) =>
+      raise TextError::SyncFailed(
+        @sync.Failure::LimitExceeded(kind~, limit~, actual~),
+      )
     _ =>
       raise TextError::SyncFailed(
         @sync.Failure::MalformedMessage(detail="invalid text version JSON"),
@@ -665,7 +784,7 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
     heads.push(identity_json(head))
   }
   Json::object({
-    "schema": (1).to_json(),
+    "schema": text_schema.to_json(),
     "format": text_sync_format.to_json(),
     "operations": operations.to_json(),
     "heads": heads.to_json(),
@@ -757,7 +876,7 @@ fn decode_sync_json(
       fail("sync envelope contains missing or unknown fields")
     }
     let envelope : WireSyncEnvelope = @json.from_json(root)
-    guard envelope.schema == 1 && envelope.format == text_sync_format else {
+    guard envelope.schema == text_schema && envelope.format == text_sync_format else {
       fail("unsupported sync envelope")
     }
     let operations : Array[@core.Op] = []
@@ -838,7 +957,7 @@ pub fn SyncSession::export_since(
 ) -> SyncMessage raise TextError {
   let operations : Array[@core.Op] = []
   for op in self.doc.inner.get_all_ops() {
-    if !peer_version.includes(op.agent(), op.seq()) {
+    if !peer_version.graph().contains(@core.RawVersion(op.agent(), op.seq())) {
       operations.push(op)
     }
   }
@@ -921,13 +1040,6 @@ pub fn SyncSession::apply_transition_with_limits(
   }
   let outcome = admission.outcome
   let projection = admission.projection
-  let receipt = match outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => receipt
-    @oplog.AdmissionOutcome::Partial(receipt~, ..) => receipt
-  }
-  for op in receipt.committed() {
-    self.doc.advance_cached_version(op)
-  }
   let effects : Array[TextEffect] = []
   let availability = match admission.effect_availability {
     @document.ProjectionEffectAvailability::Exact(projected) => {
@@ -936,13 +1048,7 @@ pub fn SyncSession::apply_transition_with_limits(
           @document.ProjectionEffect::Insert(position~, text~) =>
             effects.push(TextEffect::Insert(Pos::at(position), text))
           @document.ProjectionEffect::Delete(start~, end~) =>
-            effects.push(
-              TextEffect::Delete(
-                Range::from_ints(start, end) catch {
-                  error => raise error
-                },
-              ),
-            )
+            effects.push(TextEffect::Delete(Range::from_ints(start, end)))
         }
       }
       TextEffectAvailability::Exact(effects[:])
@@ -1066,7 +1172,7 @@ fn write_optional_raw(buf : Buffer, raw : @core.RawVersion?) -> Unit {
 /// Domain-separated canonical logical bytes for hashing and signing.
 pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   let buffer = Buffer()
-  buffer.write_bytes(b"event-graph-walker:text-sync:v1")
+  buffer.write_bytes(text_sync_canonical_domain)
   write_uvarint(buffer, self.operations.length())
   for structural in self.structural_operations {
     let op = structural.raw()

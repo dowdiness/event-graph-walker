@@ -141,12 +141,6 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           detail="delete operation missing origin",
         ),
       )
-    SequenceAncestryViolation(raw~) =>
-      TextError::SyncFailed(
-        @sync.Failure::MalformedMessage(
-          detail="operation does not causally descend from its replica predecessor: \{raw}",
-        ),
-      )
     OriginTargetNotInsert(operation~, target~) =>
       TextError::SyncFailed(
         @sync.Failure::MalformedMessage(
@@ -196,10 +190,23 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
       TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~))
     CausalGraphError(error~) =>
       match error {
+        @causal_graph.CausalGraphError::InvalidIdentity(raw~) =>
+          TextError::SyncFailed(
+            @sync.Failure::MalformedMessage(
+              detail="invalid operation identity \{raw.agent}:\{raw.seq}",
+            ),
+          )
         @causal_graph.CausalGraphError::MissingParent(lv~) =>
           TextError::SyncFailed(
             @sync.Failure::MalformedMessage(
               detail="causal graph missing parent at local version \{lv}",
+            ),
+          )
+        @causal_graph.CausalGraphError::DuplicateVersion(raw~) =>
+          TextError::SyncFailed(
+            @sync.Failure::ConflictingIdentity(
+              replica_id=raw.agent,
+              sequence=raw.seq,
             ),
           )
         @causal_graph.CausalGraphError::MissingEntry(lv~) =>

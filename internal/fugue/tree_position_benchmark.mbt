@@ -3,14 +3,17 @@ fn build_position_bench_tree(n : Int) -> FugueTree[String] {
   let tree : FugueTree[String] = FugueTree::new()
   let mut left : Lv? = None
   for i in 0..<n {
-    tree.insert({
-      id: Lv(i),
-      content: "a",
-      origin_left: left,
-      origin_right: None,
-      timestamp: Timestamp(i),
-      agent: ReplicaId("agent0"),
-    })
+    tree.insert(
+      {
+        id: Lv(i),
+        content: "a",
+        origin_left: left,
+        origin_right: None,
+        timestamp: Timestamp(i),
+        agent: ReplicaId("agent0"),
+      },
+      sequence=i,
+    )
     left = Some(Lv(i))
   }
   tree

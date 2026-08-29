@@ -9,9 +9,6 @@ pub(all) suberror OpLogError {
   /// Contrast with BranchError::MissingOrigin and DocumentError::MissingOrigin
   /// which carry the RawVersion and indicate missing graph entries.
   MissingOrigin
-  /// A non-initial replica operation does not causally descend from its
-  /// same-agent predecessor through declared parents.
-  SequenceAncestryViolation(raw~ : @core.RawVersion)
   /// An operation origin or delete/undelete target names a non-Insert.
   OriginTargetNotInsert(
     operation~ : @core.RawVersion,

@@ -14,7 +14,7 @@ MoonBit package `dowdiness/event-graph-walker` implements collaborative editing 
 
 Package metadata in `moon.mod`:
 
-- Version: `0.7.1`
+- Version: `0.8.0`
 - Repository: <https://github.com/dowdiness/event-graph-walker>
 - License: `Apache-2.0`
 - Description: `Implementation of the eg-walker CRDT algorithm with FugueMax sequence CRDT`
@@ -136,7 +136,8 @@ Primary text-editing API.
 - `version()` returns a `Version` for later checkout or incremental sync.
 - `sync().export_all()`, `sync().export_since(version)`, and `sync().apply(message)` exchange operations between replicas.
 - `checkout(version)` returns a read-only `TextView`.
-- `SyncMessage::to_json_string` / `from_json_string` provide the strict v1 transport codec; `to_canonical_bytes` provides deterministic bytes for hashing or signing.
+- `SyncMessage::to_json_string` / `from_json_string` provide the strict schema-2 transport codec; `to_canonical_bytes` uses the `event-graph-walker:text-sync:v2` domain for hashing or signing.
+- `Version::to_json_string` / `from_json_string` provide the bounded schema-2 checkpoint codec. Both directions raise `TextError`; encoding emits nothing when the Version exceeds the fixed wire envelope.
 
 ### `tree`
 
@@ -251,7 +252,8 @@ moon bench --release
 
 - [Documentation index](docs/README.md) - reading order and audience split
 - [Worked examples](docs/EXAMPLES.md) - sync, undo/redo, historical checkout
-- [v0.5 migration guide](docs/MIGRATING_TO_0.5.md) - source migration from v0.4; unchanged v0.4 wire envelopes
+- [Text schema-2 migration guide](docs/MIGRATING_TEXT_SCHEMA_2.md) - coordinated breaking upgrade for text peers and saved Versions
+- [v0.5 migration guide](docs/MIGRATING_TO_0.5.md) - historical source migration from v0.4
 - [Undoable API migration guide](docs/MIGRATING_UNDO_API.md) - migrate custom Undoable adapters to Applied/Stale results
 - [Walker usage](docs/WALKER_USAGE.md) - lower-level walker and oplog APIs
 - [Benchmarks](docs/BENCHMARKS.md) - benchmark commands and notes

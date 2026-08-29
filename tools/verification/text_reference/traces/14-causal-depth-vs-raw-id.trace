@@ -1,0 +1,13 @@
+# Same-length replica IDs isolate Lamport ordering from String ordering.
+replica a
+replica b
+insert a 0 L
+insert a 1 R
+insert a 2 X
+sync a b
+delete a 2
+insert a 1 A
+insert b 1 B
+sync a b
+sync b a
+expect-converged a b

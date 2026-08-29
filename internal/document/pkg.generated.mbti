@@ -4,6 +4,7 @@ package "dowdiness/event-graph-walker/internal/document"
 import {
   "dowdiness/event-graph-walker/history",
   "dowdiness/event-graph-walker/internal/branch",
+  "dowdiness/event-graph-walker/internal/causal_graph",
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/oplog",
@@ -42,6 +43,7 @@ pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::clear_pending(Self) -> Unit
+pub fn Document::current_graph_version(Self) -> @causal_graph.GraphVersion
 pub fn Document::delete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_if_visible(Self, Int) -> TargetEditResult raise DocumentError
@@ -60,6 +62,7 @@ pub fn Document::new(String) -> Self
 pub fn Document::pending_count(Self) -> Int
 pub fn Document::prepare_for_mutation(Self) -> Unit raise DocumentError
 pub fn Document::replace_range(Self, Int, Int, String) -> Unit raise DocumentError
+pub fn Document::resolve_graph_version(Self, @causal_graph.GraphVersion) -> @core.Frontier?
 pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::undelete_if_deleted(Self, Int) -> TargetEditResult raise DocumentError
@@ -118,4 +121,3 @@ pub impl @rle.Spanning for VisibleRun
 // Type aliases
 
 // Traits
-

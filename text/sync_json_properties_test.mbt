@@ -122,6 +122,43 @@ test "property: Version::from_json_string fails safely on malformed JSON" {
 }
 
 ///|
+test "schema 2 Version rejects a frontier absent from its range summary" {
+  let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"ranges\":[{\"replica_id\":\"bob\",\"ranges\":[{\"start\":0,\"end\":1}]}]}"
+  try Version::from_json_string(malformed) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    _ => fail("expected malformed Version")
+  } noraise {
+    _ => fail("frontier without range membership must be rejected")
+  }
+}
+
+///|
+test "schema 2 Version rejects nonempty ranges with an empty frontier" {
+  let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":1}]}]}"
+  try Version::from_json_string(malformed) catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    _ => fail("expected malformed Version")
+  } noraise {
+    _ => fail("nonempty ranges require a frontier")
+  }
+}
+
+///|
+test "checkout rejects a range summary missing a frontier ancestor" {
+  let document = try! TextState::new("alice")
+  try! document.insert(Pos::at(0), "AB")
+  let inconsistent = try! Version::from_json_string(
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":1,\"end\":2}]}]}",
+  )
+  try document.checkout(inconsistent) catch {
+    TextError::VersionNotFound => ()
+    _ => fail("expected VersionNotFound")
+  } noraise {
+    _ => fail("checkout must validate the complete frontier closure")
+  }
+}
+
+///|
 fn prop_invalid_sync_message_json_fails(seed : Int) -> Bool {
   let invalid = if seed % 2 == 0 { "" } else { "{" }
   let result : Result[SyncMessage, TextError] = Ok(
@@ -136,13 +173,32 @@ fn prop_invalid_sync_message_json_fails(seed : Int) -> Bool {
 }
 
 ///|
+test "text sync emits schema 2 and rejects schema 1" {
+  let empty = try! TextState::new("schema-two")
+  inspect(
+    try! empty.sync().export_all().to_json_string(),
+    content="{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}",
+  )
+  try
+    SyncMessage::from_json_string(
+      "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}",
+    )
+  catch {
+    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    _ => fail("expected malformed schema-1 sync message")
+  } noraise {
+    _ => fail("schema-1 sync message must be rejected")
+  }
+}
+
+///|
 test "property: SyncMessage::from_json_string fails safely on malformed JSON" {
   @qc.quick_check_fn(prop_invalid_sync_message_json_fails)
 }
 
 ///|
 fn prop_malformed_sync_content_rejected(seed : Int) -> Bool {
-  // Build a legacy sync payload that includes a malformed insert op.
+  // Build a schema-2 sync payload that includes a malformed insert op.
   // A lone surrogate should be rejected as malformed UTF-16.
   let malformed_char = Int::unsafe_to_char(0xD800).to_string()
   let bad_op = @core.Op::insert(

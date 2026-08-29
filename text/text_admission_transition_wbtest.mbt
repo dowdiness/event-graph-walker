@@ -176,7 +176,7 @@ test "transition duplicate-only and pending-only expose exact empty effects" {
   assert_eq(duplicate_report.duplicate_operations(), 1)
 
   let pending_message = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"transition-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-pending\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"transition-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-pending\",\"sequence\":1}]}",
   )
   let pending = try! receiver.sync().apply_transition(pending_message)
   match pending.availability() {
@@ -193,11 +193,11 @@ test "transition duplicate-only and pending-only expose exact empty effects" {
 test "transition dependency drain exposes one sequential effect stream" {
   let receiver = try! TextState::new("transition-drain-receiver")
   let child = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-drain\",\"sequence\":1},\"parents\":[{\"replica_id\":\"transition-drain\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"transition-drain\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-drain\",\"sequence\":1}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-drain\",\"sequence\":1},\"parents\":[{\"replica_id\":\"transition-drain\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"transition-drain\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-drain\",\"sequence\":1}]}",
   )
   ignore(try! receiver.sync().apply(child))
   let parent = try! SyncMessage::from_json_string(
-    "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-drain\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-drain\",\"sequence\":0}]}",
+    "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-drain\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-drain\",\"sequence\":0}]}",
   )
 
   let transition = try! receiver.sync().apply_transition(parent)

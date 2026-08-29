@@ -1,0 +1,10 @@
+{
+  "name": "event-graph-walker-text-reference-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "PROTOTYPE: differential text replay against the EG-walker reference implementation",
+  "dependencies": {
+    "reference-frh": "1.0.0"
+  }
+}

@@ -62,129 +62,46 @@ pub fn Range::end(self : Range) -> Pos {
 }
 
 ///|
-/// One validated version-vector entry.
-priv struct VersionEntry {
-  replica_id : String
-  sequence : Int
-} derive(Debug, Eq)
-
-///|
-/// Opaque version identifier representing the document state at a point in time.
-///
-/// Versions are validated version vectors keyed by stable replica ID.
+/// Opaque version identifier representing a document state at a point in time.
+/// Exact checkpoint and sparse membership semantics are owned by the causal
+/// graph; this façade only preserves the public text type.
 pub(all) struct Version {
-  priv entries : Array[VersionEntry]
-} derive(Debug, Eq)
+  priv graph_version : @causal_graph.GraphVersion
+} derive(Debug, Eq, Hash)
 
 ///|
 pub impl Show for Version with fn output(self, logger) {
   logger.write_string("Version(")
-  for i = 0; i < self.entries.length(); i = i + 1 {
+  let frontier = self.graph_version.frontier()
+  for i = 0; i < frontier.length(); i = i + 1 {
     if i > 0 {
       logger.write_string(", ")
     }
-    logger.write_string(self.entries[i].replica_id)
+    let raw = frontier[i]
+    logger.write_string(raw.agent)
     logger.write_string(":")
-    logger.write_string(self.entries[i].sequence.to_string())
+    logger.write_string(raw.seq.to_string())
   }
   logger.write_string(")")
 }
 
 ///|
-/// Internal validated constructor. Entries must already be sorted and unique.
-fn Version::Version(entries : Array[VersionEntry]) -> Version {
-  { entries, }
-}
-
-///|
-fn Version::from_ops(ops : Array[@core.Op]) -> Version {
-  let maxima : Map[String, Int] = Map([])
-  for op in ops {
-    match maxima.get(op.agent()) {
-      Some(sequence) => if op.seq() > sequence { maxima[op.agent()] = op.seq() }
-      None => maxima[op.agent()] = op.seq()
-    }
-  }
-  let replica_ids = maxima.keys().to_array()
-  replica_ids.sort()
-  let entries : Array[VersionEntry] = []
-  for replica_id in replica_ids {
-    match maxima.get(replica_id) {
-      Some(sequence) => entries.push({ replica_id, sequence })
-      None => ()
-    }
-  }
-  Version(entries)
-}
-
-///|
-/// Advance one cached version-vector entry without rescanning the operation log.
-///
-/// The copied array keeps `Version` values immutable to callers. The linear
-/// scan is over replica entries rather than operations, which is the hot-path
-/// trade-off for local edits.
-fn Version::advance(
-  self : Version,
-  replica_id : String,
-  sequence : Int,
-) -> Version {
-  let entries = self.entries.copy()
-  for i = 0; i < entries.length(); i = i + 1 {
-    if entries[i].replica_id == replica_id {
-      if sequence > entries[i].sequence {
-        entries[i] = { replica_id, sequence }
-      }
-      return Version(entries)
-    }
-  }
-  entries.push({ replica_id, sequence })
-  entries.sort_by((a, b) => a.replica_id.compare(b.replica_id))
-  Version(entries)
-}
-
-///|
-/// Explicit cache state keeps invalidation and lazy rebuilding in one place.
-priv enum VersionCache {
-  Ready(Version)
-  Invalid
-}
-
-///|
-fn VersionCache::empty() -> VersionCache {
-  Ready(Version::empty())
-}
-
-///|
-fn VersionCache::advance(self : VersionCache, op : @core.Op) -> VersionCache {
-  match self {
-    Ready(version) => Ready(version.advance(op.agent(), op.seq()))
-    Invalid => Invalid
-  }
-}
-
-///|
-fn VersionCache::invalidate(self : VersionCache) -> VersionCache {
-  match self {
-    Ready(_) | Invalid => Invalid
-  }
-}
-
-///|
-fn Version::includes(
-  self : Version,
-  replica_id : String,
-  sequence : Int,
-) -> Bool {
-  for entry in self.entries {
-    if entry.replica_id == replica_id {
-      return sequence <= entry.sequence
-    }
-  }
-  false
-}
-
-///|
-/// Create an empty version (represents initial state before any edits).
 pub fn Version::empty() -> Version {
-  Version([])
+  Version::{
+    graph_version: @causal_graph.GraphVersion::from_parts([], []) catch {
+      _ => abort("empty graph version must be valid")
+    },
+  }
+}
+
+///|
+fn Version::from_graph_version(
+  graph_version : @causal_graph.GraphVersion,
+) -> Version {
+  { graph_version, }
+}
+
+///|
+fn Version::graph(self : Version) -> @causal_graph.GraphVersion {
+  self.graph_version
 }
