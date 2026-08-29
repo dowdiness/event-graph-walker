@@ -58,17 +58,23 @@ pass. Cold and hot 1,000-character append remain near the prior baseline. Cold
 text-owned sparse implementation; fragmented warm snapshots have a dedicated
 32-agent × 32-range benchmark.
 
-## Consequences and unresolved migration work
+## Consequences and release evidence
 
 This replaces ADR 0008's text sequence-ancestry rule, not its ownership and
-atomic-admission decisions. Release preparation still requires:
+atomic-admission decisions. The schema-2 release gates are complete:
 
-- persisted-Version and saved-document breaking-release evidence;
-- downstream Canopy consumer validation;
-- explicit resource limits for hostile range fragmentation if encoded-byte
-  limits prove insufficient; and
-- a separate decision before changing container sequence semantics.
+- persisted schema-1 text state is rejected and removed by the Canopy browser
+  boundary instead of being converted;
+- a Canopy downstream probe against the exact EGW candidate passes all-target
+  tests, the JavaScript build, and schema-1 persistence and FFI rejection;
+- adversarial fragmentation measurements establish fixed decoder limits of
+  512 KiB, 4,096 frontier entries, 4,096 agent entries, and 4,096 total ranges;
+  and
+- the migration contract is recorded in `docs/MIGRATING_TEXT_SCHEMA_2.md`.
 
-Gate V0 does not prove arbitrary mixed-operation partition schedules,
-persistence, or symbolic safety. Mixed text schemas are intentionally
-non-interoperable.
+The Canopy migration must land after the EGW candidate is remotely reachable.
+Changing container sequence semantics still requires a separate decision and
+validation gate.
+
+Gate V0/V1 does not prove arbitrary mixed-operation partition schedules or
+symbolic safety. Mixed text schemas are intentionally non-interoperable.
