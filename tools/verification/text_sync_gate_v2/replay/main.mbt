@@ -46,14 +46,18 @@ struct WireSync {
 } derive(FromJson)
 
 ///|
-fn field(value : Json, name : String) -> Json raise Failure {
+fn optional_field(value : Json, name : String) -> Json? {
   match value {
-    Object(fields) =>
-      match fields.get(name) {
-        Some(value) => value
-        None => raise Failure::Failure("missing JSON field \{name}")
-      }
-    _ => raise Failure::Failure("expected object containing \{name}")
+    Object(fields) => fields.get(name)
+    _ => None
+  }
+}
+
+///|
+fn field(value : Json, name : String) -> Json raise Failure {
+  match optional_field(value, name) {
+    Some(value) => value
+    None => raise Failure::Failure("missing JSON field \{name}")
   }
 }
 
@@ -87,6 +91,22 @@ fn decode_itf_set(value : Json) -> Set[Int] raise Failure {
   let result : Set[Int] = Set([])
   for entry in entries {
     result.add(decode_itf_int(entry))
+  }
+  result
+}
+
+///|
+fn decode_itf_string_set(value : Json) -> Set[String] raise Failure {
+  let entries = match field(value, "#set") {
+    Array(entries) => entries
+    _ => raise Failure::Failure("ITF set payload must be an array")
+  }
+  let result : Set[String] = Set([])
+  for entry in entries {
+    match entry {
+      String(value) => result.add(value)
+      _ => raise Failure::Failure("ITF schedule ID must be a string")
+    }
   }
   result
 }
@@ -180,10 +200,8 @@ fn message_operations(message : @text.SyncMessage) -> Set[Int] raise {
   let result : Set[Int] = Set([])
   for operation in wire.operations {
     if operation.kind != "insert" ||
-      !(operation.content is String(_)) ||
-      operation.parents.length() != 0 ||
-      !(operation.origin_left is Null) ||
-      !(operation.origin_right is Null) {
+      !(operation.content is String(_)) || operation.parents.length() != 0 ||
+      !(operation.origin_left is Null) || !(operation.origin_right is Null) {
       raise Failure::Failure("exported sparse fixture operation changed shape")
     }
     if operation.id.replica_id == "shared-agent" {
@@ -260,7 +278,12 @@ fn Driver::checkpoint(
 }
 
 ///|
-fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
+fn Driver::apply_event(
+  self : Driver,
+  event : Json,
+  state : Json,
+  step : Int,
+) -> Unit raise {
   let name = string_field(event, "name")
   let message_id = string_field(event, "messageId")
   match name {
@@ -285,6 +308,12 @@ fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
         ).0
       let expected_knowledge = decode_itf_set(field(event, "versionKnowledge"))
       let delivered_operations = self.message(message_id).op_count()
+      let pending_field = if receiver == "source" {
+        "sourcePending"
+      } else {
+        "peerPending"
+      }
+      let expected_pending = int_field(state, pending_field)
       let result : Result[@text.SyncReport, Error] = Ok(
         self.document(receiver).sync().apply(self.message(message_id)),
       ) catch {
@@ -311,7 +340,7 @@ fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
         ("Pending", Ok(report)) =>
           if report.applied_operations() != 0 ||
             report.duplicate_operations() != 0 ||
-            report.pending_operations() != 1 {
+            report.pending_operations() != expected_pending {
             raise Failure::Failure(
               "step \{step}: pending SyncReport counts diverged",
             )
@@ -319,7 +348,7 @@ fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
         ("Duplicate", Ok(report)) =>
           if report.applied_operations() != 0 ||
             report.duplicate_operations() != delivered_operations ||
-            report.pending_operations() != 0 {
+            report.pending_operations() != expected_pending {
             raise Failure::Failure(
               "step \{step}: duplicate SyncReport counts diverged",
             )
@@ -329,9 +358,14 @@ fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
             before_knowledge.length()
           if report.applied_operations() != expected_applied ||
             report.duplicate_operations() != 0 ||
-            report.pending_operations() != 0 {
+            report.pending_operations() != expected_pending {
             raise Failure::Failure(
-              "step \{step}: applied SyncReport counts diverged",
+              "step \{step}: applied SyncReport expected applied=" +
+              "\{expected_applied}, duplicate=0, pending=\{expected_pending}; " +
+              "observed applied=" +
+              "\{report.applied_operations()}, duplicate=" +
+              "\{report.duplicate_operations()}, pending=" +
+              "\{report.pending_operations()}",
             )
           }
         }
@@ -425,23 +459,79 @@ fn Driver::assert_replica(
 fn Driver::replay(self : Driver, trace : ItfTrace) -> Unit raise {
   for step, raw_state in trace.states {
     let state = field(raw_state, "s")
-    self.apply_event(field(state, "lastEvent"), step)
+    self.apply_event(field(state, "lastEvent"), state, step)
     self.assert_replica(state, "source", "sourceKnowledge", step)
     self.assert_replica(state, "peer", "peerKnowledge", step)
   }
 }
 
 ///|
+fn trace_schedule_metadata(
+  trace : ItfTrace,
+) -> (String, Set[String])? raise Failure {
+  guard trace.states is [first, ..] else { return None }
+  let state = field(first, "s")
+  match
+    (
+      optional_field(state, "scheduleId"),
+      optional_field(state, "requiredScheduleIds"),
+    ) {
+    (Some(String(id)), Some(required)) =>
+      Some((id, decode_itf_string_set(required)))
+    (None, None) => None
+    _ => raise Failure::Failure("incomplete schedule coverage metadata")
+  }
+}
+
+///|
+fn describe_string_set(values : Set[String]) -> String {
+  let sorted = values.to_array()
+  sorted.sort()
+  @debug.to_string(sorted)
+}
+
+///|
 async fn main {
   let args = @env.args()
-  guard args is [_, trace_path, .. rest] else {
-    raise Failure::Failure("usage: replay TRACE.itf.json [--broken]")
+  guard args is [_, .. rest] else {
+    raise Failure::Failure("usage: replay TRACE... [--broken]")
   }
   let broken = rest.any(argument => argument == "--broken")
-  let trace : ItfTrace = @json.from_json(
-    @json.parse(@fs.read_file(trace_path).text()),
-  )
-  let driver = Driver(broken)
-  driver.replay(trace)
-  println("PASS: \{trace.states.length()} ITF states matched public text API")
+  let trace_paths = rest.filter(argument => argument != "--broken")
+  if trace_paths.is_empty() {
+    raise Failure::Failure("usage: replay TRACE... [--broken]")
+  }
+  let observed_schedule_ids : Set[String] = Set([])
+  let required_schedule_ids : Set[String] = Set([])
+  let mut total_states = 0
+  for trace_path in trace_paths {
+    let trace : ItfTrace = @json.from_json(
+      @json.parse(@fs.read_file(trace_path).text()),
+    )
+    let driver = Driver(broken)
+    driver.replay(trace)
+    total_states += trace.states.length()
+    match trace_schedule_metadata(trace) {
+      Some((id, required)) => {
+        observed_schedule_ids.add(id)
+        for required_id in required {
+          required_schedule_ids.add(required_id)
+        }
+      }
+      None => ()
+    }
+  }
+  if !observed_schedule_ids.equal(required_schedule_ids) {
+    raise Failure::Failure(
+      "schedule coverage expected " +
+      "\{describe_string_set(required_schedule_ids)}, observed " +
+      describe_string_set(observed_schedule_ids),
+    )
+  }
+  let coverage = if required_schedule_ids.is_empty() {
+    ""
+  } else {
+    " across \{required_schedule_ids.length()} required schedules"
+  }
+  println("PASS: \{total_states} ITF states matched public text API" + coverage)
 }

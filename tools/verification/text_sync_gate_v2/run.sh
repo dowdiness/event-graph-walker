@@ -67,11 +67,14 @@ on_exit() {
 trap on_exit EXIT
 sparse_trace="$tmp/sparse-gap.itf.json"
 admission_trace="$tmp/admission.itf.json"
+schedule_dir="$tmp/schedules"
+mkdir -p "$schedule_dir"
 
 cd "$suite_dir"
 "$quint_bin" typecheck TextSyncCore.qnt
 "$quint_bin" typecheck TextSyncDistributed.qnt
 "$quint_bin" typecheck TextSyncAdmission.qnt
+"$quint_bin" typecheck TextSyncSchedules.qnt
 "$quint_bin" run TextSyncDistributed.qnt \
   --main TextSyncDistributed \
   --step replayStep \
@@ -108,6 +111,26 @@ expect_failure "Invariant violated" \
     --seed 0x032 \
     --verbosity 1
 
+"$quint_bin" run TextSyncSchedules.qnt \
+  --main TextSyncSchedules \
+  --step step \
+  --invariant safety \
+  --n-traces 256 \
+  --max-samples 256 \
+  --max-steps 9 \
+  --seed 0x032 \
+  --out-itf "$schedule_dir/schedule-{seq}.itf.json" \
+  --verbosity 0
+
+expect_failure "Invariant violated" \
+  "$quint_bin" run TextSyncSchedules.qnt \
+    --main TextSyncSchedules \
+    --step mutationStep \
+    --invariant safety \
+    --max-steps 9 \
+    --seed 0x032 \
+    --verbosity 1
+
 verify_quint TextSyncDistributed.qnt \
   --main TextSyncDistributed \
   --step step \
@@ -124,9 +147,22 @@ verify_quint TextSyncAdmission.qnt \
   --apalache-version "$expected_apalache" \
   --verbosity 1
 
+verify_quint TextSyncSchedules.qnt \
+  --main TextSyncSchedules \
+  --step step \
+  --invariant safety \
+  --max-steps 9 \
+  --apalache-version "$expected_apalache" \
+  --verbosity 1
+
 moon -C "$suite_dir/replay" check --target native
 moon -C "$suite_dir/replay" run --target native . -- "$sparse_trace"
 moon -C "$suite_dir/replay" run --target native . -- "$admission_trace"
+schedule_traces=("$schedule_dir"/*.itf.json)
+moon -C "$suite_dir/replay" run --target native . -- "${schedule_traces[@]}"
+expect_failure "schedule coverage expected" \
+  moon -C "$suite_dir/replay" run --target native . -- \
+    "${schedule_traces[0]}"
 expect_failure "knowledge expected" \
   moon -C "$suite_dir/replay" run --target native . -- \
     "$sparse_trace" --broken
@@ -143,8 +179,10 @@ moon -C "$repo_root" test --target native text/sparse_version_properties_wbtest.
 printf 'PASS: Quint %s sparse and admission traces\n' "$expected_quint"
 printf 'PASS: bounded Apalache %s safety verification (sparse=6, admission=8 steps)\n' \
   "$expected_apalache"
-printf 'PASS: flat-maximum and premature-admission model mutations detected\n'
+printf 'PASS: flat-maximum, premature-admission, and implicit-sequence-parent model mutations detected\n'
 printf 'PASS: sparse, pending, duplicate, and conflict traces replayed through public MoonBit APIs\n'
+printf 'PASS: all 36 canonical two-replica delivery-order pairs replayed\n'
+printf 'PASS: incomplete schedule coverage detected\n'
 printf 'PASS: replay observation mutation detected\n'
 printf 'PASS: existing Version codec/resource/sparse contracts\n'
 printf 'PASS: Gate V0 reference traces and official corpus\n'

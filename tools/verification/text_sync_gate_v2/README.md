@@ -22,16 +22,20 @@ The implemented vertical slices cover sparse delta and admission atomicity:
 | Conflict | same identity with different exact content is rejected without Version/frontier/pending mutation |
 | Wire ingress | independently constructed schema-2 JSON parsed by `SyncMessage::from_json_string` |
 | Production observation | Version frontier/ranges, text, pending count, SyncReport, exported operation set |
-| Model mutations | flat per-agent maximum and premature admission violate `safety` |
-| Replay mutation | altered expected source knowledge diverges at the first affected prefix |
+| Delivery schedules | all 36 canonical order pairs for three fixed messages across two independent replicas |
+| Coverage authority | every required `scheduleId` must occur in the fixed-seed ITF corpus before replay passes |
+| Model mutations | flat per-agent maximum, premature admission, and implicit sequence parent violate `safety` |
+| Replay mutations | altered expected Version and incomplete schedule coverage diverge |
 
 The single entry point also reruns the existing Version codec/resource/sparse
 contracts and Gate V0’s 15 hand-written traces plus the 1,000-case official
 corpus in both delivery modes.
 
-Unordered network-soup exploration, explicit checkpoint checkout, delete and
-undelete targets, and the implicit-sequence-parent mutation remain subsequent
-vertical slices and are not claimed by the current milestone.
+The schedule catalog covers every per-replica order pair for its fixed
+parent/child/concurrent-root fixture. Explicit checkpoint checkout,
+external-overclaim replay, exact multi-agent operation comparison, and
+insert/delete/undelete target fixtures remain subsequent vertical slices and
+are not claimed by the current milestone.
 
 ## Run
 
