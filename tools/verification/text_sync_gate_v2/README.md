@@ -51,8 +51,8 @@ cd tools/verification/text_sync_gate_v2
 ```
 
 The script pins Quint 0.32.0 through `package-lock.json`. Bounded verification
-uses Apalache 0.56.1 under Java 17; when the active Java is not 17, the script
-uses `nix shell nixpkgs#jdk17_headless` if available. Candidate mode refuses a
+uses Apalache 0.62.2 under Java 21; when the active Java is not 21, the script
+uses `nix shell nixpkgs#jdk21_headless` if available. Candidate mode refuses a
 dirty worktree so the reported commit identifies the tested source exactly.
 
 The suite is native-only and outside the root workspace. It does not add a

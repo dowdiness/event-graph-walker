@@ -5,7 +5,7 @@ started_at=$SECONDS
 suite_dir="$(cd "$(dirname "$0")" && pwd -P)"
 repo_root="$(cd "$suite_dir/../../.." && pwd -P)"
 expected_quint=0.32.0
-expected_apalache=0.56.1
+expected_apalache=0.62.2
 mode="${1:---dev}"
 if [[ "$mode" != "--dev" && "$mode" != "--candidate" ]]; then
   echo "usage: ./run.sh [--dev|--candidate]" >&2
@@ -41,12 +41,12 @@ verify_quint() {
   local model="$1"
   local metrics="$tmp/${model%.qnt}.time"
   local -a command
-  if command -v java >/dev/null 2>&1 && [[ "$(java_major)" -eq 17 ]]; then
+  if command -v java >/dev/null 2>&1 && [[ "$(java_major)" -eq 21 ]]; then
     command=("$quint_bin" verify "$@")
   elif command -v nix >/dev/null 2>&1; then
-    command=(nix shell nixpkgs#jdk17_headless -c "$quint_bin" verify "$@")
+    command=(nix shell nixpkgs#jdk21_headless -c "$quint_bin" verify "$@")
   else
-    echo "STOPPED: Quint verification requires Java 17 or Nix" >&2
+    echo "STOPPED: Quint verification requires Java 21 or Nix" >&2
     exit 2
   fi
   if [[ -x /usr/bin/time ]]; then
@@ -270,7 +270,7 @@ if [[ "$mode" == "--dev" ]] && \
    [[ -n "$(git -C "$repo_root" status --short --untracked-files=all)" ]]; then
   candidate="$candidate+dirty"
 fi
-printf 'TOOLS: quint=%s apalache=%s java_requirement=17\n' \
+printf 'TOOLS: quint=%s apalache=%s java_requirement=21\n' \
   "$($quint_bin --version)" "$expected_apalache"
 printf 'MOON_TOOL: %s\n' "$(moon version --json)"
 printf 'BOUNDS: sparse=6 admission=8 schedules=9 complete=21 seed=0x032 bounded_model_states=398\n'

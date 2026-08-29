@@ -245,29 +245,29 @@ turn probabilistic generation into a formal coverage claim.
 ## Apalache pin reassessment
 
 Official release metadata shows Apalache `v0.62.2` was published on 2026-08-26.
-The existing Gate V2 pin is `0.56.1`, which is also Quint 0.32.0's CLI default.
+The initial Gate V2 pin was `0.56.1`, which is also Quint 0.32.0's CLI
+default. After the complete model and schedule catalog were available, both
+checker versions were run serially over the exact same four models:
 
-Local serial probes on the two current deterministic models produced:
-
-| Model | Apalache | Java | elapsed | max RSS |
+| Model | 0.56.1 / Java 17 elapsed | max RSS | 0.62.2 / Java 21 elapsed | max RSS |
 |---|---:|---:|---:|---:|
-| sparse distributed | 0.56.1 | 17 | 11.47 s | 140,148 KiB |
-| admission | 0.56.1 | 17 | 11.50 s | 137,136 KiB |
-| sparse distributed | 0.62.2 | 21 | 9.51 s | 212,752 KiB |
-| admission | 0.62.2 | 21 | 9.44 s | 208,212 KiB |
+| sparse distributed | 12.44 s | 179,048 KiB | 9.66 s | 206,452 KiB |
+| admission | 12.53 s | 177,192 KiB | 9.69 s | 232,400 KiB |
+| 36-case schedule catalog | 11.02 s | 339,188 KiB | 10.18 s | 231,268 KiB |
+| complete exact-operation trace | 17.26 s | 197,796 KiB | 10.06 s | 226,608 KiB |
 
 Observed caveats:
 
 - Apalache 0.62.2 bytecode requires Java 21; Java 17 fails to load it.
 - The local launcher uses a fixed server port, so two verification invocations
-  run concurrently collided. Gate V2 already runs them serially.
+  run concurrently collided. Gate V2 runs them serially.
 - 0.62.2 emitted a protobuf generated-code warning that did not fail checking.
 
-Decision: test 0.62.2/Java 21 against the completed soup model before changing
-the pin. It was about 18% faster on these tiny models but used about 50% more
-resident memory. The tiny staged models are not predictive enough to select a
-checker solely from this result. Avoid migrating mid-model unless the completed
-probe is green and the release pin is documented atomically.
+Decision: pin Apalache 0.62.2 with Java 21. Across the complete four-model gate,
+it reduced measured verification time from 53.25 to 39.59 seconds and reduced
+peak measured RSS from 339,188 to 232,400 KiB. Individual small models sometimes
+used more memory, but the schedule catalog owned the previous peak. The runner,
+README, and canonical design update the checker and JDK atomically.
 
 ## Revised implementation sequence
 
@@ -284,7 +284,7 @@ probe is green and the release pin is documented atomically.
 8. Add historical/multi-head checkpoint, fresh-peer delta, explicit overclaim,
    delete, and undelete traces.
 9. Benchmark the completed model under Apalache 0.56.1/Java 17 and
-   0.62.2/Java 21, then pin one pair.
+   0.62.2/Java 21, then pin the measured winner (completed: 0.62.2/Java 21).
 10. Run Gate V0 and resource contracts.
 11. Require a clean worktree for candidate evidence and record the exact commit,
     bounds, seeds, trace/permutation counts, states, runtime, and memory.

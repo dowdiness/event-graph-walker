@@ -529,8 +529,8 @@ The suite pins exact tool versions in `package.json` and records them in output.
 The initial versions are:
 
 - Quint `0.32.0`;
-- Apalache `0.56.1`;
-- Java 17 or a documented Nix JDK 17 fallback.
+- Apalache `0.62.2`;
+- Java 21 or a documented Nix JDK 21 fallback.
 
 Quint is used for:
 
