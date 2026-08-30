@@ -289,14 +289,13 @@ fn expected_exact_heads(event : Json) -> Set[ObservedIdentity] raise {
 
 ///|
 fn expected_conflict_identity(event : Json) -> ObservedIdentity raise {
-  let values = match field(field(event, "exactOperations"), "#set") {
-    Array(entries) => entries
-    _ => raise Failure::Failure("conflict operations must be an ITF set")
+  let value = field(event, "expectedConflictIdentity")
+  match string_field(value, "tag") {
+    "SomeIdentity" => decode_itf_identity(field(value, "value"))
+    "NoIdentity" =>
+      raise Failure::Failure("conflict event omitted its expected identity")
+    tag => raise Failure::Failure("unknown conflict identity tag \{tag}")
   }
-  guard values is [operation, ..] else {
-    raise Failure::Failure("conflict event must contain an operation")
-  }
-  decode_itf_identity(field(operation, "id"))
 }
 
 ///|

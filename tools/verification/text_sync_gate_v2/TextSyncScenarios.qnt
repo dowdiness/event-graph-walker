@@ -221,6 +221,7 @@ module TextSyncScenarios {
       s.peer.admitted == SCHEDULE_OPERATIONS
     })
 
+  pure val ATOMIC_FRESH = raw("aaron", 0)
   pure val INSERT = raw("alice", 0)
   pure val DELETE = raw("bob", 0)
   pure val UNDELETE = raw("carol", 0)
@@ -229,6 +230,9 @@ module TextSyncScenarios {
   pure val ORIGIN_TARGET = raw("frank", 0)
   pure val ORIGIN_ONLY = raw("grace", 0)
 
+  pure val ATOMIC_FRESH_OP = insert(
+    ATOMIC_FRESH, Set(), "Z", NoIdentity, NoIdentity,
+  )
   pure val INSERT_OP = insert(INSERT, Set(), "A", NoIdentity, NoIdentity)
   pure val DELETE_OP = deleteLike(
     DELETE, Set(INSERT), "delete", INSERT,
@@ -327,9 +331,11 @@ module TextSyncScenarios {
     else if (stage == 17) captureCheckpoint("source", "multi-head")
     else if (stage == 18) requestDelta("source", "historical", "historical-delta")
     else if (stage == 19) deliver("historical-delta", "peer", -1)
-    else if (stage == 20) deliver("extra", "source", -1)
-    else if (stage == 21) requestAll("source", "all")
-    else if (stage == 22) requestDelta("source", "multi-head", "fresh-delta")
+    else if (stage == 20) requestDelta(
+      "peer", "multi-head", "fresh-delta",
+    )
+    else if (stage == 21) deliver("fresh-delta", "source", -1)
+    else if (stage == 22) requestAll("source", "all")
     else if (stage == 23) requestDeltaClaim(
       "source", "overclaim", identities(COMPLETE_OPERATIONS), Set(EXTRA),
     )
@@ -351,7 +357,9 @@ module TextSyncScenarios {
     else if (stage == 29) deliver("origin-only", "source", -1)
     else if (stage == 30) deliver("origin-target", "source", -1)
     else if (stage == 31) buildFixture(
-      "content-conflict", Set(CONTENT_CONFLICT), Set(EXTRA),
+      "content-conflict",
+      Set(ATOMIC_FRESH_OP, CONTENT_CONFLICT),
+      Set(ATOMIC_FRESH, EXTRA),
     )
     else if (stage == 32) deliver("content-conflict", "source", -1)
     else if (stage == 33) buildFixture(
@@ -379,8 +387,10 @@ module TextSyncScenarios {
   val namedSafety =
     coreSafety(s) and s.stage >= 0 and s.stage <= 39 and
     (s.stage < 12 or s.peer.admitted == COMPLETE_OPERATIONS) and
-    (s.stage < 21 or s.stage >= 31 or
+    (s.stage < 22 or s.stage >= 31 or
       s.source.admitted == COMPLETE_OPERATIONS) and
+    (s.stage < 22 or s.stage >= 31 or
+      s.source.admitted == s.peer.admitted) and
     (s.stage != 30 or s.source.pending == Set(ORIGIN_ONLY_OP)) and
     (s.stage < 31 or s.source.admitted == SOURCE_OPERATIONS) and
     (s.stage < 31 or s.source.pending == Set())

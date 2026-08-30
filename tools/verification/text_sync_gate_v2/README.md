@@ -44,10 +44,14 @@ observation boundary.
 - child-before-parent pending isolation and reducer-driven release
 - equivalent duplicate delivery
 - exact conflicts in content, parents, `origin_left`, and `origin_right`
+- mixed-message conflict atomicity: a canonically earlier fresh operation remains
+  unapplied when a later operation conflicts
 - multi-agent insert/delete/undelete and multi-parent operations
 - origin-only readiness dependencies preserving declared-parent frontier semantics
 - historical and multi-head checkpoints and checkout
-- exact fresh delta, full export, and external overclaim deprivation
+- exact fresh delta from the lagging receiver's captured Version, followed by
+  applying that exported message to converge with the sender
+- full export and external overclaim deprivation
 - generated 6 × 6 delivery-order catalog with observed/required ID equality
 - flat-maximum, premature-admission, and implicit-sequence-parent reducer
   mutations

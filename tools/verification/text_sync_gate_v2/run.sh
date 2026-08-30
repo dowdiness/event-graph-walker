@@ -229,8 +229,9 @@ printf 'PASS: one pure causal reducer derived admission, pending, Version, check
 printf 'PASS: bounded Apalache %s safety verification (schedule=9, named=39 steps)\n' \
   "$expected_apalache"
 printf 'PASS: flat-maximum, premature-admission, and implicit-sequence-parent reducer mutations detected\n'
-printf 'PASS: content, parents, left-origin, and right-origin identity conflicts replayed through public APIs\n'
+printf 'PASS: mixed-batch atomicity plus content, parents, left-origin, and right-origin conflicts replayed\n'
 printf 'PASS: exact exported operation and head sets checked for fixtures, export_all, and export_since\n'
+printf 'PASS: receiver Version -> export_since -> receiver apply converged replicas\n'
 printf 'PASS: origin-only readiness preserves declared-parent Version frontier semantics\n'
 printf 'PASS: generated delivery catalog and incomplete-coverage mutation checked\n'
 printf 'PASS: replay Version and message-head observation mutations detected\n'

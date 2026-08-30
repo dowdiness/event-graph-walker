@@ -306,7 +306,8 @@ The model groups related assertions into six named obligations.
 - Every admitted identity maps to one equivalent operation.
 - Reuse with different payload or dependencies produces `Conflict`.
 - A conflict leaves admitted operations, pending operations, frontier, and
-  knowledge unchanged.
+  knowledge unchanged. This includes a mixed message whose canonically earlier
+  operation is fresh and whose later operation conflicts.
 - Equivalent duplicate delivery changes no authoritative observation.
 
 ### 2. Admission safety
@@ -335,8 +336,9 @@ For a peer Version freshly observed from the receiving replica:
 - no identity represented by peer knowledge is required for export;
 - sparse gaps remain absent and therefore exportable;
 - exported operations are dependency-safe;
-- applying the delta equalizes admitted operation sets when all required
-  operations are available.
+- applying the exact message returned by `export_since` to the replica whose
+  captured Version produced the request equalizes admitted operation sets when
+  all required operations are available.
 
 A supplied Version is a peer knowledge claim. If it overclaims identities, the
 sender may omit them. Gate V2 checks this behavior explicitly and does not claim

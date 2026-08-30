@@ -40,6 +40,7 @@ module TextSyncCore {
     checkpointId: str,
     sender: str,
     expectedOutcome: str,
+    expectedConflictIdentity: OptionalIdentity,
     expectedApplied: int,
     expectedDuplicate: int,
     expectedPending: int,
@@ -83,6 +84,7 @@ module TextSyncCore {
     checkpointId: "",
     sender: "",
     expectedOutcome: "Success",
+    expectedConflictIdentity: NoIdentity,
     expectedApplied: 0,
     expectedDuplicate: 0,
     expectedPending: 0,
@@ -224,14 +226,25 @@ module TextSyncCore {
       operations.forall(right => left.id != right.id or left == right)
     )
 
+  pure def conflictingIdentities(
+    known: Set[Operation],
+    incoming: Set[Operation],
+  ): Set[RawVersion] = incoming
+    .filter(operation =>
+      known.exists(existing =>
+        existing.id == operation.id and existing != operation
+      ) or
+      incoming.exists(other =>
+        other.id == operation.id and other != operation
+      )
+    )
+    .map(operation => operation.id)
+
   pure def hasIdentityConflict(
     known: Set[Operation],
     incoming: Set[Operation],
-  ): bool = incoming.exists(operation =>
-    known.exists(existing =>
-      existing.id == operation.id and existing != operation
-    )
-  ) or not(uniqueOperationIdentities(incoming))
+  ): bool = conflictingIdentities(known, incoming) != Set() or
+    not(uniqueOperationIdentities(incoming))
 
   pure def maximalFrontier(
     operations: Set[Operation],
@@ -399,10 +412,15 @@ module TextSyncCore {
         ...state,
         stage: state.stage + 1,
         network: remainingNetwork,
-        lastEvent: withReport(
-          event, "Conflict", 0, 0, before.pending.size(),
-          message.operations, message.heads,
-        ),
+        lastEvent: {
+          ...withReport(
+            event, "Conflict", 0, 0, before.pending.size(),
+            message.operations, message.heads,
+          ),
+          expectedConflictIdentity: SomeIdentity(
+            conflictingIdentities(known, message.operations).getOnlyElement(),
+          ),
+        },
       }
     } else {
       val after = admitMessage(before, message.operations)
