@@ -17,6 +17,8 @@ type ItfTrace derive(@json.FromJson)
 
 type ObservedIdentity derive(Eq, Hash, @debug.Debug)
 
+type ObservedMessage
+
 type WireAgentRanges derive(@json.FromJson)
 
 type WireIdentity derive(@json.FromJson)

@@ -177,7 +177,7 @@ tools/verification/text_sync_gate_v2/
   package.json
   package-lock.json
   TextSyncCore.qnt
-  TextSyncDistributed.qnt
+  TextSyncScenarios.qnt
   replay/
     moon.mod
     moon.work
@@ -237,24 +237,26 @@ Each replica contains:
 
 ```text
 Replica = {
-  admitted: Map[RawVersion, Operation],
-  pending: Map[RawVersion, Operation],
-  frontier: Set[RawVersion],
-  knowledge: Set[RawVersion],
-  conflicts: Set[RawVersion],
-  checkpoint: Option[Checkpoint],
-  lastOutcome: Outcome
+  admitted: Set[Operation],
+  pending: Set[Operation]
 }
 ```
 
-`knowledge` is represented as a set in the semantic core. Canonical range
-projection is a derived observation, not a second authority.
+Admitted and pending operations are the only replica authority. Knowledge,
+maximal frontier, pending count, checkpoints, delta contents, message heads,
+and report counts are pure derived observations. They are emitted on
+`lastEvent` for replay but are not independently updated model state. Pending
+release uses eight pure passes under an invariant-backed bound of at most eight
+known operations per replica; this covers every acyclic dependency chain in the
+recorded domain and is reported with the other run bounds.
 
 ### Network state
 
-The distributed model contains an unordered multiset of messages. A message may
-be retained or copied after delivery so the model can represent delay,
-reordering, and duplicate delivery.
+The model retains fixture messages in a set and represents outstanding schedule
+deliveries as an unordered set. Apalache chooses either receiver's next eligible
+delivery, so cross-receiver interleavings are explored while each generated
+schedule case fixes only the receiver-local order. Explicit duplicate messages
+remain ordinary named events.
 
 ### Events
 
@@ -264,21 +266,15 @@ replay driver:
 
 ```text
 Event =
-  | LocalInsert(replica, position, scalar)
-  | LocalDelete(replica, position)
   | BuildFixture(messageId, operations, heads)
   | DuplicateMessage(sourceMessageId, newMessageId)
   | Deliver(messageId, receiver)
   | CaptureCheckpoint(replica, checkpointId)
   | RequestDelta(sender, checkpointId, messageId)
   | RequestDeltaClaim(sender, knowledge, frontier, messageId)
+  | RequestAll(sender, messageId)
   | Checkout(replica, checkpointId)
 ```
-
-`LocalInsert.scalar` is exactly one valid Unicode scalar encoded as a MoonBit
-String. This keeps one model event aligned with one operation produced by public
-`TextState::insert`; multi-scalar user edits are outside the causal model and
-remain covered by production text tests.
 
 `BuildFixture` operations carry explicit identity, parent set, kind, exact
 content, and directional origins. It creates messages that local edit methods
@@ -324,6 +320,9 @@ The model groups related assertions into six named obligations.
 
 - Knowledge equals the set of admitted identities.
 - Every frontier member is admitted.
+- Declared parents alone determine graph ancestry and frontier reduction;
+  directional origins remain admission/readiness dependencies. An origin-only
+  fixture checks this distinction against production.
 - No frontier member is an ancestor of another frontier member.
 - Every admitted maximal identity is in the frontier.
 - A checkpoint frontier resolves to its exact declared transitive closure.
@@ -464,7 +463,8 @@ model/implementation divergence are distinct failure categories.
 
 ## Mutation controls
 
-The first implementation contains four deliberate mutations.
+The implementation contains reducer and replay mutations that target distinct
+blind spots.
 
 ### Model mutation: implicit sequence parent
 
@@ -486,8 +486,18 @@ admission obligations must fail.
 Alter one expected public Version observation. The replay driver must report a
 correspondence divergence at the mutated step.
 
-Additional mutations are added only when review or an escaped defect identifies
-a blind spot not covered by these controls.
+### Replay mutation: incorrect expected message heads
+
+Alter the model-derived expected heads for an exported delta. The replay driver
+must reject the otherwise structurally valid operation set.
+
+### Coverage mutation: incomplete catalog observation
+
+Replay only one generated schedule trace. Exact observed/required ID equality
+must fail.
+
+Full-operation conflict traces also send content, parent-set, left-origin, and
+right-origin identity conflicts through the production public API.
 
 ## Existing suites invoked by Gate V2
 
@@ -561,7 +571,7 @@ The command performs, in order:
 4. bounded safety verification;
 5. seeded distributed simulations with recorded counts;
 6. MoonBit public-API replay for every emitted trace;
-7. four mutation controls;
+7. reducer, replay, and coverage mutation controls;
 8. existing codec/resource contracts;
 9. Gate V0 hand-written and corpus differential runs.
 
@@ -656,7 +666,9 @@ passed.
 
 Gate V2 is complete when:
 
-- all six assurance obligations are encoded and named;
+- identity, admission, pending, Version, delta, and convergence obligations are
+  encoded as pure model predicates, while implementation correspondence remains
+  exclusively the MoonBit replay responsibility;
 - sparse same-agent identities are explored without implicit causality;
 - partial, duplicate, reordered, and conflicting delivery are first-class
   events;
@@ -665,7 +677,8 @@ Gate V2 is complete when:
 - peer knowledge overclaim behavior is documented and tested;
 - every generated trace replays through public MoonBit APIs without divergence;
 - representable and over-limit observation domains are not conflated;
-- all four mutation controls fail for the expected reason;
+- all reducer, replay, and coverage mutation controls fail for the expected
+  reason;
 - existing resource tests remain green;
 - Gate V0 remains green;
 - bounds, seeds, state counts, versions, runtime, memory, and candidate commit

@@ -52,6 +52,12 @@ struct WireSync {
 } derive(FromJson)
 
 ///|
+struct ObservedMessage {
+  operations : Set[String]
+  heads : Set[ObservedIdentity]
+}
+
+///|
 fn optional_field(value : Json, name : String) -> Json? {
   match value {
     Object(fields) => fields.get(name)
@@ -123,80 +129,11 @@ fn decode_itf_identity_set(value : Json) -> Set[ObservedIdentity] raise Failure 
 }
 
 ///|
-fn decode_itf_string_set(value : Json) -> Set[String] raise Failure {
-  let entries = match field(value, "#set") {
-    Array(entries) => entries
-    _ => raise Failure::Failure("ITF set payload must be an array")
-  }
-  let result : Set[String] = Set([])
-  for entry in entries {
-    match entry {
-      String(value) => result.add(value)
-      _ => raise Failure::Failure("ITF schedule ID must be a string")
-    }
-  }
-  result
-}
-
-///|
-fn sorted_values(values : Set[Int]) -> Array[Int] {
-  let result = values.to_array()
-  result.sort()
-  result
-}
-
-///|
-fn describe_set(values : Set[Int]) -> String {
-  @debug.to_string(sorted_values(values))
-}
-
-///|
 fn observed_identity_json(identity : ObservedIdentity) -> Json {
   Json::object({
     "replica_id": identity.agent.to_json(),
     "sequence": identity.sequence.to_json(),
   })
-}
-
-///|
-fn identity_json(sequence : Int) -> Json {
-  observed_identity_json({ agent: "shared-agent", sequence })
-}
-
-///|
-fn fixture_json(
-  operations : Set[Int],
-  parent_sequence : Int,
-  content : String,
-) -> String {
-  let sorted = sorted_values(operations)
-  let encoded_operations : Array[Json] = []
-  let heads : Array[Json] = []
-  for sequence in sorted {
-    let identity = identity_json(sequence)
-    let parents = if parent_sequence < 0 {
-      Json::array([])
-    } else {
-      [identity_json(parent_sequence)].to_json()
-    }
-    encoded_operations.push(
-      Json::object({
-        "id": identity,
-        "parents": parents,
-        "kind": "insert".to_json(),
-        "content": content.to_json(),
-        "origin_left": Json::null(),
-        "origin_right": Json::null(),
-      }),
-    )
-    heads.push(identity)
-  }
-  Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-sync".to_json(),
-    "operations": encoded_operations.to_json(),
-    "heads": heads.to_json(),
-  }).stringify()
 }
 
 ///|
@@ -269,30 +206,6 @@ fn exact_fixture_json(event : Json) -> String raise Failure {
     "operations": operations.to_json(),
     "heads": heads.to_json(),
   }).stringify()
-}
-
-///|
-fn version_observation(version : @text.Version) -> (Set[Int], Set[Int]) raise {
-  let wire : WireVersion = @json.from_json(
-    @json.parse(version.to_json_string()),
-  )
-  let knowledge : Set[Int] = Set([])
-  for agent in wire.ranges {
-    if agent.replica_id == "shared-agent" {
-      for range in agent.ranges {
-        for sequence in range.start..<range.end {
-          knowledge.add(sequence)
-        }
-      }
-    }
-  }
-  let frontier : Set[Int] = Set([])
-  for identity in wire.frontier {
-    if identity.replica_id == "shared-agent" {
-      frontier.add(identity.sequence)
-    }
-  }
-  (knowledge, frontier)
 }
 
 ///|
@@ -370,48 +283,35 @@ fn expected_exact_operations(event : Json) -> Set[String] raise {
 }
 
 ///|
-fn message_exact_operations(message : @text.SyncMessage) -> Set[String] raise {
-  let wire : WireSync = @json.from_json(@json.parse(message.to_json_string()))
-  if wire.schema != 2 || wire.format != "event-graph-walker/text-sync" {
-    raise Failure::Failure("exported message left the schema-2 domain")
-  }
-  let result : Set[String] = Set([])
-  for operation in wire.operations {
-    result.add(normalized_wire_operation(operation))
-  }
-  let canonical = message.to_canonical_bytes()
-  let roundtrip = @text.SyncMessage::from_json_string(message.to_json_string())
-  if canonical != roundtrip.to_canonical_bytes() {
-    raise Failure::Failure(
-      "exported message canonical bytes changed on round-trip",
-    )
-  }
-  result
+fn expected_exact_heads(event : Json) -> Set[ObservedIdentity] raise {
+  decode_itf_identity_set(field(event, "exactHeads"))
 }
 
 ///|
-fn message_operations(message : @text.SyncMessage) -> Set[Int] raise {
+fn expected_conflict_identity(event : Json) -> ObservedIdentity raise {
+  let values = match field(field(event, "exactOperations"), "#set") {
+    Array(entries) => entries
+    _ => raise Failure::Failure("conflict operations must be an ITF set")
+  }
+  guard values is [operation, ..] else {
+    raise Failure::Failure("conflict event must contain an operation")
+  }
+  decode_itf_identity(field(operation, "id"))
+}
+
+///|
+fn message_observation(message : @text.SyncMessage) -> ObservedMessage raise {
   let wire : WireSync = @json.from_json(@json.parse(message.to_json_string()))
   if wire.schema != 2 || wire.format != "event-graph-walker/text-sync" {
     raise Failure::Failure("exported message left the schema-2 domain")
   }
-  let result : Set[Int] = Set([])
+  let operations : Set[String] = Set([])
   for operation in wire.operations {
-    if operation.kind != "insert" ||
-      !(operation.content is String(_)) ||
-      operation.parents.length() != 0 ||
-      !(operation.origin_left is Null) ||
-      !(operation.origin_right is Null) {
-      raise Failure::Failure("exported sparse fixture operation changed shape")
-    }
-    if operation.id.replica_id == "shared-agent" {
-      result.add(operation.id.sequence)
-    }
+    operations.add(normalized_wire_operation(operation))
   }
+  let heads : Set[ObservedIdentity] = Set([])
   for head in wire.heads {
-    if head.replica_id != "shared-agent" {
-      raise Failure::Failure("exported message contains an unexpected head")
-    }
+    heads.add({ agent: head.replica_id, sequence: head.sequence })
   }
   let canonical = message.to_canonical_bytes()
   let roundtrip = @text.SyncMessage::from_json_string(message.to_json_string())
@@ -420,7 +320,28 @@ fn message_operations(message : @text.SyncMessage) -> Set[Int] raise {
       "exported message canonical bytes changed on round-trip",
     )
   }
-  result
+  { operations, heads }
+}
+
+///|
+fn assert_message_observation(
+  message : @text.SyncMessage,
+  event : Json,
+  step : Int,
+  broken_head : Bool,
+) -> Unit raise {
+  let expected_operations = expected_exact_operations(event)
+  let expected_heads = expected_exact_heads(event)
+  if broken_head && string_field(event, "name") == "RequestDelta" {
+    expected_heads.remove({ agent: "erin", sequence: 0 })
+  }
+  let actual = message_observation(message)
+  if !actual.operations.equal(expected_operations) {
+    raise Failure::Failure("step \{step}: exact message operation set diverged")
+  }
+  if !actual.heads.equal(expected_heads) {
+    raise Failure::Failure("step \{step}: exact message heads diverged")
+  }
 }
 
 ///|
@@ -477,10 +398,11 @@ struct Driver {
   messages : Map[String, @text.SyncMessage]
   checkpoints : Map[String, @text.Version]
   broken : Bool
+  broken_head : Bool
 }
 
 ///|
-fn Driver::Driver(broken : Bool) -> Driver raise {
+fn Driver::Driver(broken : Bool, broken_head : Bool) -> Driver raise {
   {
     documents: Map([
       ("source", @text.TextState::new("source-replay")),
@@ -489,6 +411,7 @@ fn Driver::Driver(broken : Bool) -> Driver raise {
     messages: Map([]),
     checkpoints: Map([]),
     broken,
+    broken_head,
   }
 }
 
@@ -526,30 +449,17 @@ fn Driver::checkpoint(
 }
 
 ///|
-fn Driver::apply_event(
-  self : Driver,
-  event : Json,
-  state : Json,
-  step : Int,
-) -> Unit raise {
+fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
   let name = string_field(event, "name")
   let message_id = string_field(event, "messageId")
   match name {
     "Init" => ()
     "BuildFixture" => {
-      let operations = decode_itf_set(field(event, "operations"))
-      let parent_sequence = int_field(event, "parentSequence")
-      let content = string_field(event, "content")
-      let exact_values = match field(field(event, "exactOperations"), "#set") {
-        Array(entries) => entries
-        _ => raise Failure::Failure("exact operations must be an ITF set")
-      }
-      let encoded = if exact_values.is_empty() {
-        fixture_json(operations, parent_sequence, content)
-      } else {
-        exact_fixture_json(event)
-      }
-      self.messages[message_id] = @text.SyncMessage::from_json_string(encoded)
+      let message = @text.SyncMessage::from_json_string(
+        exact_fixture_json(event),
+      )
+      assert_message_observation(message, event, step, self.broken_head)
+      self.messages[message_id] = message
     }
     "DuplicateMessage" => {
       let new_message_id = string_field(event, "newMessageId")
@@ -558,28 +468,9 @@ fn Driver::apply_event(
     "Deliver" => {
       let receiver = string_field(event, "receiver")
       let expected_outcome = string_field(event, "expectedOutcome")
-      let exact_field = if receiver == "source" {
-        "sourceIdentities"
-      } else {
-        "peerIdentities"
-      }
-      let before_count = match optional_field(state, exact_field) {
-        Some(_) =>
-          exact_version_observation(self.document(receiver).version()).0.length()
-        None =>
-          version_observation(self.document(receiver).version()).0.length()
-      }
-      let expected_count = match optional_field(state, exact_field) {
-        Some(value) => decode_itf_identity_set(value).length()
-        None => decode_itf_set(field(event, "versionKnowledge")).length()
-      }
-      let delivered_operations = self.message(message_id).op_count()
-      let pending_field = if receiver == "source" {
-        "sourcePending"
-      } else {
-        "peerPending"
-      }
-      let expected_pending = int_field(state, pending_field)
+      let expected_applied = int_field(event, "expectedApplied")
+      let expected_duplicate = int_field(event, "expectedDuplicate")
+      let expected_pending = int_field(event, "expectedPending")
       let result : Result[@text.SyncReport, Error] = Ok(
         self.document(receiver).sync().apply(self.message(message_id)),
       ) catch {
@@ -591,53 +482,39 @@ fn Driver::apply_event(
           Err(
             @text.TextError::SyncFailed(
               @sync.Failure::ConflictingIdentity(
-                replica_id="shared-agent",
-                sequence=2
+                replica_id=actual_agent,
+                sequence=actual_sequence
               )
             )
           ),
-        ) => ()
+        ) => {
+          let expected = expected_conflict_identity(event)
+          if actual_agent != expected.agent ||
+            actual_sequence != expected.sequence {
+            raise Failure::Failure(
+              "step \{step}: conflicting identity payload diverged",
+            )
+          }
+        }
         ("Conflict", _) =>
           raise Failure::Failure(
             "step \{step}: expected conflicting identity rejection",
           )
         (_, Err(_)) =>
           raise Failure::Failure("step \{step}: unexpected delivery failure")
-        ("Pending", Ok(report)) =>
-          if report.applied_operations() != 0 ||
-            report.duplicate_operations() != 0 ||
-            report.pending_operations() != expected_pending {
-            raise Failure::Failure(
-              "step \{step}: pending SyncReport counts diverged",
-            )
-          }
-        ("Duplicate", Ok(report)) =>
-          if report.applied_operations() != 0 ||
-            report.duplicate_operations() != delivered_operations ||
-            report.pending_operations() != expected_pending {
-            raise Failure::Failure(
-              "step \{step}: duplicate SyncReport counts diverged",
-            )
-          }
-        ("Success" | "AppliedPending", Ok(report)) => {
-          let expected_applied = expected_count - before_count
+        (_, Ok(report)) =>
           if report.applied_operations() != expected_applied ||
-            report.duplicate_operations() != 0 ||
+            report.duplicate_operations() != expected_duplicate ||
             report.pending_operations() != expected_pending {
             raise Failure::Failure(
-              "step \{step}: applied SyncReport expected applied=" +
-              "\{expected_applied}, duplicate=0, pending=\{expected_pending}; " +
-              "observed applied=" +
+              "step \{step}: SyncReport expected applied=" +
+              "\{expected_applied}, duplicate=\{expected_duplicate}, " +
+              "pending=\{expected_pending}; observed applied=" +
               "\{report.applied_operations()}, duplicate=" +
               "\{report.duplicate_operations()}, pending=" +
               "\{report.pending_operations()}",
             )
           }
-        }
-        (_, Ok(_)) =>
-          raise Failure::Failure(
-            "step \{step}: unknown expected outcome \{expected_outcome}",
-          )
       }
     }
     "CaptureCheckpoint" => {
@@ -652,37 +529,20 @@ fn Driver::apply_event(
         .document(sender)
         .sync()
         .export_since(self.checkpoint(checkpoint_id))
-      if optional_field(state, "sourceIdentities") is Some(_) {
-        let expected = expected_exact_operations(event)
-        let actual = message_exact_operations(message)
-        if !actual.equal(expected) {
-          raise Failure::Failure(
-            "step \{step}: exact delta operation set diverged",
-          )
-        }
-      } else {
-        let expected = decode_itf_set(field(event, "operations"))
-        let actual = message_operations(message)
-        if !actual.equal(expected) {
-          raise Failure::Failure(
-            "step \{step}: delta operations expected " +
-            "\{describe_set(expected)}, observed \{describe_set(actual)}",
-          )
-        }
-      }
+      assert_message_observation(message, event, step, self.broken_head)
       self.messages[message_id] = message
     }
     "RequestDeltaClaim" => {
       let sender = string_field(event, "sender")
       let claim = @text.Version::from_json_string(version_claim_json(event))
       let message = self.document(sender).sync().export_since(claim)
-      let expected = expected_exact_operations(event)
-      let actual = message_exact_operations(message)
-      if !actual.equal(expected) {
-        raise Failure::Failure(
-          "step \{step}: external claim delta operation set diverged",
-        )
-      }
+      assert_message_observation(message, event, step, self.broken_head)
+      self.messages[message_id] = message
+    }
+    "RequestAll" => {
+      let sender = string_field(event, "sender")
+      let message = self.document(sender).sync().export_all()
+      assert_message_observation(message, event, step, self.broken_head)
       self.messages[message_id] = message
     }
     "Checkout" => {
@@ -706,88 +566,39 @@ fn Driver::apply_event(
 ///|
 fn Driver::assert_replica(
   self : Driver,
-  state : Json,
+  event : Json,
   replica : String,
-  state_field : String,
   step : Int,
 ) -> Unit raise {
+  let knowledge_field = if replica == "source" {
+    "sourceKnowledge"
+  } else {
+    "peerKnowledge"
+  }
   let frontier_field = if replica == "source" {
     "sourceFrontier"
   } else {
     "peerFrontier"
   }
-  let identities_field = if replica == "source" {
-    "sourceIdentities"
-  } else {
-    "peerIdentities"
-  }
-  let frontier_identities_field = if replica == "source" {
-    "sourceFrontierIdentities"
-  } else {
-    "peerFrontierIdentities"
-  }
-  let text_field = if replica == "source" { "sourceText" } else { "peerText" }
   let pending_field = if replica == "source" {
     "sourcePending"
   } else {
     "peerPending"
   }
-  let document = self.document(replica)
-  match optional_field(state, identities_field) {
-    Some(identity_values) => {
-      let expected = decode_itf_identity_set(identity_values)
-      let expected_frontier = decode_itf_identity_set(
-        field(state, frontier_identities_field),
-      )
-      let (knowledge, frontier) = exact_version_observation(document.version())
-      if !knowledge.equal(expected) {
-        raise Failure::Failure(
-          "step \{step}: \{replica} exact knowledge diverged",
-        )
-      }
-      if !frontier.equal(expected_frontier) {
-        raise Failure::Failure(
-          "step \{step}: \{replica} exact frontier diverged",
-        )
-      }
-      let expected_text = string_field(state, text_field)
-      if document.text() != expected_text {
-        raise Failure::Failure(
-          "step \{step}: \{replica} text expected \{expected_text}, " +
-          "observed \{document.text()}",
-        )
-      }
-    }
-    None => {
-      let expected = decode_itf_set(field(state, state_field))
-      let expected_frontier = decode_itf_set(field(state, frontier_field))
-      if self.broken && replica == "source" {
-        expected.remove(2)
-      }
-      let (knowledge, frontier) = version_observation(document.version())
-      if !knowledge.equal(expected) {
-        raise Failure::Failure(
-          "step \{step}: \{replica} knowledge expected " +
-          "\{describe_set(expected)}, observed \{describe_set(knowledge)}",
-        )
-      }
-      if !frontier.equal(expected_frontier) {
-        raise Failure::Failure(
-          "step \{step}: \{replica} frontier expected " +
-          "\{describe_set(expected_frontier)}, observed " +
-          describe_set(frontier),
-        )
-      }
-      let expected_text = "x".repeat(expected.length())
-      if document.text() != expected_text {
-        raise Failure::Failure(
-          "step \{step}: \{replica} text expected \{expected_text}, " +
-          "observed \{document.text()}",
-        )
-      }
-    }
+  let expected = decode_itf_identity_set(field(event, knowledge_field))
+  let expected_frontier = decode_itf_identity_set(field(event, frontier_field))
+  if self.broken && replica == "source" {
+    expected.remove({ agent: "erin", sequence: 0 })
   }
-  let expected_pending = int_field(state, pending_field)
+  let document = self.document(replica)
+  let (knowledge, frontier) = exact_version_observation(document.version())
+  if !knowledge.equal(expected) {
+    raise Failure::Failure("step \{step}: \{replica} exact knowledge diverged")
+  }
+  if !frontier.equal(expected_frontier) {
+    raise Failure::Failure("step \{step}: \{replica} exact frontier diverged")
+  }
+  let expected_pending = int_field(event, pending_field)
   let actual_pending = document.sync().pending_sync_count()
   if actual_pending != expected_pending {
     raise Failure::Failure(
@@ -801,16 +612,15 @@ fn Driver::assert_replica(
 fn Driver::replay(self : Driver, trace : ItfTrace) -> Unit raise {
   for step, raw_state in trace.states {
     let state = field(raw_state, "s")
-    self.apply_event(field(state, "lastEvent"), state, step)
-    self.assert_replica(state, "source", "sourceKnowledge", step)
-    self.assert_replica(state, "peer", "peerKnowledge", step)
+    let event = field(state, "lastEvent")
+    self.apply_event(event, step)
+    self.assert_replica(event, "source", step)
+    self.assert_replica(event, "peer", step)
   }
 }
 
 ///|
-fn trace_schedule_metadata(
-  trace : ItfTrace,
-) -> (String, Set[String])? raise Failure {
+fn trace_schedule_metadata(trace : ItfTrace) -> (Int, Set[Int])? raise Failure {
   guard trace.states is [first, ..] else { return None }
   let state = field(first, "s")
   match
@@ -818,15 +628,21 @@ fn trace_schedule_metadata(
       optional_field(state, "scheduleId"),
       optional_field(state, "requiredScheduleIds"),
     ) {
-    (Some(String(id)), Some(required)) =>
-      Some((id, decode_itf_string_set(required)))
+    (Some(id), Some(required)) => {
+      let decoded = decode_itf_set(required)
+      if decoded.is_empty() {
+        None
+      } else {
+        Some((decode_itf_int(id), decoded))
+      }
+    }
     (None, None) => None
     _ => raise Failure::Failure("incomplete schedule coverage metadata")
   }
 }
 
 ///|
-fn describe_string_set(values : Set[String]) -> String {
+fn describe_schedule_set(values : Set[Int]) -> String {
   let sorted = values.to_array()
   sorted.sort()
   @debug.to_string(sorted)
@@ -839,18 +655,21 @@ async fn main {
     raise Failure::Failure("usage: replay TRACE... [--broken]")
   }
   let broken = rest.any(argument => argument == "--broken")
-  let trace_paths = rest.filter(argument => argument != "--broken")
+  let broken_head = rest.any(argument => argument == "--broken-head")
+  let trace_paths = rest.filter(argument => {
+    argument != "--broken" && argument != "--broken-head"
+  })
   if trace_paths.is_empty() {
     raise Failure::Failure("usage: replay TRACE... [--broken]")
   }
-  let observed_schedule_ids : Set[String] = Set([])
-  let required_schedule_ids : Set[String] = Set([])
+  let observed_schedule_ids : Set[Int] = Set([])
+  let required_schedule_ids : Set[Int] = Set([])
   let mut total_states = 0
   for trace_path in trace_paths {
     let trace : ItfTrace = @json.from_json(
       @json.parse(@fs.read_file(trace_path).text()),
     )
-    let driver = Driver(broken)
+    let driver = Driver(broken, broken_head)
     driver.replay(trace)
     total_states += trace.states.length()
     match trace_schedule_metadata(trace) {
@@ -866,8 +685,8 @@ async fn main {
   if !observed_schedule_ids.equal(required_schedule_ids) {
     raise Failure::Failure(
       "schedule coverage expected " +
-      "\{describe_string_set(required_schedule_ids)}, observed " +
-      describe_string_set(observed_schedule_ids),
+      "\{describe_schedule_set(required_schedule_ids)}, observed " +
+      describe_schedule_set(observed_schedule_ids),
     )
   }
   let coverage = if required_schedule_ids.is_empty() {
@@ -876,4 +695,8 @@ async fn main {
     " across \{required_schedule_ids.length()} required schedules"
   }
   println("PASS: \{total_states} ITF states matched public text API" + coverage)
+  println(
+    "COVERAGE: observed=\{observed_schedule_ids.length()} " +
+    "required=\{required_schedule_ids.length()}",
+  )
 }

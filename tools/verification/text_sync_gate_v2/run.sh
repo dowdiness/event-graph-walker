@@ -26,7 +26,6 @@ else
     npm ci --prefix "$suite_dir" --ignore-scripts --no-audit --no-fund
   fi
 fi
-
 if [[ ! -x "$quint_bin" ]] || \
    [[ "$($quint_bin --version)" != "$expected_quint" ]]; then
   echo "STOPPED: expected Quint $expected_quint" >&2
@@ -38,8 +37,9 @@ java_major() {
 }
 
 verify_quint() {
-  local model="$1"
-  local metrics="$tmp/${model%.qnt}.time"
+  local label="$1"
+  shift
+  local metrics="$tmp/$label.time"
   local -a command
   if command -v java >/dev/null 2>&1 && [[ "$(java_major)" -eq 21 ]]; then
     command=("$quint_bin" verify "$@")
@@ -51,13 +51,13 @@ verify_quint() {
   fi
   if [[ -x /usr/bin/time ]]; then
     /usr/bin/time \
-      -f "VERIFY_METRIC: model=$model elapsed_seconds=%e max_rss_kib=%M" \
+      -f "VERIFY_METRIC: model=$label elapsed_seconds=%e max_rss_kib=%M" \
       -o "$metrics" "${command[@]}"
     cat "$metrics"
   else
     "${command[@]}"
     printf 'VERIFY_METRIC: model=%s elapsed_seconds=unavailable max_rss_kib=unavailable\n' \
-      "$model"
+      "$label"
   fi
 }
 
@@ -89,84 +89,29 @@ on_exit() {
   exit "$status"
 }
 trap on_exit EXIT
-sparse_trace="$tmp/sparse-gap.itf.json"
-admission_trace="$tmp/admission.itf.json"
-complete_trace="$tmp/complete.itf.json"
+named_trace="$tmp/named.itf.json"
 schedule_dir="$tmp/schedules"
 mkdir -p "$schedule_dir"
 
 cd "$suite_dir"
 "$quint_bin" typecheck TextSyncCore.qnt
-"$quint_bin" typecheck TextSyncDistributed.qnt
-"$quint_bin" typecheck TextSyncAdmission.qnt
-"$quint_bin" typecheck TextSyncSchedules.qnt
-"$quint_bin" typecheck TextSyncComplete.qnt
-"$quint_bin" run TextSyncComplete.qnt \
-  --main TextSyncComplete \
-  --step step \
-  --invariant safety \
-  --out-itf "$complete_trace" \
-  --max-steps 21 \
-  --seed 0x032 \
-  --verbosity 0
-expect_failure "Invariant violated" \
-  "$quint_bin" run TextSyncComplete.qnt \
-    --main TextSyncComplete \
-    --step step \
-    --invariant identityConflictMutation \
-    --max-steps 1 \
-    --seed 0x032 \
-    --verbosity 1
+"$quint_bin" typecheck TextSyncScenarios.qnt
 
-expect_failure "Invariant violated" \
-  "$quint_bin" run TextSyncComplete.qnt \
-    --main TextSyncComplete \
-    --step step \
-    --invariant nullContentMutation \
-    --max-steps 1 \
-    --seed 0x032 \
-    --verbosity 1
-
-"$quint_bin" run TextSyncDistributed.qnt \
-  --main TextSyncDistributed \
-  --step replayStep \
-  --invariant safety \
-  --out-itf "$sparse_trace" \
-  --max-steps 6 \
+"$quint_bin" run TextSyncScenarios.qnt \
+  --main TextSyncScenarios \
+  --init initNamed \
+  --step namedStep \
+  --invariant namedSafety \
+  --out-itf "$named_trace" \
+  --max-steps 39 \
   --seed 0x032 \
   --verbosity 0
 
-expect_failure "Invariant violated" \
-  "$quint_bin" run TextSyncDistributed.qnt \
-    --main TextSyncDistributed \
-    --step mutationStep \
-    --invariant safety \
-    --max-steps 6 \
-    --seed 0x032 \
-    --verbosity 1
-
-"$quint_bin" run TextSyncAdmission.qnt \
-  --main TextSyncAdmission \
-  --step replayStep \
-  --invariant safety \
-  --out-itf "$admission_trace" \
-  --max-steps 8 \
-  --seed 0x032 \
-  --verbosity 0
-
-expect_failure "Invariant violated" \
-  "$quint_bin" run TextSyncAdmission.qnt \
-    --main TextSyncAdmission \
-    --step mutationStep \
-    --invariant safety \
-    --max-steps 2 \
-    --seed 0x032 \
-    --verbosity 1
-
-"$quint_bin" run TextSyncSchedules.qnt \
-  --main TextSyncSchedules \
-  --step step \
-  --invariant safety \
+"$quint_bin" run TextSyncScenarios.qnt \
+  --main TextSyncScenarios \
+  --init initSchedule \
+  --step scheduleStep \
+  --invariant scheduleSafety \
   --n-traces 256 \
   --max-samples 256 \
   --max-steps 9 \
@@ -175,58 +120,85 @@ expect_failure "Invariant violated" \
   --verbosity 0
 
 expect_failure "Invariant violated" \
-  "$quint_bin" run TextSyncSchedules.qnt \
-    --main TextSyncSchedules \
-    --step mutationStep \
-    --invariant safety \
+  "$quint_bin" run TextSyncScenarios.qnt \
+    --main TextSyncScenarios \
+    --init initSchedule \
+    --step implicitSequenceMutationStep \
+    --invariant scheduleSafety \
+    --n-traces 100 \
+    --max-samples 100 \
     --max-steps 9 \
     --seed 0x032 \
     --verbosity 1
 
-verify_quint TextSyncDistributed.qnt \
-  --main TextSyncDistributed \
-  --step step \
-  --invariant safety \
-  --max-steps 6 \
-  --apalache-version "$expected_apalache" \
-  --verbosity 1
+expect_failure "Invariant violated" \
+  "$quint_bin" run TextSyncScenarios.qnt \
+    --main TextSyncScenarios \
+    --init initSchedule \
+    --step prematureMutationStep \
+    --invariant scheduleSafety \
+    --n-traces 100 \
+    --max-samples 100 \
+    --max-steps 9 \
+    --seed 0x032 \
+    --verbosity 1
 
-verify_quint TextSyncAdmission.qnt \
-  --main TextSyncAdmission \
-  --step step \
-  --invariant safety \
-  --max-steps 8 \
-  --apalache-version "$expected_apalache" \
-  --verbosity 1
+expect_failure "Invariant violated" \
+  "$quint_bin" run TextSyncScenarios.qnt \
+    --main TextSyncScenarios \
+    --init initNamed \
+    --step namedStep \
+    --invariant flatMaximumMutation \
+    --max-steps 1 \
+    --seed 0x032 \
+    --verbosity 1
 
-verify_quint TextSyncSchedules.qnt \
-  --main TextSyncSchedules \
-  --step step \
-  --invariant safety \
+expect_failure "Invariant violated" \
+  "$quint_bin" run TextSyncScenarios.qnt \
+    --main TextSyncScenarios \
+    --init initSchedule \
+    --step scheduleStep \
+    --invariant catalogDeletionMutation \
+    --max-steps 1 \
+    --seed 0x032 \
+    --verbosity 1
+
+verify_quint schedule \
+  TextSyncScenarios.qnt \
+  --main TextSyncScenarios \
+  --init initSchedule \
+  --step scheduleStep \
+  --invariant scheduleSafety \
   --max-steps 9 \
   --apalache-version "$expected_apalache" \
   --verbosity 1
 
-verify_quint TextSyncComplete.qnt \
-  --main TextSyncComplete \
-  --step step \
-  --invariant safety \
-  --max-steps 21 \
+verify_quint named \
+  TextSyncScenarios.qnt \
+  --main TextSyncScenarios \
+  --init initNamed \
+  --step namedStep \
+  --invariant namedSafety \
+  --max-steps 39 \
   --apalache-version "$expected_apalache" \
   --verbosity 1
 
 moon -C "$suite_dir/replay" check --target native
-moon -C "$suite_dir/replay" run --target native . -- "$sparse_trace"
-moon -C "$suite_dir/replay" run --target native . -- "$admission_trace"
-moon -C "$suite_dir/replay" run --target native . -- "$complete_trace"
+moon -C "$suite_dir/replay" run --target native . -- "$named_trace"
 schedule_traces=("$schedule_dir"/*.itf.json)
-moon -C "$suite_dir/replay" run --target native . -- "${schedule_traces[@]}"
-trace_files=(
-  "$sparse_trace"
-  "$admission_trace"
-  "$complete_trace"
-  "${schedule_traces[@]}"
-)
+schedule_output="$(
+  moon -C "$suite_dir/replay" run --target native . -- "${schedule_traces[@]}"
+)"
+printf '%s\n' "$schedule_output"
+coverage_line="$(printf '%s\n' "$schedule_output" | awk '/^COVERAGE:/ { print; exit }')"
+observed_schedules="$(printf '%s\n' "$coverage_line" | sed -E 's/.*observed=([0-9]+).*/\1/')"
+required_schedules="$(printf '%s\n' "$coverage_line" | sed -E 's/.*required=([0-9]+).*/\1/')"
+if [[ -z "$coverage_line" ]] || [[ "$observed_schedules" != "$required_schedules" ]]; then
+  echo "schedule coverage evidence is incomplete" >&2
+  exit 1
+fi
+
+trace_files=("$named_trace" "${schedule_traces[@]}")
 replayed_states="$(node -e '
   const fs = require("node:fs");
   const total = process.argv.slice(1).reduce((sum, path) =>
@@ -236,10 +208,14 @@ replayed_states="$(node -e '
 expect_failure "schedule coverage expected" \
   moon -C "$suite_dir/replay" run --target native . -- \
     "${schedule_traces[0]}"
-expect_failure "knowledge expected" \
+expect_failure "exact knowledge diverged" \
   moon -C "$suite_dir/replay" run --target native . -- \
-    "$sparse_trace" --broken
+    "$named_trace" --broken
+expect_failure "exact message heads diverged" \
+  moon -C "$suite_dir/replay" run --target native . -- \
+    "$named_trace" --broken-head
 
+moon -C "$repo_root" test --target native text/text_wire_contract_test.mbt
 moon -C "$repo_root" test --target native text/version_resource_limit_wbtest.mbt
 moon -C "$repo_root" test --target native text/sync_json_properties_test.mbt
 moon -C "$repo_root" test --target native text/sparse_version_properties_wbtest.mbt
@@ -249,15 +225,15 @@ moon -C "$repo_root" test --target native text/sparse_version_properties_wbtest.
   ./run_corpus.sh
 )
 
-printf 'PASS: Quint %s sparse and admission traces\n' "$expected_quint"
-printf 'PASS: bounded Apalache %s safety verification (sparse=6, admission=8, schedules=9, complete=21 steps)\n' \
+printf 'PASS: one pure causal reducer derived admission, pending, Version, checkpoint, and delta observations\n'
+printf 'PASS: bounded Apalache %s safety verification (schedule=9, named=39 steps)\n' \
   "$expected_apalache"
-printf 'PASS: flat-maximum, premature-admission, implicit-sequence-parent, exact-origin-conflict, and null-content model mutations detected\n'
-printf 'PASS: sparse, pending, duplicate, and conflict traces replayed through public MoonBit APIs\n'
-printf 'PASS: all 36 canonical two-replica delivery-order pairs replayed\n'
-printf 'PASS: exact multi-agent insert/delete/undelete, directional origins, checkout, delta, and overclaim replayed\n'
-printf 'PASS: incomplete schedule coverage detected\n'
-printf 'PASS: replay observation mutation detected\n'
+printf 'PASS: flat-maximum, premature-admission, and implicit-sequence-parent reducer mutations detected\n'
+printf 'PASS: content, parents, left-origin, and right-origin identity conflicts replayed through public APIs\n'
+printf 'PASS: exact exported operation and head sets checked for fixtures, export_all, and export_since\n'
+printf 'PASS: origin-only readiness preserves declared-parent Version frontier semantics\n'
+printf 'PASS: generated delivery catalog and incomplete-coverage mutation checked\n'
+printf 'PASS: replay Version and message-head observation mutations detected\n'
 printf 'PASS: existing Version codec/resource/sparse contracts\n'
 printf 'PASS: Gate V0 reference traces and official corpus\n'
 if [[ "$mode" == "--candidate" ]] && \
@@ -273,9 +249,10 @@ fi
 printf 'TOOLS: quint=%s apalache=%s java_requirement=21\n' \
   "$($quint_bin --version)" "$expected_apalache"
 printf 'MOON_TOOL: %s\n' "$(moon version --json)"
-printf 'BOUNDS: sparse=6 admission=8 schedules=9 complete=21 seed=0x032 bounded_model_states=398\n'
-printf 'EVIDENCE: schedule_traces=%s required_schedules=36 replayed_itf_states=%s\n' \
-  "${#schedule_traces[@]}" "$replayed_states"
+printf 'BOUNDS: schedule=9 named=39 release_operations=8 seed=0x032\n'
+printf 'EVIDENCE: schedule_traces=%s observed_schedules=%s required_schedules=%s replayed_itf_states=%s\n' \
+  "${#schedule_traces[@]}" "$observed_schedules" "$required_schedules" \
+  "$replayed_states"
 printf 'EVIDENCE: total_runtime_seconds=%s\n' "$((SECONDS - started_at))"
 printf 'MODE: %s\n' "${mode#--}"
 printf 'CANDIDATE: %s\n' "$candidate"
