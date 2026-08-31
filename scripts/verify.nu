@@ -45,6 +45,9 @@ run-checked "MoonBit check" {
 run-checked "MoonBit tests" {
   ^moon test --target all --frozen
 }
+run-checked "Text epoch cutover protocol" {
+  ^nu ./tools/verification/text_epoch_cutover/run.nu
+}
 run-checked "MoonBit interface generation" {
   ^moon info --frozen
 }
