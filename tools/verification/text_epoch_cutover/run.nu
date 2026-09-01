@@ -16,6 +16,12 @@ def run-checked [description: string, command: closure] {
 
 cd ($env.FILE_PWD | path expand)
 
+run-checked "Prepare text epoch cutover dependencies" {
+  ^moon build --target native
+}
+run-checked "Text epoch cutover manifest stability" {
+  ^git diff --exit-code -- moon.mod
+}
 run-checked "Text epoch cutover baseline tests" {
   ^moon test baseline_test.mbt --target native --frozen
 }
