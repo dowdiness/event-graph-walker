@@ -1,0 +1,76 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "dowdiness/text_epoch_cutover_verification"
+
+import {
+  "dowdiness/event-graph-walker/text",
+}
+
+// Values
+
+// Errors
+pub(all) suberror ProtocolError {
+  InvalidChunkSize(Int)
+  InvalidDocumentId
+  InvalidEpoch(Int)
+  InvalidSubmissionIdentity
+  StaleEpoch(expected~ : Int, actual~ : Int)
+  Quiescing(Int)
+  PendingOperations(Int)
+  SubmissionConflict(client_instance_id~ : String, sequence~ : Int)
+  InvalidCursor(requested~ : Int, current~ : Int)
+  CutoverAlreadyStarted(Int)
+  CutoverNotStarted(Int)
+  BaselineSourceMismatch
+  TextFailure(@text.TextError)
+}
+
+// Types and methods
+pub struct Baseline {
+  // private fields
+}
+pub fn Baseline::apply_to(Self, String) -> @text.TextState raise ProtocolError
+pub fn Baseline::build(String, baseline_agent~ : String, chunk_scalars~ : Int) -> Self raise ProtocolError
+pub fn Baseline::page_count(Self) -> Int
+pub fn Baseline::page_json(Self) -> Array[String]
+pub fn Baseline::text(Self) -> String
+pub fn Baseline::version(Self) -> @text.Version
+
+pub struct LogEntry {
+  // private fields
+}
+pub fn LogEntry::cursor(Self) -> Int
+pub fn LogEntry::epoch(Self) -> Int
+pub fn LogEntry::request_json(Self) -> String
+
+pub struct Server {
+  // private fields
+}
+pub fn Server::Server(String, epoch~ : Int, server_agent~ : String) -> Self raise ProtocolError
+pub fn Server::archived_entry_count(Self, Int) -> Int?
+pub fn Server::archived_text(Self, Int) -> String?
+pub fn Server::begin_cutover(Self, expected_epoch~ : Int) -> Unit raise ProtocolError
+pub fn Server::cancel_cutover(Self, expected_epoch~ : Int) -> Unit raise ProtocolError
+pub fn Server::cursor(Self) -> Int
+pub fn Server::document_id(Self) -> String
+pub fn Server::epoch(Self) -> Int
+pub fn Server::has_archived_epoch(Self, Int) -> Bool
+pub fn Server::is_quiescing(Self) -> Bool
+pub fn Server::lookup_receipt(Self, epoch~ : Int, client_instance_id~ : String, submission_sequence~ : Int, request_json~ : String) -> SubmitOutcome? raise ProtocolError
+pub fn Server::publish_cutover(Self, expected_epoch~ : Int, baseline~ : Baseline) -> Unit raise ProtocolError
+pub fn Server::submit(Self, epoch~ : Int, client_instance_id~ : String, submission_sequence~ : Int, request_json~ : String) -> SubmitOutcome raise ProtocolError
+pub fn Server::tail_after(Self, epoch~ : Int, cursor~ : Int) -> Array[LogEntry] raise ProtocolError
+pub fn Server::text(Self) -> String
+
+pub struct SubmitOutcome {
+  // private fields
+}
+pub fn SubmitOutcome::applied_operations(Self) -> Int
+pub fn SubmitOutcome::cursor(Self) -> Int
+pub fn SubmitOutcome::duplicate_operations(Self) -> Int
+pub fn SubmitOutcome::epoch(Self) -> Int
+pub fn SubmitOutcome::is_replay(Self) -> Bool
+pub fn SubmitOutcome::pending_operations(Self) -> Int
+
+// Type aliases
+
+// Traits
