@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rather than emitting a Version the decoder would reject.
 - Canonical text SyncMessage bytes use the v2 domain. Tree and container schemas
   are unchanged. See
-  [`docs/MIGRATING_TEXT_SCHEMA_2.md`](docs/MIGRATING_TEXT_SCHEMA_2.md).
+  [`docs/migration/text-schema-2.md`](docs/migration/text-schema-2.md).
 
 ## [0.7.1] - 2026-08-02
 
@@ -48,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The public `undo.Undoable` interface now hides visibility lookup and returns
   `CompensatingEditResult::Applied` or `::Stale` from `delete_lv` and
   `undelete_lv`. Custom adapters must follow the migration guide in
-  [`docs/MIGRATING_UNDO_API.md`](docs/MIGRATING_UNDO_API.md).
+  [`docs/migration/undo-api.md`](docs/migration/undo-api.md).
 - The legacy `UndoError::ItemNotFound` variant has been removed. Stale targets
   are reported as `CompensatingEditResult::Stale` instead.
 - `TextError` now includes `InvalidText(detail)` for malformed local UTF-16.
@@ -134,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   midpoint insertion, ancestry queries, and mixed edit/query workloads, plus
   property coverage for Fugue ancestry invariants.
 
-See [Migrating to v0.5](docs/MIGRATING_TO_0.5.md).
+See [Migrating to v0.5](docs/migration/to-v0.5.md).
 
 ## [0.4.0] - 2026-07-20
 
@@ -185,7 +185,7 @@ See [Migrating to v0.5](docs/MIGRATING_TO_0.5.md).
 - `CausalSnapshot` no longer exposes `CausalGraph`, `GraphEntry`, or a public
   `from_graph` constructor.
 
-See [Migrating to v0.4](docs/MIGRATING_TO_0.4.md).
+See [Migrating to v0.4](docs/migration/to-v0.4.md).
 
 ## [0.3.0] - 2026-05-07
 

@@ -1,7 +1,46 @@
 # Examples
 
-These examples use only public façade APIs. Equivalent cases are compiled as
-tests in `examples/examples_test.mbt`.
+These examples demonstrate common tasks using only public façade APIs. Equivalent test suites are compiled in `examples/examples_test.mbt`.
+
+---
+
+## Contents
+
+- [Text operations and error handling](#text-operations-and-error-handling)
+- [Text synchronization](#text-synchronization)
+- [Tree synchronization](#tree-synchronization)
+- [Text undo and redo](#text-undo-and-redo)
+- [Container document and undo](#container-document-and-undo)
+- [Historical checkout](#historical-checkout)
+
+---
+
+## Text operations and error handling
+
+Constructing ranges or addressing out-of-bounds positions raises explicit `TextError` variants:
+
+```moonbit
+let doc = @text.TextState::new("alice-laptop")
+doc.insert(@text.Pos::at(0), "Hello World")
+
+// Safely construct a range:
+let range = @text.Range::from_ints(0, 5) catch {
+  @text.TextError::InvalidRange(start~, end~) => {
+    println("Failed: start \{start} > end \{end}")
+    return
+  }
+  error => raise error
+}
+
+// Safely delete a range with bounds checking:
+doc.delete_range(range) catch {
+  @text.TextError::InvalidPosition(pos~, len~) =>
+    println("Failed: endpoint \{pos} exceeds document length \{len}")
+  error => raise error
+}
+
+println(doc.text()) // " World"
+```
 
 ## Text synchronization
 

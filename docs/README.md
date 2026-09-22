@@ -4,11 +4,9 @@ This index separates current user guidance from contributor notes, design work, 
 
 ## Reading Order
 
-- [Package README](../README.md) - package overview, quick starts, public packages, and commands.
+- [Package README](../README.md) - package overview, quick starts, public packages, and repository layout.
 - [Worked examples](EXAMPLES.md) - sync error handling, undo/redo, historical checkout, and incremental catch-up.
-- [Migrating to v0.5](MIGRATING_TO_0.5.md) - source migration from v0.4; wire-compatible.
-- [Migrating the Undoable API](MIGRATING_UNDO_API.md) - source migration to Applied/Stale compensating-edit results; wire-compatible.
-- [Migrating to v0.4](MIGRATING_TO_0.4.md) - required source and wire changes from v0.3.
+- [Migration guides](migration/README.md) - version-to-version upgrade notes and protocol transitions.
 
 ## Learning Path
 
@@ -33,6 +31,7 @@ This index separates current user guidance from contributor notes, design work, 
 
 These are useful when changing internals, reviewing algorithm choices, or planning performance work. They are not the first-time user path.
 
+- [Contributing guide](../CONTRIBUTING.md) - local development setup, verification commands, and PR workflow.
 - [eg-walker implementation](EG_WALKER_IMPLEMENTATION.md)
 - [Undo manager design](UNDO_MANAGER_DESIGN.md)
 - [Stabilization roadmap](STABILIZATION_ROADMAP.md)
