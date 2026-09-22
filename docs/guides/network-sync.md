@@ -1,8 +1,10 @@
 # Network Synchronization for CRDT Collaboration
 
 Event Graph Walker supplies strict JSON codecs and synchronization state
-machines, but no transport, signaling, authentication, persistence, or key
+machines, but no transport, signaling, authentication, storage adapter, or key
 management. The Canopy parent repository supplies the demo WebRTC integration.
+For storage-independent text recovery, use the
+[accepted-history persistence recipe](examples.md#accepted-text-history-persistence).
 The current text protocol is a breaking schema-2 contract for both SyncMessage
 and Version. It intentionally rejects schema 1 rather than guessing sparse
 knowledge from a flat maximum. Tree and container retain their own schema-1
@@ -326,7 +328,7 @@ myTransport.onMessage((payload) => {
 
 ## Future Improvements
 
-- [ ] Persistent storage with operation log replay
+- [ ] Storage adapter (accepted-history replay recipe is documented above)
 - [x] Exact text frontier plus sparse sequence-range delta summary (prototype)
 - [x] Reject text schema 1 at the breaking schema-2 boundary
 - [ ] Delta encoding for reduced bandwidth
