@@ -1,12 +1,12 @@
 # Eg-walker Implementation Status for MoonBit
 
 > **📚 HISTORICAL RECORD.** This document tracks the journey of implementing eg-walker phases 1–4. File paths throughout reference the **pre-restructure layout** and have since shifted:
-> - MoonBit packages now live under `internal/` (e.g. `/causal_graph/graph.mbt` → `internal/causal_graph/graph.mbt`). See [STABILIZATION_ROADMAP.md](../STABILIZATION_ROADMAP.md) for the public-API-sealing work.
+> - MoonBit packages now live under `internal/` (e.g. `/causal_graph/graph.mbt` → `internal/causal_graph/graph.mbt`). See [Stabilization Roadmap](../internals/roadmaps/stabilization.md) for the public-API-sealing work.
 > - The merge algorithm lives in `internal/branch/branch_merge.mbt`, not `/merge/merge.mbt`.
 > - Network sync assets (`signaling-server.js`, the TypeScript client) now live in the **canopy parent repo** at `examples/web/`, not in a sibling `web/` directory of this submodule.
 > - The `/crdt.mbt` FFI described in Phase 4 has been superseded by the current public-API surface; see [Formal Specification](./formal-specification.md) and the current `.mbti` files for the authoritative interface.
 >
-> For current design docs, prefer `STABILIZATION_ROADMAP.md`, `OPTIMIZATION_ROADMAP.md`, [Network Synchronization](../guides/network-sync.md), and `BENCHMARKS.md`.
+> For current design docs, prefer [Stabilization Roadmap](../internals/roadmaps/stabilization.md), [Optimization Roadmap](../internals/roadmaps/optimization.md), [Network Synchronization](../guides/network-sync.md), and [Benchmarks](../internals/benchmarks/README.md).
 
 > **🎉 STATUS: IMPLEMENTATION COMPLETE** (330 tests passing at the time this doc was last updated)
 >
@@ -291,7 +291,7 @@ Comprehensive performance benchmarks have been added:
 
 Run with: `moon bench --release`
 
-See [BENCHMARKS.md](./BENCHMARKS.md) for detailed documentation.
+See [Benchmarks](../internals/benchmarks/README.md) for detailed documentation.
 
 ### Baseline Performance Results
 

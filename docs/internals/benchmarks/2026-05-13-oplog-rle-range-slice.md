@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-13
 **Command:** `moon bench -p internal/oplog --release`
-**Baseline:** `docs/benchmarks/2026-03-18-rle-all-phases-complete.md`
+**Baseline:** `docs/internals/benchmarks/2026-03-18-rle-all-phases-complete.md`
 
 ## Problem
 

@@ -175,7 +175,7 @@ event-graph-walker/
   - [Walker Usage](docs/guides/walker-usage.md) - Lower-level causal graph and oplog APIs.
 - **[Architecture & Design](docs/architecture/README.md)**: In-depth mechanics of eg-walker, FugueMax, selective undo, and formal invariants.
 - **[Migration Guides](docs/migration/README.md)**: Upgrading between major versions and protocol schemas.
-- **[Benchmarks](docs/BENCHMARKS.md)**: Performance benchmarks and methodologies.
+- **[Benchmarks](docs/internals/benchmarks/README.md)**: Performance benchmarks and methodologies.
 
 ---
 

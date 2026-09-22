@@ -308,7 +308,7 @@ After the first Version request, incremental range insertion is allowed because
 its cost is coupled to the accepted identity transition.
 
 The normative limits above are justified by the adversarial native and
-JavaScript measurements in `docs/BENCHMARKS.md`, including fragmented
+JavaScript measurements in `docs/internals/benchmarks/README.md`, including fragmented
 single-agent histories, many-agent histories, and mixed fragmentation. Both
 cold reconstruction and warm snapshots require benchmarks. Optimizations may
 change storage or encoding, but must preserve exact membership and the

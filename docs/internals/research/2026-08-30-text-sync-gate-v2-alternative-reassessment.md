@@ -47,10 +47,10 @@ Primary sources:
   `moonbit-community/quickcheck_statemachine@0.0.1`, whose published manifest
   has no repository URL.
 - Current EGW implementation:
-  [`tools/verification/text_sync_gate_v2/`](../../tools/verification/text_sync_gate_v2/),
-  [`text/text_convergence_fuzz_test.mbt`](../../text/text_convergence_fuzz_test.mbt),
-  [`text/text_properties_test.mbt`](../../text/text_properties_test.mbt), and
-  [`tools/verification/text_reference/`](../../tools/verification/text_reference/).
+  [`tools/verification/text_sync_gate_v2/`](../../../tools/verification/text_sync_gate_v2/),
+  [`text/text_convergence_fuzz_test.mbt`](../../../text/text_convergence_fuzz_test.mbt),
+  [`text/text_properties_test.mbt`](../../../text/text_properties_test.mbt), and
+  [`tools/verification/text_reference/`](../../../tools/verification/text_reference/).
 
 ## Important distinction discovered
 

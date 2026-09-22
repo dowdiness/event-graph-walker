@@ -341,7 +341,7 @@ If any gate fails, stop. Keep the fixed-point oracle and revert the production c
 **Files**
 
 - Delete `internal/oplog/prototype_issue_86/`
-- `docs/adr/0004-canonical-pending-remote-owner.md` only for measured threshold/consequence updates
+- `docs/internals/adr/0004-canonical-pending-remote-owner.md` only for measured threshold/consequence updates
 - Issue #86 and plan status
 
 **Work**

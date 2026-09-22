@@ -4,7 +4,7 @@ Gate V2 checks schema-2 causal authority rules in a bounded raw Quint model and
 replays model-derived ITF observations through the public MoonBit text API.
 
 The canonical design is
-[`docs/research/2026-08-29-text-sync-gate-v2-design.md`](../../../docs/research/2026-08-29-text-sync-gate-v2-design.md).
+[`docs/internals/research/2026-08-29-text-sync-gate-v2-design.md`](../../../docs/internals/research/2026-08-29-text-sync-gate-v2-design.md).
 
 ## Architecture
 

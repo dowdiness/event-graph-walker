@@ -4,7 +4,7 @@
 
 **Status:** Completed and archived (2026-08-04); implemented by [PR #110](https://github.com/dowdiness/event-graph-walker/pull/110)
 
-**Canonical term:** [Shared document projection](../../CONTEXT.md#shared-document)
+**Canonical term:** [Shared document projection](../../../../CONTEXT.md#shared-document)
 
 ## Why
 
@@ -53,7 +53,7 @@ Create one deep in-process module whose interface applies one admitted operation
 - Large Document merges invalidate IndexedState and advance a retained Branch (`internal/document/document.mbt:821-859`).
 - `BranchError` already represents missing origins, missing operations, OpLog failures, and Fugue failures (`internal/branch/errors.mbt`).
 - `DocumentError` already represents missing origins, missing local versions through OpLog, Fugue failures, and Branch failures (`internal/document/errors.mbt`).
-- ADR 0003 requires admitted operations and successful projection prefixes not to be rolled back after an internal projection failure (`docs/adr/0003-consistency-boundaries.md`). ADR 0004 requires a partial admitted prefix to be projected exactly once (`docs/adr/0004-canonical-pending-remote-owner.md`).
+- ADR 0003 requires admitted operations and successful projection prefixes not to be rolled back after an internal projection failure (`docs/internals/adr/0003-consistency-boundaries.md`). ADR 0004 requires a partial admitted prefix to be projected exactly once (`docs/internals/adr/0004-canonical-pending-remote-owner.md`).
 
 ## Desired State
 

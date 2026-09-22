@@ -23,7 +23,7 @@ Issues identified during codebase analysis that should be addressed before v1.0:
 
 | Issue | Location | Description |
 |-------|----------|-------------|
-| ~~Undocumented private functions~~ | `internal/causal_graph/walker.mbt:30,81`, `internal/fugue/tree.mbt:152,159,213` (RLE-related `runs.mbt` reference dropped — module not present in the current tree, see `docs/architecture/rle-design.md` and `docs/decisions-needed.md`) | ✅ Fixed: Added `///|` doc comments with invariants and complexity analysis. |
+| ~~Undocumented private functions~~ | `internal/causal_graph/walker.mbt:30,81`, `internal/fugue/tree.mbt:152,159,213` (RLE-related `runs.mbt` reference dropped — module not present in the current tree, see `docs/architecture/rle-design.md` and `docs/internals/roadmaps/decisions-needed.md`) | ✅ Fixed: Added `///|` doc comments with invariants and complexity analysis. |
 | ~~Unclear delete operation semantics~~ | `internal/core/operation.mbt:39-47` | ✅ Fixed: Added doc comment explaining `origin_left` is the tombstone ID. |
 | ~~Asymmetric sync API~~ | `text/sync.mbt` | ✅ Fixed: Added module-level documentation explaining the sender-side filtering pattern. |
 
@@ -73,7 +73,7 @@ From `OPTIMIZATION_ROADMAP.md` and `architecture/eg-walker.md`:
 |-------|----------|----------|-------------|
 | ~~O(n²) frontier comparison~~ | `internal/branch/branch.mbt:141-158` | High | ✅ Fixed: Now uses sorted array comparison O(n log n) instead of O(n²) nested `.contains()`. Preserves element multiplicity. |
 | Unnecessary array copies | `internal/branch/branch.mbt`, `internal/oplog/oplog.mbt` | Medium | Not addressed. `get_frontier()` and `get_all_ops()` still return defensive copies; the planned `frontier_ref()` / `ops_ref()` zero-copy variants were never added. Revisit if profiling shows defensive copies dominating cost. |
-| ~~O(n) position mapping~~ | `internal/document/document.mbt` | Medium | ✅ Fixed: Added lazy `position_cache: @order_tree.OrderTree[VisibleRun]?` that caches visible items. Initial fix used a flat `Array[(Int, @fugue.Item)]?` with O(1) lookup but O(n) rebuild on mutation; later upgraded to `OrderTree` with O(log n) lookup and incremental updates (see `docs/OPTIMIZATION_ROADMAP.md`). |
+| ~~O(n) position mapping~~ | `internal/document/document.mbt` | Medium | ✅ Fixed: Added lazy `position_cache: @order_tree.OrderTree[VisibleRun]?` that caches visible items. Initial fix used a flat `Array[(Int, @fugue.Item)]?` with O(1) lookup but O(n) rebuild on mutation; later upgraded to `OrderTree` with O(log n) lookup and incremental updates (see `docs/internals/roadmaps/optimization.md`). |
 | Repeated prefix sum rebuilds | `rle/rle.mbt:45-60` (RLE module not present — see `docs/architecture/rle-design.md`) | Low | Historical note: when RLE was in-tree the lazy `prefix: PrefixSums?` cache mitigated rebuild cost. Re-evaluate if RLE is revived. |
 
 ## Phase 5: Ecosystem Integration

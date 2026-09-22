@@ -78,7 +78,7 @@ For performance profiling and benchmarking:
 moon bench --release
 ```
 
-See [docs/BENCHMARKS.md](docs/BENCHMARKS.md) for more details on benchmarking setups and history.
+See [docs/internals/benchmarks/README.md](docs/internals/benchmarks/README.md) for more details on benchmarking setups and history.
 
 ---
 

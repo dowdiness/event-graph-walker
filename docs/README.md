@@ -55,13 +55,18 @@ The generated `.mbti` interface files represent the authoritative public API sur
 
 ---
 
-## 5. Contributor & Project Resources
+## 5. Contributor & Project Resources (`internals/`)
 
 Resources for hacking on internals, profiling performance, and tracking project state:
 
 - **[Contributing Guide](../CONTRIBUTING.md)**: Local dev setup, testing recipes, and PR guidelines.
-- **[Benchmarks](BENCHMARKS.md)**: Benchmark commands, baselines, and profiling notes.
-- **[Stabilization Roadmap](STABILIZATION_ROADMAP.md)**: Invariant hardening and verification status.
-- **[Optimization Roadmap](OPTIMIZATION_ROADMAP.md)**: Performance milestones and targets.
-- **[Decisions Needed](decisions-needed.md)**: Open architectural questions.
-- **[ADR Records](adr/)**: Architectural Decision Records.
+- **[Benchmarks](internals/benchmarks/README.md)**: Benchmark commands, baselines, and profiling notes.
+- **[Stabilization Roadmap](internals/roadmaps/stabilization.md)**: Invariant hardening and verification status.
+- **[Optimization Roadmap](internals/roadmaps/optimization.md)**: Performance milestones and targets.
+- **[Decisions Needed](internals/roadmaps/decisions-needed.md)**: Open architectural questions.
+- **[ADR Records](internals/adr/)**: Architectural Decision Records (ADR 0001–0009).
+- **[Benchmark Records](internals/benchmarks/)**: Raw benchmark snapshots.
+- **[Performance Evidence](internals/performance/)**: Profiling data and characterization reports.
+- **[Plans](internals/plans/)**: Active and archived implementation plans.
+- **[Research Notes](internals/research/)**: Experimental designs and alternative assessments.
+- **[Decision Records](internals/decisions/)**: Resolved implementation decisions.

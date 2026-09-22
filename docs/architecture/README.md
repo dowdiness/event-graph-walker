@@ -19,4 +19,4 @@ In-depth conceptual guides and design specifications for the core algorithms pow
 
 - [Original eg-walker paper](https://arxiv.org/abs/2409.14252)
 - [Original Fugue paper](https://arxiv.org/abs/2305.00583)
-- [Architecture Decision Records (ADRs)](../adr/)
+- [Architecture Decision Records (ADRs)](../internals/adr/)

@@ -70,7 +70,7 @@ The sync envelope uses schema `2` and format
 
 The implementation contract is defined by:
 
-- `docs/adr/0009-text-causality-and-sparse-version.md`;
+- `docs/internals/adr/0009-text-causality-and-sparse-version.md`;
 - `internal/causal_graph/graph.mbt`;
 - `internal/causal_graph/graph_version.mbt`;
 - `text/sync.mbt`;

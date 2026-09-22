@@ -8,7 +8,7 @@ A `RawVersion` names one operation by `agent` and `seq`. Receiving that operatio
 
 ## Evidence
 
-An `Op` carries more than its `RawVersion`: destination-local `lv`, parents, content, and left/right origins (`internal/core/version.mbt:22-25`; `internal/core/operation.mbt:18-25`). ADR 0004 settles identical retransmission but leaves different-payload detection open (`docs/adr/0004-canonical-pending-remote-owner.md`, "Duplicates and identity conflicts").
+An `Op` carries more than its `RawVersion`: destination-local `lv`, parents, content, and left/right origins (`internal/core/version.mbt:22-25`; `internal/core/operation.mbt:18-25`). ADR 0004 settles identical retransmission but leaves different-payload detection open (`docs/internals/adr/0004-canonical-pending-remote-owner.md`, "Duplicates and identity conflicts").
 
 The public sync façades already know the difference. Text sync compares sorted parents, content, and origins while omitting `lv`; it checks both the incoming message and pending/admitted history (`text/sync.mbt:47-67`, `:394-407`, `:1090-1152`). Container sync applies the same rule to its richer records (`container/sync_protocol.mbt:76-115`, `:1141-1208`). Both raise `Failure::ConflictingIdentity`, which peer sync treats as terminal (`sync/types.mbt:18-24`; `peer_sync/peer_sync.mbt:208-220`).
 
@@ -61,4 +61,4 @@ The guarantee lasts only while an authoritative full payload remains pending or 
 
 The implementation adds `OpLogError::ConflictingIdentity(raw)`. This is an intentional exported `.mbti` change, even though the comparator stays private. Richer commit/report receipts remain Issue #72's concern. Issue #87 retains performance measurement, and PRs #90, #91, and #92 retain their property scopes.
 
-The completed implementation record is archived at `docs/plans/archive/2026-07-26-rawversion-identity-conflict-implementation-issue.md`. It changes no persistence or wire format.
+The completed implementation record is archived at `docs/internals/plans/archive/2026-07-26-rawversion-identity-conflict-implementation-issue.md`. It changes no persistence or wire format.

@@ -4,7 +4,7 @@
 **State:** All three RLE phases complete (Phase 0: submodule swap, Phase 1: OpRun, Phase 2: VisibleRun, Phase 3: LvRange)
 **Command:** `moon bench --release` in event-graph-walker worktree
 **Platform:** Linux 6.6.87.2-microsoft-standard-WSL2
-**Baseline:** `docs/benchmarks/2026-03-18-rle-phase0-baseline.md`
+**Baseline:** `docs/internals/benchmarks/2026-03-18-rle-phase0-baseline.md`
 
 ---
 

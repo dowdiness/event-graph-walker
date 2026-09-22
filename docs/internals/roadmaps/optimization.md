@@ -3,7 +3,7 @@
 > **Status (2026-03-24):** Phases 1, 2b, 3, and binary lifting LCA are all complete. This roadmap was written during Phase 1 and has not been updated with details of later phases. See the archived plans in the parent canopy repo's `docs/archive/` (e.g. `2026-03-17-rle-phase*.md`, `2026-03-18-crdt-append-performance*.md`, `2026-03-18-lww-delete-undelete.md`) for implementation details of each phase.
 
 **Status**: Phase 1 **COMPLETED** ✅ (2026-01-09)
-**For detailed performance data**: See [BENCHMARKS.md](./BENCHMARKS.md) and [benchmarks/](./benchmarks/) for snapshots.
+**For detailed performance data**: See [benchmarks/README.md](../benchmarks/README.md) and [benchmarks/](../benchmarks/) for snapshots.
 
 ---
 
@@ -51,7 +51,7 @@ The critical O(n²) bottleneck in topological sort has been eliminated by buildi
 - Root cause: defensive `invalidate_cache()` before lookups was unnecessary — cache is always valid at `insert()` entry
 - Fix: remove invalidation, use existing cache for lookups, maintain via `OrderTree.insert_at`
 - Result: O(n) → O(log n). Single non-seq insert: 1.47ms → 4.79µs (306x) at 1000 chars
-- See `docs/benchmarks/2026-03-31-incremental-position-cache.md`
+- See `docs/internals/benchmarks/2026-03-31-incremental-position-cache.md`
 
 **Zero-Copy Reference Methods** — *Not shipped.* This item was previously
 marked ✅ but `Branch::frontier_ref()` and `OpLog::ops_ref()` were never
@@ -119,14 +119,14 @@ match children.get(current) {
 
 ## References
 
-**Detailed Analysis**: [BENCHMARKS.md](./BENCHMARKS.md)
+**Detailed Analysis**: [benchmarks/README.md](../benchmarks/README.md)
 - Current benchmark commands and categories
-- Snapshots archived under [benchmarks/](./benchmarks/)
+- Snapshots archived under [benchmarks/](../benchmarks/)
 
-**Architecture**: [eg-walker Implementation](architecture/eg-walker.md)
+**Architecture**: [eg-walker Implementation](../../architecture/eg-walker.md)
 - Eg-walker CRDT algorithm details
 - Implementation guidance
 
-**Testing**: [BENCHMARKS.md](./BENCHMARKS.md)
+**Testing**: [benchmarks/README.md](../benchmarks/README.md)
 - How to run benchmarks
 - Performance testing guide
