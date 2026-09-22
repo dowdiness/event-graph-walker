@@ -85,7 +85,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
   )
   let admitted = try! receiver
     .sync()
-    .apply_with_limits(authoritative, @sync.Limits::default())
+    .apply_with_limits(authoritative, Default::default())
   inspect(admitted.applied_operations(), content="2")
   inspect(admitted.duplicate_operations(), content="1")
   inspect(admitted.pending_operations(), content="0")
@@ -94,7 +94,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
 
   let duplicate = try! receiver
     .sync()
-    .apply_with_limits(authoritative, @sync.Limits::default())
+    .apply_with_limits(authoritative, Default::default())
   inspect(duplicate.applied_operations(), content="0")
   inspect(duplicate.duplicate_operations(), content="2")
   inspect(duplicate.pending_operations(), content="0")
@@ -535,7 +535,7 @@ test "receiver-specific decoder honors raised parent limits in validation" {
   let message = try! @text.SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
   let strict = try! @text.TextState::new("strict")
-  try strict.sync().apply_with_limits(message, @sync.Limits::default()) catch {
+  try strict.sync().apply_with_limits(message, Default::default()) catch {
     @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,

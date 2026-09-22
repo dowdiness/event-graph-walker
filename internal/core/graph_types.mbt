@@ -118,6 +118,7 @@ pub(all) struct GraphEntry {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Frontier with @debug.Debug::{to_repr}
 
@@ -127,16 +128,27 @@ pub extend Frontier with @json.FromJson::{from_json}
 
 ///|
 #doc(hidden)
-pub extend Frontier with Eq::{not_equal, equal}
+pub extend Frontier with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Frontier with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend Frontier with Show::{to_string, output}
+pub extend Frontier with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Frontier with Show::{output}
 
 ///|
 #doc(hidden)
 pub extend Frontier with ToJson::{to_json}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend GraphEntry with @debug.Debug::{to_repr}

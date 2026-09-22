@@ -59,4 +59,9 @@ pub impl Show for TextView with fn output(self, logger) {
 
 ///|
 #doc(hidden)
-pub extend TextView with Show::{to_string, output}
+pub extend TextView with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TextView with Show::{output}

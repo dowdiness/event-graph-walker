@@ -46,7 +46,7 @@ pub impl @debug.Debug for TextState with fn to_repr(self) {
 ///|
 /// Create a new empty document with the given agent ID
 pub fn TextState::new(agent_id : String) -> TextState raise TextError {
-  TextState::new_with_sync_limits(agent_id, @sync.Limits::default())
+  TextState::new_with_sync_limits(agent_id, Default::default())
 }
 
 ///|
@@ -230,9 +230,15 @@ fn checked_range_bounds(
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend TextState with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend TextState with Show::{to_string, output}
+pub extend TextState with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TextState with Show::{output}

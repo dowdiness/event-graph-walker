@@ -273,17 +273,25 @@ test "property: generated local traces preserve compressed query semantics" {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CompressionExpectedOp with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend CompressionExpectedOp with Eq::{not_equal, equal}
+pub extend CompressionExpectedOp with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend CompressionExpectedOp with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CompressionLocalEdit with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CompressionTrace with @debug.Debug::{to_repr}

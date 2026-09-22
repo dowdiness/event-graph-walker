@@ -493,7 +493,7 @@ pub struct Document {
 /// Reusing the same id on two replicas causes node-id collisions and silent op
 /// loss during synchronization.
 pub fn Document::new(replica_id : String) -> Document raise DocumentError {
-  Document::new_with_sync_limits(replica_id, @sync.Limits::default())
+  Document::new_with_sync_limits(replica_id, Default::default())
 }
 
 ///|
@@ -1576,25 +1576,62 @@ pub fn SyncSession::clear_pending_sync(self : SyncSession) -> Unit {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend TreeNodeId with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend TreeNodeId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend TreeNodeId with Compare::{compare}
+
+///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TreeNodeId with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TreeNodeId with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TreeNodeId with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TreeNodeId with Compare::{op_gt}
 
 ///|
 #doc(hidden)
-pub extend TreeNodeId with Eq::{not_equal, equal}
+pub extend TreeNodeId with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend TreeNodeId with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend TreeNodeId with Hash::{hash, hash_combine}
+pub extend TreeNodeId with Hash::{hash}
 
 ///|
+#deprecated("Use `Hash::hash_combine` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend TreeNodeId with Hash::{hash_combine}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Version with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Version with Eq::{not_equal, equal}
+pub extend Version with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Version with Eq::{not_equal}

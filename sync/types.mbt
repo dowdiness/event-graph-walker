@@ -141,28 +141,51 @@ pub fn Limits::max_parents_per_operation(self : Limits) -> Int {
 
 ///|
 #doc(hidden)
-pub extend Failure with Show::{to_string, output}
+pub extend Failure with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Failure with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend LimitKind with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend LimitKind with Eq::{not_equal, equal}
+pub extend LimitKind with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LimitKind with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend LimitKind with Show::{to_string, output}
+pub extend LimitKind with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LimitKind with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Limits with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `Default::default` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Limits with Default::{default}
 
 ///|
 #doc(hidden)
-pub extend Limits with Eq::{not_equal, equal}
+pub extend Limits with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Limits with Eq::{not_equal}

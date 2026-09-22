@@ -210,18 +210,25 @@ pub fn Op::get_insert_text(self : Op) -> String? {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Op with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Op with Show::{to_string, output}
+pub extend Op with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Op with Show::{output}
 
 ///|
 #doc(hidden)
 pub extend Op with ToJson::{to_json}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend OpContent with @debug.Debug::{to_repr}
 
@@ -231,11 +238,21 @@ pub extend OpContent with @json.FromJson::{from_json}
 
 ///|
 #doc(hidden)
-pub extend OpContent with Eq::{not_equal, equal}
+pub extend OpContent with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend OpContent with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend OpContent with Show::{to_string, output}
+pub extend OpContent with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend OpContent with Show::{output}
 
 ///|
 #doc(hidden)

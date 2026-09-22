@@ -897,17 +897,25 @@ test "property: missing parent and origin dependencies drain exactly once" {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend RemoteDeliveryEvidence with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend RemoteDeliverySnapshot with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend RemoteDeliverySnapshot with Eq::{not_equal, equal}
+pub extend RemoteDeliverySnapshot with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RemoteDeliverySnapshot with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend RemoteDeliveryTrace with @debug.Debug::{to_repr}

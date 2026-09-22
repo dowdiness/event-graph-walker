@@ -213,17 +213,48 @@ fn between_impl(
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend FractionalIndex with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend FractionalIndex with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend FractionalIndex with Compare::{compare}
+
+///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FractionalIndex with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FractionalIndex with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FractionalIndex with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FractionalIndex with Compare::{op_gt}
 
 ///|
 #doc(hidden)
-pub extend FractionalIndex with Eq::{not_equal, equal}
+pub extend FractionalIndex with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FractionalIndex with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend FractionalIndex with Show::{to_string, output}
+pub extend FractionalIndex with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FractionalIndex with Show::{output}

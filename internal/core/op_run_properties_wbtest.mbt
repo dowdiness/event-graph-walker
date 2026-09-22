@@ -505,13 +505,16 @@ test "property: OpRun::decompress metadata chains across offsets" {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CompatibleOpRunPair with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CompatibleOpRunTriple with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend OpRunSingle with @debug.Debug::{to_repr}

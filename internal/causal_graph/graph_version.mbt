@@ -317,17 +317,29 @@ pub fn CausalGraph::resolve_graph_version(
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend GraphVersion with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend GraphVersion with Eq::{not_equal, equal}
+pub extend GraphVersion with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend GraphVersion with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend GraphVersion with Hash::{hash, hash_combine}
+pub extend GraphVersion with Hash::{hash}
 
 ///|
+#deprecated("Use `Hash::hash_combine` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend GraphVersion with Hash::{hash_combine}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend GraphVersionError with @debug.Debug::{to_repr}

@@ -228,13 +228,16 @@ test "property: invalid slice bounds return errors" {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend VisibleRunModel with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend VisibleRunSlice with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend VisibleRunSplit with @debug.Debug::{to_repr}

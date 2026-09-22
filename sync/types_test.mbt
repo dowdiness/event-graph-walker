@@ -1,6 +1,6 @@
 ///|
 test "Limits defaults match the v0.4 contract" {
-  let limits : @sync.Limits = @sync.Limits::default()
+  let limits : @sync.Limits = Default::default()
   inspect(limits.max_encoded_bytes(), content="16777216")
   inspect(limits.max_decoded_operations(), content="100000")
   inspect(limits.max_pending_operations(), content="10000")

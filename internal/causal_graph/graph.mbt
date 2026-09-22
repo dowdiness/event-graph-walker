@@ -369,9 +369,15 @@ pub impl Show for CausalGraph with fn output(self, logger) {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CausalGraph with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend CausalGraph with Show::{to_string, output}
+pub extend CausalGraph with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend CausalGraph with Show::{output}

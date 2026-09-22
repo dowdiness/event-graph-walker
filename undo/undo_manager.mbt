@@ -244,5 +244,6 @@ pub fn UndoManager::clear(self : UndoManager) -> Unit {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend UndoManager with @debug.Debug::{to_repr}

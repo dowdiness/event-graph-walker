@@ -200,105 +200,255 @@ fn[T] Item::is_visible(self : Item[T]) -> Bool {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend InsertOp with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Item with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Item with Eq::{not_equal, equal}
+pub extend Item with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Item with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend Item with Show::{to_string, output}
+pub extend Item with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Item with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend ItemId with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend ItemId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend ItemId with Compare::{compare}
 
 ///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Compare::{op_gt}
+
+///|
+#deprecated("Use `Default::default` instead", skip_current_package=true)
 #doc(hidden)
 pub extend ItemId with Default::{default}
 
 ///|
 #doc(hidden)
-pub extend ItemId with Eq::{not_equal, equal}
+pub extend ItemId with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend ItemId with Hash::{hash, hash_combine}
+pub extend ItemId with Hash::{hash}
+
+///|
+#deprecated("Use `Hash::hash_combine` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Hash::{hash_combine}
 
 ///|
 #doc(hidden)
-pub extend ItemId with Show::{to_string, output}
+pub extend ItemId with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemId with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Lv with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Lv with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend Lv with Compare::{compare}
 
 ///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Compare::{op_gt}
+
+///|
+#deprecated("Use `Default::default` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Lv with Default::{default}
 
 ///|
 #doc(hidden)
-pub extend Lv with Eq::{not_equal, equal}
+pub extend Lv with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend Lv with Hash::{hash, hash_combine}
+pub extend Lv with Hash::{hash}
+
+///|
+#deprecated("Use `Hash::hash_combine` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Hash::{hash_combine}
 
 ///|
 #doc(hidden)
-pub extend Lv with Show::{to_string, output}
+pub extend Lv with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Lv with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend ReplicaId with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend ReplicaId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend ReplicaId with Compare::{compare}
+
+///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ReplicaId with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ReplicaId with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ReplicaId with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ReplicaId with Compare::{op_gt}
 
 ///|
 #doc(hidden)
-pub extend ReplicaId with Eq::{not_equal, equal}
+pub extend ReplicaId with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ReplicaId with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Side with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Side with Eq::{not_equal, equal}
+pub extend Side with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Side with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend Side with Show::{to_string, output}
+pub extend Side with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Side with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Timestamp with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Timestamp with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend Timestamp with Compare::{compare}
 
 ///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Timestamp with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Timestamp with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Timestamp with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Timestamp with Compare::{op_gt}
+
+///|
+#deprecated("Use `Default::default` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Timestamp with Default::{default}
 
 ///|
 #doc(hidden)
-pub extend Timestamp with Eq::{not_equal, equal}
+pub extend Timestamp with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Timestamp with Eq::{not_equal}

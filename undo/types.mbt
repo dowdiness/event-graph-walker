@@ -68,25 +68,39 @@ pub fn UndoError::is_retryable(self : UndoError) -> Bool {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CompensatingEditResult with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend CompensatingEditResult with Eq::{not_equal, equal}
+pub extend CompensatingEditResult with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend CompensatingEditResult with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend UndoGroup with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend UndoItem with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend UndoOpType with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend UndoOpType with Eq::{not_equal, equal}
+pub extend UndoOpType with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend UndoOpType with Eq::{not_equal}

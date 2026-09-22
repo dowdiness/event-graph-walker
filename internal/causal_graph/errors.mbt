@@ -21,5 +21,6 @@ pub(all) suberror CausalGraphError {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend CausalGraphError with @debug.Debug::{to_repr}

@@ -87,9 +87,15 @@ pub extend LvRange with @rle.Mergeable::{can_merge, merge}
 pub extend LvRange with @rle.Spanning::{logical_length, span}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend LvRange with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend LvRange with Eq::{not_equal, equal}
+pub extend LvRange with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LvRange with Eq::{not_equal}

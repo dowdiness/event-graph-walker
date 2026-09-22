@@ -167,7 +167,7 @@ fn decode_tree_sync_json(
 pub fn SyncMessage::from_json_string(
   json_string : String,
 ) -> SyncMessage raise TreeError {
-  decode_tree_sync_json(json_string, @sync.Limits::default(), payload => {
+  decode_tree_sync_json(json_string, Default::default(), payload => {
     @container.SyncMessage::from_json_string(payload)
   })
 }
@@ -199,7 +199,7 @@ pub fn Version::to_json_string(self : Version) -> String {
 pub fn Version::from_json_string(
   json_string : String,
 ) -> Version raise TreeError {
-  let _ = tree_json_size(json_string, @sync.Limits::default())
+  let _ = tree_json_size(json_string, Default::default())
   try {
     let root = @json.parse(json_string)
     let object = match root {

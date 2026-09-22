@@ -105,6 +105,7 @@ fn item_offset_to_utf16(text : String, item_offset : Int) -> Int {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend VisibleRun with @debug.Debug::{to_repr}
 
@@ -126,4 +127,9 @@ pub extend VisibleRun with @rle.Spanning::{logical_length, span}
 
 ///|
 #doc(hidden)
-pub extend VisibleRun with Eq::{not_equal, equal}
+pub extend VisibleRun with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VisibleRun with Eq::{not_equal}

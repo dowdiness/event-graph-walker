@@ -233,5 +233,6 @@ test "property: typed admission ownership partition is disjoint" {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend TypedOwnershipTrace with @debug.Debug::{to_repr}

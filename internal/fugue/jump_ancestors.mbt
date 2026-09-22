@@ -91,5 +91,6 @@ fn JumpAncestors::is_ancestor_item_id(
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend JumpAncestors with @debug.Debug::{to_repr}

@@ -226,17 +226,29 @@ pub extend OpRun with @rle.Mergeable::{can_merge, merge}
 pub extend OpRun with @rle.Spanning::{logical_length, span}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend OpRun with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend OpRun with Eq::{not_equal, equal}
+pub extend OpRun with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend OpRun with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend OpRunContent with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend OpRunContent with Eq::{not_equal, equal}
+pub extend OpRunContent with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend OpRunContent with Eq::{not_equal}

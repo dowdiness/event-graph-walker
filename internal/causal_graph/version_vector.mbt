@@ -492,6 +492,7 @@ pub fn VersionVector::includes(
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend VersionVector with @debug.Debug::{to_repr}
 
@@ -509,19 +510,50 @@ pub extend VersionVector with @qc.Shrink::{shrink}
 
 ///|
 #doc(hidden)
-pub extend VersionVector with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend VersionVector with Compare::{compare}
 
 ///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VersionVector with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VersionVector with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VersionVector with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VersionVector with Compare::{op_gt}
+
+///|
+#deprecated("Use `Default::default` instead", skip_current_package=true)
 #doc(hidden)
 pub extend VersionVector with Default::{default}
 
 ///|
 #doc(hidden)
-pub extend VersionVector with Eq::{not_equal, equal}
+pub extend VersionVector with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VersionVector with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend VersionVector with Show::{to_string, output}
+pub extend VersionVector with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend VersionVector with Show::{output}
 
 ///|
 #doc(hidden)

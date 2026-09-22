@@ -283,17 +283,29 @@ test "property: sync message converges mixed tree and text edits" {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend BlockEdit with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend BlockEdit with Show::{to_string, output}
+pub extend BlockEdit with Show::{to_string}
 
 ///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend BlockEdit with Show::{output}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend BlockScenario with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend BlockScenario with Show::{to_string, output}
+pub extend BlockScenario with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend BlockScenario with Show::{output}

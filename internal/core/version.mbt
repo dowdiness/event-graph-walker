@@ -91,6 +91,7 @@ pub impl Hash for RawVersion with fn hash_combine(self, hasher) {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend RawVersion with @debug.Debug::{to_repr}
 
@@ -100,17 +101,48 @@ pub extend RawVersion with @json.FromJson::{from_json}
 
 ///|
 #doc(hidden)
-pub extend RawVersion with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+pub extend RawVersion with Compare::{compare}
+
+///|
+#deprecated("Use `<` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RawVersion with Compare::{op_lt}
+
+///|
+#deprecated("Use `<=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RawVersion with Compare::{op_le}
+
+///|
+#deprecated("Use `>=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RawVersion with Compare::{op_ge}
+
+///|
+#deprecated("Use `>` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RawVersion with Compare::{op_gt}
 
 ///|
 #doc(hidden)
-pub extend RawVersion with Eq::{not_equal, equal}
+pub extend RawVersion with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend RawVersion with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend RawVersion with Hash::{hash, hash_combine}
+pub extend RawVersion with Hash::{hash}
 
 ///|
+#deprecated("Use `Hash::hash_combine` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend RawVersion with Hash::{hash_combine}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
 #doc(hidden)
 pub extend RawVersion with Show::{output}
 

@@ -109,33 +109,61 @@ fn Version::graph(self : Version) -> @causal_graph.GraphVersion {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Pos with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Pos with Eq::{not_equal, equal}
+pub extend Pos with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Pos with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Range with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Range with Eq::{not_equal, equal}
+pub extend Range with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Range with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Version with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Version with Eq::{not_equal, equal}
+pub extend Version with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Version with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend Version with Hash::{hash, hash_combine}
+pub extend Version with Hash::{hash}
+
+///|
+#deprecated("Use `Hash::hash_combine` via the trait instead", skip_current_package=true)
+#doc(hidden)
+pub extend Version with Hash::{hash_combine}
 
 ///|
 #doc(hidden)
-pub extend Version with Show::{to_string, output}
+pub extend Version with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Version with Show::{output}

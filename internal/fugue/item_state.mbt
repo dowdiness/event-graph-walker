@@ -72,17 +72,29 @@ pub fn ItemState::is_visible(self : ItemState, delete_count~ : Int) -> Bool {
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend ItemState with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `Default::default` instead", skip_current_package=true)
 #doc(hidden)
 pub extend ItemState with Default::{default}
 
 ///|
 #doc(hidden)
-pub extend ItemState with Eq::{not_equal, equal}
+pub extend ItemState with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemState with Eq::{not_equal}
 
 ///|
 #doc(hidden)
-pub extend ItemState with Show::{to_string, output}
+pub extend ItemState with Show::{to_string}
+
+///|
+#deprecated("Use `Show::output` via the trait or `to_string` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ItemState with Show::{output}

@@ -1162,9 +1162,11 @@ test "property: generated planner lifecycle traces match the model" {
 // --- Explicit trait-method promotions (E0079) ---
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend PlannerLifecycleEvent with @debug.Debug::{to_repr}
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend PlannerLifecycleTrace with @debug.Debug::{to_repr}

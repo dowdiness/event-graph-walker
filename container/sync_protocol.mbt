@@ -1464,7 +1464,7 @@ fn decode_container_sync_json(
 pub fn SyncMessage::from_json_string(
   json_string : String,
 ) -> SyncMessage raise DocumentError {
-  decode_container_sync_json(json_string, @sync.Limits::default())
+  decode_container_sync_json(json_string, Default::default())
 }
 
 ///|
@@ -1474,7 +1474,7 @@ pub fn SyncSession::decode_json(
   _self : SyncSession,
   json_string : String,
 ) -> SyncMessage raise DocumentError {
-  decode_container_sync_json(json_string, @sync.Limits::default())
+  decode_container_sync_json(json_string, Default::default())
 }
 
 ///|
@@ -1501,7 +1501,7 @@ pub fn Version::to_json_string(self : Version) -> String {
 pub fn Version::from_json_string(
   json_string : String,
 ) -> Version raise DocumentError {
-  let limits : @sync.Limits = @sync.Limits::default()
+  let limits : @sync.Limits = Default::default()
   let _ = container_encoded_size(json_string, limits) catch {
     failure => raise DocumentError::SyncFailed(failure)
   }

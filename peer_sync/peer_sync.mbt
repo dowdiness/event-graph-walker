@@ -230,25 +230,43 @@ pub fn FailureDisposition::FailureDisposition(
 // ---------------------------------------------------------------------------
 
 ///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend ApplyDisposition with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend ApplyDisposition with Eq::{not_equal, equal}
+pub extend ApplyDisposition with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ApplyDisposition with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend Decision with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend Decision with Eq::{not_equal, equal}
+pub extend Decision with Eq::{equal}
 
 ///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend Decision with Eq::{not_equal}
+
+///|
+#deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend FailureDisposition with @debug.Debug::{to_repr}
 
 ///|
 #doc(hidden)
-pub extend FailureDisposition with Eq::{not_equal, equal}
+pub extend FailureDisposition with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend FailureDisposition with Eq::{not_equal}
