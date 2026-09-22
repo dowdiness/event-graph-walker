@@ -101,6 +101,6 @@ Tested by `prop_insert_position_roundtrip` in `text/position_roundtrip_propertie
 ## References
 
 - Weidner, M. & Kleppmann, M. (2023). "The Art of the Fugue: Minimizing Interleaving in Collaborative Text Editing." arXiv:2305.00583. Algorithm 1, lines 25-28.
-- Law L5.8 in `docs/FORMAL_SPECIFICATION.md`, Section 5.
+- Law L5.8 in `docs/architecture/formal-specification.md`, Section 5.
 - `internal/fugue/tree.mbt`: `find_parent_and_side` function.
 - `text/position_roundtrip_properties_test.mbt`: `prop_insert_position_roundtrip`.

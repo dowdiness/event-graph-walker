@@ -70,7 +70,7 @@ This removes the previous illegal intermediate state without introducing a new t
 
 `Range` now has private fields and exposes `start()` and `end()` read-only accessors (`text/types.mbt`). Its public constructors reject reversed endpoints with `TextError::InvalidRange`, so every constructed range satisfies `start <= end`; no constructor silently normalizes its input. The document-dependent check `end <= current_length` remains in `checked_range_bounds` immediately before mutation (`text/text_doc.mbt`).
 
-Tests cover reversed-endpoint rejection, while existing range edits cover valid and empty ranges. Because `Pos::at` intentionally clamps negatives (`text/types.mbt:6-17`; `docs/FORMAL_SPECIFICATION.md:936-943`), changing its behavior remains outside this proposal.
+Tests cover reversed-endpoint rejection, while existing range edits cover valid and empty ranges. Because `Pos::at` intentionally clamps negatives (`text/types.mbt:6-17`; `docs/architecture/formal-specification.md:936-943`), changing its behavior remains outside this proposal.
 
 ### 4. Separate structural parsing from receiver policy
 

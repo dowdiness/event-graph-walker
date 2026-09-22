@@ -115,7 +115,7 @@ fn main() -> Unit raise {
 ```
 
 > [!TIP]
-> For advanced scenarios including undo/redo, container documents, historical checkout, and detailed error handling, see [Worked Examples](docs/EXAMPLES.md).
+> For advanced scenarios including undo/redo, container documents, historical checkout, and detailed error handling, see [Worked Examples](docs/guides/examples.md).
 
 ---
 
@@ -169,10 +169,12 @@ event-graph-walker/
 ## Documentation
 
 - **[Documentation Index](docs/README.md)**: Reading order, learning path, and audience split.
-- **[Worked Examples](docs/EXAMPLES.md)**: Step-by-step examples for sync, undo/redo, checkout, and error handling.
+- **[Guides & Worked Examples](docs/guides/README.md)**:
+  - [Worked Examples](docs/guides/examples.md) - Sync, undo/redo, checkout, and error handling.
+  - [Network Synchronization](docs/guides/network-sync.md) - Transport integration patterns (WebSocket / WebRTC).
+  - [Walker Usage](docs/guides/walker-usage.md) - Lower-level causal graph and oplog APIs.
+- **[Architecture & Design](docs/architecture/README.md)**: In-depth mechanics of eg-walker, FugueMax, selective undo, and formal invariants.
 - **[Migration Guides](docs/migration/README.md)**: Upgrading between major versions and protocol schemas.
-- **[Walker Usage](docs/WALKER_USAGE.md)**: Lower-level causal graph and oplog traversal APIs.
-- **[Network Synchronization](docs/NETWORK_SYNC.md)**: Transport integration patterns (WebSocket / WebRTC).
 - **[Benchmarks](docs/BENCHMARKS.md)**: Performance benchmarks and methodologies.
 
 ---

@@ -12,7 +12,7 @@
 
 > **📌 PATH DRIFT NOTE.** This document was written before two reorganizations:
 > 1. **`internal/` restructure** — MoonBit packages are now under `internal/` (e.g. `event-graph-walker/causal_graph/graph.mbt` → `event-graph-walker/internal/causal_graph/graph.mbt`). Treat bare references like `event-graph-walker/<pkg>/<file>` as shorthand; the authoritative file is `event-graph-walker/internal/<pkg>/<file>` unless the package is a public facade (`text/`, `undo/`, `document/`, `container/`).
-> 2. **RLE module not in tree** — Laws and references citing `event-graph-walker/rle/...` (L1, L2, §1 layer) describe a planned standalone RLE module that was **never merged**. Those sections are **aspirational / unverified** until the RLE decision is resolved. See `docs/RLE_DESIGN_PLAN.md` and `docs/decisions-needed.md`.
+> 2. **RLE module not in tree** — Laws and references citing `event-graph-walker/rle/...` (L1, L2, §1 layer) describe a planned standalone RLE module that was **never merged**. Those sections are **aspirational / unverified** until the RLE decision is resolved. See [RLE Design Plan](rle-design.md) and [decisions-needed](../decisions-needed.md).
 >
 > Path updates across ~50 references are tracked; this note supersedes them in one place rather than silently editing each cell.
 

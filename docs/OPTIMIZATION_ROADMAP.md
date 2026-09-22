@@ -123,7 +123,7 @@ match children.get(current) {
 - Current benchmark commands and categories
 - Snapshots archived under [benchmarks/](./benchmarks/)
 
-**Architecture**: [EG_WALKER_IMPLEMENTATION.md](./EG_WALKER_IMPLEMENTATION.md)
+**Architecture**: [eg-walker Implementation](architecture/eg-walker.md)
 - Eg-walker CRDT algorithm details
 - Implementation guidance
 

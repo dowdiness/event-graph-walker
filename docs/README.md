@@ -1,62 +1,67 @@
-# Event Graph Walker Docs
+# Event Graph Walker Documentation
 
-This index separates current user guidance from contributor notes, design work, benchmarks, and historical/spec material. If a deeper document conflicts with the public facade API or generated `.mbti` files, trust the public API first.
+Welcome to the Event Graph Walker documentation. This index organizes user guides, architecture references, migration notes, and contributor resources.
 
-## Reading Order
+---
 
-- [Package README](../README.md) - package overview, quick starts, public packages, and repository layout.
-- [Worked examples](EXAMPLES.md) - sync error handling, undo/redo, historical checkout, and incremental catch-up.
-- [Migration guides](migration/README.md) - version-to-version upgrade notes and protocol transitions.
+## 1. Getting Started & User Guides (`guides/`)
 
-## Learning Path
+Practical how-to guides for integrating and using the library:
 
-- [Examples](EXAMPLES.md) - practical usage of `text` and `undo`.
-- [Walker usage](WALKER_USAGE.md) - lower-level causal graph and oplog traversal APIs. Read this after the public `text` facade unless you are working on internals.
-- [Network synchronization](NETWORK_SYNC.md) - Canopy demo/integration notes for WebSocket/WebRTC wiring around `TextState::sync()`. This depends on parent `canopy` repo infrastructure, not just this package.
+- **[Guides Overview](guides/README.md)**: Index and recommended learning path.
+- **[Worked Examples](guides/examples.md)**: Code walkthroughs for text/tree sync, undo/redo, checkout, and error handling.
+- **[Network Synchronization](guides/network-sync.md)**: WebSocket/WebRTC integration patterns around `TextState::sync()`.
+- **[Walker Usage](guides/walker-usage.md)**: Lower-level causal graph and oplog traversal APIs.
 
-## API And Reference
+---
 
-- [`text/pkg.generated.mbti`](../text/pkg.generated.mbti) - public text API.
-- [`tree/pkg.generated.mbti`](../tree/pkg.generated.mbti) - public movable-tree API.
-- [`undo/pkg.generated.mbti`](../undo/pkg.generated.mbti) - public undo/redo API.
-- [`container/pkg.generated.mbti`](../container/pkg.generated.mbti) - advanced document API combining tree nodes, block text, sync, and undo.
-- [`history/pkg.generated.mbti`](../history/pkg.generated.mbti) - read-only causal history snapshots.
-- [`sync/pkg.generated.mbti`](../sync/pkg.generated.mbti) - shared synchronization limits and failure classifications.
-- [`peer_sync/pkg.generated.mbti`](../peer_sync/pkg.generated.mbti) - peer-free synchronization policy core.
-- [`peer_sync/text/pkg.generated.mbti`](../peer_sync/text/pkg.generated.mbti) - text façade sync adapter.
-- [`peer_sync/container/pkg.generated.mbti`](../peer_sync/container/pkg.generated.mbti) - container façade sync adapter.
-- [Benchmarks](BENCHMARKS.md) - current benchmark commands and performance notes.
+## 2. Architecture & Design (`architecture/`)
 
-## Contributor And Deep Design Docs
+In-depth conceptual documentation explaining how the CRDT algorithms work:
 
-These are useful when changing internals, reviewing algorithm choices, or planning performance work. They are not the first-time user path.
+- **[Architecture Overview](architecture/README.md)**: Algorithm specifications and invariant models.
+- **[eg-walker Implementation](architecture/eg-walker.md)**: Event graph walker mechanics and FugueMax sequence convergence.
+- **[Undo Manager Design](architecture/undo-manager.md)**: Selective undo/redo preserving concurrent remote edits.
+- **[Formal Specification](architecture/formal-specification.md)**: Mathematical models, algebraic laws, and invariant definitions.
+- **[RLE Design Plan](architecture/rle-design.md)**: Data compression exploratory design.
 
-- [Contributing guide](../CONTRIBUTING.md) - local development setup, verification commands, and PR workflow.
-- [eg-walker implementation](EG_WALKER_IMPLEMENTATION.md)
-- [Undo manager design](UNDO_MANAGER_DESIGN.md)
-- [Stabilization roadmap](STABILIZATION_ROADMAP.md)
-- [Optimization roadmap](OPTIMIZATION_ROADMAP.md)
-- [Decisions needed](decisions-needed.md)
-- [Decision records](decisions/)
-- [Plans](plans/)
-- [Benchmark records](benchmarks/)
+---
 
-## Historical, Spec, Or Exploratory Material
+## 3. Migration Guides (`migration/`)
 
-Read these with care. They contain formalization, planned work, or notes that may not describe current implemented behavior unless confirmed by code and current API docs.
+Upgrade instructions for breaking protocol changes and major versions:
 
-- [Parse, Don't Validate audit and improvement plan](plans/archive/2026-07-21-parse-dont-validate-audit.md) - archived record of the invariant-hardening audit and its completed phases.
-- [Formal specification](FORMAL_SPECIFICATION.md) - includes path drift and aspirational/unverified notes.
-- [RLE design plan](RLE_DESIGN_PLAN.md) - planned/exploratory RLE design material.
+- **[Migration Index](migration/README.md)**: Version upgrade recommendations and breaking change summaries.
+- **[Text Schema 2](migration/text-schema-2.md)**: Upgrading to exact causality and domain-separated wire encoding.
+- **[v0.5 Migration](migration/to-v0.5.md)**: Opaque `text.Range` constructors with validation.
+- **[v0.4 Migration](migration/to-v0.4.md)**: Stable identity transition and schema 1 envelopes.
+- **[Undo API Migration](migration/undo-api.md)**: Compensating edit results (`Applied` / `Stale`).
 
-## Current User Path
+---
 
-For application code, prefer this order:
+## 4. API Reference
 
-1. Use `dowdiness/event-graph-walker/text` for collaborative text.
-2. Use `dowdiness/event-graph-walker/tree` for collaborative trees.
-3. Add `dowdiness/event-graph-walker/undo` when local text undo/redo is needed.
-4. Use `dowdiness/event-graph-walker/container` only when you need the combined tree + block text document API.
-5. Use `dowdiness/event-graph-walker/peer_sync` for shared synchronization decisions without owning transport.
-6. Consult generated `.mbti` files for exact names and signatures.
-7. Move into `internal/` docs only when contributing to the implementation.
+The generated `.mbti` interface files represent the authoritative public API surface:
+
+- [`text/pkg.generated.mbti`](../text/pkg.generated.mbti) - Public text CRDT API.
+- [`tree/pkg.generated.mbti`](../tree/pkg.generated.mbti) - Public movable-tree API.
+- [`undo/pkg.generated.mbti`](../undo/pkg.generated.mbti) - Public undo/redo API.
+- [`container/pkg.generated.mbti`](../container/pkg.generated.mbti) - Unified document API (tree + block text + sync + undo).
+- [`history/pkg.generated.mbti`](../history/pkg.generated.mbti) - Read-only causal history snapshots.
+- [`sync/pkg.generated.mbti`](../sync/pkg.generated.mbti) - Shared limits and error classifications.
+- [`peer_sync/pkg.generated.mbti`](../peer_sync/pkg.generated.mbti) - Peer-free synchronization policy core.
+- [`peer_sync/text/pkg.generated.mbti`](../peer_sync/text/pkg.generated.mbti) - Text sync adapter.
+- [`peer_sync/container/pkg.generated.mbti`](../peer_sync/container/pkg.generated.mbti) - Container sync adapter.
+
+---
+
+## 5. Contributor & Project Resources
+
+Resources for hacking on internals, profiling performance, and tracking project state:
+
+- **[Contributing Guide](../CONTRIBUTING.md)**: Local dev setup, testing recipes, and PR guidelines.
+- **[Benchmarks](BENCHMARKS.md)**: Benchmark commands, baselines, and profiling notes.
+- **[Stabilization Roadmap](STABILIZATION_ROADMAP.md)**: Invariant hardening and verification status.
+- **[Optimization Roadmap](OPTIMIZATION_ROADMAP.md)**: Performance milestones and targets.
+- **[Decisions Needed](decisions-needed.md)**: Open architectural questions.
+- **[ADR Records](adr/)**: Architectural Decision Records.

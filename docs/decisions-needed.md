@@ -6,18 +6,18 @@ Items from `/moonbit-housekeeping triage` classified as `needs-human-review`. Re
 
 ### RLE standalone module extraction — revive, abandon, or update design?
 
-**Source:** `docs/RLE_DESIGN_PLAN.md`, branch `work/claude`, closed PR #5
-**Context:** PR #5 `refactor(rle): extract rle into standalone CRDT-independent module` was CLOSED (not merged) on 2026-02-07. The `work/claude` branch is 73 days stale with no follow-up. `docs/RLE_DESIGN_PLAN.md` still reads as active design intent. `OPTIMIZATION_ROADMAP.md` lists RLE as "Future Work" (3–5 days). `rle/` package no longer exists at root.
+**Source:** `docs/architecture/rle-design.md`, branch `work/claude`, closed PR #5
+**Context:** PR #5 `refactor(rle): extract rle into standalone CRDT-independent module` was CLOSED (not merged) on 2026-02-07. The `work/claude` branch is 73 days stale with no follow-up. `docs/architecture/rle-design.md` still reads as active design intent. `OPTIMIZATION_ROADMAP.md` lists RLE as "Future Work" (3–5 days). `rle/` package no longer exists at root.
 **Blocks:** Nothing directly. Relevant only if someone revisits run-length encoding optimization.
 **Evidence:**
 - PR #5 status: closed (not merged)
 - Branch `work/claude` last commit 2026-02-07, 73 days ago
 - Worktree `/home/antisatori/ghq/github.com/dowdiness/egw` still checked out on this branch
-- `docs/RLE_DESIGN_PLAN.md` exists but is inconsistent with closed PR
+- `docs/architecture/rle-design.md` exists but is inconsistent with closed PR
 **Options:**
 1. Revive — reopen PR #5 or create a new branch
-2. Abandon — delete `docs/RLE_DESIGN_PLAN.md` (or move to `docs/archive/`), prune `work/claude` branch, remove `egw` worktree
-3. Park — update `RLE_DESIGN_PLAN.md` with a status note ("deferred pending motivation from benchmarks")
+2. Abandon — delete `docs/architecture/rle-design.md` (or move to `docs/archive/`), prune `work/claude` branch, remove `egw` worktree
+3. Park — update `rle-design.md` with a status note ("deferred pending motivation from benchmarks")
 **Added:** 2026-04-21
 
 ---

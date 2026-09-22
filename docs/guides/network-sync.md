@@ -165,8 +165,8 @@ routing, retry budgets, connectivity, scheduling, and transport envelopes.
 Causal pending operations remain inside the text or container façade.
 
 For package responsibilities and worked examples, see the
-[peer synchronization companion overview](../README.md#peer-synchronization-companion)
-and [sync examples](EXAMPLES.md). Transport wiring (WebRTC + signaling) lives
+[packages overview](../../README.md#packages-overview)
+and [sync examples](examples.md). Transport wiring (WebRTC + signaling) lives
 in the canopy parent repo at `examples/web/`.
 
 ## Signaling Server API
@@ -321,8 +321,8 @@ myTransport.onMessage((payload) => {
 
 - [eg-walker Paper](https://arxiv.org/abs/2409.14252) - The CRDT algorithm
 - [WebRTC Data Channels](https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_data_channels)
-- [CRDT Implementation Guide](./EG_WALKER_IMPLEMENTATION.md)
-- [Branch System Documentation](./WALKER_USAGE.md)
+- [CRDT Implementation Guide](../architecture/eg-walker.md)
+- [Branch System Documentation](./walker-usage.md)
 
 ## Future Improvements
 
