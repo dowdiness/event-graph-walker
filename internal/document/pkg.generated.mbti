@@ -43,6 +43,7 @@ pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::clear_pending(Self) -> Unit
+pub fn Document::collect_missing_ops(Self, @causal_graph.GraphVersion) -> Array[@core.Op] raise DocumentError
 pub fn Document::current_graph_version(Self) -> @causal_graph.GraphVersion
 pub fn Document::delete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError

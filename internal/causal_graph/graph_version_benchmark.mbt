@@ -52,6 +52,15 @@ test "perf: graph version cold reconstruction (1000 ops)" (b : @bench.T) {
 }
 
 ///|
+test "perf: graph version cold reconstruction (100000 ops)" (b : @bench.T) {
+  let graph = graph_version_benchmark_graph(100000)
+  b.bench(fn() {
+    graph.version_cache = Cold
+    b.keep(graph.current_graph_version())
+  })
+}
+
+///|
 test "perf: sparse summary insert (32 agents)" (b : @bench.T) {
   let source = HaveSummary::empty()
   for i in 0..<32 {

@@ -55,6 +55,13 @@ pub fn OpRun::from_op(op : Op) -> OpRun {
 }
 
 ///|
+/// Return this run's half-open local-version bounds. OpLog uses these stable
+/// positional bounds for binary search without building RLE span prefixes.
+pub fn OpRun::lv_bounds(self : OpRun) -> (Int, Int) {
+  (self.start_lv, self.start_lv + self.count)
+}
+
+///|
 /// Decompress a single Op at the given offset within this run.
 ///
 /// `offset` must be in `[0, self.count)`. Returns None if out of bounds.

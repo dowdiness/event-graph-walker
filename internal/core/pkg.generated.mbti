@@ -86,6 +86,7 @@ pub struct OpRun {
 pub fn OpRun::decompress(Self, Int) -> Op?
 pub fn OpRun::decompress_into(Self, Array[Op]) -> Unit
 pub fn OpRun::from_op(Op) -> Self
+pub fn OpRun::lv_bounds(Self) -> (Int, Int)
 pub impl @rle.HasLength for OpRun
 pub impl @rle.Mergeable for OpRun
 pub impl @rle.Spanning for OpRun

@@ -144,6 +144,81 @@ fn HaveSummary::contains(self : HaveSummary, raw : @core.RawVersion) -> Bool {
 }
 
 ///|
+/// Subtract one canonical sparse summary from another without enumerating
+/// identities in either summary. The result retains the left-hand shape.
+fn HaveSummary::subtract(
+  self : HaveSummary,
+  other : HaveSummary,
+) -> HaveSummary {
+  self.subtract_counted(other).0
+}
+
+///|
+fn HaveSummary::subtract_counted(
+  self : HaveSummary,
+  other : HaveSummary,
+) -> (HaveSummary, Int, Int) {
+  let result = HaveSummary::empty()
+  let mut other_entry_index = 0
+  let mut agent_steps = 0
+  let mut range_steps = 0
+  for entry in self.entries {
+    agent_steps = agent_steps + 1
+    while other_entry_index < other.entries.length() &&
+          other.entries[other_entry_index].agent < entry.agent {
+      agent_steps = agent_steps + 1
+      other_entry_index = other_entry_index + 1
+    }
+    let other_ranges = if other_entry_index < other.entries.length() &&
+      other.entries[other_entry_index].agent == entry.agent {
+      other.entries[other_entry_index].ranges
+    } else {
+      []
+    }
+    let ranges : Array[SequenceRange] = []
+    let mut other_range_index = 0
+    for range in entry.ranges {
+      range_steps = range_steps + 1
+      let mut cursor = range.start
+      while other_range_index < other_ranges.length() &&
+            other_ranges[other_range_index].end <= cursor {
+        range_steps = range_steps + 1
+        other_range_index = other_range_index + 1
+      }
+      while other_range_index < other_ranges.length() &&
+            other_ranges[other_range_index].start < range.end {
+        range_steps = range_steps + 1
+        let covered = other_ranges[other_range_index]
+        if covered.start > cursor {
+          ranges.push({
+            start: cursor,
+            end: if covered.start < range.end {
+              covered.start
+            } else {
+              range.end
+            },
+          })
+        }
+        if covered.end > cursor {
+          cursor = covered.end
+        }
+        if cursor >= range.end {
+          break
+        }
+        other_range_index = other_range_index + 1
+      }
+      if cursor < range.end {
+        ranges.push({ start: cursor, end: range.end, })
+      }
+    }
+    if !ranges.is_empty() {
+      result.entries.push({ agent: entry.agent, ranges, })
+    }
+  }
+  (result, agent_steps, range_steps)
+}
+
+///|
 fn HaveSummary::from_graph(self : CausalGraph) -> HaveSummary {
   let summary = HaveSummary::empty()
   for lv in 0..<self.next_lv {
@@ -254,6 +329,19 @@ pub fn GraphVersion::contains(
   raw : @core.RawVersion,
 ) -> Bool {
   self.have.contains(raw)
+}
+
+///|
+/// Return identities present in this version but absent from `other` as
+/// canonical sparse ranges. Work is proportional to the summaries' agents and
+/// ranges, not to sequence values or the number of covered identities.
+pub fn GraphVersion::subtract_ranges(
+  self : GraphVersion,
+  other : GraphVersion,
+) -> Array[(String, Array[(UInt, UInt)])] {
+  self.have.subtract(other.have).entries.map(entry => {
+    (entry.agent, entry.ranges.map(range => (range.start, range.end)))
+  })
 }
 
 ///|

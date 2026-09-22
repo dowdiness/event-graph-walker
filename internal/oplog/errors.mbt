@@ -4,6 +4,9 @@
 pub(all) suberror OpLogError {
   /// A local version (LV) was not found in the graph during operation creation
   MissingLocalVersion(lv~ : Int)
+  /// Sparse graph membership named an identity absent from the graph index.
+  /// This is an internal authority inconsistency, not ordinary peer absence.
+  MissingLocalIdentity(raw~ : @core.RawVersion)
   /// A remote delete operation was received without origin_left set.
   /// This indicates a malformed operation (protocol error), not missing graph state.
   /// Contrast with BranchError::MissingOrigin and DocumentError::MissingOrigin

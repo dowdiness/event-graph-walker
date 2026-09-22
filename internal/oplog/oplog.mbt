@@ -170,14 +170,27 @@ pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
   if lv < 0 {
     return None
   }
-  match self.operations.find(lv) {
-    Some(pos) =>
-      match self.operations.get(pos.run) {
-        Some(run) => run.decompress(pos.offset)
-        None => None
-      }
-    None => None
+  // OpRun local-version bounds are already sorted and non-overlapping. Search
+  // those bounds directly instead of Rle::find: its lazy positional-prefix
+  // rebuild would inspect every run after each append.
+  let mut low = 0
+  let mut high = self.operations.length()
+  while low < high {
+    let middle = low + (high - low) / 2
+    let run = match self.operations.get(middle) {
+      Some(value) => value
+      None => return None
+    }
+    let (start, end) = run.lv_bounds()
+    if lv < start {
+      high = middle
+    } else if lv >= end {
+      low = middle + 1
+    } else {
+      return run.decompress(lv - start)
+    }
   }
+  None
 }
 
 ///|
@@ -225,6 +238,56 @@ pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
     run.decompress_into(result)
   }
   result
+}
+
+///|
+/// Collect exactly the locally admitted operations absent from a peer's sparse
+/// version. Sparse subtraction happens in the causal graph representation;
+/// only identities in the resulting ranges are resolved and decompressed.
+pub fn OpLog::collect_missing_ops(
+  self : OpLog,
+  peer : @causal_graph.GraphVersion,
+) -> Array[@core.Op] raise OpLogError {
+  self.collect_missing_ops_counted(peer).0
+}
+
+///|
+fn OpLog::collect_missing_ops_counted(
+  self : OpLog,
+  peer : @causal_graph.GraphVersion,
+) -> (Array[@core.Op], Int, Int, Int, Int) raise OpLogError {
+  let current = self.graph.current_graph_version()
+  let operations : Array[@core.Op] = []
+  let mut missing_ranges = 0
+  let mut identity_lookups = 0
+  let mut operation_lookups = 0
+  for entry in current.subtract_ranges(peer) {
+    for range in entry.1 {
+      missing_ranges = missing_ranges + 1
+      let mut sequence = range.0
+      while sequence < range.1 {
+        identity_lookups = identity_lookups + 1
+        let raw = @core.RawVersion(entry.0, sequence.reinterpret_as_int())
+        let lv = match self.graph.raw_to_lv(raw) {
+          Some(value) => value
+          None => raise OpLogError::MissingLocalIdentity(raw~)
+        }
+        operation_lookups = operation_lookups + 1
+        match self.get_op(lv) {
+          Some(op) => operations.push(op)
+          None => raise OpLogError::MissingLocalVersion(lv~)
+        }
+        sequence = sequence + 1U
+      }
+    }
+  }
+  (
+    operations,
+    missing_ranges,
+    identity_lookups,
+    operation_lookups,
+    operations.length(),
+  )
 }
 
 ///|

@@ -668,6 +668,17 @@ pub fn Document::get_all_ops(self : Document) -> Array[@core.Op] {
 }
 
 ///|
+/// Collect locally admitted operations absent from a peer's sparse version.
+pub fn Document::collect_missing_ops(
+  self : Document,
+  peer : @causal_graph.GraphVersion,
+) -> Array[@core.Op] raise DocumentError {
+  self.oplog.collect_missing_ops(peer) catch {
+    error => raise DocumentError::OpLog(error)
+  }
+}
+
+///|
 /// Get all operation runs without decompression (for sync export).
 pub fn Document::get_all_runs(self : Document) -> Array[@core.OpRun] {
   self.oplog.get_all_runs()

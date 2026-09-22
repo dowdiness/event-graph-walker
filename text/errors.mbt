@@ -135,6 +135,8 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
   match err {
     MissingLocalVersion(lv~) =>
       TextError::Internal(detail="missing local version: \{lv}")
+    MissingLocalIdentity(raw~) =>
+      TextError::Internal(detail="missing local identity: \{raw}")
     MissingOrigin =>
       TextError::SyncFailed(
         @sync.Failure::MalformedMessage(

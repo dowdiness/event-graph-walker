@@ -93,6 +93,49 @@ test "graph version constructor owns structural canonicality" {
 }
 
 ///|
+test "sparse subtraction preserves holes and range boundaries" {
+  let current = try! @causal_graph.GraphVersion::from_parts(
+    [
+      @core.RawVersion("a", 2),
+      @core.RawVersion("b", 14),
+      @core.RawVersion("high", 2147483647),
+    ],
+    [
+      ("a", [(0U, 3U), (10U, 13U)]),
+      ("b", [(10U, 15U)]),
+      ("high", [(2147483647U, 2147483648U)]),
+    ],
+  )
+  let peer = try! @causal_graph.GraphVersion::from_parts(
+    [
+      @core.RawVersion("a", 99),
+      @core.RawVersion("b", 13),
+      @core.RawVersion("peer-only", 1000000000),
+    ],
+    [
+      ("a", [(1U, 2U), (11U, 12U), (99U, 100U)]),
+      ("b", [(9U, 11U), (13U, 14U)]),
+      ("peer-only", [(1000000000U, 1000000001U)]),
+    ],
+  )
+  assert_eq(current.subtract_ranges(peer), [
+    ("a", [(0U, 1U), (2U, 3U), (10U, 11U), (12U, 13U)]),
+    ("b", [(11U, 13U), (14U, 15U)]),
+    ("high", [(2147483647U, 2147483648U)]),
+  ])
+
+  let spanning_peer = try! @causal_graph.GraphVersion::from_parts(
+    [@core.RawVersion("a", 11)],
+    [("a", [(1U, 12U)])],
+  )
+  assert_eq(current.subtract_ranges(spanning_peer), [
+    ("a", [(0U, 1U), (12U, 13U)]),
+    ("b", [(10U, 15U)]),
+    ("high", [(2147483647U, 2147483648U)]),
+  ])
+}
+
+///|
 test "generation buffer resize does not hide an old ancestor" {
   let graph = @causal_graph.CausalGraph::new()
   let mut head = try! graph.add_version([], "agent")

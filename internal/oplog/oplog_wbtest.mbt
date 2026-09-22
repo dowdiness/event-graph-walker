@@ -407,3 +407,36 @@ test "get_ops_rle keeps clamped invalid-LV behavior" {
   inspect(ops[0].lv(), content="0")
   inspect(ops[1].lv(), content="1")
 }
+
+///|
+test "collect_missing_ops work follows delta rather than admitted history" {
+  for history in [1000, 10000] {
+    let oplog = OpLog("agent")
+    let mut previous = -1
+    for _ in 0..<history {
+      let op = try! oplog.insert("x", previous, -1)
+      previous = op.lv()
+    }
+    let peer = try! @causal_graph.GraphVersion::from_parts(
+      [@core.RawVersion("agent", history - 2)],
+      [("agent", [(0U, (history - 1).reinterpret_as_uint())])],
+    )
+    let (operations, ranges, identities, lookups, expanded) = try! oplog.collect_missing_ops_counted(
+      peer,
+    )
+    assert_eq(operations.length(), 1)
+    assert_eq(operations[0].seq(), history - 1)
+    assert_eq(ranges, 1)
+    assert_eq(identities, 1)
+    assert_eq(lookups, 1)
+    assert_eq(expanded, 1)
+
+    let (_, empty_ranges, empty_identities, empty_lookups, empty_expanded) = try! oplog.collect_missing_ops_counted(
+      oplog.causal_graph().current_graph_version(),
+    )
+    assert_eq(empty_ranges, 0)
+    assert_eq(empty_identities, 0)
+    assert_eq(empty_lookups, 0)
+    assert_eq(empty_expanded, 0)
+  }
+}

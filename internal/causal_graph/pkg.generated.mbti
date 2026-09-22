@@ -59,6 +59,7 @@ pub fn GraphVersion::contains(Self, @core.RawVersion) -> Bool
 pub fn GraphVersion::from_parts(Array[@core.RawVersion], Array[(String, Array[(UInt, UInt)])]) -> Self raise GraphVersionError
 pub fn GraphVersion::frontier(Self) -> Array[@core.RawVersion]
 pub fn GraphVersion::ranges(Self) -> Array[(String, Array[(UInt, UInt)])]
+pub fn GraphVersion::subtract_ranges(Self, Self) -> Array[(String, Array[(UInt, UInt)])]
 
 pub struct VersionVector(Map[String, Int]) derive(Default, Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn VersionVector::agents(Self) -> Array[String]

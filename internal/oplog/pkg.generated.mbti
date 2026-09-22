@@ -12,6 +12,7 @@ import {
 // Errors
 pub(all) suberror OpLogError {
   MissingLocalVersion(lv~ : Int)
+  MissingLocalIdentity(raw~ : @core.RawVersion)
   MissingOrigin
   OriginTargetNotInsert(operation~ : @core.RawVersion, target~ : @core.RawVersion)
   InvalidOriginShape(raw~ : @core.RawVersion)
@@ -56,6 +57,7 @@ pub fn OpLog::OpLog(String) -> Self
 pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
 pub fn OpLog::clear_pending(Self) -> Unit
+pub fn OpLog::collect_missing_ops(Self, @causal_graph.GraphVersion) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::commit_admission(Self, PreparedAdmission) -> AdmissionOutcome raise OpLogError
 pub fn OpLog::commit_admission_with_failure(Self, PreparedAdmission, (@core.Op) -> @causal_graph.CausalGraphError?) -> AdmissionOutcome raise OpLogError
 pub fn OpLog::commit_remote(Self, PreparedAdmission) -> Array[@core.Op] raise OpLogError

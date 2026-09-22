@@ -955,11 +955,8 @@ pub fn SyncSession::export_since(
   self : SyncSession,
   peer_version : Version,
 ) -> SyncMessage raise TextError {
-  let operations : Array[@core.Op] = []
-  for op in self.doc.inner.get_all_ops() {
-    if !peer_version.graph().contains(@core.RawVersion(op.agent(), op.seq())) {
-      operations.push(op)
-    }
+  let operations = self.doc.inner.collect_missing_ops(peer_version.graph()) catch {
+    error => raise TextError::from_document_error(error, () => self.doc.len())
   }
   let heads = current_heads(self.doc)
   map_sync_failure(fn() raise @sync.Failure {
