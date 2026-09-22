@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly MOON_VERSION='0.10.14+7d59c7ec9'
+readonly NU_VERSION='0.112.2'
+readonly JUST_VERSION='1.48.1'
+readonly LOCAL_BIN="$HOME/.local/bin"
+readonly TOOLS_DIR="$HOME/.local/share/event-graph-walker-tools"
+readonly MOON_HOME="$HOME/.moon"
+
+export PATH="$LOCAL_BIN:$MOON_HOME/bin:$PATH"
+
+log_step() {
+  printf '\n==> %s\n' "$1"
+}
+
+download() {
+  local url="$1"
+  local destination="$2"
+  curl --fail --location --retry 3 --retry-delay 2 --silent --show-error \
+    --output "$destination" "$url"
+}
+
+install_moonbit() {
+  local moon="$MOON_HOME/bin/moon"
+  local moonc="$MOON_HOME/bin/moonc"
+  if [[ -x "$moon" ]] && [[ -x "$moonc" ]] && "$moonc" -v 2>&1 | grep -Fq "$MOON_VERSION" && [[ -d "$MOON_HOME/lib/core" ]]; then
+    return
+  fi
+
+  log_step "Installing MoonBit $MOON_VERSION"
+  local temporary_dir
+  temporary_dir="$(mktemp --directory)"
+  download "https://cli.moonbitlang.com/binaries/${MOON_VERSION//+/%2B}/moonbit-linux-x86_64.tar.gz" "$temporary_dir/moonbit.tar.gz"
+  download "https://cli.moonbitlang.com/cores/core-${MOON_VERSION//+/%2B}.tar.gz" "$temporary_dir/core.tar.gz"
+  rm -rf "$MOON_HOME"
+  mkdir -p "$MOON_HOME/lib"
+  tar xf "$temporary_dir/moonbit.tar.gz" --directory "$MOON_HOME"
+  tar xf "$temporary_dir/core.tar.gz" --directory "$MOON_HOME/lib"
+  chmod +x "$MOON_HOME/bin"/* "$MOON_HOME/bin/internal/tcc"
+  ln -sfn moon "$MOON_HOME/bin/moonx"
+  PATH="$MOON_HOME/bin" "$moon" -C "$MOON_HOME/lib/core" bundle --warn-list -a --all
+  PATH="$MOON_HOME/bin" "$moon" -C "$MOON_HOME/lib/core" bundle --warn-list -a --target wasm-gc --quiet
+  rm -rf "$temporary_dir"
+}
+
+ensure_login_path() {
+  local marker='# event-graph-walker orb toolchain'
+  if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+    cat >> "$HOME/.bash_profile" <<'EOF'
+
+# event-graph-walker orb toolchain
+export PATH="$HOME/.local/bin:$HOME/.moon/bin:$PATH"
+EOF
+  fi
+}
+
+install_nushell() {
+  local install_dir="$TOOLS_DIR/nu-$NU_VERSION"
+  if [[ ! -x "$install_dir/nu" ]] || ! "$install_dir/nu" --version | grep -Fxq "$NU_VERSION"; then
+    log_step "Installing Nushell $NU_VERSION"
+    local temporary_dir
+    temporary_dir="$(mktemp --directory)"
+    download "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" "$temporary_dir/nu.tar.gz"
+    rm -rf "$install_dir"
+    mkdir -p "$install_dir"
+    tar xf "$temporary_dir/nu.tar.gz" --strip-components=1 --directory "$install_dir"
+    rm -rf "$temporary_dir"
+  fi
+  ln -sfn "$install_dir/nu" "$LOCAL_BIN/nu"
+}
+
+install_just() {
+  local install_dir="$TOOLS_DIR/just-$JUST_VERSION"
+  if [[ ! -x "$install_dir/just" ]] || ! "$install_dir/just" --version | grep -Fq "just $JUST_VERSION"; then
+    log_step "Installing just $JUST_VERSION"
+    local temporary_dir
+    temporary_dir="$(mktemp --directory)"
+    download "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" "$temporary_dir/just.tar.gz"
+    rm -rf "$install_dir"
+    mkdir -p "$install_dir"
+    tar xf "$temporary_dir/just.tar.gz" --directory "$install_dir"
+    rm -rf "$temporary_dir"
+  fi
+  ln -sfn "$install_dir/just" "$LOCAL_BIN/just"
+}
+
+log_step "Preparing tool directories"
+mkdir -p "$LOCAL_BIN" "$TOOLS_DIR"
+
+install_moonbit
+install_nushell
+install_just
+ensure_login_path
+
+log_step "Resolving MoonBit dependencies"
+moon update
+moon build --target all
+
+log_step "Checking installed toolchain"
+moon version
+moonc -v
+nu --version
+just --version
+python3 --version

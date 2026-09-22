@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PATH="$HOME/.local/bin:$HOME/.moon/bin:$PATH"
+
+for command in moon nu just python3; do
+  command -v "$command" >/dev/null || {
+    printf 'Missing %s; run .agents/setup to repair this orb.\n' "$command" >&2
+    exit 1
+  }
+done
