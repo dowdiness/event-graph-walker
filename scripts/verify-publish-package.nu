@@ -55,8 +55,8 @@ try {
       error make { msg: $"published dependency manifest contains probe-only crypto: ($manifest_path)" }
     }
   }
-  run-checked "extracted package dependency install" {
-    ^moon install
+  run-checked "extracted package build" {
+    ^moon build
   }
   run-checked "extracted package check" {
     ^moon check --frozen
