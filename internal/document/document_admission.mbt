@@ -74,14 +74,6 @@ fn merge_projection_recovery_targets(
 }
 
 ///|
-priv struct AdmissionCapabilities {
-  prepare : (Array[@core.Op], Int?, Int?) -> @oplog.PreparedAdmission raise @oplog.OpLogError
-  commit : (@oplog.PreparedAdmission) -> @oplog.AdmissionOutcome raise @oplog.OpLogError
-  project : (ArrayView[@core.Op], ProjectionWorkspace) -> Unit raise DocumentError
-  recover : (@core.Frontier) -> Unit raise DocumentError
-}
-
-///|
 /// Check remote Fugue origins without changing the pending planner or tree.
 /// Every graph-known origin enters `required`; only tree-missing origins enter
 /// `divergences`.
@@ -274,131 +266,6 @@ fn Document::commit_admission_for_document(
 }
 
 ///|
-/// Run one typed remote admission and one derived projection finalization.
-fn Document::admit_remote_with(
-  self : Document,
-  incoming : Array[@core.Op],
-  max_pending : Int?,
-  max_pending_after_complete : Int?,
-  capabilities : AdmissionCapabilities,
-) -> DocumentAdmission raise DocumentError {
-  let entry_recovered = self.ensure_projection_ready_for_admission()
-  // Remote ingress ends the local sequential-insert fast path at entry,
-  // including pending-only, duplicate-only, and pre-commit rejection paths.
-  self.cursor = None
-  validate_remote_ops(incoming[:])
-  self.observe_prepare_remote()
-  let prepared = (capabilities.prepare)(
-    incoming, max_pending, max_pending_after_complete,
-  ) catch {
-    error => raise DocumentError::OpLog(error)
-  }
-  let preflight_recovered = self.ensure_admission_targets(
-    prepared.operations(),
-    incoming[:],
-    capabilities.recover,
-  )
-  let recovered = entry_recovered || preflight_recovered
-
-  let detached_cache = self.indexed_state.take_cache()
-  self.observe_commit_admission()
-  let outcome = (capabilities.commit)(prepared) catch {
-    error => {
-      self.indexed_state.restore_cache(detached_cache)
-      raise DocumentError::OpLog(error)
-    }
-  }
-  let receipt = match outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => receipt
-    @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
-      let _ = error
-      receipt
-    }
-  }
-  let committed = receipt.committed()
-  if committed.length() == 0 {
-    self.indexed_state.restore_cache(detached_cache)
-    self.cursor = None
-    let status = if recovered {
-      ProjectionStatus::Recovered
-    } else {
-      ProjectionStatus::Skipped
-    }
-    let effects : Array[ProjectionEffect] = []
-    let availability = if recovered {
-      ProjectionEffectAvailability::SnapshotRequired
-    } else {
-      ProjectionEffectAvailability::Exact(effects[:])
-    }
-    return DocumentAdmission::DocumentAdmission(
-      outcome, status, effects, availability,
-    )
-  }
-
-  // Authority has advanced. Never restore the detached cache before projection;
-  // a projection failure must remain visibly invalid until recovery succeeds.
-  self.invalidate_cache()
-  self.cursor = None
-  let detached_ready = match detached_cache {
-    (Some(_), Some(_)) => true
-    _ => false
-  }
-  let workspace = ProjectionWorkspace::new(
-    detached_cache,
-    committed.length() <= 3 && detached_ready,
-  )
-  let projection_result : Result[Unit, DocumentError] = Ok(
-    (capabilities.project)(committed, workspace),
-  ) catch {
-    error => Err(error)
-  }
-  match projection_result {
-    Ok(_) => {
-      let status = if recovered {
-        ProjectionStatus::Recovered
-      } else {
-        ProjectionStatus::Projected
-      }
-      self.indexed_state.restore_cache(workspace.take_cache())
-      let effects = workspace.effects
-      let availability = if recovered || !workspace.exact {
-        ProjectionEffectAvailability::SnapshotRequired
-      } else {
-        ProjectionEffectAvailability::Exact(effects[:])
-      }
-      DocumentAdmission::DocumentAdmission(
-        outcome, status, effects, availability,
-      )
-    }
-    Err(_) => {
-      self.invalidate_cache()
-      self.cursor = None
-      let status = try (capabilities.recover)(receipt.frontier_after()) catch {
-        DocumentError::ProjectionRecoveryRequired(frontier~, error~) => {
-          let _ = frontier
-          ProjectionStatus::RecoveryRequired(error~)
-        }
-        error => raise error
-      } noraise {
-        _ => ProjectionStatus::Recovered
-      }
-      let effects : Array[ProjectionEffect] = []
-      let availability = match status {
-        ProjectionStatus::Recovered =>
-          ProjectionEffectAvailability::SnapshotRequired
-        ProjectionStatus::RecoveryRequired(..) =>
-          ProjectionEffectAvailability::Unavailable
-        ProjectionStatus::Skipped | ProjectionStatus::Projected =>
-          ProjectionEffectAvailability::SnapshotRequired
-      }
-      DocumentAdmission::DocumentAdmission(
-        outcome, status, effects, availability,
-      )
-    }
-  }
-}
-
-///|
 /// Return the authority frontier carried by either typed outcome variant.
 fn DocumentAdmission::frontier_after(
   self : DocumentAdmission,
@@ -447,16 +314,25 @@ pub fn Document::admit_remote(
   max_pending? : Int,
   max_pending_after_complete? : Int,
 ) -> DocumentAdmission raise DocumentError {
-  self.admit_remote_with(incoming, max_pending, max_pending_after_complete, {
-    prepare: (operations, max_pending, max_pending_after_complete) => {
-      self.prepare_remote_for_admission(
-        operations, max_pending, max_pending_after_complete,
-      )
-    },
-    commit: prepared => self.commit_admission_for_document(prepared),
-    project: (committed, workspace) => {
-      self.project_remote_ops(committed, workspace)
-    },
-    recover: frontier => self.recover_projection_for_admission(frontier),
-  })
+  let entry_recovered = self.ensure_projection_ready_for_admission()
+  // Remote ingress ends the local sequential-insert fast path at entry,
+  // including pending-only, duplicate-only, and pre-commit rejection paths.
+  self.cursor = None
+  validate_remote_ops(incoming[:])
+  self.observe_prepare_remote()
+  let prepared = self.prepare_remote_for_admission(
+    incoming, max_pending, max_pending_after_complete,
+  ) catch {
+    error => raise DocumentError::OpLog(error)
+  }
+  let preflight_recovered = self.ensure_admission_targets(
+    prepared.operations(),
+    incoming[:],
+    frontier => self.recover_projection_for_admission(frontier),
+  )
+  ProjectionWorkspace::commit_and_project(
+    self,
+    prepared,
+    entry_recovered || preflight_recovered,
+  )
 }
