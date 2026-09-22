@@ -3,7 +3,7 @@
 ///|
 test "branch get_version_vector - empty" {
   let oplog = @oplog.OpLog("alice")
-  let branch = Branch::new(oplog)
+  let branch = @branch.Branch::new(oplog)
   let vv = branch.get_version_vector()
   inspect(vv.0.is_empty(), content="true")
 }
@@ -14,7 +14,10 @@ test "branch get_version_vector - single agent" {
   ignore(try! oplog.insert("x", -1, -1))
   ignore(try! oplog.insert("y", 0, -1))
   ignore(try! oplog.insert("z", 1, -1))
-  let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
+  let branch = @branch.Branch::from_tree_and_oplog(
+    @fugue.FugueTree::new(),
+    oplog,
+  )
   let _vv = branch.get_version_vector()
   @debug.debug_inspect(
     _vv.0.get("alice"),
@@ -37,7 +40,10 @@ test "branch get_version_vector - multiple agents" {
 
   // Merge bob's operations into alice's oplog
   let bob_ops = oplog_bob.get_all_ops()
-  let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
+  let branch = @branch.Branch::from_tree_and_oplog(
+    @fugue.FugueTree::new(),
+    oplog,
+  )
   let branch = try! branch.merge_remote_ops(bob_ops)
   let _vv = branch.get_version_vector()
   @debug.debug_inspect(
@@ -58,7 +64,10 @@ test "branch get_version_vector - multiple agents" {
 test "branch at_version_vector - true" {
   let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("a", -1, -1))
-  let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
+  let branch = @branch.Branch::from_tree_and_oplog(
+    @fugue.FugueTree::new(),
+    oplog,
+  )
   let vv = @causal_graph.VersionVector::new().set("alice", 0)
   inspect(branch.at_version_vector(vv), content="true")
 }
@@ -67,7 +76,10 @@ test "branch at_version_vector - true" {
 test "branch at_version_vector - false" {
   let oplog = @oplog.OpLog("alice")
   ignore(try! oplog.insert("a", -1, -1))
-  let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
+  let branch = @branch.Branch::from_tree_and_oplog(
+    @fugue.FugueTree::new(),
+    oplog,
+  )
   let vv = @causal_graph.VersionVector::new().set("alice", 1)
   inspect(branch.at_version_vector(vv), content="false")
 }
@@ -83,7 +95,7 @@ test "branch checkout_version_vector" {
 
   // Checkout at alice:2 (should have "hel")
   let vv = @causal_graph.VersionVector::new().set("alice", 2)
-  let branch = try! Branch::checkout_version_vector(oplog, vv)
+  let branch = try! @branch.Branch::checkout_version_vector(oplog, vv)
   inspect(branch.to_text(), content="hel")
 }
 
@@ -95,7 +107,7 @@ test "branch advance_to_version_vector" {
 
   // Start with a branch at alice:1
   let vv1 = @causal_graph.VersionVector::new().set("alice", 1)
-  let branch = try! Branch::checkout_version_vector(oplog, vv1)
+  let branch = try! @branch.Branch::checkout_version_vector(oplog, vv1)
   inspect(branch.to_text(), content="he")
 
   // Add more operations
@@ -118,11 +130,11 @@ test "version vector roundtrip with branch" {
 
   // Checkout branch at current frontier
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   let vv = branch.get_version_vector()
 
   // Create new branch from version vector
-  let branch2 = try! Branch::checkout_version_vector(oplog, vv)
+  let branch2 = try! @branch.Branch::checkout_version_vector(oplog, vv)
 
   // Should have same text
   inspect(branch.to_text() == branch2.to_text(), content="true")
@@ -138,7 +150,10 @@ test "version vector efficiency - many operations from same agent" {
     let op = try! oplog.insert("x", last_lv, -1)
     last_lv = op.lv()
   }
-  let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
+  let branch = @branch.Branch::from_tree_and_oplog(
+    @fugue.FugueTree::new(),
+    oplog,
+  )
 
   // Regular frontier would have 1 LV
   let frontier = branch.get_frontier()
@@ -170,7 +185,10 @@ test "version vector with concurrent operations" {
 
   // Merge bob's operations into alice's oplog
   let bob_ops = oplog2.get_all_ops()
-  let branch = Branch::from_tree_and_oplog(@fugue.FugueTree::new(), oplog)
+  let branch = @branch.Branch::from_tree_and_oplog(
+    @fugue.FugueTree::new(),
+    oplog,
+  )
   let branch = try! branch.merge_remote_ops(bob_ops)
 
   // Version vector should have both agents at their latest seq

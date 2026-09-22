@@ -117,7 +117,7 @@ fn TextBlock::make_insert_op_at(
   } else {
     Some(self.stable_for_local(items[pos].0.0))
   }
-  Insert({ id, content, origin_left, origin_right, timestamp, agent })
+  Insert({ id, content, origin_left, origin_right, timestamp, agent, })
 }
 
 ///|

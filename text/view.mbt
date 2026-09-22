@@ -12,7 +12,7 @@ fn TextView::from_branch(
   branch : @branch.Branch,
   version : Version,
 ) -> TextView {
-  TextView::{ branch, view_version: version }
+  TextView::{ branch, view_version: version, }
 }
 
 ///|
@@ -54,3 +54,9 @@ pub impl Show for TextView with fn output(self, logger) {
   Show::output(self.version(), logger)
   logger.write_string(" }")
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TextView with Show::{to_string, output}

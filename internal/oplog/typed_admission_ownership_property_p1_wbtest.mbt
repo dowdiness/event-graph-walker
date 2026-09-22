@@ -18,7 +18,7 @@ impl @quickcheck.Arbitrary for TypedOwnershipTrace with fn arbitrary(
   _size,
   random_state,
 ) {
-  { mode: typed_ownership_rand_bounded(random_state.split(), 8) }
+  { mode: typed_ownership_rand_bounded(random_state.split(), 8), }
 }
 
 ///|
@@ -26,7 +26,7 @@ impl @qc.Shrink for TypedOwnershipTrace with fn shrink(self) {
   if self.mode == 0 {
     [].iter()
   } else {
-    [{ mode: 0 }].iter()
+    [{ mode: 0, }].iter()
   }
 }
 
@@ -229,3 +229,9 @@ test "property generator: typed ownership traces are valid" {
 test "property: typed admission ownership partition is disjoint" {
   @qc.quick_check_fn(typed_ownership_property, max_success=100, max_size=24)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TypedOwnershipTrace with @debug.Debug::{to_repr}

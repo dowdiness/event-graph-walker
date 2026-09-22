@@ -451,7 +451,7 @@ fn RemoteAdmissionPlanner::register_canonical(
     ready_refs: 0,
   }
   self.pending.set(raw, canonical)
-  self.pending_order.push({ raw, arrival: canonical.arrival })
+  self.pending_order.push({ raw, arrival: canonical.arrival, })
   for dependency in canonical.waiting_dependencies {
     remote_admission_add_waiter(self.waiters, dependency, {
       raw,
@@ -459,7 +459,7 @@ fn RemoteAdmissionPlanner::register_canonical(
     })
   }
   if canonical.unresolved_count == 0 {
-    self.ready.push({ round_key: 0, arrival_key: -canonical.arrival, raw })
+    self.ready.push({ round_key: 0, arrival_key: -canonical.arrival, raw, })
     canonical.ready_refs = 1
     self.pending.set(raw, canonical)
   }
@@ -670,7 +670,7 @@ fn RemoteAdmissionOverlay::schedule(
   // smallest `(round, arrival)` pair, which is the compatibility order.
   // A later, larger round deliberately leaves the older entry for lazy
   // validation when it is popped.
-  self.ready.push({ round_key: -round, arrival_key: -arrival, raw })
+  self.ready.push({ round_key: -round, arrival_key: -arrival, raw, })
 }
 
 ///|
@@ -735,7 +735,7 @@ fn RemoteAdmissionOverlay::rejection_closure(
       discarded_staged.add(raw)
     }
   }
-  { discarded_pending, discarded_staged }
+  { discarded_pending, discarded_staged, }
 }
 
 ///|
@@ -1004,7 +1004,7 @@ fn RemoteAdmissionPlanner::prepare_with_semantics(
     overlay.staged_order.push(raw)
     overlay.staged_unresolved.set(raw, waiting_dependencies.length())
     for dependency in waiting_dependencies {
-      overlay.add_waiter(dependency, { raw, arrival: node.arrival })
+      overlay.add_waiter(dependency, { raw, arrival: node.arrival, })
     }
   }
   match semantics {

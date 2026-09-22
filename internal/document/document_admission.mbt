@@ -40,7 +40,7 @@ fn DocumentAdmission::DocumentAdmission(
   effects : Array[ProjectionEffect],
   effect_availability : ProjectionEffectAvailability,
 ) -> DocumentAdmission {
-  { outcome, projection, effects, effect_availability }
+  { outcome, projection, effects, effect_availability, }
 }
 
 ///|
@@ -146,7 +146,7 @@ fn Document::check_remote_targets(
       }
     }
   }
-  { required, divergences, invalid }
+  { required, divergences, invalid, }
 }
 
 ///|

@@ -32,10 +32,10 @@ pub impl @json.FromJson for Frontier with fn from_json(json, path) {
 /// nor any duplicate values.
 pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
   if values.length() == 0 {
-    return { values: [] }
+    return { values: [], }
   }
   if values.length() == 1 {
-    return { values: [values[0]] }
+    return { values: [values[0]], }
   }
   let seen : @hashset.HashSet[Int] = @hashset.HashSet(
     [],
@@ -47,7 +47,7 @@ pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
       deduped.push(value)
     }
   }
-  { values: deduped }
+  { values: deduped, }
 }
 
 ///|
@@ -65,7 +65,7 @@ pub fn Frontier::advance(
   if !next.contains(new_version) {
     next.push(new_version)
   }
-  { values: next }
+  { values: next, }
 }
 
 ///|
@@ -110,3 +110,33 @@ pub(all) struct GraphEntry {
   /// Used for deterministic total ordering when causal order alone is ambiguous.
   timestamp : Int
 } derive(Debug)
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend Frontier with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Frontier with @json.FromJson::{from_json}
+
+///|
+#doc(hidden)
+pub extend Frontier with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Frontier with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend Frontier with ToJson::{to_json}
+
+///|
+#doc(hidden)
+pub extend GraphEntry with @debug.Debug::{to_repr}

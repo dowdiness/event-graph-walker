@@ -22,9 +22,9 @@ pub fn MergeCache::new(
   merge_size : Int,
 ) -> MergeCache {
   if merge_size > doc_size / 2 {
-    { cache: None, dirty: true }
+    { cache: None, dirty: true, }
   } else {
-    { cache, dirty: cache is None }
+    { cache, dirty: cache is None, }
   }
 }
 

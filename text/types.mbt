@@ -13,7 +13,7 @@ pub(all) struct Pos {
 ///|
 /// Negative values are clamped to 0.
 pub fn Pos::at(value : Int) -> Pos {
-  { value: if value < 0 { 0 } else { value } }
+  { value: if value < 0 { 0 } else { value }, }
 }
 
 ///|
@@ -37,7 +37,7 @@ pub fn Range::new(start : Pos, end : Pos) -> Range raise TextError {
   if start.value() > end.value() {
     raise TextError::InvalidRange(start=start.value(), end=end.value())
   }
-  { start, end }
+  { start, end, }
 }
 
 ///|
@@ -105,3 +105,37 @@ fn Version::from_graph_version(
 fn Version::graph(self : Version) -> @causal_graph.GraphVersion {
   self.graph_version
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend Pos with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Pos with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Range with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Range with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Version with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Version with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Version with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend Version with Show::{to_string, output}

@@ -15,7 +15,10 @@ struct IndexedState {
 
 ///|
 fn IndexedState::new() -> IndexedState {
-  { cache: Some(@order_tree.OrderTree::new()), locator: Some(LvLocator::new()) }
+  {
+    cache: Some(@order_tree.OrderTree::new()),
+    locator: Some(LvLocator::new()),
+  }
 }
 
 ///|
@@ -24,7 +27,7 @@ fn IndexedState::from_snapshot(
   snapshot : (@order_tree.OrderTree[VisibleRun]?, LvLocator?),
 ) -> IndexedState {
   let (cache, locator) = snapshot
-  { cache, locator }
+  { cache, locator, }
 }
 
 ///|
@@ -32,10 +35,10 @@ fn IndexedState::from_snapshot(
 /// construction order and run representation exactly.
 fn IndexedState::from_tree(tree : @fugue.FugueTree[String]) -> IndexedState {
   let items = tree.get_visible_items()
-  let runs : Array[VisibleRun] = Array::new(capacity=items.length())
+  let runs : Array[VisibleRun] = Array(capacity=items.length())
   for i = 0; i < items.length(); i = i + 1 {
     let (lv, item) = items[i]
-    runs.push({ start_lv: lv.0, text: item.content, count: 1 })
+    runs.push({ start_lv: lv.0, text: item.content, count: 1, })
   }
   {
     cache: Some(@order_tree.OrderTree::from_array(runs)),
@@ -222,7 +225,7 @@ fn IndexedState::text(
   tree : @fugue.FugueTree[String],
 ) -> String {
   let cache = self.ensure(tree)
-  let builder = StringBuilder::new()
+  let builder = StringBuilder()
   for run in cache.iter() {
     builder.write_string(run.text)
   }

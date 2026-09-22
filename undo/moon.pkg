@@ -1,6 +1,9 @@
 import {
+  "moonbitlang/core/debug",
+}
+
+import {
   "dowdiness/event-graph-walker/text",
-  "moonbitlang/core/quickcheck",
 } for "test"
 
 options(

@@ -9,7 +9,7 @@ struct JumpAncestors {
 
 ///|
 fn JumpAncestors::new() -> JumpAncestors {
-  { depth: [], jump: [] }
+  { depth: [], jump: [], }
 }
 
 ///|
@@ -85,3 +85,11 @@ fn JumpAncestors::is_ancestor_item_id(
   }
   current == ancestor
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079). See `internal/fugue/item.mbt`.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend JumpAncestors with @debug.Debug::{to_repr}

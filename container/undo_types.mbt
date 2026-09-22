@@ -56,7 +56,7 @@ fn ReplayCommand::ReplayCommand(
   source_index : Int,
   item : UndoItem,
 ) -> ReplayCommand {
-  { source_index, item }
+  { source_index, item, }
 }
 
 ///|

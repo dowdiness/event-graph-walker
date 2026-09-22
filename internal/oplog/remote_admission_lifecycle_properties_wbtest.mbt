@@ -451,7 +451,7 @@ fn PlannerLifecycleModel::begin(
     return false
   }
   for index, op in plan.staged {
-    self.pending.push({ op, arrival: self.next_arrival + index })
+    self.pending.push({ op, arrival: self.next_arrival + index, })
   }
   self.next_arrival = plan.next_arrival
   plan.consumed = true
@@ -1158,3 +1158,13 @@ test "property: generated planner lifecycle traces match the model" {
     max_size=24,
   )
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend PlannerLifecycleEvent with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend PlannerLifecycleTrace with @debug.Debug::{to_repr}

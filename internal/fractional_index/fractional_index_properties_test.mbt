@@ -28,14 +28,14 @@ pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
   let _ = size
   // Ensure a < b by swapping if needed, skip if equal
   if a < b {
-    { left: a, right: b }
+    { left: a, right: b, }
   } else if b < a {
-    { left: b, right: a }
+    { left: b, right: a, }
   } else {
     // Equal — offset b by appending 1
     let elems_b2 : Array[Int] = a.elements()
     elems_b2.push(1)
-    { left: a, right: @fractional_index.FractionalIndex::new(elems_b2) }
+    { left: a, right: @fractional_index.FractionalIndex::new(elems_b2), }
   }
 }
 
@@ -49,7 +49,7 @@ pub impl @qc.Shrink for OrderedPair with fn shrink(self) {
     let shorter = left_elems[:left_elems.length() - 1].to_owned()
     let candidate = @fractional_index.FractionalIndex::new(shorter)
     if candidate < self.right {
-      results.push({ left: candidate, right: self.right })
+      results.push({ left: candidate, right: self.right, })
     }
   }
   // Try reducing elements of right
@@ -58,7 +58,7 @@ pub impl @qc.Shrink for OrderedPair with fn shrink(self) {
     let shorter = right_elems[:right_elems.length() - 1].to_owned()
     let candidate = @fractional_index.FractionalIndex::new(shorter)
     if self.left < candidate {
-      results.push({ left: self.left, right: candidate })
+      results.push({ left: self.left, right: candidate, })
     }
   }
   results.iter()
@@ -77,7 +77,7 @@ pub impl @qc.Shrink for SingleKey with fn shrink(self) {
   let elems = self.key.elements()
   if elems.length() > 1 {
     let shorter = elems[:elems.length() - 1].to_owned()
-    results.push({ key: @fractional_index.FractionalIndex::new(shorter) })
+    results.push({ key: @fractional_index.FractionalIndex::new(shorter), })
   }
   results.iter()
 }
@@ -91,7 +91,7 @@ pub impl @quickcheck.Arbitrary for SingleKey with fn arbitrary(size, rs) {
     let _ = i
     elems.push(rs.next_uint64().to_int().abs() % 65536)
   }
-  { key: @fractional_index.FractionalIndex::new(elems) }
+  { key: @fractional_index.FractionalIndex::new(elems), }
 }
 
 ///|

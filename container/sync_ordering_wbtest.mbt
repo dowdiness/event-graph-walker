@@ -14,7 +14,7 @@ test "10k sequential container records have linear preparation comparisons" {
         parents,
         op: @mt.SetProperty({
           timestamp: sequence,
-          target: { agent: "node", counter: 0 },
+          target: { agent: "node", counter: 0, },
           key: "k",
           value: sequence.to_string(),
           agent: "alice",
@@ -37,7 +37,7 @@ test "text ordering uses block-create sequence instead of node counter" {
     parents: [],
     op: @mt.Move({
       timestamp: 0,
-      target: { agent: "alice", counter: 0 },
+      target: { agent: "alice", counter: 0, },
       new_parent: @mt.root_id,
       position: @fi.FractionalIndex::between(left=None, right=None),
       agent: "alice",
@@ -48,7 +48,7 @@ test "text ordering uses block-create sequence instead of node counter" {
     parents: [],
     op: @mt.Move({
       timestamp: 0,
-      target: { agent: "ghost", counter: 99 },
+      target: { agent: "ghost", counter: 99, },
       new_parent: @mt.root_id,
       position: @fi.FractionalIndex::between(left=None, right=None),
       agent: "ghost",
@@ -59,7 +59,7 @@ test "text ordering uses block-create sequence instead of node counter" {
     parents: [@core.RawVersion("ghost", 0)],
     op: @mt.SetProperty({
       timestamp: 1,
-      target: { agent: "ghost", counter: 99 },
+      target: { agent: "ghost", counter: 99, },
       key: "prior",
       value: "operation",
       agent: "ghost",
@@ -70,7 +70,7 @@ test "text ordering uses block-create sequence instead of node counter" {
     parents: [@core.RawVersion("ghost", 1)],
     op: @mt.Move({
       timestamp: 2,
-      target: { agent: "ghost", counter: 0 },
+      target: { agent: "ghost", counter: 0, },
       new_parent: @mt.root_id,
       position: @fi.FractionalIndex::between(left=None, right=None),
       agent: "ghost",
@@ -79,7 +79,7 @@ test "text ordering uses block-create sequence instead of node counter" {
   let text = SyncOpRecord::Text({
     version: @core.RawVersion("alice", 1),
     parents: [@core.RawVersion("alice", 0)],
-    block: { agent: "ghost", counter: 0 },
+    block: { agent: "ghost", counter: 0, },
     op: Insert({
       id: @core.RawVersion("alice", 1),
       origin_left: None,

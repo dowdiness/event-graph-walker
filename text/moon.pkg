@@ -9,7 +9,6 @@ import {
   "dowdiness/event-graph-walker/sync",
   "dowdiness/event-graph-walker/undo",
   "moonbitlang/core/bench",
-  "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",

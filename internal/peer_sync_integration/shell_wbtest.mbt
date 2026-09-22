@@ -21,7 +21,7 @@ priv struct State {
 
 ///|
 fn State::empty() -> State {
-  { peers: Map([]) }
+  { peers: Map([]), }
 }
 
 ///|
@@ -250,7 +250,7 @@ priv struct Scheduler[T] {
 
 ///|
 fn[T] Scheduler::new() -> Scheduler[T] {
-  { ready: [], delayed: [] }
+  { ready: [], delayed: [], }
 }
 
 ///|

@@ -31,7 +31,7 @@ fn TextAdmissionTransition::new(
   availability : TextEffectAvailability,
   result : Result[SyncReport, TextError],
 ) -> TextAdmissionTransition {
-  { version_before, version_after, effects, availability, result }
+  { version_before, version_after, effects, availability, result, }
 }
 
 ///|
@@ -67,3 +67,13 @@ pub fn TextAdmissionTransition::finish(
     Err(error) => raise error
   }
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TextEffect with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend TextEffect with Eq::{not_equal, equal}

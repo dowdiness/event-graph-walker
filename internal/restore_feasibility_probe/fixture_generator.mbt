@@ -173,7 +173,7 @@ struct FixtureBuilder {
 
 ///|
 fn FixtureBuilder::new() -> FixtureBuilder {
-  { events: [], visible: [], next_sequences: Default::default() }
+  { events: [], visible: [], next_sequences: Default::default(), }
 }
 
 ///|
@@ -231,7 +231,7 @@ fn FixtureBuilder::insert(
     raise FixtureError::Invalid(detail="insert position outside visible text")
   }
   let event = self.append_event(agent, parents, InsertScalar(position, scalar))
-  self.visible.insert(position, { value: scalar, identity: event.identity })
+  self.visible.insert(position, { value: scalar, identity: event.identity, })
   event
 }
 
@@ -775,7 +775,7 @@ fn _generate_required_catalog() -> FixtureCatalog raise FixtureError {
     let (shape, count) = spec
     fixtures.push(catalog_fixture(generate_fixture(shape, count)))
   }
-  { schema_version: 1, fixture_seed: "none", fixtures }
+  { schema_version: 1, fixture_seed: "none", fixtures, }
 }
 
 ///|
@@ -796,7 +796,7 @@ fn generate_required_fixture(
 ///|
 /// Emit the complete catalog without retaining all fixture trees at once.
 fn generate_full_catalog_json() -> String raise FixtureError {
-  let builder = StringBuilder::new()
+  let builder = StringBuilder()
   builder.write_string(
     "{\"schema_version\":1,\"fixture_seed\":\"none\",\"fixtures\":[",
   )

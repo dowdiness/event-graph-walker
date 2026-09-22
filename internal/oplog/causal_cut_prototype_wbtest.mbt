@@ -29,7 +29,7 @@ priv struct CausalCutSnapshot {
 
 ///|
 fn CausalCut::new() -> CausalCut {
-  { nodes: Default::default(), frontier: Default::default() }
+  { nodes: Default::default(), frontier: Default::default(), }
 }
 
 ///|
@@ -54,7 +54,7 @@ fn CausalCut::append(self : CausalCut, operation : @core.Op) -> Unit {
       None => abort("causal cut missing parent")
     }
   })
-  self.nodes.set(raw, { operation, timestamp })
+  self.nodes.set(raw, { operation, timestamp, })
   for parent in parents {
     self.frontier.remove(parent)
   }
@@ -79,7 +79,7 @@ fn CausalCut::snapshot(self : CausalCut) -> CausalCutSnapshot {
   let frontier : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.HashSet::from_iter(
     self.frontier.iter(),
   )
-  { nodes, frontier }
+  { nodes, frontier, }
 }
 
 ///|

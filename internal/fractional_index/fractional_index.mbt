@@ -29,7 +29,7 @@ pub fn FractionalIndex::new(elements : Array[Int]) -> FractionalIndex {
     }
   }
   let normalized = normalize(elements)
-  { elements: normalized }
+  { elements: normalized, }
 }
 
 ///|
@@ -205,3 +205,25 @@ fn between_impl(
   }
   FractionalIndex::new(result)
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend FractionalIndex with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend FractionalIndex with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend FractionalIndex with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend FractionalIndex with Show::{to_string, output}

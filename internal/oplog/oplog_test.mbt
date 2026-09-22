@@ -3,7 +3,7 @@
 ///|
 test "local delete and undelete reject the root sentinel before allocation" {
   let delete_log = @oplog.OpLog("local")
-  let delete_result : Result[Unit, OpLogError] = try {
+  let delete_result : Result[Unit, @oplog.OpLogError] = try {
     let _ = delete_log.delete(-1)
     Ok(())
   } catch {
@@ -13,7 +13,7 @@ test "local delete and undelete reject the root sentinel before allocation" {
   inspect(delete_log.op_count(), content="0")
 
   let undelete_log = @oplog.OpLog("local")
-  let undelete_result : Result[Unit, OpLogError] = try {
+  let undelete_result : Result[Unit, @oplog.OpLogError] = try {
     let _ = undelete_log.undelete(-1)
     Ok(())
   } catch {
@@ -53,7 +53,7 @@ test "remote plan is non-mutating and preserves drain order" {
 ///|
 test "local insert origin preflight leaves causal state unchanged" {
   let oplog = @oplog.OpLog("local")
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     ignore(oplog.insert("ghost", 99, -1))
     Ok(())
   } catch {
@@ -71,7 +71,7 @@ test "local insert origin preflight leaves causal state unchanged" {
   inspect(oplog.op_count(), content="1")
 
   let right_oplog = @oplog.OpLog("right")
-  let right_result : Result[Unit, OpLogError] = try {
+  let right_result : Result[Unit, @oplog.OpLogError] = try {
     ignore(right_oplog.insert("ghost", -1, 99))
     Ok(())
   } catch {
@@ -89,7 +89,7 @@ test "local insert origin preflight preserves existing causal state" {
   let seed = try! oplog.insert("seed", -1, -1)
   let before_frontier = oplog.causal_graph().get_frontier().to_array()
 
-  let bad_left : Result[Unit, OpLogError] = try {
+  let bad_left : Result[Unit, @oplog.OpLogError] = try {
     ignore(oplog.insert("ghost", 99, -1))
     Ok(())
   } catch {
@@ -102,7 +102,7 @@ test "local insert origin preflight preserves existing causal state" {
     content="true",
   )
 
-  let bad_right : Result[Unit, OpLogError] = try {
+  let bad_right : Result[Unit, @oplog.OpLogError] = try {
     ignore(oplog.insert("ghost", seed.lv(), 99))
     Ok(())
   } catch {
@@ -125,7 +125,7 @@ test "local insert origin preflight preserves existing causal state" {
 test "validate_remote_batch accepts identical repeated identity" {
   let oplog = @oplog.OpLog("local")
   let op = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([op, op], [@core.RawVersion("remote", 0)])
     Ok(())
   } catch {
@@ -140,7 +140,7 @@ test "validate_remote_batch raises ConflictingIdentity for logical repeat" {
   let oplog = @oplog.OpLog("local")
   let op1 = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
   let op2 = @core.Op::insert(-1, [], "remote", 0, "b", None, None)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([op1, op2], [])
     Ok(())
   } catch {
@@ -160,7 +160,7 @@ test "validate_remote_batch raises MissingRemoteParent for unknown parent" {
   let oplog = @oplog.OpLog("local")
   let ghost_parent = @core.RawVersion("ghost", 0)
   let op = @core.Op::insert(-1, [ghost_parent], "remote", 0, "a", None, None)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([op], [])
     Ok(())
   } catch {
@@ -183,7 +183,7 @@ test "validate_remote_batch accepts parent present in the batch" {
   let op1 = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
   let op1_raw = @core.RawVersion("remote", 0)
   let op2 = @core.Op::insert(-1, [op1_raw], "remote", 1, "b", None, None)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([op1, op2], [])
     Ok(())
   } catch {
@@ -198,7 +198,7 @@ test "validate_remote_batch raises MissingRemoteFrontier for unknown frontier en
   let op = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
   // frontier claims ("ghost", 99) but that op is neither local nor in the batch
   let ghost = @core.RawVersion("ghost", 99)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([op], [ghost])
     Ok(())
   } catch {
@@ -220,7 +220,7 @@ test "validate_remote_batch accepts frontier op present in the batch" {
   let op = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
   // frontier entry ("remote", 0) matches op in the batch — should be ok
   let op_raw = @core.RawVersion("remote", 0)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([op], [op_raw])
     Ok(())
   } catch {
@@ -238,7 +238,7 @@ test "validate_remote_batch accepts frontier op already present in oplog" {
   let alice_raw = @core.RawVersion("alice", 0)
   // A new batch from "remote" with alice's already-applied op in the frontier
   let new_op = @core.Op::insert(-1, [], "remote", 0, "y", None, None)
-  let result : Result[Unit, OpLogError] = try {
+  let result : Result[Unit, @oplog.OpLogError] = try {
     oplog.validate_remote_batch([new_op], [alice_raw])
     Ok(())
   } catch {
@@ -252,7 +252,7 @@ test "apply_remote raises MissingOrigin for delete with no origin_left" {
   let oplog = @oplog.OpLog("local")
   // A delete with origin_left=None is malformed (protocol error)
   let bad_delete = @core.Op::delete(-1, [], "remote", 0, None)
-  let result : Result[Array[@core.Op], OpLogError] = try {
+  let result : Result[Array[@core.Op], @oplog.OpLogError] = try {
     let v = oplog.apply_remote(bad_delete)
     Ok(v)
   } catch {
@@ -275,7 +275,7 @@ test "apply_remote is idempotent: already-applied op is silently skipped" {
   let op = @core.Op::insert(-1, [], "remote", 0, "a", None, None)
   let _ = try! oplog.apply_remote(op)
   // Applying the same op again must not raise and must not add a duplicate
-  let result : Result[Array[@core.Op], OpLogError] = try {
+  let result : Result[Array[@core.Op], @oplog.OpLogError] = try {
     let v = oplog.apply_remote(op)
     Ok(v)
   } catch {
@@ -310,7 +310,7 @@ test "apply_remote raises admitted ConflictingIdentity atomically" {
   )
   let before_frontier = oplog.get_frontier_raw()
   let before_ops = oplog.get_all_ops()
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
+  let result : Result[Array[@core.Op], @oplog.OpLogError] = Ok(
     oplog.apply_remote(conflict),
   ) catch {
     e => Err(e)
@@ -347,7 +347,7 @@ test "prepare_remote rejects conflict before ready prefix admission" {
   let oplog = @oplog.OpLog("ready-prefix")
   let ready = @core.Op::insert(-1, [], "ready-prefix-op", 0, "a", None, None)
   let conflict = @core.Op::insert(5, [], "ready-prefix-op", 0, "b", None, None)
-  let result : Result[PreparedAdmission, OpLogError] = Ok(
+  let result : Result[@oplog.PreparedAdmission, @oplog.OpLogError] = Ok(
     oplog.prepare_remote([ready, conflict]),
   ) catch {
     error => Err(error)

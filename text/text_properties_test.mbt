@@ -62,12 +62,12 @@ impl @qc.Shrink for RealOps with fn shrink(self) {
   let edits = self.edits
   let len = edits.length()
   if len > 0 {
-    results.push({ edits: [] })
+    results.push({ edits: [], })
     let half = len / 2
     if half > 0 {
-      results.push({ edits: edits[:half].to_owned() })
+      results.push({ edits: edits[:half].to_owned(), })
     }
-    results.push({ edits: edits[:len - 1].to_owned() })
+    results.push({ edits: edits[:len - 1].to_owned(), })
   }
   results.iter()
 }

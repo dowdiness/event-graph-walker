@@ -28,7 +28,7 @@ priv struct ProjectionRecoveryVerification {
 fn ProjectionRecoveryVerification::from_targets(
   targets : Array[ProjectionRecoveryTarget],
 ) -> ProjectionRecoveryVerification {
-  { targets: targets.copy() }
+  { targets: targets.copy(), }
 }
 
 ///|

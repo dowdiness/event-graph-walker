@@ -65,4 +65,3 @@ pub fn MergeContext::retreat_operations(Self, @rle.Rle[@core.LvRange]) -> Unit r
 // Type aliases
 
 // Traits
-

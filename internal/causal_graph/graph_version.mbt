@@ -55,7 +55,7 @@ fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
 
 ///|
 fn HaveSummary::empty() -> HaveSummary {
-  { entries: [] }
+  { entries: [], }
 }
 
 ///|
@@ -63,7 +63,7 @@ fn HaveSummary::copy(self : HaveSummary) -> HaveSummary {
   {
     entries: self.entries.map(entry => {
       agent: entry.agent,
-      ranges: entry.ranges.map(range => { start: range.start, end: range.end }),
+      ranges: entry.ranges.map(range => { start: range.start, end: range.end, }),
     }),
   }
 }
@@ -79,7 +79,7 @@ fn HaveSummary::insert(self : HaveSummary, raw : @core.RawVersion) -> Unit {
     Err(index) => {
       self.entries.insert(index, {
         agent: raw.agent,
-        ranges: [{ start: sequence, end: sequence + 1U }],
+        ranges: [{ start: sequence, end: sequence + 1U, }],
       })
       return
     }
@@ -106,19 +106,19 @@ fn HaveSummary::insert(self : HaveSummary, raw : @core.RawVersion) -> Unit {
     (true, true) => {
       let left = entry.ranges[range_index - 1]
       let right = entry.ranges[range_index]
-      entry.ranges[range_index - 1] = { start: left.start, end: right.end }
+      entry.ranges[range_index - 1] = { start: left.start, end: right.end, }
       ignore(entry.ranges.remove(range_index))
     }
     (true, false) => {
       let left = entry.ranges[range_index - 1]
-      entry.ranges[range_index - 1] = { start: left.start, end: sequence + 1U }
+      entry.ranges[range_index - 1] = { start: left.start, end: sequence + 1U, }
     }
     (false, true) => {
       let right = entry.ranges[range_index]
-      entry.ranges[range_index] = { start: sequence, end: right.end }
+      entry.ranges[range_index] = { start: sequence, end: right.end, }
     }
     (false, false) =>
-      entry.ranges.insert(range_index, { start: sequence, end: sequence + 1U })
+      entry.ranges.insert(range_index, { start: sequence, end: sequence + 1U, })
   }
 }
 
@@ -220,11 +220,11 @@ pub fn GraphVersion::from_parts(
   checkpoint_values.sort_by(compare_graph_raw)
   let entries : Array[HaveEntry] = ranges.map(entry => {
     agent: entry.0,
-    ranges: entry.1.map(range => { start: range.0, end: range.1 }),
+    ranges: entry.1.map(range => { start: range.0, end: range.1, }),
   })
   entries.sort_by((a, b) => a.agent.compare(b.agent))
   let result : GraphVersion = {
-    checkpoint: { frontier: checkpoint_values },
+    checkpoint: { frontier: checkpoint_values, },
     have: { entries, },
   }
   validate_graph_version(result.checkpoint, result.have)
@@ -275,7 +275,7 @@ pub fn CausalGraph::current_graph_version(self : CausalGraph) -> GraphVersion {
     }
   }
   frontier.sort_by(compare_graph_raw)
-  { checkpoint: { frontier, }, have }
+  { checkpoint: { frontier, }, have, }
 }
 
 ///|
@@ -309,3 +309,25 @@ pub fn CausalGraph::resolve_graph_version(
     _ => None
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend GraphVersion with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend GraphVersion with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend GraphVersion with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend GraphVersionError with @debug.Debug::{to_repr}

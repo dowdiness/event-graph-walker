@@ -13,3 +13,13 @@ pub(all) suberror CausalGraphError {
   /// Indicates a consistency bug — LV was referenced but never registered.
   MissingEntry(lv~ : Int)
 } derive(Debug)
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend CausalGraphError with @debug.Debug::{to_repr}

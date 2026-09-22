@@ -60,3 +60,33 @@ pub fn UndoError::is_retryable(self : UndoError) -> Bool {
   ignore(self)
   false
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend CompensatingEditResult with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend CompensatingEditResult with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend UndoGroup with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend UndoItem with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend UndoOpType with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend UndoOpType with Eq::{not_equal, equal}

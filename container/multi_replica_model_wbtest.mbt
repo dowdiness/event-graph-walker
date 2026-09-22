@@ -64,7 +64,7 @@ impl @quickcheck.Arbitrary for ContainerModelTrace with fn arbitrary(size, rs) {
     }
     actions.push(action)
   }
-  { replica_count, actions }
+  { replica_count, actions, }
 }
 
 ///|
@@ -211,3 +211,13 @@ fn run_container_model(trace : ContainerModelTrace) -> Bool {
 test "property: 2-5 replica container model converges" {
   @qc.quick_check_fn(run_container_model)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend ContainerModelAction with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend ContainerModelTrace with @debug.Debug::{to_repr}

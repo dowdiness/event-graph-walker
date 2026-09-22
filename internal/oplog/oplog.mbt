@@ -377,7 +377,7 @@ fn OpLog::admitted_op(self : OpLog, raw : @core.RawVersion) -> @core.Op? {
 ///|
 /// Build the core semantic view without giving the planner graph ownership.
 fn OpLog::remote_admission_semantics(self : OpLog) -> RemoteAdmissionSemantics {
-  { op_of: raw => self.admitted_op(raw) }
+  { op_of: raw => self.admitted_op(raw), }
 }
 
 ///|

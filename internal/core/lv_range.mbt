@@ -31,12 +31,12 @@ pub impl @rle.Mergeable for LvRange with fn can_merge(a, b) {
 
 ///|
 pub impl @rle.Mergeable for LvRange with fn merge(a, b) {
-  { start: a.start, count: a.count + b.count }
+  { start: a.start, count: a.count + b.count, }
 }
 
 ///|
 pub impl @rle.FromRange for LvRange with fn from_range(start, count) {
-  { start, count }
+  { start, count, }
 }
 
 ///|
@@ -59,3 +59,37 @@ pub fn LvRange::contains(self : LvRange, lv : Int) -> Bool {
 pub fn LvRange::end(self : LvRange) -> Int {
   self.start + self.count
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend LvRange with @rle.Addressable::{address}
+
+///|
+#doc(hidden)
+pub extend LvRange with @rle.FromRange::{from_range}
+
+///|
+#doc(hidden)
+pub extend LvRange with @rle.HasLength::{length, is_empty}
+
+///|
+#doc(hidden)
+pub extend LvRange with @rle.Mergeable::{can_merge, merge}
+
+///|
+#doc(hidden)
+pub extend LvRange with @rle.Spanning::{logical_length, span}
+
+///|
+#doc(hidden)
+pub extend LvRange with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend LvRange with Eq::{not_equal, equal}

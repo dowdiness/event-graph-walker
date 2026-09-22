@@ -5,8 +5,8 @@
 // the FugueMax tree placement and the position-based API contract.
 
 ///|
-fn do_insert(doc : TextState, pos : Int, ch : String) -> Unit {
-  doc.insert(Pos::at(pos), ch) catch {
+fn do_insert(doc : @text.TextState, pos : Int, ch : String) -> Unit {
+  doc.insert(@text.Pos::at(pos), ch) catch {
     _ => ()
   }
 }
@@ -18,12 +18,12 @@ fn do_insert(doc : TextState, pos : Int, ch : String) -> Unit {
 /// and the FugueMax tree. If FugueMax places a character at a different
 /// position than requested, this test catches it.
 fn prop_insert_position_roundtrip(ops : RealOps) -> Bool {
-  let doc = try! TextState::new("roundtrip")
+  let doc = try! @text.TextState::new("roundtrip")
   for edit in ops.edits {
     match edit {
       Insert(pos, ch) => {
         let before_len = doc.len()
-        doc.insert(Pos::at(pos), ch) catch {
+        doc.insert(@text.Pos::at(pos), ch) catch {
           _ => continue
         }
         let text = doc.text()
@@ -36,7 +36,7 @@ fn prop_insert_position_roundtrip(ops : RealOps) -> Bool {
           return false
         }
       }
-      Delete(pos) => doc.delete(Pos::at(pos)) catch { _ => continue }
+      Delete(pos) => doc.delete(@text.Pos::at(pos)) catch { _ => continue }
     }
   }
   true
@@ -48,9 +48,7 @@ test "property: insert at position P places character at position P" {
     prop_insert_position_roundtrip,
     max_success=200,
     max_size=50,
-  ) catch {
-    failure => raise failure
-  }
+  )
 }
 
 ///|
@@ -59,7 +57,7 @@ test "property: insert at position P places character at position P" {
 /// places the item as a right child of root (at the END), violating the
 /// position contract.
 test "position roundtrip: insert at 0 on non-empty doc" {
-  let doc = try! TextState::new("test")
+  let doc = try! @text.TextState::new("test")
   do_insert(doc, 0, "a")
   do_insert(doc, 1, "b")
   do_insert(doc, 2, "c")
@@ -74,7 +72,7 @@ test "position roundtrip: insert at 0 on non-empty doc" {
 ///|
 /// Targeted test: multiple inserts at position 0 interleave correctly.
 test "position roundtrip: repeated insert at 0" {
-  let doc = try! TextState::new("test")
+  let doc = try! @text.TextState::new("test")
   do_insert(doc, 0, "c")
   do_insert(doc, 0, "b")
   do_insert(doc, 0, "a")
@@ -85,7 +83,7 @@ test "position roundtrip: repeated insert at 0" {
 ///|
 /// Targeted test: insert at 0, then insert at end, then insert at 0 again.
 test "position roundtrip: alternating insert at 0 and end" {
-  let doc = try! TextState::new("test")
+  let doc = try! @text.TextState::new("test")
   do_insert(doc, 0, "a")
   inspect(doc.text(), content="a")
   do_insert(doc, 1, "b")

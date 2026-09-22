@@ -5,8 +5,8 @@
 
 ///|
 struct VersionVectorPair {
-  a : VersionVector
-  b : VersionVector
+  a : @causal_graph.VersionVector
+  b : @causal_graph.VersionVector
 } derive(Debug)
 
 ///|
@@ -22,9 +22,9 @@ impl @qc.Shrink for VersionVectorPair
 
 ///|
 struct VersionVectorTriple {
-  a : VersionVector
-  b : VersionVector
-  c : VersionVector
+  a : @causal_graph.VersionVector
+  b : @causal_graph.VersionVector
+  c : @causal_graph.VersionVector
 } derive(Debug)
 
 ///|
@@ -41,7 +41,7 @@ impl @qc.Shrink for VersionVectorTriple
 
 ///|
 /// Property: Reflexivity - a version vector is always <= itself
-fn prop_reflexivity(vv : VersionVector) -> Bool {
+fn prop_reflexivity(vv : @causal_graph.VersionVector) -> Bool {
   vv <= vv
 }
 
@@ -103,7 +103,7 @@ test "property: merge is commutative" {
 
 ///|
 /// Property: Merge idempotence - merge(a, a) == a
-fn prop_merge_idempotent(vv : VersionVector) -> Bool {
+fn prop_merge_idempotent(vv : @causal_graph.VersionVector) -> Bool {
   let merged = vv.merge(vv)
   merged == vv
 }
@@ -177,8 +177,8 @@ test "property: total order or concurrent" {
 
 ///|
 /// Property: Empty version vector is <= any version vector
-fn prop_empty_is_minimal(vv : VersionVector) -> Bool {
-  let empty = VersionVector::new()
+fn prop_empty_is_minimal(vv : @causal_graph.VersionVector) -> Bool {
+  let empty = @causal_graph.VersionVector::new()
   empty <= vv
 }
 
@@ -189,7 +189,7 @@ test "property: empty is minimal" {
 
 ///|
 /// Property: Set with larger value makes version vector larger
-fn prop_set_increases(vv : VersionVector) -> Bool {
+fn prop_set_increases(vv : @causal_graph.VersionVector) -> Bool {
   // Pick first agent if any, otherwise use a new agent
   let agents = vv.agents()
   let agent = if agents.length() > 0 { agents[0] } else { "test" }
@@ -236,7 +236,7 @@ test "property: includes consistent with comparison" {
 
 ///|
 /// Property: length equals number of agents
-fn prop_length_equals_agents(vv : VersionVector) -> Bool {
+fn prop_length_equals_agents(vv : @causal_graph.VersionVector) -> Bool {
   vv.0.length() == vv.agents().length()
 }
 
@@ -248,7 +248,7 @@ test "property: length equals agent count" {
 ///|
 /// Property: Empty version vector has length 0
 fn prop_empty_length_zero(_unit : Unit) -> Bool {
-  let vv = VersionVector::new()
+  let vv = @causal_graph.VersionVector::new()
   vv.0.is_empty() && vv.0.length() == 0
 }
 
@@ -290,7 +290,7 @@ test "property: equality is transitive" {
 
 ///|
 /// Property: Agents returns all agent IDs correctly
-fn prop_agents_correct(vv : VersionVector) -> Bool {
+fn prop_agents_correct(vv : @causal_graph.VersionVector) -> Bool {
   let agents = vv.agents()
   // Every agent in agents() should have a value in the version vector
   let mut all_have_values = true
@@ -334,8 +334,8 @@ test "property: merge is least upper bound" {
 /// Property: empty is the identity element for merge
 ///
 /// Merging with the empty version vector is a no-op in both directions.
-fn prop_merge_empty_identity(vv : VersionVector) -> Bool {
-  let empty = VersionVector::new()
+fn prop_merge_empty_identity(vv : @causal_graph.VersionVector) -> Bool {
+  let empty = @causal_graph.VersionVector::new()
   vv.merge(empty) == vv && empty.merge(vv) == vv
 }
 
@@ -370,7 +370,7 @@ test "property: merge is monotone in its arguments" {
 ///
 /// A version vector is never concurrent with itself.
 /// (By definition: concurrent(a, a) would require !(a <= a), but a <= a always holds.)
-fn prop_concurrent_irreflexive(vv : VersionVector) -> Bool {
+fn prop_concurrent_irreflexive(vv : @causal_graph.VersionVector) -> Bool {
   !vv.concurrent(vv)
 }
 
@@ -384,7 +384,7 @@ test "property: concurrent is irreflexive" {
 ///
 /// If a version vector includes (agent, seq), it also includes (agent, seq')
 /// for any seq' <= seq. Knowing "up to seq" implies knowing "up to seq-1, seq-2, ...".
-fn prop_includes_downward_closed(vv : VersionVector) -> Bool {
+fn prop_includes_downward_closed(vv : @causal_graph.VersionVector) -> Bool {
   let agents = vv.agents()
   if agents.is_empty() {
     return true
@@ -415,7 +415,10 @@ test "property: includes is downward-closed in seq" {
 ///
 /// After vv.increment(agent), every other agent retains its original seq,
 /// and the target agent's seq increases by exactly 1 (or becomes 0 if new).
-fn check_increment_target_only(vv : VersionVector, target : String) -> Bool {
+fn check_increment_target_only(
+  vv : @causal_graph.VersionVector,
+  target : String,
+) -> Bool {
   let before = vv.0.get(target)
   let vv2 = vv.increment(target)
   let after = vv2.0.get(target)
@@ -457,7 +460,7 @@ fn check_increment_target_only(vv : VersionVector, target : String) -> Bool {
 }
 
 ///|
-fn prop_increment_target_only(vv : VersionVector) -> Bool {
+fn prop_increment_target_only(vv : @causal_graph.VersionVector) -> Bool {
   let existing_target_ok = check_increment_target_only(vv, "alice")
   // Arbitrary VersionVector currently uses ["alice", "bob", "charlie", "dave", "eve"].
   // Using "zoe" ensures the absent-target increment path is exercised.

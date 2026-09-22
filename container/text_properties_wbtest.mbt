@@ -80,7 +80,7 @@ impl @quickcheck.Arbitrary for BlockScenario with fn arbitrary(size, rs) {
       edits.push(Delete(block, pos))
     } else if choice == 2 {
       let repl_len = rs.split().next_uint64().to_int().abs() % 3 + 1
-      let sb = StringBuilder::new()
+      let sb = StringBuilder()
       for i = 0; i < repl_len; i = i + 1 {
         let char_idx = (rs.split().next_uint64().to_int().abs() + i) %
           chars.length()
@@ -102,13 +102,13 @@ impl @qc.Shrink for BlockScenario with fn shrink(self) {
   let results : Array[BlockScenario] = []
   let len = self.edits.length()
   if len > 0 {
-    results.push({ edits: [] })
+    results.push({ edits: [], })
     let half = len / 2
     if half > 0 {
-      results.push({ edits: self.edits[:half].to_owned() })
+      results.push({ edits: self.edits[:half].to_owned(), })
     }
     if len > 1 {
-      results.push({ edits: self.edits[:len - 1].to_owned() })
+      results.push({ edits: self.edits[:len - 1].to_owned(), })
     }
   }
   results.iter()
@@ -279,3 +279,21 @@ fn prop_sync_message_replays_mixed_tree_and_text(
 test "property: sync message converges mixed tree and text edits" {
   @qc.quick_check_fn(prop_sync_message_replays_mixed_tree_and_text)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend BlockEdit with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend BlockEdit with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend BlockScenario with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend BlockScenario with Show::{to_string, output}

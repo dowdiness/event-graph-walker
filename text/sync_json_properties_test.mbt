@@ -3,7 +3,7 @@
 ///|
 fn prop_version_json_roundtrip(ops : RealOps) -> Bool {
   let doc = try! @text.TextState::new("alice")
-  let versions : Array[Version] = []
+  let versions : Array[@text.Version] = []
   versions.push(doc.version())
   if !apply_edits(doc, ops.edits) {
     return false
@@ -20,7 +20,7 @@ fn prop_version_json_roundtrip(ops : RealOps) -> Bool {
   }
 
   for version in versions {
-    let roundtrip = Version::from_json_string(version.to_json_string()) catch {
+    let roundtrip = @text.Version::from_json_string(version.to_json_string()) catch {
       _ => return false
     }
     if roundtrip != version {
@@ -42,7 +42,7 @@ fn prop_sync_message_json_roundtrip_metadata(ops : RealOps) -> Bool {
     return false
   }
   let message = doc.sync().export_all() catch { _ => return false }
-  let roundtrip = SyncMessage::from_json_string(message.to_json_string()) catch {
+  let roundtrip = @text.SyncMessage::from_json_string(message.to_json_string()) catch {
     _ => return false
   }
   message.op_count() == roundtrip.op_count() &&
@@ -61,7 +61,7 @@ fn prop_sync_message_roundtrip_apply_equivalence(ops : RealOps) -> Bool {
     return false
   }
   let message = origin.sync().export_all() catch { _ => return false }
-  let roundtrip = SyncMessage::from_json_string(message.to_json_string()) catch {
+  let roundtrip = @text.SyncMessage::from_json_string(message.to_json_string()) catch {
     _ => return false
   }
 
@@ -91,7 +91,7 @@ fn prop_export_since_current_json_roundtrip_is_empty(ops : RealOps) -> Bool {
   if !message.is_empty() {
     return false
   }
-  let roundtrip = SyncMessage::from_json_string(message.to_json_string()) catch {
+  let roundtrip = @text.SyncMessage::from_json_string(message.to_json_string()) catch {
     _ => return false
   }
   roundtrip.is_empty() && roundtrip.op_count() == 0
@@ -105,13 +105,13 @@ test "property: export_since(current) stays empty after JSON round-trip" {
 ///|
 fn prop_invalid_version_json_fails(seed : Int) -> Bool {
   let invalid = if seed % 2 == 0 { "" } else { "{not_json" }
-  let result : Result[Version, TextError] = Ok(
-    Version::from_json_string(invalid),
+  let result : Result[@text.Version, @text.TextError] = Ok(
+    @text.Version::from_json_string(invalid),
   ) catch {
     e => Err(e)
   }
   match result {
-    Err(TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
+    Err(@text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
     _ => false
   }
 }
@@ -124,8 +124,8 @@ test "property: Version::from_json_string fails safely on malformed JSON" {
 ///|
 test "schema 2 Version rejects a frontier absent from its range summary" {
   let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"ranges\":[{\"replica_id\":\"bob\",\"ranges\":[{\"start\":0,\"end\":1}]}]}"
-  try Version::from_json_string(malformed) catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+  try @text.Version::from_json_string(malformed) catch {
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
     _ => fail("expected malformed Version")
   } noraise {
     _ => fail("frontier without range membership must be rejected")
@@ -135,8 +135,8 @@ test "schema 2 Version rejects a frontier absent from its range summary" {
 ///|
 test "schema 2 Version rejects nonempty ranges with an empty frontier" {
   let malformed = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":0,\"end\":1}]}]}"
-  try Version::from_json_string(malformed) catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+  try @text.Version::from_json_string(malformed) catch {
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
     _ => fail("expected malformed Version")
   } noraise {
     _ => fail("nonempty ranges require a frontier")
@@ -145,13 +145,13 @@ test "schema 2 Version rejects nonempty ranges with an empty frontier" {
 
 ///|
 test "checkout rejects a range summary missing a frontier ancestor" {
-  let document = try! TextState::new("alice")
-  try! document.insert(Pos::at(0), "AB")
-  let inconsistent = try! Version::from_json_string(
+  let document = try! @text.TextState::new("alice")
+  try! document.insert(@text.Pos::at(0), "AB")
+  let inconsistent = try! @text.Version::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":1}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":1,\"end\":2}]}]}",
   )
   try document.checkout(inconsistent) catch {
-    TextError::VersionNotFound => ()
+    @text.TextError::VersionNotFound => ()
     _ => fail("expected VersionNotFound")
   } noraise {
     _ => fail("checkout must validate the complete frontier closure")
@@ -161,30 +161,30 @@ test "checkout rejects a range summary missing a frontier ancestor" {
 ///|
 fn prop_invalid_sync_message_json_fails(seed : Int) -> Bool {
   let invalid = if seed % 2 == 0 { "" } else { "{" }
-  let result : Result[SyncMessage, TextError] = Ok(
-    SyncMessage::from_json_string(invalid),
+  let result : Result[@text.SyncMessage, @text.TextError] = Ok(
+    @text.SyncMessage::from_json_string(invalid),
   ) catch {
     e => Err(e)
   }
   match result {
-    Err(TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
+    Err(@text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
     _ => false
   }
 }
 
 ///|
 test "text sync emits schema 2 and rejects schema 1" {
-  let empty = try! TextState::new("schema-two")
+  let empty = try! @text.TextState::new("schema-two")
   inspect(
     try! empty.sync().export_all().to_json_string(),
     content="{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}",
   )
   try
-    SyncMessage::from_json_string(
+    @text.SyncMessage::from_json_string(
       "{\"schema\":1,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}",
     )
   catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
     _ => fail("expected malformed schema-1 sync message")
   } noraise {
     _ => fail("schema-1 sync message must be rejected")
@@ -212,13 +212,13 @@ fn prop_malformed_sync_content_rejected(seed : Int) -> Bool {
   )
   let op_json = bad_op.to_json().stringify()
   let malformed = "{\"ops\":[" + op_json + "],\"heads\":[] }"
-  let result : Result[SyncMessage, TextError] = Ok(
-    SyncMessage::from_json_string(malformed),
+  let result : Result[@text.SyncMessage, @text.TextError] = Ok(
+    @text.SyncMessage::from_json_string(malformed),
   ) catch {
     e => Err(e)
   }
   match result {
-    Err(TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
+    Err(@text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_))) => true
     _ => false
   }
 }

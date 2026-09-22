@@ -5,7 +5,7 @@ test "10k monotonic tree operations use linear ordering comparisons" {
   for index = 0; index < 10_000; index = index + 1 {
     log.apply(tree, {
       timestamp: index,
-      target: { agent: "alice", counter: index },
+      target: { agent: "alice", counter: index, },
       new_parent: root_id,
       position: @fi.FractionalIndex::new([index + 1]),
       agent: "alice",

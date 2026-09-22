@@ -18,7 +18,7 @@ pub fn TreeNodeId::TreeNodeId(
   if replica_id == "" || sequence < 0 {
     raise DocumentError::Internal(detail="invalid tree node identity")
   }
-  { inner: { agent: replica_id, counter: sequence } }
+  { inner: { agent: replica_id, counter: sequence, }, }
 }
 
 ///|
@@ -562,7 +562,10 @@ pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
 ///|
 /// Allocate a fresh node id local to this agent and bump the counter.
 fn Document::alloc_id(self : Document) -> @mt.TreeNodeId {
-  let id : @mt.TreeNodeId = { agent: self.agent_id, counter: self.next_counter }
+  let id : @mt.TreeNodeId = {
+    agent: self.agent_id,
+    counter: self.next_counter,
+  }
   self.next_counter = self.next_counter + 1
   id
 }
@@ -800,7 +803,7 @@ fn Document::try_apply_versioned_text_op(
   // when the op stream bypasses normal causal ordering). That is a
   // handler-internal queue, not a sync-protocol pending state, so we
   // report success once the version has been recorded.
-  self.apply_remote_text_op({ block: op.block, op: op.op })
+  self.apply_remote_text_op({ block: op.block, op: op.op, })
   true
 }
 
@@ -904,7 +907,7 @@ fn Document::apply_property_op(
   self : Document,
   op : @mt.TreePropertyOp,
 ) -> Unit {
-  let prop_key : PropertyKey = { id: op.target, key: op.key }
+  let prop_key : PropertyKey = { id: op.target, key: op.key, }
   let should_apply = match self.property_state.get(prop_key) {
     Some(current) => compare_property_ops(current, op) < 0
     None => true
@@ -1081,7 +1084,11 @@ pub fn Document::create_node(
     }
     self.apply_move_op(move_op)
     let _ = self.record_op(@mt.Move(move_op))
-    let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+    let _ = self.record_sync_tree_op({
+      version,
+      parents,
+      op: @mt.Move(move_op),
+    })
     self.record_undo_item(TreeCreate(target=id, parent~, pos=position))
     TreeNodeId::from_inner(id)
   })
@@ -1116,7 +1123,11 @@ pub fn Document::create_node_after(
     }
     self.apply_move_op(move_op)
     let _ = self.record_op(@mt.Move(move_op))
-    let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+    let _ = self.record_sync_tree_op({
+      version,
+      parents,
+      op: @mt.Move(move_op),
+    })
     self.record_undo_item(TreeCreate(target=id, parent~, pos=position))
     TreeNodeId::from_inner(id)
   })
@@ -1159,7 +1170,7 @@ fn Document::emit_move_op(
   }
   self.apply_move_op(move_op)
   let _ = self.record_op(@mt.Move(move_op))
-  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+  let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op), })
 }
 
 ///|
@@ -1293,7 +1304,11 @@ pub fn Document::delete_node(
     }
     self.apply_move_op(move_op)
     let _ = self.record_op(@mt.Move(move_op))
-    let _ = self.record_sync_tree_op({ version, parents, op: @mt.Move(move_op) })
+    let _ = self.record_sync_tree_op({
+      version,
+      parents,
+      op: @mt.Move(move_op),
+    })
     match snapshot {
       Some((old_parent, old_pos)) =>
         self.record_undo_item(TreeDelete(target~, old_parent~, old_pos~))
@@ -1423,7 +1438,7 @@ pub fn Document::version(self : Document) -> Version {
 ///|
 /// Obtain a synchronization session for this document.
 pub fn Document::sync(self : Document) -> SyncSession {
-  { document: self }
+  { document: self, }
 }
 
 ///|
@@ -1557,3 +1572,29 @@ pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
 pub fn SyncSession::clear_pending_sync(self : SyncSession) -> Unit {
   self.document.pending_sync_ops = []
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend Version with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Version with Eq::{not_equal, equal}

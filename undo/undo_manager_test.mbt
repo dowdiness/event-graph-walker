@@ -13,7 +13,7 @@ fn FailureProbeDoc::FailureProbeDoc(
   fail_target : Int,
   stale_target : Int?,
 ) -> FailureProbeDoc {
-  { applied: [], fail_target, stale_target }
+  { applied: [], fail_target, stale_target, }
 }
 
 ///|

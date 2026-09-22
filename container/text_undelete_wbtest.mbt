@@ -53,7 +53,7 @@ test "document: Undelete revives a locally-deleted char" {
   let del_ts = find_delete_target_ts(doc, h_id)
   doc.apply_remote_text_op({
     block: block.to_inner(),
-    op: Undelete({ target: h_id, timestamp: del_ts + 1000, agent: "alice" }),
+    op: Undelete({ target: h_id, timestamp: del_ts + 1000, agent: "alice", }),
   })
   inspect(doc.get_text(block), content="hello")
 }
@@ -64,11 +64,11 @@ test "document: Undelete converges across orderings (delete-then-undelete)" {
   let (alice, _, block, x_lv) = setup_peers_with_x()
   let delete_op : BlockTextOp = {
     block: block.to_inner(),
-    op: Delete({ target: x_lv, timestamp: 5, agent: "alice" }),
+    op: Delete({ target: x_lv, timestamp: 5, agent: "alice", }),
   }
   let undelete_op : BlockTextOp = {
     block: block.to_inner(),
-    op: Undelete({ target: x_lv, timestamp: 10, agent: "bob" }),
+    op: Undelete({ target: x_lv, timestamp: 10, agent: "bob", }),
   }
   alice.apply_remote_text_op(delete_op)
   alice.apply_remote_text_op(undelete_op)
@@ -80,11 +80,11 @@ test "document: Undelete converges across orderings (undelete-then-delete)" {
   let (_, bob, block, x_lv) = setup_peers_with_x()
   let delete_op : BlockTextOp = {
     block: block.to_inner(),
-    op: Delete({ target: x_lv, timestamp: 5, agent: "alice" }),
+    op: Delete({ target: x_lv, timestamp: 5, agent: "alice", }),
   }
   let undelete_op : BlockTextOp = {
     block: block.to_inner(),
-    op: Undelete({ target: x_lv, timestamp: 10, agent: "bob" }),
+    op: Undelete({ target: x_lv, timestamp: 10, agent: "bob", }),
   }
   bob.apply_remote_text_op(undelete_op)
   bob.apply_remote_text_op(delete_op)
@@ -100,11 +100,11 @@ test "document: Undelete wins tie-break against Delete at equal timestamp" {
   let (alice, bob, block, x_lv) = setup_peers_with_x()
   let delete_op : BlockTextOp = {
     block: block.to_inner(),
-    op: Delete({ target: x_lv, timestamp: 7, agent: "alice" }),
+    op: Delete({ target: x_lv, timestamp: 7, agent: "alice", }),
   }
   let undelete_op : BlockTextOp = {
     block: block.to_inner(),
-    op: Undelete({ target: x_lv, timestamp: 7, agent: "alice" }),
+    op: Undelete({ target: x_lv, timestamp: 7, agent: "alice", }),
   }
   alice.apply_remote_text_op(delete_op)
   alice.apply_remote_text_op(undelete_op)

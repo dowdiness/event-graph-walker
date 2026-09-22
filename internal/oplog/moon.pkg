@@ -3,7 +3,6 @@ import {
   "dowdiness/event-graph-walker/internal/causal_graph",
   "dowdiness/rle",
   "moonbitlang/core/bench",
-  "moonbitlang/core/json",
   "moonbitlang/core/hashset",
   "moonbitlang/core/priority_queue",
   "moonbitlang/core/immut/hashset" @immut/hashset,
@@ -12,6 +11,7 @@ import {
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/hashmap",
+  "moonbitlang/core/json",
   "moonbitlang/core/immut/hashmap" @immut/hashmap,
   "moonbitlang/core/immut/hashset" @immut/hashset,
   "moonbitlang/core/quickcheck",

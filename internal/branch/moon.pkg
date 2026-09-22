@@ -6,10 +6,10 @@ import {
   "dowdiness/event-graph-walker/internal/fugue_projection",
   "dowdiness/rle",
   "moonbitlang/core/bench",
-  "moonbitlang/core/debug",
 }
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/core/quickcheck",
   "moonbitlang/quickcheck" @qc,
   "moonbitlang/core/quickcheck/splitmix",

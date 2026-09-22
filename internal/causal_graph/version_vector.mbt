@@ -484,3 +484,45 @@ pub fn VersionVector::includes(
     None => false
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend VersionVector with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend VersionVector with @json.FromJson::{from_json}
+
+///|
+#doc(hidden)
+pub extend VersionVector with @quickcheck.Arbitrary::{arbitrary}
+
+///|
+#doc(hidden)
+pub extend VersionVector with @qc.Shrink::{shrink}
+
+///|
+#doc(hidden)
+pub extend VersionVector with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend VersionVector with Default::{default}
+
+///|
+#doc(hidden)
+pub extend VersionVector with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend VersionVector with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend VersionVector with ToJson::{to_json}

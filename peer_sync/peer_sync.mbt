@@ -58,7 +58,7 @@ priv enum Event {
 ///|
 /// Construct a policy in its initial handshake state.
 pub fn State::State() -> State {
-  { phase: Bootstrapping, full_sync_outstanding: false }
+  { phase: Bootstrapping, full_sync_outstanding: false, }
 }
 
 ///|
@@ -77,7 +77,7 @@ fn State::request_full_sync(self : State, decisions : Array[Decision]) -> State 
     self
   } else {
     Array::push(decisions, RequestFullSync)
-    { phase: Recovering, full_sync_outstanding: true }
+    { phase: Recovering, full_sync_outstanding: true, }
   }
 }
 
@@ -99,7 +99,10 @@ fn State::apply_event(self : State, event : Event) -> (State, Array[Decision]) {
         if equal {
           match self.phase {
             Bootstrapping | Recovering =>
-              ({ phase: Idle, full_sync_outstanding: false }, [ReportRecovered])
+              (
+                { phase: Idle, full_sync_outstanding: false, },
+                [ReportRecovered],
+              )
             Idle | Escalated => (self, decisions)
           }
         } else {
@@ -107,7 +110,7 @@ fn State::apply_event(self : State, event : Event) -> (State, Array[Decision]) {
           (next, decisions)
         }
       FullRecoveryRequired =>
-        ({ phase: Recovering, full_sync_outstanding: true }, [RequestFullSync])
+        ({ phase: Recovering, full_sync_outstanding: true, }, [RequestFullSync])
       FullSyncRequested => (self, [SendFullSync])
       LocalVersionAdvanced => (self, [SendIncrementalSync])
       Applied(disposition) =>
@@ -127,7 +130,7 @@ fn State::apply_event(self : State, event : Event) -> (State, Array[Decision]) {
           }
           Terminal =>
             (
-              { phase: Escalated, full_sync_outstanding: false },
+              { phase: Escalated, full_sync_outstanding: false, },
               [ReportFailure, Escalate],
             )
         }
@@ -219,3 +222,33 @@ pub fn FailureDisposition::FailureDisposition(
     | @sync.Failure::LimitExceeded(_) => Terminal
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend ApplyDisposition with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend ApplyDisposition with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Decision with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Decision with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend FailureDisposition with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend FailureDisposition with Eq::{not_equal, equal}

@@ -121,7 +121,7 @@ fn version_resource_text_state(
       max_pending_after_complete=0,
     ),
   )
-  TextState::{ inner: document, sync_limits: @sync.Limits::default() }
+  TextState::{ inner: document, sync_limits: @sync.Limits::default(), }
 }
 
 ///|

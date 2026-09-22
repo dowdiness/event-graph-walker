@@ -17,4 +17,3 @@ pub fn classify_error(@dowdiness/event-graph-walker/container.DocumentError) -> 
 // Type aliases
 
 // Traits
-

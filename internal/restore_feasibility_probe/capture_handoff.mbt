@@ -2,7 +2,7 @@
 /// RFC 4648 base64 used at the native/fresh-JS process seam.
 fn base64_encode(bytes : Bytes) -> String {
   let alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   let mut index = 0
   while index < bytes.length() {
     let remaining = bytes.length() - index

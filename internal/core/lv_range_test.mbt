@@ -1,6 +1,6 @@
 ///|
 test "LvRange - basic construction" {
-  let r = @core.LvRange::{ start: 0, count: 5 }
+  let r = @core.LvRange::{ start: 0, count: 5, }
   inspect(r.start, content="0")
   inspect(r.count, content="5")
   inspect(r.end(), content="5")
@@ -8,7 +8,7 @@ test "LvRange - basic construction" {
 
 ///|
 test "LvRange - contains" {
-  let r = @core.LvRange::{ start: 3, count: 4 }
+  let r = @core.LvRange::{ start: 3, count: 4, }
   // Contains 3, 4, 5, 6
   inspect(r.contains(2), content="false")
   inspect(r.contains(3), content="true")
@@ -18,7 +18,7 @@ test "LvRange - contains" {
 
 ///|
 test "LvRange - HasLength and Spanning" {
-  let r = @core.LvRange::{ start: 10, count: 3 }
+  let r = @core.LvRange::{ start: 10, count: 3, }
   inspect(@rle.HasLength::length(r), content="3")
   inspect(@rle.Spanning::span(r), content="3")
   inspect(@rle.Spanning::logical_length(r), content="3")
@@ -26,8 +26,8 @@ test "LvRange - HasLength and Spanning" {
 
 ///|
 test "LvRange - Mergeable contiguous ranges" {
-  let a = @core.LvRange::{ start: 0, count: 3 }
-  let b = @core.LvRange::{ start: 3, count: 2 }
+  let a = @core.LvRange::{ start: 0, count: 3, }
+  let b = @core.LvRange::{ start: 3, count: 2, }
   inspect(@rle.Mergeable::can_merge(a, b), content="true")
   let merged = @rle.Mergeable::merge(a, b)
   inspect(merged.start, content="0")
@@ -36,8 +36,8 @@ test "LvRange - Mergeable contiguous ranges" {
 
 ///|
 test "LvRange - Mergeable non-contiguous ranges" {
-  let a = @core.LvRange::{ start: 0, count: 3 }
-  let b = @core.LvRange::{ start: 5, count: 2 }
+  let a = @core.LvRange::{ start: 0, count: 3, }
+  let b = @core.LvRange::{ start: 5, count: 2, }
   inspect(@rle.Mergeable::can_merge(a, b), content="false")
 }
 
@@ -50,7 +50,7 @@ test "LvRange - FromRange" {
 
 ///|
 test "LvRange - Addressable" {
-  let r = @core.LvRange::{ start: 10, count: 5 }
+  let r = @core.LvRange::{ start: 10, count: 5, }
   // global_start is ignored for index-carrying types
   inspect(@rle.Addressable::address(r, 0, 0), content="10")
   inspect(@rle.Addressable::address(r, 0, 2), content="12")

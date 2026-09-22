@@ -4,17 +4,17 @@
 ///|
 /// Test-only Adapter for validating post-commit Internal failure behavior.
 struct PartialFailureDoc {
-  inner : TextState
+  inner : @text.TextState
   mut delete_calls : Int
   fail_after : Int
 }
 
 ///|
 fn PartialFailureDoc::PartialFailureDoc(
-  inner : TextState,
+  inner : @text.TextState,
   fail_after : Int,
 ) -> PartialFailureDoc {
-  { inner, delete_calls: 0, fail_after }
+  { inner, delete_calls: 0, fail_after, }
 }
 
 ///|
@@ -33,7 +33,7 @@ pub impl @undo.Undoable for PartialFailureDoc with fn undelete_lv(self, lv) -> @
 
 ///|
 test "TextState Undoable internal errors preserve target detail" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let result : Result[@undo.CompensatingEditResult, @undo.UndoError] = Ok(
     @undo.Undoable::delete_lv(doc, 99),
   ) catch {
@@ -63,7 +63,7 @@ test "TextState Undoable internal errors preserve target detail" {
 
 ///|
 test "TextState::new creates empty document" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   inspect(doc.text(), content="")
   inspect(doc.len(), content="0")
   inspect(doc.is_empty(), content="true")
@@ -71,72 +71,72 @@ test "TextState::new creates empty document" {
 
 ///|
 test "TextState::insert adds text" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
   inspect(doc.text(), content="Hello")
   inspect(doc.len(), content="5")
 }
 
 ///|
 test "TextState::insert at position" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "W")
-  let _ = doc.insert(Pos::at(1), "o")
-  let _ = doc.insert(Pos::at(2), "r")
-  let _ = doc.insert(Pos::at(3), "l")
-  let _ = doc.insert(Pos::at(4), "d")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "W")
+  let _ = doc.insert(@text.Pos::at(1), "o")
+  let _ = doc.insert(@text.Pos::at(2), "r")
+  let _ = doc.insert(@text.Pos::at(3), "l")
+  let _ = doc.insert(@text.Pos::at(4), "d")
   inspect(doc.text(), content="World")
 }
 
 ///|
 test "TextState::delete removes character" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete(Pos::at(4))
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
+  let _ = doc.delete(@text.Pos::at(4))
   inspect(doc.text(), content="Hell")
 }
 
 ///|
 test "TextState::delete_range removes text at document start" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete_range(try! Range::from_ints(0, 2))
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
+  let _ = doc.delete_range(try! @text.Range::from_ints(0, 2))
   inspect(doc.text(), content="llo")
 }
 
 ///|
 test "TextState::delete_range removes text in document middle" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete_range(try! Range::from_ints(1, 4))
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
+  let _ = doc.delete_range(try! @text.Range::from_ints(1, 4))
   inspect(doc.text(), content="Ho")
 }
 
 ///|
 test "TextState::delete_range removes text at document end" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
-  let _ = doc.delete_range(try! Range::from_ints(3, 5))
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
+  let _ = doc.delete_range(try! @text.Range::from_ints(3, 5))
   inspect(doc.text(), content="Hel")
 }
 
 ///|
 test "TextState::replace_range handles shorter replacement" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "abcdef")
-  let _ = doc.replace_range(try! Range::from_ints(1, 4), "Z")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "abcdef")
+  let _ = doc.replace_range(try! @text.Range::from_ints(1, 4), "Z")
   inspect(doc.text(), content="aZef")
 }
 
 ///|
 test "TextState::replace_range rejects malformed text atomically" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "abcdef")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "abcdef")
   let before_text = doc.text()
   let before_version = doc.version()
   let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
-  let result : Result[Unit, TextError] = Ok(
-    doc.replace_range(try! Range::from_ints(1, 4), malformed),
+  let result : Result[Unit, @text.TextError] = Ok(
+    doc.replace_range(try! @text.Range::from_ints(1, 4), malformed),
   ) catch {
     e => Err(e)
   }
@@ -150,38 +150,40 @@ test "TextState::replace_range rejects malformed text atomically" {
 
 ///|
 test "TextState::replace_range handles equal-length replacement" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "abcdef")
-  let _ = doc.replace_range(try! Range::from_ints(1, 3), "XY")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "abcdef")
+  let _ = doc.replace_range(try! @text.Range::from_ints(1, 3), "XY")
   inspect(doc.text(), content="aXYdef")
 }
 
 ///|
 test "TextState::replace_range handles longer replacement" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "abcdef")
-  let _ = doc.replace_range(try! Range::from_ints(1, 2), "WXYZ")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "abcdef")
+  let _ = doc.replace_range(try! @text.Range::from_ints(1, 2), "WXYZ")
   inspect(doc.text(), content="aWXYZcdef")
 }
 
 ///|
 test "TextState::version changes after edit" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let v1 = doc.version()
-  let _ = doc.insert(Pos::at(0), "Hello")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
   let v2 = doc.version()
   inspect(v1 == v2, content="false")
 }
 
 ///|
 test "Pos::at clamps negative values" {
-  let pos = Pos::at(-5)
+  let pos = @text.Pos::at(-5)
   inspect(pos.value(), content="0")
 }
 
 ///|
 test "Range rejects reversed endpoints" {
-  let result : Result[Range, TextError] = Ok(Range::new(Pos::at(5), Pos::at(3))) catch {
+  let result : Result[@text.Range, @text.TextError] = Ok(
+    @text.Range::new(@text.Pos::at(5), @text.Pos::at(3)),
+  ) catch {
     error => Err(error)
   }
   match result {
@@ -195,7 +197,9 @@ test "Range rejects reversed endpoints" {
 
 ///|
 test "Range::from_ints rejects reversed inputs before clamping" {
-  let result : Result[Range, TextError] = Ok(Range::from_ints(-1, -2)) catch {
+  let result : Result[@text.Range, @text.TextError] = Ok(
+    @text.Range::from_ints(-1, -2),
+  ) catch {
     error => Err(error)
   }
   match result {
@@ -209,7 +213,7 @@ test "Range::from_ints rejects reversed inputs before clamping" {
 
 ///|
 test "TextError::message provides user message" {
-  let err : TextError = TextError::InvalidPosition(pos=10, len=5)
+  let err : @text.TextError = @text.TextError::InvalidPosition(pos=10, len=5)
   inspect(
     err.message(),
     content="Invalid position: 10 is out of bounds for text of length 5",
@@ -218,7 +222,7 @@ test "TextError::message provides user message" {
 
 ///|
 test "TextError::help provides guidance" {
-  let err : TextError = TextError::InvalidPosition(pos=10, len=5)
+  let err : @text.TextError = @text.TextError::InvalidPosition(pos=10, len=5)
   inspect(
     err.help(),
     content="Use a position between 0 and 5 (inclusive for insert, exclusive for delete)",
@@ -227,7 +231,9 @@ test "TextError::help provides guidance" {
 
 ///|
 test "TextError::InvalidText provides local diagnostics" {
-  let err : TextError = TextError::InvalidText(detail="malformed UTF-16")
+  let err : @text.TextError = @text.TextError::InvalidText(
+    detail="malformed UTF-16",
+  )
   inspect(err.message(), content="Invalid text: malformed UTF-16")
   inspect(
     err.help(),
@@ -242,10 +248,10 @@ test "TextError::InvalidText provides local diagnostics" {
 
 ///|
 test "TextError::is_retryable for sync errors" {
-  let retryable : TextError = TextError::SyncFailed(
+  let retryable : @text.TextError = @text.TextError::SyncFailed(
     @sync.Failure::MissingDependency(replica_id="peer", sequence=3),
   )
-  let not_retryable : TextError = TextError::SyncFailed(
+  let not_retryable : @text.TextError = @text.TextError::SyncFailed(
     @sync.Failure::MalformedMessage(detail="test"),
   )
   inspect(retryable.is_retryable(), content="true")
@@ -256,7 +262,7 @@ test "TextError::is_retryable for sync errors" {
 /// Invalid content surfaces as a shared typed failure, not `Internal`.
 /// without parsing diagnostic strings.
 test "TextError::SyncFailed(InvalidContent) — message and help" {
-  let err : TextError = TextError::SyncFailed(
+  let err : @text.TextError = @text.TextError::SyncFailed(
     @sync.Failure::InvalidContent(detail="insert contains malformed UTF-16"),
   )
   inspect(
@@ -272,7 +278,7 @@ test "TextError::SyncFailed(InvalidContent) — message and help" {
 
 ///|
 test "TextError::SyncFailed(InvalidContent) — multi-codepoint detail" {
-  let multi : TextError = TextError::SyncFailed(
+  let multi : @text.TextError = @text.TextError::SyncFailed(
     @sync.Failure::InvalidContent(
       detail="insert must contain exactly one Unicode scalar value",
     ),
@@ -285,10 +291,10 @@ test "TextError::SyncFailed(InvalidContent) — multi-codepoint detail" {
 
 ///|
 test "SyncSession::export_all and apply" {
-  let doc1 = try! TextState::new("alice")
-  let doc2 = try! TextState::new("bob")
-  let _ = doc1.insert(Pos::at(0), "H")
-  let _ = doc1.insert(Pos::at(1), "i")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
+  let _ = doc1.insert(@text.Pos::at(0), "H")
+  let _ = doc1.insert(@text.Pos::at(1), "i")
   let msg = doc1.sync().export_all()
   inspect(msg.is_empty(), content="false")
   inspect(msg.op_count(), content="2")
@@ -298,14 +304,14 @@ test "SyncSession::export_all and apply" {
 
 ///|
 test "SyncSession::export_since sends delta" {
-  let doc1 = try! TextState::new("alice")
-  let doc2 = try! TextState::new("bob")
-  let _ = doc1.insert(Pos::at(0), "H")
-  let _ = doc1.insert(Pos::at(1), "i")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
+  let _ = doc1.insert(@text.Pos::at(0), "H")
+  let _ = doc1.insert(@text.Pos::at(1), "i")
   let msg1 = doc1.sync().export_all()
   let _ = doc2.sync().apply(msg1)
   let v2 = doc2.version()
-  let _ = doc1.insert(Pos::at(2), "!")
+  let _ = doc1.insert(@text.Pos::at(2), "!")
   let msg2 = doc1.sync().export_since(v2)
   inspect(msg2.op_count(), content="1")
   let _ = doc2.sync().apply(msg2)
@@ -314,10 +320,10 @@ test "SyncSession::export_since sends delta" {
 
 ///|
 test "TextState::checkout creates historical view" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
   let v1 = doc.version()
-  let _ = doc.insert(Pos::at(5), " World")
+  let _ = doc.insert(@text.Pos::at(5), " World")
   let view = doc.checkout(v1)
   inspect(view.text(), content="Hello")
   inspect(doc.text(), content="Hello World")
@@ -325,7 +331,7 @@ test "TextState::checkout creates historical view" {
 
 ///|
 test "Failure::LimitExceeded is not retryable" {
-  let err : TextError = TextError::SyncFailed(
+  let err : @text.TextError = @text.TextError::SyncFailed(
     @sync.Failure::LimitExceeded(
       kind=@sync.LimitKind::DecodedOperations,
       limit=10,
@@ -341,7 +347,7 @@ test "Failure::LimitExceeded is not retryable" {
 
 ///|
 test "Failure::ConflictingIdentity is not retryable" {
-  let err : TextError = TextError::SyncFailed(
+  let err : @text.TextError = @text.TextError::SyncFailed(
     @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0),
   )
   inspect(err.is_retryable(), content="false")
@@ -350,16 +356,18 @@ test "Failure::ConflictingIdentity is not retryable" {
 
 ///|
 test "Version::empty creates empty version" {
-  let v = Version::empty()
+  let v = @text.Version::empty()
   // An empty version equals the initial state of a new document
-  let doc = try! TextState::new("test")
+  let doc = try! @text.TextState::new("test")
   inspect(doc.version() == v, content="true")
 }
 
 ///|
 test "TextState insert at invalid position raises error" {
-  let doc = try! TextState::new("alice")
-  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(10), "Hello")) catch {
+  let doc = try! @text.TextState::new("alice")
+  let result : Result[Unit, @text.TextError] = Ok(
+    doc.insert(@text.Pos::at(10), "Hello"),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -373,12 +381,14 @@ test "TextState insert at invalid position raises error" {
 
 ///|
 test "TextState insert rejects malformed local text atomically" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "seed")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "seed")
   let before_text = doc.text()
   let before_version = doc.version()
   let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
-  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(2), malformed)) catch {
+  let result : Result[Unit, @text.TextError] = Ok(
+    doc.insert(@text.Pos::at(2), malformed),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -391,9 +401,11 @@ test "TextState insert rejects malformed local text atomically" {
 
 ///|
 test "TextState insert validates position before local text" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
-  let result : Result[Unit, TextError] = Ok(doc.insert(Pos::at(1), malformed)) catch {
+  let result : Result[Unit, @text.TextError] = Ok(
+    doc.insert(@text.Pos::at(1), malformed),
+  ) catch {
     e => Err(e)
   }
   match result {
@@ -407,9 +419,9 @@ test "TextState insert validates position before local text" {
 
 ///|
 test "TextState delete at invalid position raises error" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hi")
-  let result : Result[Unit, TextError] = Ok(doc.delete(Pos::at(5))) catch {
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hi")
+  let result : Result[Unit, @text.TextError] = Ok(doc.delete(@text.Pos::at(5))) catch {
     e => Err(e)
   }
   match result {
@@ -423,11 +435,16 @@ test "TextState delete at invalid position raises error" {
 
 ///|
 test "TextState::replace_range_and_record undo and redo restore range edit" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
-  let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
+  let _ = doc.insert_and_record(
+    @text.Pos::at(0),
+    "abcdef",
+    mgr,
+    timestamp_ms=1000,
+  )
   let _ = doc.replace_range_and_record(
-    try! Range::from_ints(1, 4),
+    try! @text.Range::from_ints(1, 4),
     "XYZ",
     mgr,
     timestamp_ms=2000,
@@ -441,9 +458,14 @@ test "TextState::replace_range_and_record undo and redo restore range edit" {
 
 ///|
 test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
-  let _ = doc.insert_and_record(Pos::at(0), "a😀b", mgr, timestamp_ms=1000)
+  let _ = doc.insert_and_record(
+    @text.Pos::at(0),
+    "a😀b",
+    mgr,
+    timestamp_ms=1000,
+  )
   inspect(doc.text(), content="a😀b")
   inspect(doc.len(), content="3")
   let _ = mgr.undo(doc)
@@ -454,12 +476,12 @@ test "TextState::insert_and_record keeps non-BMP codepoints atomic" {
 
 ///|
 test "TextState::insert_and_record rejects malformed text atomically" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
   let before_version = doc.version()
-  let result : Result[Unit, TextError] = Ok(
-    doc.insert_and_record(Pos::at(0), malformed, mgr, timestamp_ms=1000),
+  let result : Result[Unit, @text.TextError] = Ok(
+    doc.insert_and_record(@text.Pos::at(0), malformed, mgr, timestamp_ms=1000),
   ) catch {
     e => Err(e)
   }
@@ -474,15 +496,20 @@ test "TextState::insert_and_record rejects malformed text atomically" {
 
 ///|
 test "TextState::replace_range_and_record rejects malformed text atomically" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
-  let _ = doc.insert_and_record(Pos::at(0), "abcdef", mgr, timestamp_ms=1000)
+  let _ = doc.insert_and_record(
+    @text.Pos::at(0),
+    "abcdef",
+    mgr,
+    timestamp_ms=1000,
+  )
   let before_text = doc.text()
   let before_version = doc.version()
   let malformed = Bytes::from_array([0x00, 0xD8]).to_unchecked_string()
-  let result : Result[Unit, TextError] = Ok(
+  let result : Result[Unit, @text.TextError] = Ok(
     doc.replace_range_and_record(
-      try! Range::from_ints(1, 4),
+      try! @text.Range::from_ints(1, 4),
       malformed,
       mgr,
       timestamp_ms=2000,
@@ -502,11 +529,11 @@ test "TextState::replace_range_and_record rejects malformed text atomically" {
 
 ///|
 test "TextState unknown undo target preserves causal state" {
-  let doc = try! TextState::new("alice")
-  let peer = try! TextState::new("bob")
+  let doc = try! @text.TextState::new("alice")
+  let peer = try! @text.TextState::new("bob")
   let mgr = @undo.UndoManager::new("alice")
-  let _ = doc.insert(Pos::at(0), "A")
-  let _ = doc.delete(Pos::at(0))
+  let _ = doc.insert(@text.Pos::at(0), "A")
+  let _ = doc.delete(@text.Pos::at(0))
   // LV 1 is the local delete operation: it exists in the causal graph but
   // is not a Fugue item and therefore cannot be an undelete target.
   mgr.record_delete(1, "alice", 1000)
@@ -530,11 +557,11 @@ test "TextState unknown undo target preserves causal state" {
 
 ///|
 test "TextState::replace_range_and_record inserts non-BMP text atomically" {
-  let doc = try! TextState::new("alice")
+  let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
-  let _ = doc.insert_and_record(Pos::at(0), "ab", mgr, timestamp_ms=1000)
+  let _ = doc.insert_and_record(@text.Pos::at(0), "ab", mgr, timestamp_ms=1000)
   let _ = doc.replace_range_and_record(
-    try! Range::from_ints(1, 1),
+    try! @text.Range::from_ints(1, 1),
     "😀X",
     mgr,
     timestamp_ms=2000,
@@ -549,14 +576,23 @@ test "TextState::replace_range_and_record inserts non-BMP text atomically" {
 
 ///|
 test "Undo Delete stale visible target preserves sync state" {
-  let alice = try! TextState::new("alice")
-  let bob = try! TextState::new("bob")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
   let alice_mgr = @undo.UndoManager::new("alice")
   let bob_mgr = @undo.UndoManager::new("bob")
-  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = alice.insert_and_record(
+    @text.Pos::at(0),
+    "A",
+    alice_mgr,
+    timestamp_ms=1000,
+  )
   let _ = bob.sync().apply(alice.sync().export_all())
-  let _ = alice.delete_and_record(Pos::at(0), alice_mgr, timestamp_ms=2000)
-  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=2000)
+  let _ = alice.delete_and_record(
+    @text.Pos::at(0),
+    alice_mgr,
+    timestamp_ms=2000,
+  )
+  let _ = bob.delete_and_record(@text.Pos::at(0), bob_mgr, timestamp_ms=2000)
   inspect(bob_mgr.undo(bob), content="true")
   let _ = alice.sync().apply(bob.sync().export_all())
   inspect(alice.text(), content="A")
@@ -570,14 +606,19 @@ test "Undo Delete stale visible target preserves sync state" {
 
 ///|
 test "Redo Insert stale visible target preserves sync state" {
-  let alice = try! TextState::new("alice")
-  let bob = try! TextState::new("bob")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
   let alice_mgr = @undo.UndoManager::new("alice")
   let bob_mgr = @undo.UndoManager::new("bob")
-  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = alice.insert_and_record(
+    @text.Pos::at(0),
+    "A",
+    alice_mgr,
+    timestamp_ms=1000,
+  )
   let _ = bob.sync().apply(alice.sync().export_all())
   inspect(alice_mgr.undo(alice), content="true")
-  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=2000)
+  let _ = bob.delete_and_record(@text.Pos::at(0), bob_mgr, timestamp_ms=2000)
   inspect(bob_mgr.undo(bob), content="true")
   let _ = alice.sync().apply(bob.sync().export_all())
   inspect(alice.text(), content="A")
@@ -590,17 +631,26 @@ test "Redo Insert stale visible target preserves sync state" {
 
 ///|
 test "Redo Delete stale absent target preserves sync state" {
-  let alice = try! TextState::new("alice")
-  let bob = try! TextState::new("bob")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
   let alice_mgr = @undo.UndoManager::new("alice")
   let bob_mgr = @undo.UndoManager::new("bob")
-  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = alice.insert_and_record(
+    @text.Pos::at(0),
+    "A",
+    alice_mgr,
+    timestamp_ms=1000,
+  )
   let _ = bob.sync().apply(alice.sync().export_all())
-  let _ = alice.delete_and_record(Pos::at(0), alice_mgr, timestamp_ms=2000)
+  let _ = alice.delete_and_record(
+    @text.Pos::at(0),
+    alice_mgr,
+    timestamp_ms=2000,
+  )
   inspect(alice_mgr.undo(alice), content="true")
   let _ = bob.sync().apply(alice.sync().export_all())
   let bob_before_delete = bob.version()
-  let _ = bob.delete_and_record(Pos::at(0), bob_mgr, timestamp_ms=3000)
+  let _ = bob.delete_and_record(@text.Pos::at(0), bob_mgr, timestamp_ms=3000)
   let _ = alice.sync().apply(bob.sync().export_since(bob_before_delete))
   inspect(alice.text(), content="")
   let before = alice.version()
@@ -612,12 +662,17 @@ test "Redo Delete stale absent target preserves sync state" {
 
 ///|
 test "Undo Insert stale absent target preserves sync state" {
-  let alice = try! TextState::new("alice")
-  let bob = try! TextState::new("bob")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
   let alice_mgr = @undo.UndoManager::new("alice")
-  let _ = alice.insert_and_record(Pos::at(0), "A", alice_mgr, timestamp_ms=1000)
+  let _ = alice.insert_and_record(
+    @text.Pos::at(0),
+    "A",
+    alice_mgr,
+    timestamp_ms=1000,
+  )
   let _ = bob.sync().apply(alice.sync().export_all())
-  let _ = bob.delete(Pos::at(0))
+  let _ = bob.delete(@text.Pos::at(0))
   let _ = alice.sync().apply(bob.sync().export_all())
   let before = alice.version()
 
@@ -629,11 +684,21 @@ test "Undo Insert stale absent target preserves sync state" {
 
 ///|
 test "post-commit internal failure preserves CRDT prefix and clears history" {
-  let source = try! TextState::new("alice")
-  let peer = try! TextState::new("bob")
+  let source = try! @text.TextState::new("alice")
+  let peer = try! @text.TextState::new("bob")
   let manager = @undo.UndoManager::new("alice")
-  let _ = source.insert_and_record(Pos::at(0), "AB", manager, timestamp_ms=1000)
-  let _ = source.insert_and_record(Pos::at(2), "C", manager, timestamp_ms=2000)
+  let _ = source.insert_and_record(
+    @text.Pos::at(0),
+    "AB",
+    manager,
+    timestamp_ms=1000,
+  )
+  let _ = source.insert_and_record(
+    @text.Pos::at(2),
+    "C",
+    manager,
+    timestamp_ms=2000,
+  )
   inspect(manager.undo(source), content="true")
   inspect(source.text(), content="AB")
   let failing = PartialFailureDoc::PartialFailureDoc(source, 1)
@@ -657,8 +722,8 @@ test "post-commit internal failure preserves CRDT prefix and clears history" {
 
 ///|
 test "TextView::runs iterates over runs" {
-  let doc = try! TextState::new("alice")
-  let _ = doc.insert(Pos::at(0), "Hello")
+  let doc = try! @text.TextState::new("alice")
+  let _ = doc.insert(@text.Pos::at(0), "Hello")
   let view = doc.checkout(doc.version())
   let runs = view.runs().collect()
   inspect(runs.length(), content="1")
@@ -672,11 +737,11 @@ test "TextView::runs iterates over runs" {
 ///|
 /// Test: Peer reconnects after divergence - both edited while disconnected
 test "sync recovery - peer reconnects after divergence" {
-  let doc1 = try! TextState::new("alice")
-  let doc2 = try! TextState::new("bob")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
 
   // Initial sync - both start with "Hello"
-  let _ = doc1.insert(Pos::at(0), "Hello")
+  let _ = doc1.insert(@text.Pos::at(0), "Hello")
   let msg_init = doc1.sync().export_all()
   let _ = doc2.sync().apply(msg_init)
   inspect(doc1.text(), content="Hello")
@@ -687,11 +752,11 @@ test "sync recovery - peer reconnects after divergence" {
 
   // === Network disconnection - both edit independently ===
   // Alice adds " World"
-  let _ = doc1.insert(Pos::at(5), " World")
+  let _ = doc1.insert(@text.Pos::at(5), " World")
   inspect(doc1.text(), content="Hello World")
 
   // Bob adds "!"
-  let _ = doc2.insert(Pos::at(5), "!")
+  let _ = doc2.insert(@text.Pos::at(5), "!")
   inspect(doc2.text(), content="Hello!")
 
   // === Reconnection using export_since ===
@@ -717,20 +782,20 @@ test "sync recovery - peer reconnects after divergence" {
 ///|
 /// Test: Peer only received partial sync, reconnects with stale version
 test "sync recovery - partial operation log" {
-  let doc1 = try! TextState::new("alice")
-  let doc2 = try! TextState::new("bob")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
 
   // Alice inserts "A" alone so Bob can sync to that specific version
-  let _ = doc1.insert(Pos::at(0), "A")
+  let _ = doc1.insert(@text.Pos::at(0), "A")
 
   // Sync only "A" to Bob
-  let msg_a = doc1.sync().export_since(Version::empty())
+  let msg_a = doc1.sync().export_since(@text.Version::empty())
   let _ = doc2.sync().apply(msg_a)
   inspect(doc2.text(), content="A")
 
   // Alice continues writing, Bob misses it
-  let _ = doc1.insert(Pos::at(1), "B")
-  let _ = doc1.insert(Pos::at(2), "C")
+  let _ = doc1.insert(@text.Pos::at(1), "B")
+  let _ = doc1.insert(@text.Pos::at(2), "C")
 
   // Bob reconnects; Alice sends only the delta
   let bob_version = doc2.version()
@@ -744,15 +809,15 @@ test "sync recovery - partial operation log" {
 ///|
 /// Test: Use saved old version for export_since, verify correct delta
 test "sync recovery - stale version vector" {
-  let doc1 = try! TextState::new("alice")
-  let doc2 = try! TextState::new("bob")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
 
   // Build up some history
-  let _ = doc1.insert(Pos::at(0), "Hello")
+  let _ = doc1.insert(@text.Pos::at(0), "Hello")
   let old_version = doc1.version() // Save this for later
-  let _ = doc1.insert(Pos::at(5), " ")
-  let _ = doc1.insert(Pos::at(6), "World")
-  let _ = doc1.insert(Pos::at(11), "!")
+  let _ = doc1.insert(@text.Pos::at(5), " ")
+  let _ = doc1.insert(@text.Pos::at(6), "World")
+  let _ = doc1.insert(@text.Pos::at(11), "!")
 
   // Sync everything to doc2
   let full_msg = doc1.sync().export_all()
@@ -771,12 +836,12 @@ test "sync recovery - stale version vector" {
 ///|
 /// Test: Two partitions evolve separately, reunify, all three converge
 test "sync recovery - network partition reunion (3 peers)" {
-  let doc_a = try! TextState::new("alice")
-  let doc_b = try! TextState::new("bob")
-  let doc_c = try! TextState::new("carol")
+  let doc_a = try! @text.TextState::new("alice")
+  let doc_b = try! @text.TextState::new("bob")
+  let doc_c = try! @text.TextState::new("carol")
 
   // Initial state: all three have "X"
-  let _ = doc_a.insert(Pos::at(0), "X")
+  let _ = doc_a.insert(@text.Pos::at(0), "X")
   let msg_init = doc_a.sync().export_all()
   let _ = doc_b.sync().apply(msg_init)
   let _ = doc_c.sync().apply(msg_init)
@@ -784,12 +849,12 @@ test "sync recovery - network partition reunion (3 peers)" {
 
   // === Partition 1: Alice and Bob ===
   // Alice inserts "A"
-  let _ = doc_a.insert(Pos::at(1), "A")
+  let _ = doc_a.insert(@text.Pos::at(1), "A")
   // Sync within partition
   let msg_a = doc_a.sync().export_since(shared_version)
   let _ = doc_b.sync().apply(msg_a)
   // Bob inserts "B"
-  let _ = doc_b.insert(Pos::at(2), "B")
+  let _ = doc_b.insert(@text.Pos::at(2), "B")
   let msg_b = doc_b.sync().export_since(doc_a.version())
   let _ = doc_a.sync().apply(msg_b)
 
@@ -798,7 +863,7 @@ test "sync recovery - network partition reunion (3 peers)" {
 
   // === Partition 2: Carol alone ===
   // Carol inserts "C"
-  let _ = doc_c.insert(Pos::at(1), "C")
+  let _ = doc_c.insert(@text.Pos::at(1), "C")
   inspect(doc_c.text(), content="XC")
 
   // === Reunification ===
@@ -827,20 +892,20 @@ test "sync recovery - network partition reunion (3 peers)" {
 ///|
 /// Test: Both peers have local-only ops, sync both directions simultaneously
 test "sync recovery - bidirectional delta after disconnect" {
-  let doc1 = try! TextState::new("alice")
-  let doc2 = try! TextState::new("bob")
+  let doc1 = try! @text.TextState::new("alice")
+  let doc2 = try! @text.TextState::new("bob")
 
   // Shared initial state
-  let _ = doc1.insert(Pos::at(0), "START")
+  let _ = doc1.insert(@text.Pos::at(0), "START")
   let msg_init = doc1.sync().export_all()
   let _ = doc2.sync().apply(msg_init)
   let shared = doc1.version()
 
   // Both make local changes while disconnected
-  let _ = doc1.insert(Pos::at(5), "-A1")
-  let _ = doc1.insert(Pos::at(8), "-A2")
-  let _ = doc2.insert(Pos::at(5), "-B1")
-  let _ = doc2.insert(Pos::at(8), "-B2")
+  let _ = doc1.insert(@text.Pos::at(5), "-A1")
+  let _ = doc1.insert(@text.Pos::at(8), "-A2")
+  let _ = doc2.insert(@text.Pos::at(5), "-B1")
+  let _ = doc2.insert(@text.Pos::at(8), "-B2")
 
   // Compute deltas from shared version (simultaneously)
   let delta1 = doc1.sync().export_since(shared)

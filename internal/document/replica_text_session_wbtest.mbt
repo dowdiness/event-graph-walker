@@ -91,7 +91,7 @@ fn ReplicaTextSession::attach(
   if !operations.is_empty() {
     session.merge_remote(operations, authority.get_frontier_raw())
   }
-  { authority, session, replayed_operations: operations.length() }
+  { authority, session, replayed_operations: operations.length(), }
 }
 
 ///|

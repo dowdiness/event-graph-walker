@@ -7,7 +7,7 @@ fn truncate_display(text : String) -> String {
     text
     .iter()
     .take(50)
-    .fold(init=StringBuilder::new(), fn(sb, c) {
+    .fold(init=StringBuilder(), fn(sb, c) {
       sb.write_char(c)
       sb
     })

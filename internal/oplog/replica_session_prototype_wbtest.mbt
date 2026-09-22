@@ -25,7 +25,7 @@ fn ReplicaSession::attach(
   writer_id : String,
 ) -> ReplicaSession {
   guard writer_id != "" else { abort("replica session requires a writer") }
-  { authority, writer_id, frontier: authority.get_frontier() }
+  { authority, writer_id, frontier: authority.get_frontier(), }
 }
 
 ///|
@@ -41,7 +41,7 @@ fn ReplicaSession::pull(self : ReplicaSession) -> ReplicaDelta {
     frontier,
   )
   self.frontier = frontier
-  { retreat, advance, frontier }
+  { retreat, advance, frontier, }
 }
 
 ///|
@@ -50,7 +50,7 @@ fn ReplicaSession::export_since(
   from : @core.Frontier,
 ) -> ReplicaDelta {
   let (retreat, advance) = self.authority.diff_and_collect(from, self.frontier)
-  { retreat, advance, frontier: self.frontier }
+  { retreat, advance, frontier: self.frontier, }
 }
 
 ///|

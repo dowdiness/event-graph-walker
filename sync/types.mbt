@@ -130,3 +130,39 @@ pub fn Limits::max_pending_operations(self : Limits) -> Int {
 pub fn Limits::max_parents_per_operation(self : Limits) -> Int {
   self.max_parents_per_operation
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079)
+//
+// These methods were previously attached implicitly. The `#doc(hidden)`
+// attributes keep them out of the generated `.mbti` so the public interface
+// stays unchanged while dot-syntax keeps working.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend Failure with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend LimitKind with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend LimitKind with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend LimitKind with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend Limits with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Limits with Default::{default}
+
+///|
+#doc(hidden)
+pub extend Limits with Eq::{not_equal, equal}

@@ -61,13 +61,13 @@ impl @qc.Shrink for TreeScenario with fn shrink(self) {
   let results : Array[TreeScenario] = []
   let len = self.actions.length()
   if len > 0 {
-    results.push({ actions: [] })
+    results.push({ actions: [], })
     let half = len / 2
     if half > 0 {
-      results.push({ actions: self.actions[:half].to_owned() })
+      results.push({ actions: self.actions[:half].to_owned(), })
     }
     if len > 1 {
-      results.push({ actions: self.actions[:len - 1].to_owned() })
+      results.push({ actions: self.actions[:len - 1].to_owned(), })
     }
   }
   results.iter()
@@ -89,10 +89,10 @@ fn build_ops(
     next_pos = next_pos + 100
     match actions[i] {
       Create(idx) => {
-        let id : @movable_tree.TreeNodeId = { agent: "qc", counter: idx }
+        let id : @movable_tree.TreeNodeId = { agent: "qc", counter: idx, }
         // Ensure node_ids has this entry
         while node_ids.length() <= idx {
-          node_ids.push({ agent: "qc", counter: node_ids.length() })
+          node_ids.push({ agent: "qc", counter: node_ids.length(), })
         }
         ops.push({
           timestamp,
@@ -110,7 +110,13 @@ fn build_ops(
           } else {
             @movable_tree.root_id
           }
-          ops.push({ timestamp, target, new_parent, position: pos, agent: "qc" })
+          ops.push({
+            timestamp,
+            target,
+            new_parent,
+            position: pos,
+            agent: "qc",
+          })
         }
       Delete(idx) =>
         if idx < node_ids.length() {

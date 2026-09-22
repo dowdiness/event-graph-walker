@@ -1,7 +1,7 @@
 ///|
 fn transition_test_item(sequence : Int) -> UndoItem {
   TextInsert(
-    block={ agent: "block", counter: 0 },
+    block={ agent: "block", counter: 0, },
     id=@core.RawVersion("alice", sequence),
   )
 }

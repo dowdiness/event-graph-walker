@@ -137,7 +137,7 @@ test "get_ops_rle expands a middle slice from a compressed run" {
   inspect(oplog.operations.length(), content="1")
 
   let ranges : @rle.Rle[@core.LvRange] = @rle.Rle::from_array([
-    @core.LvRange::{ start: 1, count: 2 },
+    @core.LvRange::{ start: 1, count: 2, },
   ])
   let ops = oplog.get_ops_rle(ranges)
   inspect(ops.length(), content="2")
@@ -385,8 +385,8 @@ test "get_ops_rle preserves range order for retreat-style ranges" {
     prev = op.lv()
   }
   let ranges : @rle.Rle[@core.LvRange] = @rle.Rle::from_array([
-    @core.LvRange::{ start: 2, count: 1 },
-    @core.LvRange::{ start: 0, count: 1 },
+    @core.LvRange::{ start: 2, count: 1, },
+    @core.LvRange::{ start: 0, count: 1, },
   ])
   let ops = oplog.get_ops_rle(ranges)
   inspect(ops.length(), content="2")
@@ -400,7 +400,7 @@ test "get_ops_rle keeps clamped invalid-LV behavior" {
   let _ = try! oplog.insert("a", -1, -1)
   let _ = try! oplog.insert("b", 0, -1)
   let ranges : @rle.Rle[@core.LvRange] = @rle.Rle::from_array([
-    @core.LvRange::{ start: -1, count: 4 },
+    @core.LvRange::{ start: -1, count: 4, },
   ])
   let ops = oplog.get_ops_rle(ranges)
   inspect(ops.length(), content="2")

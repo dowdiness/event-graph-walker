@@ -215,7 +215,7 @@ test "Document: property ops replay after out-of-order create" {
 test "Document: local timestamps advance past remote history" {
   let doc_b = Document::new("bob")
   let doc_c = Document::new("carol")
-  let remote_id : @mt.TreeNodeId = { agent: "alice", counter: 0 }
+  let remote_id : @mt.TreeNodeId = { agent: "alice", counter: 0, }
   let remote_create : @mt.TreeOp = @mt.Move({
     timestamp: 10,
     target: remote_id,
@@ -290,7 +290,7 @@ test "panic Document: create node with missing parent" {
   let doc = Document::new("alice")
   ignore(
     doc.create_node(
-      parent=TreeNodeId::from_inner({ agent: "missing", counter: 99 }),
+      parent=TreeNodeId::from_inner({ agent: "missing", counter: 99, }),
     ),
   )
 }
@@ -301,7 +301,7 @@ test "panic Document: move missing target" {
   let doc = Document::new("alice")
   let parent = doc.create_node(parent=root_id)
   doc.move_node(
-    target=TreeNodeId::from_inner({ agent: "missing", counter: 99 }),
+    target=TreeNodeId::from_inner({ agent: "missing", counter: 99, }),
     new_parent=parent,
   )
 }
@@ -313,7 +313,7 @@ test "panic Document: move to missing parent" {
   let node = doc.create_node(parent=root_id)
   doc.move_node(
     target=node,
-    new_parent=TreeNodeId::from_inner({ agent: "missing", counter: 99 }),
+    new_parent=TreeNodeId::from_inner({ agent: "missing", counter: 99, }),
   )
 }
 
@@ -413,7 +413,7 @@ test "Document: create_node_after nested" {
 test "Document: create_node_after fallback on missing after" {
   let doc = Document::new("alice")
   let a = doc.create_node(parent=root_id)
-  let orphan : @mt.TreeNodeId = { agent: "ghost", counter: 99 }
+  let orphan : @mt.TreeNodeId = { agent: "ghost", counter: 99, }
   let b = doc.create_node_after(
     parent=root_id,
     after=TreeNodeId::from_inner(orphan),

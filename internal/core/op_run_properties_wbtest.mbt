@@ -129,7 +129,7 @@ impl @quickcheck.Arbitrary for CompatibleOpRunPair with fn arbitrary(
     },
     rs,
   )
-  { first, second }
+  { first, second, }
 }
 
 ///|
@@ -212,7 +212,7 @@ impl @quickcheck.Arbitrary for CompatibleOpRunTriple with fn arbitrary(
     },
     rs,
   )
-  { first, second, third }
+  { first, second, third, }
 }
 
 ///|
@@ -499,3 +499,19 @@ test "property: OpRun::decompress metadata chains across offsets" {
     inspect(prop_oprun_decompress_chain_metadata(sample), content="true")
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend CompatibleOpRunPair with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend CompatibleOpRunTriple with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend OpRunSingle with @debug.Debug::{to_repr}

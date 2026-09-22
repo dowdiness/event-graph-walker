@@ -78,7 +78,7 @@ test "merge_remote_ops - basic concurrent inserts" {
 
   // Now merge B's operations into A
   let ops_from_b = [op_b1, op_b2]
-  try! merge_remote_ops(tree_a, oplog_a, ops_from_b)
+  try! @branch.merge_remote_ops(tree_a, oplog_a, ops_from_b)
 
   // Both agents should converge
   let text_a = tree_a.to_text()
@@ -86,7 +86,7 @@ test "merge_remote_ops - basic concurrent inserts" {
 
   // Merge A's operations into B
   let ops_from_a = [op_a1, op_a2]
-  try! merge_remote_ops(tree_b, oplog_b, ops_from_a)
+  try! @branch.merge_remote_ops(tree_b, oplog_b, ops_from_a)
   let text_b = tree_b.to_text()
   inspect(text_b, content="HeWo") // Should converge to same result
 }
@@ -129,7 +129,7 @@ test "merge_remote_ops - insert and delete" {
 
   // Agent B gets A's state
   let ops_from_a = [op_a1, op_a2, op_a3]
-  try! merge_remote_ops(tree_b, oplog_b, ops_from_a)
+  try! @branch.merge_remote_ops(tree_b, oplog_b, ops_from_a)
   inspect(tree_b.to_text(), content="ABC")
 
   // Agent B deletes "B"
@@ -146,7 +146,7 @@ test "merge_remote_ops - insert and delete" {
 
   // Merge B's delete back to A
   let ops_from_b = [op_b1]
-  try! merge_remote_ops(tree_a, oplog_a, ops_from_b)
+  try! @branch.merge_remote_ops(tree_a, oplog_a, ops_from_b)
   inspect(tree_a.to_text(), content="AC")
 
   // Verify both converged
@@ -236,7 +236,7 @@ test "merge - simple merge using graph_diff" {
   })
 
   // Then merge to frontier_after
-  merge(tree2, oplog, frontier_before, frontier_after)
+  @branch.merge(tree2, oplog, frontier_before, frontier_after)
   let merged_text = tree2.to_text()
   inspect(merged_text, content="Hello")
 }
@@ -261,12 +261,12 @@ test "merge error - missing op during apply" {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  let ctx = MergeContext::new(tree, oplog)
+  let ctx = @branch.MergeContext::new(tree, oplog)
 
   // Try to apply operations including a non-existent LV
-  let result : Result[Unit, BranchError] = try {
+  let result : Result[Unit, @branch.BranchError] = try {
     ctx.apply_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1 }]),
+      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1, }]),
     )
     Ok(())
   } catch {
@@ -309,12 +309,12 @@ test "merge error - apply operations succeeds for valid ops" {
     timestamp: @fugue.Timestamp(0),
     agent: @fugue.ReplicaId("agent_a"),
   })
-  let ctx = MergeContext::new(tree2, oplog)
+  let ctx = @branch.MergeContext::new(tree2, oplog)
 
   // Apply op2 through merge context - should succeed
-  let result : Result[Unit, BranchError] = try {
+  let result : Result[Unit, @branch.BranchError] = try {
     ctx.apply_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: op2.lv(), count: 1 }]),
+      @rle.Rle::from_array([@core.LvRange::{ start: op2.lv(), count: 1, }]),
     )
     Ok(())
   } catch {
@@ -364,12 +364,12 @@ test "merge error - state unchanged after failure" {
   // Capture state before
   let text_before = tree.to_text()
   inspect(text_before, content="ABC")
-  let ctx = MergeContext::new(tree, oplog)
+  let ctx = @branch.MergeContext::new(tree, oplog)
 
   // Try an operation that will fail
-  let result : Result[Unit, BranchError] = try {
+  let result : Result[Unit, @branch.BranchError] = try {
     ctx.apply_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1 }]),
+      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1, }]),
     )
     Ok(())
   } catch {
@@ -418,13 +418,13 @@ test "retreat then apply with missing item" {
     agent: @fugue.ReplicaId("agent_a"),
   })
   inspect(tree.to_text(), content="AB")
-  let ctx = MergeContext::new(tree, oplog)
+  let ctx = @branch.MergeContext::new(tree, oplog)
 
   // Try to retreat a non-existent item - should raise MissingOp
   // (retreat now looks up the op in the oplog first)
-  let result : Result[Unit, BranchError] = try {
+  let result : Result[Unit, @branch.BranchError] = try {
     ctx.retreat_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1 }]),
+      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1, }]),
     )
     Ok(())
   } catch {
@@ -474,7 +474,7 @@ test "merge - concurrent delete retreat convergence" {
 
   // Sync A -> B
   let ops_a = [op1, op2, op3]
-  try! merge_remote_ops(tree_b, oplog_b, ops_a)
+  try! @branch.merge_remote_ops(tree_b, oplog_b, ops_a)
   inspect(tree_b.to_text(), content="ABC")
 
   // Agent A deletes "B"
@@ -493,11 +493,11 @@ test "merge - concurrent delete retreat convergence" {
   inspect(tree_b.to_text(), content="AC")
 
   // Merge: A gets B's concurrent delete via merge_remote_ops (advance path)
-  try! merge_remote_ops(tree_a, oplog_a, [del_b])
+  try! @branch.merge_remote_ops(tree_a, oplog_a, [del_b])
   inspect(tree_a.to_text(), content="AC")
 
   // Merge: B gets A's concurrent delete via merge_remote_ops (advance path)
-  try! merge_remote_ops(tree_b, oplog_b, [del_a])
+  try! @branch.merge_remote_ops(tree_b, oplog_b, [del_a])
   inspect(tree_b.to_text(), content="AC")
 }
 
@@ -548,7 +548,7 @@ test "merge - frontier retreat exercises two-count path" {
 
   // Retreat the delete via merge() — this calls retreat_operations directly.
   // Retreating the delete should restore "B" to visible.
-  merge(tree, oplog, frontier_with_delete, frontier_abc)
+  @branch.merge(tree, oplog, frontier_with_delete, frontier_abc)
   inspect(tree.to_text(), content="ABC")
 }
 
@@ -655,6 +655,6 @@ test "merge - retreat insert hides items correctly" {
   })
 
   // Retreat from ABCDE to ABC (retreat ops 3,4 — hides D and E)
-  merge(tree2, oplog, frontier_abcde, frontier_abc)
+  @branch.merge(tree2, oplog, frontier_abcde, frontier_abc)
   inspect(tree2.to_text(), content="ABC")
 }

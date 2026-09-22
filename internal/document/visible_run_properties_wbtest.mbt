@@ -13,7 +13,7 @@ fn single_codepoint_chunk(rs : @splitmix.RandomState) -> String {
 
 ///|
 fn join_chunks(chunks : Array[String]) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   for chunk in chunks {
     sb.write_string(chunk)
   }
@@ -42,14 +42,14 @@ impl @quickcheck.Arbitrary for VisibleRunModel with fn arbitrary(
     chunks.push(single_codepoint_chunk(rs))
   }
   let start_lv = rs.next_uint64().to_int().abs() % 20
-  { start_lv, chunks, text: join_chunks(chunks) }
+  { start_lv, chunks, text: join_chunks(chunks), }
 }
 
 ///|
 
 ///|
 fn model_to_run(model : VisibleRunModel) -> VisibleRun {
-  { start_lv: model.start_lv, text: model.text, count: model.chunks.length() }
+  { start_lv: model.start_lv, text: model.text, count: model.chunks.length(), }
 }
 
 ///|
@@ -71,7 +71,7 @@ impl @quickcheck.Arbitrary for VisibleRunSlice with fn arbitrary(
   let b = rs.next_uint64().to_int().abs() % (max + 1)
   let start = if a <= b { a } else { b }
   let end = if a <= b { b } else { a }
-  { model, start, end }
+  { model, start, end, }
 }
 
 ///|
@@ -95,7 +95,7 @@ impl @quickcheck.Arbitrary for VisibleRunSplit with fn arbitrary(
   } else {
     rs.next_uint64().to_int().abs() % (count - 1) + 1
   }
-  { model, split }
+  { model, split, }
 }
 
 ///|
@@ -224,3 +224,17 @@ test "property: invalid slice bounds return errors" {
     inspect(prop_visible_slice_invalid_bounds(sample), content="true")
   }
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend VisibleRunModel with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend VisibleRunSlice with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend VisibleRunSplit with @debug.Debug::{to_repr}

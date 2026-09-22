@@ -1199,3 +1199,13 @@ pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   }
   buffer.to_bytes()
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend SyncReport with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend SyncReport with Eq::{not_equal, equal}

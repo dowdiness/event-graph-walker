@@ -361,3 +361,17 @@ pub impl Show for CausalGraph with fn output(self, logger) {
   logger.write_string(self.next_lv.to_string())
   logger.write_string(" versions)")
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend CausalGraph with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend CausalGraph with Show::{to_string, output}

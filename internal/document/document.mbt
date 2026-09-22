@@ -258,7 +258,7 @@ pub fn Document::insert(
     if cache_valid {
       cache_valid = self.indexed_state.insert_at(
         current_pos,
-        { start_lv: op.lv(), text: ch_str, count: 1 },
+        { start_lv: op.lv(), text: ch_str, count: 1, },
         self.tree.get(@fugue.Lv(op.lv())).unwrap(),
       )
     }
@@ -712,3 +712,9 @@ pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
   self.ensure_projection_ready_for_read()
   self.indexed_state.lv_to_position(self.tree, lv)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend InsertCursor with @debug.Debug::{to_repr}

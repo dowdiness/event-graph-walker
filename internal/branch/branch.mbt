@@ -37,7 +37,7 @@ pub fn Branch::from_tree_and_oplog(
   oplog : @oplog.OpLog,
 ) -> Branch {
   let frontier = oplog.get_frontier()
-  { frontier, tree, oplog }
+  { frontier, tree, oplog, }
 }
 
 ///|
@@ -66,7 +66,7 @@ pub fn Branch::checkout(
   apply_projections(tree, ops[:], oplog.causal_graph())
 
   // Return branch with reconstructed state
-  { frontier, tree, oplog }
+  { frontier, tree, oplog, }
 }
 
 ///|
@@ -103,7 +103,7 @@ pub fn Branch::advance(
     // Fast path: advance only — apply k new ops incrementally
     let tree = self.tree
     apply_projections(tree, advance_ops[:], self.oplog.causal_graph())
-    { frontier: target_frontier, tree, oplog: self.oplog }
+    { frontier: target_frontier, tree, oplog: self.oplog, }
   }
 }
 

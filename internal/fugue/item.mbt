@@ -192,3 +192,113 @@ fn[T] Item::new(
 fn[T] Item::is_visible(self : Item[T]) -> Bool {
   self.state.is_visible(delete_count=self.delete_count)
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend InsertOp with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Item with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Item with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Item with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend ItemId with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend ItemId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend ItemId with Default::{default}
+
+///|
+#doc(hidden)
+pub extend ItemId with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend ItemId with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend ItemId with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend Lv with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Lv with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend Lv with Default::{default}
+
+///|
+#doc(hidden)
+pub extend Lv with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Lv with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend Lv with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend ReplicaId with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend ReplicaId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend ReplicaId with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Side with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Side with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend Side with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend Timestamp with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Timestamp with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend Timestamp with Default::{default}
+
+///|
+#doc(hidden)
+pub extend Timestamp with Eq::{not_equal, equal}

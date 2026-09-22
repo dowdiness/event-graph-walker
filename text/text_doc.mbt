@@ -9,7 +9,7 @@ priv struct InsertPlan {
 
 ///|
 fn InsertPlan::InsertPlan(position : Int, text : String) -> InsertPlan {
-  { position, text }
+  { position, text, }
 }
 
 ///|
@@ -58,7 +58,7 @@ pub fn TextState::new_with_sync_limits(
   if agent_id == "" {
     raise TextError::EmptyReplicaId
   }
-  TextState::{ inner: @document.Document::new(agent_id), sync_limits: limits }
+  TextState::{ inner: @document.Document::new(agent_id), sync_limits: limits, }
 }
 
 ///|
@@ -226,3 +226,13 @@ fn checked_range_bounds(
   }
   (start, end)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TextState with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend TextState with Show::{to_string, output}

@@ -8,7 +8,7 @@
 /// Synthesize a cheap TextInsert undo item for tests that only care about
 /// the presence of a record in the buffer / stack.
 fn dummy_undo_item() -> UndoItem {
-  let id : @mt.TreeNodeId = { agent: "test", counter: 0 }
+  let id : @mt.TreeNodeId = { agent: "test", counter: 0, }
   TextInsert(block=id, id=@core.RawVersion("test", 42))
 }
 
@@ -43,7 +43,7 @@ test "undo: nested transactions flatten into a single outer group" {
 test "undo: commit clears redo stack" {
   let doc = Document::new("alice")
   // Pre-seed redo with a dummy group to prove a fresh commit wipes it.
-  doc.redo_stack.push({ items: [dummy_undo_item()] })
+  doc.redo_stack.push({ items: [dummy_undo_item()], })
   inspect(doc.redo_stack.length(), content="1")
   doc.txn_open()
   doc.record_undo_item(dummy_undo_item())

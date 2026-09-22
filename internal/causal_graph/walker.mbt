@@ -79,7 +79,7 @@ pub fn CausalGraph::diff_frontiers_lvs(
       reversed.push(expanded[i])
     }
     @rle.Rle::from_array(
-      reversed.map(fn(lv) { @core.LvRange::{ start: lv, count: 1 } }),
+      reversed.map(fn(lv) { @core.LvRange::{ start: lv, count: 1, } }),
     )
   } else {
     @rle.Rle::Rle()

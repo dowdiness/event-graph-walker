@@ -824,7 +824,7 @@ fn decode_container_node(json : Json) -> @mt.TreeNodeId raise {
       guard replica_id != "" && sequence >= 0 else {
         fail("node identity is invalid")
       }
-      { agent: replica_id, counter: sequence }
+      { agent: replica_id, counter: sequence, }
     }
     _ => fail("unknown node kind")
   }
@@ -1041,9 +1041,9 @@ fn decode_container_text_payload(json : Json) -> (@mt.TreeNodeId, TextOp) raise 
         object.get("target").unwrap_or(Json::null()),
       )
       if kind == "delete" {
-        (block, Delete({ target, timestamp, agent }))
+        (block, Delete({ target, timestamp, agent, }))
       } else {
-        (block, Undelete({ target, timestamp, agent }))
+        (block, Undelete({ target, timestamp, agent, }))
       }
     }
     _ => fail("unknown text operation kind")
@@ -1081,7 +1081,7 @@ fn decode_container_record(json : Json) -> SyncOpRecord raise {
       let (block, op) = decode_container_text_payload(
         object.get("payload").unwrap_or(Json::null()),
       )
-      Text({ version, parents, block, op })
+      Text({ version, parents, block, op, })
     }
     _ => fail("unknown operation domain")
   }
@@ -1309,7 +1309,7 @@ fn prepare_container_sync(
       actual=pending.length(),
     )
   }
-  { applicable, pending, duplicate_operations: duplicates }
+  { applicable, pending, duplicate_operations: duplicates, }
 }
 
 ///|

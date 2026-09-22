@@ -5,7 +5,7 @@
 test "create: single node under root" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree.apply_create(id, @movable_tree.root_id, pos)
   inspect(tree.contains(id), content="true")
   inspect(tree.is_alive(id), content="true")
@@ -25,8 +25,8 @@ test "create: single node under root" {
 test "move: reparent a node" {
   let tree = @movable_tree.MovableTree::new()
   let pos1 = @fi.FractionalIndex::between(left=None, right=None)
-  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1 }
+  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1, }
   tree.apply_create(parent_id, @movable_tree.root_id, pos1)
   let pos2 = @fi.FractionalIndex::between(left=None, right=None)
   tree.apply_create(child_id, @movable_tree.root_id, pos2)
@@ -50,7 +50,7 @@ test "move: reparent a node" {
 test "delete: move to trash" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree.apply_create(id, @movable_tree.root_id, pos)
   inspect(tree.is_alive(id), content="true")
   // Move to trash
@@ -71,8 +71,8 @@ test "delete: move to trash" {
 test "delete: descendants of trashed nodes are not alive" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1 }
+  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1, }
   tree.apply_create(parent_id, @movable_tree.root_id, pos)
   tree.apply_create(child_id, parent_id, pos)
   tree.apply_move(parent_id, @movable_tree.trash_id, pos)
@@ -85,8 +85,8 @@ test "delete: descendants of trashed nodes are not alive" {
 test "cycle: parent under child rejected" {
   let tree = @movable_tree.MovableTree::new()
   let pos1 = @fi.FractionalIndex::between(left=None, right=None)
-  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1 }
+  let parent_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let child_id : @movable_tree.TreeNodeId = { agent: "alice", counter: 1, }
   tree.apply_create(parent_id, @movable_tree.root_id, pos1)
   let pos2 = @fi.FractionalIndex::between(left=None, right=None)
   tree.apply_create(child_id, parent_id, pos2)
@@ -106,9 +106,9 @@ test "cycle: parent under child rejected" {
 test "children: sorted by fractional index" {
   let tree = @movable_tree.MovableTree::new()
   // Create three nodes with specific positions: high, low, mid
-  let id_a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let id_b : @movable_tree.TreeNodeId = { agent: "alice", counter: 1 }
-  let id_c : @movable_tree.TreeNodeId = { agent: "alice", counter: 2 }
+  let id_a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let id_b : @movable_tree.TreeNodeId = { agent: "alice", counter: 1, }
+  let id_c : @movable_tree.TreeNodeId = { agent: "alice", counter: 2, }
   let pos_high = @fi.FractionalIndex::new([300])
   let pos_low = @fi.FractionalIndex::new([100])
   let pos_mid = @fi.FractionalIndex::new([200])
@@ -129,7 +129,7 @@ test "children: sorted by fractional index" {
 test "remove_node: completely removes node" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree.apply_create(id, @movable_tree.root_id, pos)
   inspect(tree.contains(id), content="true")
   inspect(tree.children(@movable_tree.root_id).length(), content="1")
@@ -146,10 +146,10 @@ test "is_ancestor_of: deep chain" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
   // Create a chain: root -> a -> b -> c -> d
-  let id_a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let id_b : @movable_tree.TreeNodeId = { agent: "alice", counter: 1 }
-  let id_c : @movable_tree.TreeNodeId = { agent: "alice", counter: 2 }
-  let id_d : @movable_tree.TreeNodeId = { agent: "alice", counter: 3 }
+  let id_a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let id_b : @movable_tree.TreeNodeId = { agent: "alice", counter: 1, }
+  let id_c : @movable_tree.TreeNodeId = { agent: "alice", counter: 2, }
+  let id_d : @movable_tree.TreeNodeId = { agent: "alice", counter: 3, }
   tree.apply_create(id_a, @movable_tree.root_id, pos)
   tree.apply_create(id_b, id_a, pos)
   tree.apply_create(id_c, id_b, pos)
@@ -171,7 +171,7 @@ test "is_ancestor_of: deep chain" {
 test "is_ancestor_of: node is not its own ancestor" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree.apply_create(id, @movable_tree.root_id, pos)
   inspect(tree.is_ancestor_of(id, id), content="false")
 }
@@ -181,7 +181,7 @@ test "is_ancestor_of: node is not its own ancestor" {
 test "properties: set and get" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree.apply_create(id, @movable_tree.root_id, pos)
   // No property yet
   inspect(tree.get_property(id, "color") is None, content="true")
@@ -199,8 +199,8 @@ test "children: equal positions break ties by node id" {
   let tree_a = @movable_tree.MovableTree::new()
   let tree_b = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::between(left=None, right=None)
-  let bob : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
-  let alice : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let bob : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
+  let alice : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree_a.apply_create(bob, @movable_tree.root_id, pos)
   tree_a.apply_create(alice, @movable_tree.root_id, pos)
   tree_b.apply_create(alice, @movable_tree.root_id, pos)
@@ -218,14 +218,14 @@ test "children: equal positions break ties by node id" {
 test "get_position: returns correct position" {
   let tree = @movable_tree.MovableTree::new()
   let pos = @fi.FractionalIndex::new([42])
-  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let id : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   tree.apply_create(id, @movable_tree.root_id, pos)
   @debug.debug_inspect(
     tree.get_position(id),
     content="Some(FractionalIndex([42]))",
   )
   inspect(
-    tree.get_position({ agent: "nobody", counter: 99 }) is None,
+    tree.get_position({ agent: "nobody", counter: 99, }) is None,
     content="true",
   )
 }

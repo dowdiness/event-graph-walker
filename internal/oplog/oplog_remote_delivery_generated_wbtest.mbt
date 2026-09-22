@@ -66,17 +66,17 @@ impl @quickcheck.Arbitrary for RemoteDeliveryTrace with fn arbitrary(
 impl @qc.Shrink for RemoteDeliveryTrace with fn shrink(self) {
   let results : Array[RemoteDeliveryTrace] = []
   if self.suffix_count > 0 {
-    results.push({ ..self, suffix_count: 0 })
+    results.push({ ..self, suffix_count: 0, })
     let half = self.suffix_count / 2
     if half > 0 {
-      results.push({ ..self, suffix_count: half })
+      results.push({ ..self, suffix_count: half, })
     }
   }
   if self.source_seed != 0 {
-    results.push({ ..self, source_seed: 0 })
+    results.push({ ..self, source_seed: 0, })
   }
   if self.schedule_seed != 0 {
-    results.push({ ..self, schedule_seed: 0 })
+    results.push({ ..self, schedule_seed: 0, })
   }
   results.iter()
 }
@@ -321,7 +321,7 @@ fn remote_delivery_build_scenario(
 
 ///|
 fn RemoteDeliveryModel::RemoteDeliveryModel() -> RemoteDeliveryModel {
-  { pending: [], known: [], admitted: @hashset.HashSet([]) }
+  { pending: [], known: [], admitted: @hashset.HashSet([]), }
 }
 
 ///|
@@ -893,3 +893,21 @@ test "property: missing parent and origin dependencies drain exactly once" {
     max_size=16,
   )
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend RemoteDeliveryEvidence with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend RemoteDeliverySnapshot with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend RemoteDeliverySnapshot with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend RemoteDeliveryTrace with @debug.Debug::{to_repr}

@@ -206,3 +206,37 @@ pub impl @rle.Spanning for OpRun with fn span(self : OpRun) -> Int {
 pub impl @rle.Spanning for OpRun with fn logical_length(self : OpRun) -> Int {
   self.count
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend OpRun with @rle.HasLength::{length, is_empty}
+
+///|
+#doc(hidden)
+pub extend OpRun with @rle.Mergeable::{can_merge, merge}
+
+///|
+#doc(hidden)
+pub extend OpRun with @rle.Spanning::{logical_length, span}
+
+///|
+#doc(hidden)
+pub extend OpRun with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend OpRun with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend OpRunContent with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend OpRunContent with Eq::{not_equal, equal}

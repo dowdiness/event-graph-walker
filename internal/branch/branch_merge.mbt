@@ -17,7 +17,7 @@ pub fn MergeContext::new(
   tree : @fugue.FugueTree[String],
   oplog : @oplog.OpLog,
 ) -> MergeContext {
-  { tree, oplog }
+  { tree, oplog, }
 }
 
 ///|

@@ -36,12 +36,12 @@ pub fn[T : Default] FugueTree::new() -> FugueTree[T] {
 /// This is the more general constructor that doesn't require the Default trait.
 pub fn[T] FugueTree::make(_root_content : T) -> FugueTree[T] {
   {
-    items: Array::new(capacity=1024),
-    lv_index: Array::new(capacity=1024),
+    items: Array(capacity=1024),
+    lv_index: Array(capacity=1024),
     length: 0,
     visible: 0,
     root_children: [],
-    children: Array::new(capacity=1024),
+    children: Array(capacity=1024),
     jump_ancestors: JumpAncestors::new(),
   }
 }
@@ -155,7 +155,7 @@ pub fn[T : Eq] FugueTree::iter(self : FugueTree[T]) -> Iter[(Lv, Item[T])] {
 /// Convenience method for FugueTree[String].
 pub fn FugueTree::to_text(self : FugueTree[String]) -> String {
   self
-  .fold(init=StringBuilder::new(), fn(sb, item) {
+  .fold(init=StringBuilder(), fn(sb, item) {
     sb.write_string(item.content)
     sb
   })
@@ -842,3 +842,11 @@ fn[T : Eq] FugueTree::traverse_tree(
     None
   })
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079). See `internal/fugue/item.mbt`.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend FugueTree with @debug.Debug::{to_repr}

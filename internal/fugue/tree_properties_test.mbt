@@ -37,10 +37,10 @@ pub impl @quickcheck.Arbitrary for QcInsertOpSet with fn arbitrary(
     let ts = rs.next_uint64().to_int().abs() % 1000
     let agent_id = rs.next_uint64().to_int().abs()
     let agent = "agent-\{agent_id}"
-    ops.push({ id, content, ts, agent })
+    ops.push({ id, content, ts, agent, })
   }
   let shuffle_seed = rs.next_uint64()
-  { ops, shuffle_seed }
+  { ops, shuffle_seed, }
 }
 
 ///|
@@ -50,7 +50,7 @@ pub impl @qc.Shrink for QcInsertOpSet with fn shrink(self) {
   let ops = self.ops
   let len = ops.length()
   if len > 0 {
-    results.push({ ops: [], shuffle_seed: self.shuffle_seed })
+    results.push({ ops: [], shuffle_seed: self.shuffle_seed, })
     let half = len / 2
     if half > 0 {
       results.push({
@@ -82,7 +82,7 @@ fn compare_ops(a : QcInsertOp, b : QcInsertOp) -> Int {
 fn expected_text_from_ops(ops : Array[QcInsertOp]) -> String {
   let sorted = ops.map(fn(op) { op })
   sorted.sort_by(compare_ops)
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   sb.write_string("L")
   for op in sorted {
     sb.write_string(op.content)
@@ -141,11 +141,11 @@ fn prop_fugue_insertion_determinism(set : QcInsertOpSet) -> Bool {
   let tree1 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   insert_with_test_sequence(
     tree1,
-    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
+    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base", }, -1, -1),
   )
   insert_with_test_sequence(
     tree1,
-    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
+    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base", }, 0, -1),
   )
   for op in set.ops {
     insert_with_test_sequence(tree1, qc_to_insert_op(op, 0, 1))
@@ -157,11 +157,11 @@ fn prop_fugue_insertion_determinism(set : QcInsertOpSet) -> Bool {
   let tree2 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   insert_with_test_sequence(
     tree2,
-    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
+    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base", }, -1, -1),
   )
   insert_with_test_sequence(
     tree2,
-    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
+    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base", }, 0, -1),
   )
   for i = set.ops.length() - 1; i >= 0; i = i - 1 {
     let op = set.ops[i]
@@ -175,11 +175,11 @@ fn prop_fugue_insertion_determinism(set : QcInsertOpSet) -> Bool {
   let tree3 : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   insert_with_test_sequence(
     tree3,
-    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
+    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base", }, -1, -1),
   )
   insert_with_test_sequence(
     tree3,
-    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
+    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base", }, 0, -1),
   )
   for op in shuffled {
     insert_with_test_sequence(tree3, qc_to_insert_op(op, 0, 1))
@@ -213,9 +213,9 @@ pub impl @quickcheck.Arbitrary for ChainLen with fn arbitrary(
 pub impl @qc.Shrink for ChainLen with fn shrink(self) {
   let results : Array[ChainLen] = []
   if self.len > 3 {
-    results.push({ len: 3 })
-    results.push({ len: self.len / 2 })
-    results.push({ len: self.len - 1 })
+    results.push({ len: 3, })
+    results.push({ len: self.len / 2, })
+    results.push({ len: self.len - 1, })
   }
   results.iter()
 }
@@ -386,13 +386,13 @@ pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with fn arbitrary(
     let ts = rs.next_uint64().to_int().abs() % 1000
     let agent_id = rs.next_uint64().to_int().abs()
     let agent = "agent-\{agent_id}"
-    inserts.push({ id, content, ts, agent })
+    inserts.push({ id, content, ts, agent, })
   }
   let mut delete_count = 0
   if len > 0 {
     delete_count = rs.next_uint64().to_int().abs() % (len + 1)
   }
-  { inserts, delete_count }
+  { inserts, delete_count, }
 }
 
 ///|
@@ -400,12 +400,12 @@ pub impl @qc.Shrink for InsertSetWithDeletes with fn shrink(self) {
   let results : Array[InsertSetWithDeletes] = []
   let len = self.inserts.length()
   if len > 0 {
-    results.push({ inserts: [], delete_count: 0 })
+    results.push({ inserts: [], delete_count: 0, })
     let half = len / 2
     if half > 0 {
       let trimmed = self.inserts[:half].to_owned()
       let dc = if self.delete_count > half { half } else { self.delete_count }
-      results.push({ inserts: trimmed, delete_count: dc })
+      results.push({ inserts: trimmed, delete_count: dc, })
     }
     let trimmed = self.inserts[:len - 1].to_owned()
     let dc = if self.delete_count > len - 1 {
@@ -413,7 +413,7 @@ pub impl @qc.Shrink for InsertSetWithDeletes with fn shrink(self) {
     } else {
       self.delete_count
     }
-    results.push({ inserts: trimmed, delete_count: dc })
+    results.push({ inserts: trimmed, delete_count: dc, })
   }
   results.iter()
 }
@@ -448,11 +448,11 @@ fn prop_fugue_insert_visibility(set : QcInsertOpSet) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   insert_with_test_sequence(
     tree,
-    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
+    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base", }, -1, -1),
   )
   insert_with_test_sequence(
     tree,
-    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
+    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base", }, 0, -1),
   )
   for op in set.ops {
     insert_with_test_sequence(tree, qc_to_insert_op(op, 0, 1))
@@ -480,11 +480,11 @@ fn prop_fugue_delete_visibility(set : InsertSetWithDeletes) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   insert_with_test_sequence(
     tree,
-    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base" }, -1, -1),
+    qc_to_insert_op({ id: 0, content: "L", ts: 0, agent: "base", }, -1, -1),
   )
   insert_with_test_sequence(
     tree,
-    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base" }, 0, -1),
+    qc_to_insert_op({ id: 1, content: "R", ts: 1, agent: "base", }, 0, -1),
   )
   for op in set.inserts {
     insert_with_test_sequence(tree, qc_to_insert_op(op, 0, 1))
@@ -543,7 +543,7 @@ pub impl @quickcheck.Arbitrary for ConcurrentInsertSeq with fn arbitrary(
   let len_b = rs.next_uint64().to_int().abs() % (max_len + 1)
   let ts_a = rs.next_uint64().to_int().abs() % 1000
   let ts_b = rs.next_uint64().to_int().abs() % 1000
-  { len_a, len_b, ts_a, ts_b }
+  { len_a, len_b, ts_a, ts_b, }
 }
 
 ///|
@@ -551,7 +551,7 @@ pub impl @quickcheck.Arbitrary for ConcurrentInsertSeq with fn arbitrary(
 pub impl @qc.Shrink for ConcurrentInsertSeq with fn shrink(self) {
   let results : Array[ConcurrentInsertSeq] = []
   if self.len_a > 0 || self.len_b > 0 || self.ts_a > 0 || self.ts_b > 0 {
-    results.push({ len_a: 0, len_b: 0, ts_a: 0, ts_b: 0 })
+    results.push({ len_a: 0, len_b: 0, ts_a: 0, ts_b: 0, })
   }
   if self.len_a > 0 {
     results.push({
@@ -752,13 +752,13 @@ pub impl @quickcheck.Arbitrary for TieBreakCase with fn arbitrary(
   if id_b == id_a {
     id_b = id_b + 1
   }
-  { agent_a, agent_b, id_a, id_b }
+  { agent_a, agent_b, id_a, id_b, }
 }
 
 ///|
 pub impl @qc.Shrink for TieBreakCase with fn shrink(_self) {
   let results : Array[TieBreakCase] = []
-  results.push({ agent_a: "agent-0", agent_b: "agent-1", id_a: 10, id_b: 11 })
+  results.push({ agent_a: "agent-0", agent_b: "agent-1", id_a: 10, id_b: 11, })
   results.iter()
 }
 
@@ -828,16 +828,16 @@ pub(all) struct BranchingTree {
 ///|
 pub impl @quickcheck.Arbitrary for BranchingTree with fn arbitrary(size, rs) {
   let len = if size < 3 { 3 } else if size > 50 { 50 } else { size }
-  { len: rs.next_positive_int() % len + 3 }
+  { len: rs.next_positive_int() % len + 3, }
 }
 
 ///|
 pub impl @qc.Shrink for BranchingTree with fn shrink(self) {
   let results : Array[BranchingTree] = []
   if self.len > 3 {
-    results.push({ len: 3 })
-    results.push({ len: self.len / 2 })
-    results.push({ len: self.len - 1 })
+    results.push({ len: 3, })
+    results.push({ len: self.len / 2, })
+    results.push({ len: self.len - 1, })
   }
   results.iter()
 }
@@ -1029,13 +1029,17 @@ fn append_right_chain(
   let ids : Array[@fugue.Lv] = []
   insert_with_test_sequence(
     tree,
-    qc_to_insert_op({ id: 0, content: "A", ts: 0, agent: "chain" }, -1, -1),
+    qc_to_insert_op({ id: 0, content: "A", ts: 0, agent: "chain", }, -1, -1),
   )
   ids.push(@fugue.Lv(0))
   for i = 1; i < length; i = i + 1 {
     insert_with_test_sequence(
       tree,
-      qc_to_insert_op({ id: i, content: "A", ts: i, agent: "chain" }, i - 1, -1),
+      qc_to_insert_op(
+        { id: i, content: "A", ts: i, agent: "chain", },
+        i - 1,
+        -1,
+      ),
     )
     ids.push(@fugue.Lv(i))
   }
@@ -1056,7 +1060,7 @@ fn prop_ancestry_midpoint_concurrency(chain : ChainLen) -> Bool {
   let tied_split_id = 1001
   let right_id = 1002
   let nested_right_id = 1003
-  let split = { id: split_id, content: "L", ts: 77, agent: "same-agent" }
+  let split = { id: split_id, content: "L", ts: 77, agent: "same-agent", }
   let tied_split = {
     id: tied_split_id,
     content: "T",
@@ -1082,7 +1086,7 @@ fn prop_ancestry_midpoint_concurrency(chain : ChainLen) -> Bool {
   insert_with_test_sequence(
     tree,
     qc_to_insert_op(
-      { id: right_id, content: "R", ts: 77, agent: "right-agent" },
+      { id: right_id, content: "R", ts: 77, agent: "right-agent", },
       midpoint,
       -1,
     ),
@@ -1094,7 +1098,7 @@ fn prop_ancestry_midpoint_concurrency(chain : ChainLen) -> Bool {
   insert_with_test_sequence(
     tree,
     qc_to_insert_op(
-      { id: nested_right_id, content: "N", ts: 77, agent: "nested-agent" },
+      { id: nested_right_id, content: "N", ts: 77, agent: "nested-agent", },
       split_id,
       midpoint,
     ),
@@ -1136,7 +1140,7 @@ fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
   insert_with_test_sequence(
     tree,
     qc_to_insert_op(
-      { id: case.id_a, content: "X", ts: 42, agent: case.agent_a },
+      { id: case.id_a, content: "X", ts: 42, agent: case.agent_a, },
       0,
       1,
     ),
@@ -1145,7 +1149,7 @@ fn prop_ancestry_matches_naive_for_ties(case : TieBreakCase) -> Bool {
   insert_with_test_sequence(
     tree,
     qc_to_insert_op(
-      { id: case.id_b, content: "Y", ts: 42, agent: case.agent_a },
+      { id: case.id_b, content: "Y", ts: 42, agent: case.agent_a, },
       0,
       1,
     ),

@@ -153,3 +153,25 @@ pub impl @json.FromJson for OpRun with fn from_json(json, path) {
     _ => raise @json.JsonDecodeError((path, "expected OpRun object"))
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend OpRun with @json.FromJson::{from_json}
+
+///|
+#doc(hidden)
+pub extend OpRun with ToJson::{to_json}
+
+///|
+#doc(hidden)
+pub extend OpRunContent with @json.FromJson::{from_json}
+
+///|
+#doc(hidden)
+pub extend OpRunContent with ToJson::{to_json}

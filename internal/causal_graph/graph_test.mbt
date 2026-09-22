@@ -1,13 +1,13 @@
 ///|
 /// Tests for CausalGraph
 test "create empty graph" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   @debug.debug_inspect(graph.get_frontier().to_array(), content="[]")
 }
 
 ///|
 test "add single version" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let lv = try! graph.add_version([], "agent1")
   inspect(lv, content="0")
   @debug.debug_inspect(graph.get_frontier().to_array(), content="[0]")
@@ -15,7 +15,7 @@ test "add single version" {
 
 ///|
 test "add version with parent" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([lv0], "agent1")
   inspect(lv1, content="1")
@@ -24,7 +24,7 @@ test "add version with parent" {
 
 ///|
 test "lv to raw version conversion" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let lv = try! graph.add_version([], "agent1")
   match graph.lv_to_raw(lv) {
     Some(raw) => {
@@ -37,7 +37,7 @@ test "lv to raw version conversion" {
 
 ///|
 test "raw to lv version conversion" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   ignore(try! graph.add_version([], "agent1"))
   let raw = @core.RawVersion("agent1", 0)
   match graph.raw_to_lv(raw) {
@@ -48,7 +48,7 @@ test "raw to lv version conversion" {
 
 ///|
 test "concurrent versions create two frontier heads" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([], "agent2") // Concurrent with lv0
   let frontier = graph.get_frontier()
@@ -59,7 +59,7 @@ test "concurrent versions create two frontier heads" {
 
 ///|
 test "duplicate RawVersion is rejected without graph mutation" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let first = try! graph.add_version_with_seq([], "alice", 0)
   let before_frontier = graph.get_frontier()
   try graph.add_version_with_seq([], "alice", 0) catch {
@@ -76,7 +76,7 @@ test "duplicate RawVersion is rejected without graph mutation" {
 
 ///|
 test "graph admission owns parent storage and rejects invalid identities" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let root = try! graph.add_version([], "agent")
   let caller_parents = [root]
   let child = try! graph.add_version(caller_parents, "agent")
@@ -101,7 +101,7 @@ test "graph admission owns parent storage and rejects invalid identities" {
 
 ///|
 test "is_ancestor simple case" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([lv0], "agent1")
   inspect(graph.is_ancestor(lv0, lv1), content="true")
@@ -110,7 +110,7 @@ test "is_ancestor simple case" {
 
 ///|
 test "graph_diff with no overlap" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([lv0], "agent1")
   let lv2 = try! graph.add_version([lv0], "agent2") // Branch from lv0

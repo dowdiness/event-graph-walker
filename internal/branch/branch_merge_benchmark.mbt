@@ -379,9 +379,7 @@ test "merge - retreat concurrent deletes (500 items, 50 deletes)" (b : @bench.T)
   let frontier_with_deletes = oplog_a.get_frontier()
 
   // Pre-build template insert ops (avoid rebuilding 500 items per iteration)
-  let template_inserts : Array[@fugue.InsertOp[String]] = Array::new(
-    capacity=500,
-  )
+  let template_inserts : Array[@fugue.InsertOp[String]] = Array(capacity=500)
   for i = 0; i < 500; i = i + 1 {
     template_inserts.push({
       id: @fugue.Lv(i),

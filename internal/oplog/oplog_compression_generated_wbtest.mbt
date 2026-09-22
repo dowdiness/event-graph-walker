@@ -57,13 +57,13 @@ impl @qc.Shrink for CompressionTrace with fn shrink(self) {
   let results : Array[CompressionTrace] = []
   let suffix_count = self.suffix.length()
   if suffix_count > 0 {
-    results.push({ suffix: [] })
+    results.push({ suffix: [], })
     let half = suffix_count / 2
     if half > 0 {
-      results.push({ suffix: self.suffix[:half].to_owned() })
+      results.push({ suffix: self.suffix[:half].to_owned(), })
     }
     if suffix_count > 1 {
-      results.push({ suffix: self.suffix[:suffix_count - 1].to_owned() })
+      results.push({ suffix: self.suffix[:suffix_count - 1].to_owned(), })
     }
   }
   results.iter()
@@ -147,7 +147,7 @@ fn CompressionTrace::replay(self : CompressionTrace) -> CompressionReplay {
       inserted_lvs.push(op.lv())
     }
   }
-  { oplog, expected }
+  { oplog, expected, }
 }
 
 ///|
@@ -269,3 +269,21 @@ test "property generator: local compression traces are complete and non-vacuous"
 test "property: generated local traces preserve compressed query semantics" {
   @qc.quick_check_fn(prop_generated_compression_matches_model)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend CompressionExpectedOp with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend CompressionExpectedOp with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend CompressionLocalEdit with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend CompressionTrace with @debug.Debug::{to_repr}

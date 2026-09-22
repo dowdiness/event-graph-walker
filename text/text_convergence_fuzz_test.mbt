@@ -81,7 +81,7 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
       actions.push(FuzzSync(agent, to))
     }
   }
-  { num_agents, actions }
+  { num_agents, actions, }
 }
 
 ///|
@@ -90,7 +90,7 @@ impl @qc.Shrink for MultiAgentTrace with fn shrink(self) {
   let len = self.actions.length()
   if len > 1 {
     // Try empty
-    results.push({ num_agents: self.num_agents, actions: [] })
+    results.push({ num_agents: self.num_agents, actions: [], })
     // Try first half
     let half = len / 2
     if half > 0 {

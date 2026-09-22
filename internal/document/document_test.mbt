@@ -3,7 +3,7 @@
 ///|
 /// Document wrapping seam: a pending identity conflict does not project or advance.
 test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let seed = try! doc.insert(0, "seed")
   // Warm the derived position cache before the unresolved operation arrives.
   let _ = doc.get_visible_items()
@@ -31,15 +31,18 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
     None,
     None,
   )
-  let result : Result[Unit, DocumentError] = try {
+  let result : Result[Unit, @document.DocumentError] = try {
     doc.apply_remote(conflict)
     Ok(())
   } catch {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))) =>
-      assert_eq(raw, @core.RawVersion("document-pending", 0))
+    Err(
+      @document.DocumentError::OpLog(
+        @oplog.OpLogError::ConflictingIdentity(raw~)
+      )
+    ) => assert_eq(raw, @core.RawVersion("document-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }
   assert_eq(doc.causal_snapshot().op_count(), before.op_count())
@@ -67,7 +70,7 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
 
 ///|
 test "apply_remote rejects graph-only delete target before oplog mutation" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   ignore(doc.get_visible_items())
@@ -83,7 +86,7 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
     Some(@core.RawVersion("local", delete_op.seq())),
   )
 
-  let result : Result[Unit, DocumentError] = try {
+  let result : Result[Unit, @document.DocumentError] = try {
     doc.apply_remote(bad_delete)
     Ok(())
   } catch {
@@ -91,7 +94,7 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
   }
   match result {
     Err(
-      DocumentError::OpLog(
+      @document.DocumentError::OpLog(
         @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
       )
     ) => {
@@ -113,7 +116,7 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
 
 ///|
 test "apply_remote rejects graph-only undelete target before oplog mutation" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   let before_snapshot = doc.causal_snapshot()
@@ -126,7 +129,7 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
     Some(@core.RawVersion("local", delete_op.seq())),
   )
 
-  let result : Result[Unit, DocumentError] = try {
+  let result : Result[Unit, @document.DocumentError] = try {
     doc.apply_remote(bad_undelete)
     Ok(())
   } catch {
@@ -134,7 +137,7 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
   }
   match result {
     Err(
-      DocumentError::OpLog(
+      @document.DocumentError::OpLog(
         @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
       )
     ) => {
@@ -153,7 +156,7 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
 
 ///|
 test "apply_remote rejects graph-only insert origins before oplog mutation" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   let graph_only = @core.RawVersion("local", delete_op.seq())
@@ -178,7 +181,7 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
     Some(graph_only),
   )
   for bad in [bad_left, bad_right] {
-    let result : Result[Unit, DocumentError] = try {
+    let result : Result[Unit, @document.DocumentError] = try {
       doc.apply_remote(bad)
       Ok(())
     } catch {
@@ -186,7 +189,7 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
     }
     match result {
       Err(
-        DocumentError::OpLog(
+        @document.DocumentError::OpLog(
           @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
         )
       ) => {
@@ -206,7 +209,7 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
 
 ///|
 test "apply_remote validates an unready incoming origin before pending" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   let graph_only = @core.RawVersion("local", delete_op.seq())
@@ -231,7 +234,7 @@ test "apply_remote validates an unready incoming origin before pending" {
     Some(graph_only),
     None,
   )
-  let result : Result[Unit, DocumentError] = try {
+  let result : Result[Unit, @document.DocumentError] = try {
     doc.apply_remote(bad)
     Ok(())
   } catch {
@@ -239,7 +242,7 @@ test "apply_remote validates an unready incoming origin before pending" {
   }
   match result {
     Err(
-      DocumentError::OpLog(
+      @document.DocumentError::OpLog(
         @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
       )
     ) => {
@@ -260,7 +263,7 @@ test "apply_remote validates an unready incoming origin before pending" {
 
 ///|
 test "merge_remote rejects graph-only target before oplog mutation" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   let before_snapshot = doc.causal_snapshot()
@@ -273,7 +276,7 @@ test "merge_remote rejects graph-only target before oplog mutation" {
     Some(@core.RawVersion("local", delete_op.seq())),
   )
 
-  let result : Result[Unit, DocumentError] = try {
+  let result : Result[Unit, @document.DocumentError] = try {
     doc.merge_remote([bad_delete], [])
     Ok(())
   } catch {
@@ -281,7 +284,7 @@ test "merge_remote rejects graph-only target before oplog mutation" {
   }
   match result {
     Err(
-      DocumentError::OpLog(
+      @document.DocumentError::OpLog(
         @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
       )
     ) => {
@@ -300,10 +303,10 @@ test "merge_remote rejects graph-only target before oplog mutation" {
 
 ///|
 test "merge_remote accepts a valid insert-delete batch" {
-  let source = Document::new("remote")
+  let source = @document.Document::new("remote")
   let _ = try! source.insert(0, "x")
   let _ = try! source.delete(0)
-  let target = Document::new("local")
+  let target = @document.Document::new("local")
   let frontier = try! source.get_frontier_raw()
   try! target.merge_remote(source.get_all_ops(), frontier)
   inspect(target.to_text(), content="")
@@ -311,7 +314,7 @@ test "merge_remote accepts a valid insert-delete batch" {
 
 ///|
 test "core admission discards pending graph-only targets and dependents" {
-  let doc = Document::new("local")
+  let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let target_raw = @core.RawVersion("remote-target", 0)
   let pending_delete = @core.Op::delete(
@@ -362,15 +365,15 @@ test "core admission discards pending graph-only targets and dependents" {
 
 ///|
 test "unknown local delete target does not poison later synchronization" {
-  let alice = Document::new("alice")
-  let bob = Document::new("bob")
+  let alice = @document.Document::new("alice")
+  let bob = @document.Document::new("bob")
   let _ = try! alice.insert(0, "A")
   let delete_op = try! alice.delete(0)
   let before_snapshot = alice.causal_snapshot()
   let before_op_count = before_snapshot.op_count()
   let before_frontier = before_snapshot.frontier()
   let before_export = alice.get_all_ops().map(op => op.lv())
-  let result : Result[Unit, DocumentError] = Ok(
+  let result : Result[Unit, @document.DocumentError] = Ok(
     // The delete operation LV is in the causal graph but is not a Fugue item.
     {
       let _ = alice.delete_by_lv(delete_op.lv())
@@ -380,7 +383,7 @@ test "unknown local delete target does not poison later synchronization" {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(id~))) =>
+    Err(@document.DocumentError::Fugue(@fugue.FugueError::MissingItem(id~))) =>
       inspect(id == @fugue.Lv(delete_op.lv()), content="true")
     _ => fail("expected structurally missing target error")
   }
@@ -401,8 +404,8 @@ test "unknown local delete target does not poison later synchronization" {
 
 ///|
 test "cache coherent after apply_remote insert: visible count and text correct" {
-  let alice = Document::new("alice")
-  let bob = Document::new("bob")
+  let alice = @document.Document::new("alice")
+  let bob = @document.Document::new("bob")
 
   // Alice inserts "Hello"
   let _ = try! alice.insert(0, "Hello")
@@ -424,8 +427,8 @@ test "cache coherent after apply_remote insert: visible count and text correct" 
 
 ///|
 test "cache coherent after apply_remote delete: deleted item gone from positions" {
-  let alice = Document::new("alice")
-  let bob = Document::new("bob")
+  let alice = @document.Document::new("alice")
+  let bob = @document.Document::new("bob")
 
   // Both start with "abc"
   let _ = try! alice.insert(0, "abc")
@@ -454,8 +457,8 @@ test "cache coherent after apply_remote delete: deleted item gone from positions
 
 ///|
 test "cache coherent after merge_remote: positions reflect merged state" {
-  let alice = Document::new("alice")
-  let bob = Document::new("bob")
+  let alice = @document.Document::new("alice")
+  let bob = @document.Document::new("bob")
 
   // Alice inserts "Hello"
   let _ = try! alice.insert(0, "Hello")
@@ -536,8 +539,8 @@ test "delete_range across split VisibleRuns" {
 
 ///|
 test "cache coherent: interleaved local and remote edits maintain consistency" {
-  let alice = Document::new("alice")
-  let bob = Document::new("bob")
+  let alice = @document.Document::new("alice")
+  let bob = @document.Document::new("bob")
 
   // Shared initial state: "ac"
   let _ = try! alice.insert(0, "ac")

@@ -143,8 +143,8 @@ fn snapshot_frontier(
   oplog : @oplog.OpLog,
   frontier : @core.Frontier,
 ) -> TraceSnapshot {
-  let branch = try! Branch::checkout(oplog, frontier)
-  { frontier, text: branch.to_text(), visible_count: branch.visible_count() }
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
+  { frontier, text: branch.to_text(), visible_count: branch.visible_count(), }
 }
 
 ///|
@@ -356,14 +356,17 @@ fn BranchTrace::remote_ops(self : BranchTrace) -> Array[@core.Op] {
 }
 
 ///|
-fn branch_matches_snapshot(branch : Branch, snapshot : TraceSnapshot) -> Bool {
+fn branch_matches_snapshot(
+  branch : @branch.Branch,
+  snapshot : TraceSnapshot,
+) -> Bool {
   branch.to_text() == snapshot.text &&
   branch.visible_count() == snapshot.visible_count &&
   branch.at_frontier(snapshot.frontier)
 }
 
 ///|
-fn branches_match(lhs : Branch, rhs : Branch) -> Bool {
+fn branches_match(lhs : @branch.Branch, rhs : @branch.Branch) -> Bool {
   lhs.to_text() == rhs.to_text() &&
   lhs.visible_count() == rhs.visible_count() &&
   lhs.at_frontier(rhs.get_frontier())
@@ -375,7 +378,7 @@ fn snapshots_match_trace(
   snapshots : Array[TraceSnapshot],
 ) -> Bool {
   for snapshot in snapshots {
-    let branch = try! Branch::checkout(oplog, snapshot.frontier)
+    let branch = try! @branch.Branch::checkout(oplog, snapshot.frontier)
     if !branch_matches_snapshot(branch, snapshot) {
       return false
     }
@@ -412,9 +415,9 @@ fn prop_checkout_advance_matches_checkout(trace : BranchTrace) -> Bool {
   }
   let from_snapshot = trace.from_snapshot()
   let to_snapshot = trace.to_snapshot()
-  let from_branch = try! Branch::checkout(oplog, from_snapshot.frontier)
+  let from_branch = try! @branch.Branch::checkout(oplog, from_snapshot.frontier)
   let advanced = try! from_branch.advance(to_snapshot.frontier)
-  let checked = try! Branch::checkout(oplog, to_snapshot.frontier)
+  let checked = try! @branch.Branch::checkout(oplog, to_snapshot.frontier)
   branches_match(advanced, checked) &&
   branch_matches_snapshot(checked, to_snapshot)
 }
@@ -428,7 +431,7 @@ test "property: checkout(from).advance(to) equals checkout(to)" {
 fn prop_advance_to_current_frontier_is_noop(trace : BranchTrace) -> Bool {
   let oplog = trace.replay()
   let snapshot = trace.from_snapshot()
-  let branch = try! Branch::checkout(oplog, snapshot.frontier)
+  let branch = try! @branch.Branch::checkout(oplog, snapshot.frontier)
   let advanced = try! branch.advance(branch.get_frontier())
   branch_matches_snapshot(advanced, snapshot)
 }
@@ -443,7 +446,7 @@ fn prop_advance_roundtrip_restores_text_and_count(trace : BranchTrace) -> Bool {
   let oplog = trace.replay()
   let from_snapshot = trace.from_snapshot()
   let to_snapshot = trace.to_snapshot()
-  let branch = try! Branch::checkout(oplog, from_snapshot.frontier)
+  let branch = try! @branch.Branch::checkout(oplog, from_snapshot.frontier)
   let moved = try! branch.advance(to_snapshot.frontier)
   let restored = try! moved.advance(from_snapshot.frontier)
   branch_matches_snapshot(restored, from_snapshot)
@@ -465,8 +468,8 @@ fn prop_checkout_version_vector_matches_to_frontier(
     snapshot.frontier,
   )
   let frontier = vv.to_frontier(oplog.causal_graph())
-  let via_vv = try! Branch::checkout_version_vector(oplog, vv)
-  let via_frontier = try! Branch::checkout(oplog, frontier)
+  let via_vv = try! @branch.Branch::checkout_version_vector(oplog, vv)
+  let via_frontier = try! @branch.Branch::checkout(oplog, frontier)
   branches_match(via_vv, via_frontier) &&
   branch_matches_snapshot(via_frontier, snapshot)
 }
@@ -480,7 +483,7 @@ test "property: checkout_version_vector equals checkout via to_frontier" {
 fn prop_get_frontier_accessor_isolated(trace : BranchTrace) -> Bool {
   let oplog = trace.replay()
   let snapshot = trace.to_snapshot()
-  let branch = try! Branch::checkout(oplog, snapshot.frontier)
+  let branch = try! @branch.Branch::checkout(oplog, snapshot.frontier)
   let frontier = branch.get_frontier()
   let array = frontier.to_array()
   array.push(-1)
@@ -497,13 +500,13 @@ fn prop_advance_to_version_vector_matches_advance(trace : BranchTrace) -> Bool {
   let oplog = trace.replay()
   let from_snapshot = trace.from_snapshot()
   let to_snapshot = trace.to_snapshot()
-  let from_branch = try! Branch::checkout(oplog, from_snapshot.frontier)
+  let from_branch = try! @branch.Branch::checkout(oplog, from_snapshot.frontier)
   let to_vv = @causal_graph.VersionVector::from_frontier(
     oplog.causal_graph(),
     to_snapshot.frontier,
   )
   let via_vv = try! from_branch.advance_to_version_vector(to_vv)
-  let via_frontier = try! Branch::checkout(oplog, to_snapshot.frontier)
+  let via_frontier = try! @branch.Branch::checkout(oplog, to_snapshot.frontier)
   branches_match(via_vv, via_frontier) &&
   branch_matches_snapshot(via_frontier, to_snapshot)
 }
@@ -517,7 +520,7 @@ test "property: advance_to_version_vector matches advance(to_frontier)" {
 fn prop_at_version_vector_matches_frontier(trace : BranchTrace) -> Bool {
   let oplog = trace.replay()
   let snapshot = trace.to_snapshot()
-  let branch = try! Branch::checkout(oplog, snapshot.frontier)
+  let branch = try! @branch.Branch::checkout(oplog, snapshot.frontier)
   let vv = @causal_graph.VersionVector::from_frontier(
     oplog.causal_graph(),
     snapshot.frontier,
@@ -545,7 +548,7 @@ test "property: at_version_vector is exact" {
 ///|
 fn prop_merge_remote_ops_idempotent(trace : BranchTrace) -> Bool {
   let oplog = replay_ops(trace.local_ops())
-  let branch = try! Branch::checkout(oplog, oplog.get_frontier())
+  let branch = try! @branch.Branch::checkout(oplog, oplog.get_frontier())
   let remote_ops = trace.remote_ops()
   let merged = try! branch.merge_remote_ops(remote_ops)
   let merged_again = try! merged.merge_remote_ops(remote_ops)
@@ -561,9 +564,9 @@ test "property: merge_remote_ops is idempotent" {
 ///|
 fn prop_merge_remote_ops_matches_full_checkout(trace : BranchTrace) -> Bool {
   let oplog = replay_ops(trace.local_ops())
-  let branch = try! Branch::checkout(oplog, oplog.get_frontier())
+  let branch = try! @branch.Branch::checkout(oplog, oplog.get_frontier())
   let merged = try! branch.merge_remote_ops(trace.remote_ops())
-  let full = try! Branch::checkout(oplog, oplog.get_frontier())
+  let full = try! @branch.Branch::checkout(oplog, oplog.get_frontier())
   branches_match(merged, full) &&
   branch_matches_snapshot(full, trace.full_snapshot())
 }

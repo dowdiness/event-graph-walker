@@ -1,6 +1,6 @@
 ///|
 test "graph version canonicalizes sparse identities with one union algorithm" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   ignore(try! graph.add_version_with_seq([], "agent", 4))
   ignore(try! graph.add_version_with_seq([], "agent", 0))
   ignore(try! graph.add_version_with_seq([], "agent", 2))
@@ -15,7 +15,7 @@ test "graph version canonicalizes sparse identities with one union algorithm" {
 
 ///|
 test "cold snapshot becomes hot and advances without mutating old values" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let first = try! graph.add_version_with_seq([], "agent", 0)
   let old = graph.current_graph_version()
   ignore(try! graph.add_version_with_seq([], "agent", 2))
@@ -36,10 +36,10 @@ test "cold snapshot becomes hot and advances without mutating old values" {
 
 ///|
 test "resolve rejects knowledge outside the checkpoint closure" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   ignore(try! graph.add_version_with_seq([], "agent", 0))
   ignore(try! graph.add_version_with_seq([], "agent", 1))
-  let false_claim = try! GraphVersion::from_parts(
+  let false_claim = try! @causal_graph.GraphVersion::from_parts(
     [@core.RawVersion("agent", 0)],
     [("agent", [(0U, 2U)])],
   )
@@ -48,10 +48,10 @@ test "resolve rejects knowledge outside the checkpoint closure" {
 
 ///|
 test "resolve rejects a redundant nonmaximal checkpoint" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let root = try! graph.add_version_with_seq([], "agent", 0)
   let child = try! graph.add_version_with_seq([root], "agent", 1)
-  let redundant = try! GraphVersion::from_parts(
+  let redundant = try! @causal_graph.GraphVersion::from_parts(
     [@core.RawVersion("agent", 0), @core.RawVersion("agent", 1)],
     [("agent", [(0U, 2U)])],
   )
@@ -65,26 +65,28 @@ test "resolve rejects a redundant nonmaximal checkpoint" {
 
 ///|
 test "graph version constructor owns structural canonicality" {
-  try GraphVersion::from_parts([], [("agent", [(0U, 1U)])]) catch {
-    GraphVersionError::Invalid => ()
+  try
+    @causal_graph.GraphVersion::from_parts([], [("agent", [(0U, 1U)])])
+  catch {
+    @causal_graph.GraphVersionError::Invalid => ()
   } noraise {
     _ => fail("empty checkpoint with knowledge must fail")
   }
   try
-    GraphVersion::from_parts([@core.RawVersion("agent", 0)], [
+    @causal_graph.GraphVersion::from_parts([@core.RawVersion("agent", 0)], [
       ("agent", [(0U, 1U), (1U, 2U)]),
     ])
   catch {
-    GraphVersionError::Invalid => ()
+    @causal_graph.GraphVersionError::Invalid => ()
   } noraise {
     _ => fail("adjacent noncanonical ranges must fail")
   }
   try
-    GraphVersion::from_parts([@core.RawVersion("agent", 1)], [
+    @causal_graph.GraphVersion::from_parts([@core.RawVersion("agent", 1)], [
       ("agent", [(0U, 1U)]),
     ])
   catch {
-    GraphVersionError::Invalid => ()
+    @causal_graph.GraphVersionError::Invalid => ()
   } noraise {
     _ => fail("frontier outside knowledge must fail")
   }
@@ -92,7 +94,7 @@ test "graph version constructor owns structural canonicality" {
 
 ///|
 test "generation buffer resize does not hide an old ancestor" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let mut head = try! graph.add_version([], "agent")
   for _ in 0..<7 {
     head = try! graph.add_version([head], "agent")

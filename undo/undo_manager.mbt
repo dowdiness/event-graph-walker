@@ -74,7 +74,7 @@ fn UndoManager::record_item(
   if agent != self.agent_id {
     return
   }
-  let item : UndoItem = { target_lv, op_type, content }
+  let item : UndoItem = { target_lv, op_type, content, }
   // Check if we should merge into the current group or start a new one
   let should_merge = if self.force_new_group {
     false
@@ -90,7 +90,7 @@ fn UndoManager::record_item(
       None => ()
     }
   } else {
-    self.undo_stack.push({ items: [item], timestamp: timestamp_ms })
+    self.undo_stack.push({ items: [item], timestamp: timestamp_ms, })
   }
   self.last_change_ms = timestamp_ms
   self.force_new_group = false
@@ -128,34 +128,30 @@ pub fn[D : Undoable] UndoManager::undo(
   let redo_items : Array[UndoItem] = []
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
-    try {
-      let result = match item.op_type {
-        Insert => doc.delete_lv(item.target_lv)
-        Delete => doc.undelete_lv(item.target_lv)
-      }
-      match result {
-        Applied =>
-          redo_items.push({
-            target_lv: item.target_lv,
-            op_type: item.op_type,
-            content: item.content,
-          })
-        Stale => ()
-      }
-    } catch {
-      e => {
-        self.tracking_enabled = was_tracking
-        // Internal failures may follow partial CRDT application. Do not leave
-        // stale history that could issue more operations against that state.
-        self.clear()
-        raise e
-      }
+    errdefer {
+      self.tracking_enabled = was_tracking
+      // Internal failures may follow partial CRDT application. Do not leave
+      // stale history that could issue more operations against that state.
+      self.clear()
+    }
+    let result = match item.op_type {
+      Insert => doc.delete_lv(item.target_lv)
+      Delete => doc.undelete_lv(item.target_lv)
+    }
+    match result {
+      Applied =>
+        redo_items.push({
+          target_lv: item.target_lv,
+          op_type: item.op_type,
+          content: item.content,
+        })
+      Stale => ()
     }
   }
   let any_applied = redo_items.length() > 0
   if any_applied {
     redo_items.rev_in_place()
-    self.redo_stack.push({ items: redo_items, timestamp: group.timestamp })
+    self.redo_stack.push({ items: redo_items, timestamp: group.timestamp, })
   }
   self.tracking_enabled = was_tracking
   // Return whether anything actually changed. Popping a group whose items
@@ -183,34 +179,30 @@ pub fn[D : Undoable] UndoManager::redo(
   let undo_items : Array[UndoItem] = []
   for i = group.items.length() - 1; i >= 0; i = i - 1 {
     let item = group.items[i]
-    try {
-      let result = match item.op_type {
-        Insert => doc.undelete_lv(item.target_lv)
-        Delete => doc.delete_lv(item.target_lv)
-      }
-      match result {
-        Applied =>
-          undo_items.push({
-            target_lv: item.target_lv,
-            op_type: item.op_type,
-            content: item.content,
-          })
-        Stale => ()
-      }
-    } catch {
-      e => {
-        self.tracking_enabled = was_tracking
-        // Internal failures may follow partial CRDT application. Do not leave
-        // stale history that could issue more operations against that state.
-        self.clear()
-        raise e
-      }
+    errdefer {
+      self.tracking_enabled = was_tracking
+      // Internal failures may follow partial CRDT application. Do not leave
+      // stale history that could issue more operations against that state.
+      self.clear()
+    }
+    let result = match item.op_type {
+      Insert => doc.undelete_lv(item.target_lv)
+      Delete => doc.delete_lv(item.target_lv)
+    }
+    match result {
+      Applied =>
+        undo_items.push({
+          target_lv: item.target_lv,
+          op_type: item.op_type,
+          content: item.content,
+        })
+      Stale => ()
     }
   }
   let any_applied = undo_items.length() > 0
   if any_applied {
     undo_items.rev_in_place()
-    self.undo_stack.push({ items: undo_items, timestamp: group.timestamp })
+    self.undo_stack.push({ items: undo_items, timestamp: group.timestamp, })
   }
   self.tracking_enabled = was_tracking
   any_applied
@@ -246,3 +238,11 @@ pub fn UndoManager::clear(self : UndoManager) -> Unit {
   self.undo_stack = []
   self.redo_stack = []
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079). See `undo/types.mbt`.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend UndoManager with @debug.Debug::{to_repr}

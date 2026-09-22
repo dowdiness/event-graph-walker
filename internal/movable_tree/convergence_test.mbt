@@ -55,8 +55,8 @@ fn tree_snapshot(
 test "convergence: two peers same ops different order" {
   let pos1 = @fi.FractionalIndex::new([100])
   let pos2 = @fi.FractionalIndex::new([200])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
   let op1 : @movable_tree.TreeMoveOp = {
     timestamp: 1,
     target: a,
@@ -117,8 +117,8 @@ test "convergence: two peers same ops different order" {
 /// Expected: A under B, B under root.
 test "convergence: concurrent cycle — later move skipped" {
   let pos = @fi.FractionalIndex::new([100])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
   // Create A under root (ts 1)
   let create_a : @movable_tree.TreeMoveOp = {
     timestamp: 1,
@@ -197,7 +197,7 @@ test "convergence: concurrent cycle — later move skipped" {
 /// Test 3: Duplicate ops are idempotent.
 test "convergence: duplicate ops idempotent" {
   let pos = @fi.FractionalIndex::new([100])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
   let op : @movable_tree.TreeMoveOp = {
     timestamp: 1,
     target: a,
@@ -234,8 +234,8 @@ test "convergence: duplicate ops idempotent" {
 test "convergence: move before create" {
   let pos = @fi.FractionalIndex::new([100])
   let pos2 = @fi.FractionalIndex::new([200])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
   // Create A (ts 1)
   let create_a : @movable_tree.TreeMoveOp = {
     timestamp: 1,
@@ -286,9 +286,9 @@ test "convergence: move before create" {
 /// create-like replays of missing targets.
 test "convergence: missing-target replay still checks cycles" {
   let pos = @fi.FractionalIndex::new([100])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
-  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
+  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0, }
   let create_c : @movable_tree.TreeMoveOp = {
     timestamp: 0,
     target: c,
@@ -339,9 +339,9 @@ test "convergence: six orderings all converge" {
   let pos = @fi.FractionalIndex::new([100])
   let pos2 = @fi.FractionalIndex::new([200])
   let pos3 = @fi.FractionalIndex::new([300])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
-  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
+  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0, }
   let ops : Array[@movable_tree.TreeMoveOp] = [
     // Create A (ts 1)
     {
@@ -368,9 +368,9 @@ test "convergence: six orderings all converge" {
       agent: "carol",
     },
     // Move B under A (ts 4)
-    { timestamp: 4, target: b, new_parent: a, position: pos, agent: "alice" },
+    { timestamp: 4, target: b, new_parent: a, position: pos, agent: "alice", },
     // Move C under B (ts 5)
-    { timestamp: 5, target: c, new_parent: b, position: pos, agent: "bob" },
+    { timestamp: 5, target: c, new_parent: b, position: pos, agent: "bob", },
   ]
   // Six different orderings (permutations)
   let orderings : Array[Array[Int]] = [
@@ -424,9 +424,9 @@ test "convergence: six orderings all converge" {
 /// Test 6: No cycles after convergence — walk parent chain from every node.
 test "convergence: no cycles after convergence" {
   let pos = @fi.FractionalIndex::new([100])
-  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0 }
-  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0 }
-  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0 }
+  let a : @movable_tree.TreeNodeId = { agent: "alice", counter: 0, }
+  let b : @movable_tree.TreeNodeId = { agent: "bob", counter: 0, }
+  let c : @movable_tree.TreeNodeId = { agent: "carol", counter: 0, }
   // Create nodes, then do concurrent conflicting moves
   let ops : Array[@movable_tree.TreeMoveOp] = [
     // Create A, B, C under root
@@ -452,9 +452,9 @@ test "convergence: no cycles after convergence" {
       agent: "carol",
     },
     // Concurrent: A under B, B under C, C under A (triangle cycle attempt)
-    { timestamp: 4, target: a, new_parent: b, position: pos, agent: "alice" },
-    { timestamp: 5, target: b, new_parent: c, position: pos, agent: "bob" },
-    { timestamp: 6, target: c, new_parent: a, position: pos, agent: "carol" },
+    { timestamp: 4, target: a, new_parent: b, position: pos, agent: "alice", },
+    { timestamp: 5, target: b, new_parent: c, position: pos, agent: "bob", },
+    { timestamp: 6, target: c, new_parent: a, position: pos, agent: "carol", },
   ]
   // Apply in reverse order (worst case for undo-do-redo)
   let tree = @movable_tree.MovableTree::new()

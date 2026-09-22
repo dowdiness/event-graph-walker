@@ -58,7 +58,7 @@ fn p2_tree_snapshot(doc : Document) -> Array[P2TreeItemSnapshot] {
 ///|
 fn p2_cache_snapshot(doc : Document) -> P2CacheSnapshot raise {
   if !doc.indexed_state.is_ready() {
-    return { ready: false, positions: [] }
+    return { ready: false, positions: [], }
   }
   let positions : Array[Int] = []
   for position = 0; position < doc.tree.visible_count(); position = position + 1 {
@@ -67,7 +67,7 @@ fn p2_cache_snapshot(doc : Document) -> P2CacheSnapshot raise {
       None => fail("ready cache must resolve every visible position")
     }
   }
-  { ready: true, positions }
+  { ready: true, positions, }
 }
 
 ///|

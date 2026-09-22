@@ -89,7 +89,7 @@ fn build_peaks(leaves : Array[Bytes]) -> Array[MmrPeak] {
   let peaks : Array[MmrPeak] = []
   for layout in peak_layout(leaves.length()) {
     let (height, start) = layout
-    peaks.push({ height, start, digest: subtree_hash(leaves, start, height) })
+    peaks.push({ height, start, digest: subtree_hash(leaves, start, height), })
   }
   peaks
 }
@@ -103,7 +103,7 @@ fn R0Mmr::_from_leaf_hashes(leaves : ArrayView[Bytes]) -> R0Mmr {
     }
     owned.push(leaf)
   }
-  { leaf_hashes: owned }
+  { leaf_hashes: owned, }
 }
 
 ///|
@@ -273,7 +273,7 @@ fn R0MmrProof::_with_reversed_other_peaks(self : R0MmrProof) -> R0MmrProof {
     peaks[other] = held
   }
   if peaks.length() == 1 {
-    peaks[0] = { ..peaks[0], height: self.containing_peak_height }
+    peaks[0] = { ..peaks[0], height: self.containing_peak_height, }
   }
   self.copy_with(other_peaks=peaks)
 }
@@ -282,7 +282,7 @@ fn R0MmrProof::_with_reversed_other_peaks(self : R0MmrProof) -> R0MmrProof {
 fn R0MmrProof::_with_invalid_direction(self : R0MmrProof) -> R0MmrProof {
   let siblings = self.siblings.copy()
   if siblings.length() > 0 {
-    siblings[0] = { ..siblings[0], direction: 2 }
+    siblings[0] = { ..siblings[0], direction: 2, }
   }
   self.copy_with(siblings~)
 }

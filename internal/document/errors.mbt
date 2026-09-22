@@ -35,3 +35,17 @@ pub(all) enum ContentErrorReason {
 pub impl Show for ContentErrorReason with fn output(self, logger) {
   logger.write_string(@debug.to_string(self))
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend ContentErrorReason with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend ContentErrorReason with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend ContentErrorReason with Show::{to_string, output}

@@ -98,7 +98,7 @@ pub struct TreeOpLog {
 ///|
 /// Create a new empty operation log.
 pub fn TreeOpLog::new() -> TreeOpLog {
-  { entries: [], seen: Default::default(), ordering_comparisons: 0 }
+  { entries: [], seen: Default::default(), ordering_comparisons: 0, }
 }
 
 ///|
@@ -310,7 +310,7 @@ pub fn TreeOpLog::apply(
   // touching any existing undo information or replaying a suffix.
   if self.entries.is_empty() ||
     self.compare_counted(self.entries[self.entries.length() - 1].op, op) <= 0 {
-    self.entries.push({ op, undo_info: do_op(tree, op) })
+    self.entries.push({ op, undo_info: do_op(tree, op), })
     return
   }
   // Genuinely out-of-order delivery uses binary search for the first entry
@@ -333,7 +333,7 @@ pub fn TreeOpLog::apply(
   }
   // Step 4: Do — apply the new op in the now-unwound tree.
   let undo_info = do_op(tree, op)
-  let new_entry : LogEntry = { op, undo_info }
+  let new_entry : LogEntry = { op, undo_info, }
   // Step 5: Insert — splice the new entry into the sorted log.
   self.entries.insert(insert_idx, new_entry)
   // Step 6: Redo — re-apply the suffix with fresh undo information.

@@ -9,7 +9,7 @@ fn frontier_from_array_linear_for_benchmark(values : Array[Int]) -> Frontier {
       deduped.push(value)
     }
   }
-  { values: deduped }
+  { values: deduped, }
 }
 
 ///|

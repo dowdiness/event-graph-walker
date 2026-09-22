@@ -27,7 +27,7 @@ pub fn CausalSnapshot::CausalSnapshot(
   frontier_fn : () -> Array[Int],
   children_count_fn : (Int) -> Int,
 ) -> CausalSnapshot {
-  { op_count_fn, entry_fn, frontier_fn, children_count_fn }
+  { op_count_fn, entry_fn, frontier_fn, children_count_fn, }
 }
 
 ///|
@@ -74,7 +74,7 @@ pub fn SnapshotEntry::SnapshotEntry(
   replica_id : String,
   sequence : Int,
 ) -> SnapshotEntry {
-  { parent_lvs: parents.copy(), replica_id, sequence }
+  { parent_lvs: parents.copy(), replica_id, sequence, }
 }
 
 ///|

@@ -51,7 +51,7 @@ fn Document::txn_close(self : Document) -> Unit {
   self.txn_depth = self.txn_depth - 1
   if self.txn_depth == 0 {
     if self.txn_buffer.length() > 0 {
-      let group : UndoGroup = { items: self.txn_buffer.copy() }
+      let group : UndoGroup = { items: self.txn_buffer.copy(), }
       self.undo_stack.push(group)
       self.redo_stack.clear()
     }
@@ -87,12 +87,8 @@ fn[T, E : Error] Document::with_implicit_transaction(
   action : () -> T raise E,
 ) -> T raise E {
   self.txn_open()
-  let result = action() catch {
-    e => {
-      self.txn_close()
-      raise e
-    }
-  }
+  errdefer self.txn_close()
+  let result = action()
   self.txn_close()
   result
 }
@@ -116,10 +112,10 @@ fn Document::emit_text_op(
   let (lv, timestamp, version) = self.next_version_with_raw()
   let parents = self.raw_parents_for_lv(lv)
   let text_op = build(version, timestamp)
-  let op : BlockTextOp = { block, op: text_op }
+  let op : BlockTextOp = { block, op: text_op, }
   self.apply_block_text_op(block, op)
   let _ = self.record_text_op(op)
-  let _ = self.record_sync_text_op({ version, parents, block, op: text_op })
+  let _ = self.record_sync_text_op({ version, parents, block, op: text_op, })
   version
 }
 
@@ -142,7 +138,11 @@ fn Document::emit_property_op(
   }
   self.apply_property_op(op)
   let _ = self.record_op(@mt.SetProperty(op))
-  let _ = self.record_sync_tree_op({ version, parents, op: @mt.SetProperty(op) })
+  let _ = self.record_sync_tree_op({
+    version,
+    parents,
+    op: @mt.SetProperty(op),
+  })
 }
 
 ///|
@@ -155,13 +155,13 @@ fn Document::apply_undo(
     TextInsert(block~, id~) => {
       // Undo an insert: tombstone the LV we created.
       let _ = self.emit_text_op(block, (_, ts) => {
-        Delete({ target: id, timestamp: ts, agent: self.agent_id })
+        Delete({ target: id, timestamp: ts, agent: self.agent_id, })
       })
     }
     TextDelete(block~, id~) => {
       // Undo a delete: revive the tombstone.
       let _ = self.emit_text_op(block, (_, ts) => {
-        Undelete({ target: id, timestamp: ts, agent: self.agent_id })
+        Undelete({ target: id, timestamp: ts, agent: self.agent_id, })
       })
     }
     TreeMove(target~, old_parent~, old_pos~, new_parent=_, new_pos=_) =>
@@ -191,13 +191,13 @@ fn Document::apply_redo(
       // Redo of insert: revive tombstoned LV via Undelete. LWW-wins because
       // we allocate a higher timestamp.
       let _ = self.emit_text_op(block, (_, ts) => {
-        Undelete({ target: id, timestamp: ts, agent: self.agent_id })
+        Undelete({ target: id, timestamp: ts, agent: self.agent_id, })
       })
     }
     TextDelete(block~, id~) => {
       // Redo of delete: re-tombstone at a fresh higher timestamp.
       let _ = self.emit_text_op(block, (_, ts) => {
-        Delete({ target: id, timestamp: ts, agent: self.agent_id })
+        Delete({ target: id, timestamp: ts, agent: self.agent_id, })
       })
     }
     TreeMove(target~, old_parent=_, old_pos=_, new_parent~, new_pos~) =>
@@ -368,10 +368,10 @@ pub fn Document::undo(self : Document) -> Bool raise DocumentError {
             completed,
           )
           if !transition.remaining_source.is_empty() {
-            self.undo_stack.push({ items: transition.remaining_source })
+            self.undo_stack.push({ items: transition.remaining_source, })
           }
           if !transition.completed_opposite.is_empty() {
-            self.redo_stack.push({ items: transition.completed_opposite })
+            self.redo_stack.push({ items: transition.completed_opposite, })
           }
           raise e
         }
@@ -382,7 +382,7 @@ pub fn Document::undo(self : Document) -> Bool raise DocumentError {
   }
   self.undo_execution_mode = false
   if completed.length() > 0 {
-    self.redo_stack.push({ items: completed.rev() })
+    self.redo_stack.push({ items: completed.rev(), })
   }
   true
 }
@@ -420,10 +420,10 @@ pub fn Document::redo(self : Document) -> Bool raise DocumentError {
             completed,
           )
           if !transition.remaining_source.is_empty() {
-            self.redo_stack.push({ items: transition.remaining_source })
+            self.redo_stack.push({ items: transition.remaining_source, })
           }
           if !transition.completed_opposite.is_empty() {
-            self.undo_stack.push({ items: transition.completed_opposite })
+            self.undo_stack.push({ items: transition.completed_opposite, })
           }
           raise e
         }
@@ -434,7 +434,7 @@ pub fn Document::redo(self : Document) -> Bool raise DocumentError {
   }
   self.undo_execution_mode = false
   if completed.length() > 0 {
-    self.undo_stack.push({ items: completed })
+    self.undo_stack.push({ items: completed, })
   }
   true
 }
@@ -455,12 +455,8 @@ pub fn[T, E : Error] Document::transaction(
   action : () -> T raise E,
 ) -> T raise E {
   self.txn_open()
-  let result = action() catch {
-    e => {
-      self.txn_abort()
-      raise e
-    }
-  }
+  errdefer self.txn_abort()
+  let result = action()
   self.txn_close()
   result
 }

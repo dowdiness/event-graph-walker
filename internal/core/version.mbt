@@ -48,7 +48,7 @@ pub impl @json.FromJson for RawVersion with fn from_json(json, path) {
           (seq_path, "RawVersion seq must be non-negative"),
         )
       }
-      { agent, seq }
+      { agent, seq, }
     }
     _ => raise @json.JsonDecodeError((path, "expected RawVersion object"))
   }
@@ -62,7 +62,7 @@ pub impl Show for RawVersion with fn output(self, logger) {
 ///|
 /// Construct a RawVersion value.
 pub fn RawVersion::RawVersion(agent : String, seq : Int) -> RawVersion {
-  { agent, seq }
+  { agent, seq, }
 }
 
 ///|
@@ -83,3 +83,37 @@ pub impl Hash for RawVersion with fn hash_combine(self, hasher) {
   hasher.combine_string(self.agent)
   hasher.combine_int(self.seq)
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend RawVersion with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend RawVersion with @json.FromJson::{from_json}
+
+///|
+#doc(hidden)
+pub extend RawVersion with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend RawVersion with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend RawVersion with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend RawVersion with Show::{output}
+
+///|
+#doc(hidden)
+pub extend RawVersion with ToJson::{to_json}

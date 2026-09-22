@@ -6,7 +6,7 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
   let oplog = @oplog.OpLog("local")
   let seed = @core.Op::insert(-1, [], "local", 0, "seed", None, None)
   ignore(try! oplog.apply_remote(seed))
-  let branch = try! Branch::checkout(oplog, oplog.get_frontier())
+  let branch = try! @branch.Branch::checkout(oplog, oplog.get_frontier())
   let missing_parent = @core.RawVersion("branch-parent", 0)
   let pending = @core.Op::insert(
     11,
@@ -29,14 +29,15 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
     None,
     None,
   )
-  let result : Result[Branch, BranchError] = Ok(
+  let result : Result[@branch.Branch, @branch.BranchError] = Ok(
     pending_branch.merge_remote_ops([conflict]),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(BranchError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))) =>
-      assert_eq(raw, @core.RawVersion("branch-pending", 0))
+    Err(
+      @branch.BranchError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))
+    ) => assert_eq(raw, @core.RawVersion("branch-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }
   assert_eq(oplog.op_count(), before_count)
@@ -77,7 +78,7 @@ fn insert_string(oplog : @oplog.OpLog, text : String, start_lv : Int) -> Int {
 ///|
 test "create empty branch" {
   let oplog = @oplog.OpLog("agent-1")
-  let branch = Branch::new(oplog)
+  let branch = @branch.Branch::new(oplog)
   inspect(branch.to_text(), content="")
   inspect(branch.get_frontier().length(), content="0")
 }
@@ -91,7 +92,7 @@ test "checkout with single insert" {
   let frontier = oplog.get_frontier()
 
   // Checkout at this frontier
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   inspect(branch.to_text(), content="hello")
   inspect(branch.visible_count(), content="5")
 }
@@ -105,7 +106,7 @@ test "checkout with multiple inserts" {
   // Insert " world" after "hello"
   let _ = insert_string(oplog, " world", last_lv)
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   inspect(branch.to_text(), content="hello world")
   inspect(branch.visible_count(), content="11")
 }
@@ -119,7 +120,7 @@ test "checkout with delete" {
   // Delete first character (lv 0 is 'h')
   let _ = try! oplog.delete(0)
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   inspect(branch.to_text(), content="ello")
   inspect(branch.visible_count(), content="4")
 }
@@ -133,7 +134,7 @@ test "advance branch with new operations" {
   let frontier1 = oplog.get_frontier()
 
   // Checkout at first frontier
-  let branch1 = try! Branch::checkout(oplog, frontier1)
+  let branch1 = try! @branch.Branch::checkout(oplog, frontier1)
   inspect(branch1.to_text(), content="hello")
 
   // Add more operations
@@ -162,9 +163,9 @@ test "checkout at different frontiers" {
   let frontier3 = oplog.get_frontier()
 
   // Checkout at different points
-  let branch1 = try! Branch::checkout(oplog, frontier1)
-  let branch2 = try! Branch::checkout(oplog, frontier2)
-  let branch3 = try! Branch::checkout(oplog, frontier3)
+  let branch1 = try! @branch.Branch::checkout(oplog, frontier1)
+  let branch2 = try! @branch.Branch::checkout(oplog, frontier2)
+  let branch3 = try! @branch.Branch::checkout(oplog, frontier3)
   inspect(branch1.to_text(), content="a")
   inspect(branch2.to_text(), content="ab")
   inspect(branch3.to_text(), content="abc")
@@ -175,7 +176,7 @@ test "at_frontier check" {
   let oplog = @oplog.OpLog("agent-1")
   let _ = insert_string(oplog, "hello", -1)
   let frontier1 = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier1)
+  let branch = try! @branch.Branch::checkout(oplog, frontier1)
   inspect(branch.at_frontier(frontier1), content="true")
   inspect(
     branch.at_frontier(@core.Frontier::from_array([999])),
@@ -194,7 +195,7 @@ test "at_frontier rejects canonical duplicate input" {
   ignore(try! oplog.apply_remote(op_a))
   ignore(try! oplog.apply_remote(op_b))
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   inspect(frontier.length(), content="2")
   inspect(branch.at_frontier(frontier), content="true")
   let values = frontier.to_array()
@@ -225,7 +226,7 @@ test "concurrent inserts converge" {
   // FugueMax should resolve deterministically
 
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
 
   // The text should be deterministic (either "AB" or "BA")
   let text = branch.to_text()
@@ -239,7 +240,7 @@ test "advance with no changes" {
   let oplog = @oplog.OpLog("agent-1")
   let _ = insert_string(oplog, "hello", -1)
   let frontier = oplog.get_frontier()
-  let branch1 = try! Branch::checkout(oplog, frontier)
+  let branch1 = try! @branch.Branch::checkout(oplog, frontier)
   let branch2 = try! branch1.advance(frontier)
   inspect(branch2.to_text(), content="hello")
   inspect(branch2.at_frontier(frontier), content="true")
@@ -249,7 +250,7 @@ test "advance with no changes" {
 test "checkout empty oplog" {
   let oplog = @oplog.OpLog("agent-1")
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   inspect(branch.to_text(), content="")
   inspect(branch.visible_count(), content="0")
 }
@@ -271,7 +272,7 @@ test "multiple advances" {
   let f3 = oplog.get_frontier()
 
   // Checkout at f1, then advance twice
-  let branch = try! Branch::checkout(oplog, f1)
+  let branch = try! @branch.Branch::checkout(oplog, f1)
   inspect(branch.to_text(), content="a")
   let branch2 = try! branch.advance(f2)
   inspect(branch2.to_text(), content="ab")
@@ -290,6 +291,6 @@ test "branch with complex operations" {
   let space_lv = try! oplog.insert(" ", hello_last, -1).lv() // "hello "
   let _ = insert_string(oplog, "world", space_lv) // "hello world"
   let frontier = oplog.get_frontier()
-  let branch = try! Branch::checkout(oplog, frontier)
+  let branch = try! @branch.Branch::checkout(oplog, frontier)
   inspect(branch.to_text(), content="hello world")
 }

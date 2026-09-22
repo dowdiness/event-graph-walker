@@ -202,3 +202,41 @@ pub fn Op::get_insert_text(self : Op) -> String? {
     Delete | Undelete => None
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend Op with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend Op with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend Op with ToJson::{to_json}
+
+///|
+#doc(hidden)
+pub extend OpContent with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend OpContent with @json.FromJson::{from_json}
+
+///|
+#doc(hidden)
+pub extend OpContent with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend OpContent with Show::{to_string, output}
+
+///|
+#doc(hidden)
+pub extend OpContent with ToJson::{to_json}

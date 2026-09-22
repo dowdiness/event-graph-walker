@@ -12,7 +12,7 @@ pub fn TreeNodeId::TreeNodeId(
   replica_id : String,
   sequence : Int,
 ) -> TreeNodeId raise TreeError {
-  { inner: @container.TreeNodeId::TreeNodeId(replica_id, sequence) } catch {
+  { inner: @container.TreeNodeId::TreeNodeId(replica_id, sequence), } catch {
     _ => raise TreeError::Internal(detail="invalid tree node identity")
   }
 }
@@ -79,7 +79,7 @@ fn SyncMessage::SyncMessage(
   inner : @container.SyncMessage,
   encoded_size : Int?,
 ) -> SyncMessage {
-  { inner, encoded_size }
+  { inner, encoded_size, }
 }
 
 ///|
@@ -251,7 +251,7 @@ pub fn TreeState::version(self : TreeState) -> Version {
 
 ///|
 pub fn TreeState::sync(self : TreeState) -> SyncSession {
-  { state: self }
+  { state: self, }
 }
 
 ///|
@@ -311,3 +311,25 @@ pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
 pub fn SyncSession::clear_pending_sync(self : SyncSession) -> Unit {
   self.state.document.sync().clear_pending_sync()
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with Compare::{op_lt, op_le, op_ge, compare, op_gt}
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend TreeNodeId with Hash::{hash, hash_combine}
+
+///|
+#doc(hidden)
+pub extend Version with Eq::{not_equal, equal}

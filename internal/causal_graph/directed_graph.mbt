@@ -29,3 +29,27 @@ pub impl @alga.Successors for CausalGraph with fn successors(self, v) {
 
 ///|
 pub impl @alga.DirectedGraph for CausalGraph
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079).
+// `#doc(hidden)` keeps these out of the generated interface while preserving
+// dot-syntax and cross-package use.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend CausalGraph with @alga.Successors::{
+  each_successor,
+  bfs_fold,
+  dfs_fold,
+  successors,
+}
+
+///|
+#doc(hidden)
+pub extend CausalGraph with @alga.VertexSet::{
+  vertex_count,
+  has_vertex,
+  each_vertex,
+  iter,
+}

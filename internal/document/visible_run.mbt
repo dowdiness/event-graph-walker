@@ -101,3 +101,29 @@ fn item_offset_to_utf16(text : String, item_offset : Int) -> Int {
   }
   utf16_pos
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend VisibleRun with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend VisibleRun with @rle.HasLength::{length, is_empty}
+
+///|
+#doc(hidden)
+pub extend VisibleRun with @rle.Mergeable::{can_merge, merge}
+
+///|
+#doc(hidden)
+pub extend VisibleRun with @rle.Sliceable::{slice}
+
+///|
+#doc(hidden)
+pub extend VisibleRun with @rle.Spanning::{logical_length, span}
+
+///|
+#doc(hidden)
+pub extend VisibleRun with Eq::{not_equal, equal}

@@ -37,3 +37,12 @@ pub impl @undo.Undoable for TextState with fn undelete_lv(self, lv) {
   }
   map_target_edit_result(result)
 }
+
+// --- Explicit trait-method promotions (E0079) ---
+
+///|
+#doc(hidden)
+pub extend TextState with @dowdiness/event-graph-walker/undo.Undoable::{
+  delete_lv,
+  undelete_lv,
+}

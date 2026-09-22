@@ -1,10 +1,10 @@
 ///|
 test "SyncSession admission uses per-call limits atomically" {
-  let source = try! TextState::new("source")
-  try! source.insert(Pos::at(0), "A")
+  let source = try! @text.TextState::new("source")
+  try! source.insert(@text.Pos::at(0), "A")
   let message = try! source.sync().export_all()
   let encoded_size = @utf8.encode(message.to_json_string()).length()
-  let receiver = try! TextState::new("receiver")
+  let receiver = try! @text.TextState::new("receiver")
   let exact = try! @sync.Limits::Limits(max_encoded_bytes=encoded_size)
   let admitted = try! receiver.sync().apply_with_limits(message, exact)
   inspect(admitted.applied_operations(), content="1")
@@ -15,7 +15,7 @@ test "SyncSession admission uses per-call limits atomically" {
   let before_pending = receiver.sync().pending_sync_count()
   let over = try! @sync.Limits::Limits(max_encoded_bytes=encoded_size - 1)
   try receiver.sync().apply_with_limits(message, over) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
@@ -36,13 +36,13 @@ test "SyncSession admission uses per-call limits atomically" {
 
 ///|
 test "text sync rejects conflicting duplicate identities in one message atomically" {
-  let receiver = try! TextState::new("receiver")
+  let receiver = try! @text.TextState::new("receiver")
   let before_version = receiver.version()
   let conflict = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
     "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}," +
     "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[]}"
-  try SyncMessage::from_json_string(conflict) catch {
-    TextError::SyncFailed(
+  try @text.SyncMessage::from_json_string(conflict) catch {
+    @text.TextError::SyncFailed(
       @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0)
     ) => ()
     _ => fail("expected in-message ConflictingIdentity")
@@ -56,19 +56,19 @@ test "text sync rejects conflicting duplicate identities in one message atomical
 
 ///|
 test "text sync retains authoritative pending payload after identity conflict" {
-  let receiver = try! TextState::new("receiver")
-  let future = try! SyncMessage::from_json_string(
+  let receiver = try! @text.TextState::new("receiver")
+  let future = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let deferred = try! receiver.sync().apply(future)
   inspect(deferred.applied_operations(), content="0")
   inspect(receiver.sync().pending_sync_count(), content="1")
   let before_version = receiver.version()
-  let conflict = try! SyncMessage::from_json_string(
+  let conflict = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   try receiver.sync().apply(conflict) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1)
     ) => ()
     _ => fail("expected pending ConflictingIdentity")
@@ -80,7 +80,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
   inspect(receiver.sync().pending_sync_count(), content="1")
 
   // The identical authoritative retransmission is still eligible to drain.
-  let authoritative = try! SyncMessage::from_json_string(
+  let authoritative = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let admitted = try! receiver
@@ -99,7 +99,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
   inspect(duplicate.duplicate_operations(), content="2")
   inspect(duplicate.pending_operations(), content="0")
 
-  let pending_receiver = try! TextState::new("pending-receiver")
+  let pending_receiver = try! @text.TextState::new("pending-receiver")
   let pending_limits = try! @sync.Limits::Limits(max_pending_operations=1)
   let pending_report = try! pending_receiver
     .sync()
@@ -108,13 +108,13 @@ test "text sync retains authoritative pending payload after identity conflict" {
   inspect(pending_report.duplicate_operations(), content="0")
   inspect(pending_report.pending_operations(), content="1")
 
-  let strict_receiver = try! TextState::new("strict-pending-receiver")
+  let strict_receiver = try! @text.TextState::new("strict-pending-receiver")
   let before_text = strict_receiver.text()
   let before_version = strict_receiver.version()
   let before_pending = strict_receiver.sync().pending_sync_count()
   let strict_limits = try! @sync.Limits::Limits(max_pending_operations=0)
   try strict_receiver.sync().apply_with_limits(future, strict_limits) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::PendingOperations,
         limit=0,
@@ -135,12 +135,12 @@ test "text sync retains authoritative pending payload after identity conflict" {
 
 ///|
 test "empty local insert is a complete no-op" {
-  let document = try! TextState::new("empty-insert")
+  let document = try! @text.TextState::new("empty-insert")
   let manager = @undo.UndoManager::new("empty-insert")
   let before_version = document.version()
   let before_message = try! document.sync().export_all()
-  try! document.insert(Pos::at(0), "")
-  try! document.insert_and_record(Pos::at(0), "", manager, timestamp_ms=0)
+  try! document.insert(@text.Pos::at(0), "")
+  try! document.insert_and_record(@text.Pos::at(0), "", manager, timestamp_ms=0)
   inspect(document.text(), content="")
   inspect(document.len(), content="0")
   inspect(document.version() == before_version, content="true")
@@ -155,8 +155,8 @@ test "empty local insert is a complete no-op" {
 
 ///|
 test "empty replica id is rejected" {
-  try TextState::new("") catch {
-    TextError::EmptyReplicaId => ()
+  try @text.TextState::new("") catch {
+    @text.TextError::EmptyReplicaId => ()
     _ => fail("expected EmptyReplicaId")
   } noraise {
     _ => fail("empty replica id must fail")
@@ -166,11 +166,11 @@ test "empty replica id is rejected" {
 ///|
 test "empty remote insert record is rejected" {
   try
-    SyncMessage::from_json_string(
+    @text.SyncMessage::from_json_string(
       "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}",
     )
   catch {
-    TextError::SyncFailed(@sync.Failure::InvalidContent(detail=_)) => ()
+    @text.TextError::SyncFailed(@sync.Failure::InvalidContent(detail=_)) => ()
     _ => fail("expected InvalidContent")
   } noraise {
     _ => fail("empty remote insert must fail")
@@ -179,16 +179,16 @@ test "empty remote insert record is rejected" {
 
 ///|
 test "peer-portable version vectors ignore receiver-local LV numbering" {
-  let alice = try! TextState::new("alice")
-  let bob = try! TextState::new("bob")
-  try! alice.insert(Pos::at(0), "A")
-  try! bob.insert(Pos::at(0), "B")
+  let alice = try! @text.TextState::new("alice")
+  let bob = try! @text.TextState::new("bob")
+  try! alice.insert(@text.Pos::at(0), "A")
+  try! bob.insert(@text.Pos::at(0), "B")
   let alice_initial = try! alice.sync().export_all()
   let bob_initial = try! bob.sync().export_all()
   let _ = try! alice.sync().apply(bob_initial)
   let _ = try! bob.sync().apply(alice_initial)
   let bob_version = bob.version()
-  try! alice.insert(Pos::at(alice.len()), "C")
+  try! alice.insert(@text.Pos::at(alice.len()), "C")
   let delta = try! alice.sync().export_since(bob_version)
   inspect(delta.op_count(), content="1")
   let _ = try! bob.sync().apply(delta)
@@ -198,15 +198,15 @@ test "peer-portable version vectors ignore receiver-local LV numbering" {
 
 ///|
 test "checkout rejects an unavailable version without changing live state" {
-  let document = try! TextState::new("checkout")
-  try! document.insert(Pos::at(0), "live")
+  let document = try! @text.TextState::new("checkout")
+  try! document.insert(@text.Pos::at(0), "live")
   let before_text = document.text()
   let before_version = document.version()
-  let unknown = try! Version::from_json_string(
+  let unknown = try! @text.Version::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"ghost\",\"sequence\":0}],\"ranges\":[{\"replica_id\":\"ghost\",\"ranges\":[{\"start\":0,\"end\":1}]}]}",
   )
   try document.checkout(unknown) catch {
-    TextError::VersionNotFound => ()
+    @text.TextError::VersionNotFound => ()
     _ => fail("expected VersionNotFound")
   } noraise {
     _ => fail("unknown checkout version must fail")
@@ -217,15 +217,17 @@ test "checkout rejects an unavailable version without changing live state" {
 
 ///|
 test "same-agent causal fork round-trips an exact checkout version" {
-  let receiver = try! TextState::new("receiver")
-  let message = try! SyncMessage::from_json_string(
+  let receiver = try! @text.TextState::new("receiver")
+  let message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let report = try! receiver.sync().apply(message)
   inspect(report.applied_operations(), content="2")
   inspect(receiver.text(), content="AB")
   let version = receiver.version()
-  let decoded = try! Version::from_json_string(try! version.to_json_string())
+  let decoded = try! @text.Version::from_json_string(
+    try! version.to_json_string(),
+  )
   inspect(decoded == version, content="true")
   let view = try! receiver.checkout(decoded)
   inspect(view.text(), content="AB")
@@ -235,11 +237,11 @@ test "same-agent causal fork round-trips an exact checkout version" {
 ///|
 test "schema 1 text version is rejected" {
   try
-    Version::from_json_string(
+    @text.Version::from_json_string(
       "{\"schema\":1,\"format\":\"event-graph-walker/text-version\",\"entries\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
     )
   catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(_)) => ()
     _ => fail("expected malformed schema-1 version")
   } noraise {
     _ => fail("schema-1 version must be rejected")
@@ -249,18 +251,18 @@ test "schema 1 text version is rejected" {
 ///|
 test "schema 2 text version preserves the maximum UInt endpoint" {
   let encoded = "{\"schema\":2,\"format\":\"event-graph-walker/text-version\",\"frontier\":[{\"replica_id\":\"alice\",\"sequence\":2147483647}],\"ranges\":[{\"replica_id\":\"alice\",\"ranges\":[{\"start\":2147483647,\"end\":2147483648}]}]}"
-  let version = try! Version::from_json_string(encoded)
+  let version = try! @text.Version::from_json_string(encoded)
   inspect(try! version.to_json_string(), content=encoded)
 }
 
 ///|
 test "sparse same-agent knowledge exports the missing operation only" {
-  let source = try! TextState::new("source")
-  let peer = try! TextState::new("peer")
-  let source_message = try! SyncMessage::from_json_string(
+  let source = try! @text.TextState::new("source")
+  let peer = try! @text.TextState::new("peer")
+  let source_message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0},{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
-  let peer_message = try! SyncMessage::from_json_string(
+  let peer_message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   ignore(try! source.sync().apply(source_message))
@@ -275,7 +277,7 @@ test "sparse same-agent knowledge exports the missing operation only" {
 
 ///|
 test "out-of-order sparse roots canonicalize one Version range" {
-  let receiver = try! TextState::new("receiver")
+  let receiver = try! @text.TextState::new("receiver")
   for
     encoded in [
       "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
@@ -283,7 +285,9 @@ test "out-of-order sparse roots canonicalize one Version range" {
       "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
     ] {
     ignore(
-      try! receiver.sync().apply(try! SyncMessage::from_json_string(encoded)),
+      try! receiver
+      .sync()
+      .apply(try! @text.SyncMessage::from_json_string(encoded)),
     )
   }
   inspect(
@@ -294,8 +298,8 @@ test "out-of-order sparse roots canonicalize one Version range" {
 
 ///|
 test "replica predecessor may be an indirect causal ancestor" {
-  let receiver = try! TextState::new("receiver")
-  let message = try! SyncMessage::from_json_string(
+  let receiver = try! @text.TextState::new("receiver")
+  let message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"bob\",\"sequence\":0},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"bob\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":{\"replica_id\":\"bob\",\"sequence\":0},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
   let report = try! receiver.sync().apply(message)
@@ -310,18 +314,18 @@ test "replica predecessor may be an indirect causal ancestor" {
 ///|
 test "receiver encoded-byte limit succeeds at boundary and rejects one under" {
   let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
-  let message = try! SyncMessage::from_json_string(json)
+  let message = try! @text.SyncMessage::from_json_string(json)
   let exact_limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length())
-  let exact = try! TextState::new_with_sync_limits("exact", exact_limits)
+  let exact = try! @text.TextState::new_with_sync_limits("exact", exact_limits)
   let report = try! exact.sync().apply(message)
   inspect(report.applied_operations(), content="1")
   inspect(exact.text(), content="A")
   let over_limits = try! @sync.Limits::Limits(
     max_encoded_bytes=json.length() - 1,
   )
-  let over = try! TextState::new_with_sync_limits("over", over_limits)
+  let over = try! @text.TextState::new_with_sync_limits("over", over_limits)
   try over.sync().apply(message) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
@@ -333,20 +337,20 @@ test "receiver encoded-byte limit succeeds at boundary and rejects one under" {
     _ => fail("encoded byte limit must reject ingress")
   }
   inspect(over.text(), content="")
-  inspect(over.version() == Version::empty(), content="true")
+  inspect(over.version() == @text.Version::empty(), content="true")
   inspect(over.sync().pending_sync_count(), content="0")
 }
 
 ///|
 test "receiver encoded-byte limit also covers direct exported messages" {
-  let source = try! TextState::new("source")
-  try! source.insert(Pos::at(0), "A")
+  let source = try! @text.TextState::new("source")
+  try! source.insert(@text.Pos::at(0), "A")
   let message = try! source.sync().export_all()
   let encoded_size = message.to_json_string().length()
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=encoded_size - 1)
-  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  let receiver = try! @text.TextState::new_with_sync_limits("receiver", limits)
   try receiver.sync().apply(message) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
@@ -358,21 +362,21 @@ test "receiver encoded-byte limit also covers direct exported messages" {
     _ => fail("encoded byte limit must reject exported ingress")
   }
   inspect(receiver.text(), content="")
-  inspect(receiver.version() == Version::empty(), content="true")
+  inspect(receiver.version() == @text.Version::empty(), content="true")
 }
 
 ///|
 test "non-insert origin is rejected before any receiver mutation" {
-  let receiver = try! TextState::new("receiver")
-  try! receiver.insert(Pos::at(0), "X")
-  try! receiver.delete(Pos::at(0))
+  let receiver = try! @text.TextState::new("receiver")
+  try! receiver.insert(@text.Pos::at(0), "X")
+  try! receiver.delete(@text.Pos::at(0))
   let before_text = receiver.text()
   let before_version = receiver.version()
-  let message = try! SyncMessage::from_json_string(
+  let message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"remote\",\"sequence\":1},\"parents\":[{\"replica_id\":\"remote\",\"sequence\":0},{\"replica_id\":\"receiver\",\"sequence\":1}],\"kind\":\"delete\",\"content\":null,\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":1}]}",
   )
   try receiver.sync().apply(message) catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
     _ => fail("expected malformed non-insert origin")
   } noraise {
     _ => fail("non-insert origin must be rejected")
@@ -384,16 +388,16 @@ test "non-insert origin is rejected before any receiver mutation" {
 
 ///|
 test "known non-insert origin rejects before unrelated dependency defer" {
-  let receiver = try! TextState::new("receiver")
-  try! receiver.insert(Pos::at(0), "X")
-  try! receiver.delete(Pos::at(0))
+  let receiver = try! @text.TextState::new("receiver")
+  try! receiver.insert(@text.Pos::at(0), "X")
+  try! receiver.delete(@text.Pos::at(0))
   let before_text = receiver.text()
   let before_version = receiver.version()
-  let message = try! SyncMessage::from_json_string(
+  let message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
   )
   try receiver.sync().apply(message) catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
     _ => fail("known invalid origin must reject before unrelated defer")
   } noraise {
     _ => fail("known invalid origin must be atomic")
@@ -405,9 +409,9 @@ test "known non-insert origin rejects before unrelated dependency defer" {
 
 ///|
 test "core and text reject known invalid origin with the same atomic meaning" {
-  let text_receiver = try! TextState::new("receiver")
-  try! text_receiver.insert(Pos::at(0), "X")
-  try! text_receiver.delete(Pos::at(0))
+  let text_receiver = try! @text.TextState::new("receiver")
+  try! text_receiver.insert(@text.Pos::at(0), "X")
+  try! text_receiver.delete(@text.Pos::at(0))
   let before_text = text_receiver.text()
   let before_version = text_receiver.version()
   let bad = @core.Op::insert(
@@ -419,11 +423,11 @@ test "core and text reject known invalid origin with the same atomic meaning" {
     Some(@core.RawVersion("receiver", 1)),
     None,
   )
-  let message = try! SyncMessage::from_json_string(
+  let message = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"remote\",\"sequence\":0},\"parents\":[{\"replica_id\":\"missing\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":{\"replica_id\":\"receiver\",\"sequence\":1},\"origin_right\":null}],\"heads\":[{\"replica_id\":\"remote\",\"sequence\":0}]}",
   )
   try text_receiver.sync().apply(message) catch {
-    TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
+    @text.TextError::SyncFailed(@sync.Failure::MalformedMessage(detail=_)) => ()
     _ => fail("text path must classify known invalid origin as malformed")
   } noraise {
     _ => fail("text path must reject known invalid origin atomically")
@@ -461,14 +465,14 @@ test "core and text reject known invalid origin with the same atomic meaning" {
 
 ///|
 test "same-agent sequence hole admits without an implicit predecessor" {
-  let receiver = try! TextState::new("receiver")
-  let malformed_future = try! SyncMessage::from_json_string(
+  let receiver = try! @text.TextState::new("receiver")
+  let malformed_future = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
   let first = try! receiver.sync().apply(malformed_future)
   inspect(first.applied_operations(), content="1")
   inspect(receiver.sync().pending_sync_count(), content="0")
-  let valid_predecessors = try! SyncMessage::from_json_string(
+  let valid_predecessors = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":{\"replica_id\":\"alice\",\"sequence\":0},\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",
   )
   let applied = try! receiver.sync().apply(valid_predecessors)
@@ -482,10 +486,10 @@ test "same-agent sequence hole admits without an implicit predecessor" {
 test "decode accepts structurally valid JSON and apply enforces receiver limits" {
   let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
-  let receiver = try! TextState::new("receiver")
+  let receiver = try! @text.TextState::new("receiver")
   let message = try! receiver.sync().decode_json(json)
   try receiver.sync().apply_with_limits(message, limits) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
@@ -502,11 +506,11 @@ test "decode accepts structurally valid JSON and apply enforces receiver limits"
 test "receiver-specific decoder may raise the default encoded byte limit" {
   let envelope = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[],\"heads\":[]}"
   let json = envelope + " ".repeat(16 * 1024 * 1024)
-  let message = try! SyncMessage::from_json_string(json)
+  let message = try! @text.SyncMessage::from_json_string(json)
   let limits = try! @sync.Limits::Limits(max_encoded_bytes=json.length() - 1)
-  let receiver = try! TextState::new_with_sync_limits("receiver", limits)
+  let receiver = try! @text.TextState::new_with_sync_limits("receiver", limits)
   try receiver.sync().apply(message) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
@@ -528,11 +532,11 @@ test "receiver-specific decoder honors raised parent limits in validation" {
   let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[" +
     parents.join(",") +
     "],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
-  let message = try! SyncMessage::from_json_string(json)
+  let message = try! @text.SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
-  let strict = try! TextState::new("strict")
+  let strict = try! @text.TextState::new("strict")
   try strict.sync().apply_with_limits(message, @sync.Limits::default()) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
         limit=256,
@@ -553,12 +557,12 @@ test "duplicate-heavy decoded operation limit counts wire operations" {
     "," +
     operation +
     "],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":0}]}"
-  let message = try! SyncMessage::from_json_string(json)
+  let message = try! @text.SyncMessage::from_json_string(json)
   inspect(message.op_count(), content="1")
-  let receiver = try! TextState::new("duplicate-limit")
+  let receiver = try! @text.TextState::new("duplicate-limit")
   let limits = try! @sync.Limits::Limits(max_decoded_operations=1)
   try receiver.sync().apply_with_limits(message, limits) catch {
-    TextError::SyncFailed(
+    @text.TextError::SyncFailed(
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::DecodedOperations,
         limit=1,
@@ -570,5 +574,5 @@ test "duplicate-heavy decoded operation limit counts wire operations" {
     _ => fail("duplicate-heavy payload must exceed the decoded limit")
   }
   inspect(receiver.text(), content="")
-  inspect(receiver.version() == Version::empty(), content="true")
+  inspect(receiver.version() == @text.Version::empty(), content="true")
 }

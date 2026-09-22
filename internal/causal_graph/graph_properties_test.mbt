@@ -99,8 +99,8 @@ impl @qc.Shrink for GraphScenario with fn shrink(self) {
 ///|
 fn GraphScenario::to_graph(
   self : GraphScenario,
-) -> CausalGraph raise CausalGraphError {
-  let graph = CausalGraph::new()
+) -> @causal_graph.CausalGraph raise @causal_graph.CausalGraphError {
+  let graph = @causal_graph.CausalGraph::new()
   for lv, parents in self.parents_by_lv {
     let _ = graph.add_version(parents, graph_property_agent(lv))
   }

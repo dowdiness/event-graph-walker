@@ -66,3 +66,23 @@ pub fn ItemState::update_from_delete_count(
 pub fn ItemState::is_visible(self : ItemState, delete_count~ : Int) -> Bool {
   self == Inserted && delete_count == 0
 }
+
+// ---------------------------------------------------------------------------
+// Explicit trait-method promotions (E0079). See `internal/fugue/item.mbt`.
+// ---------------------------------------------------------------------------
+
+///|
+#doc(hidden)
+pub extend ItemState with @debug.Debug::{to_repr}
+
+///|
+#doc(hidden)
+pub extend ItemState with Default::{default}
+
+///|
+#doc(hidden)
+pub extend ItemState with Eq::{not_equal, equal}
+
+///|
+#doc(hidden)
+pub extend ItemState with Show::{to_string, output}

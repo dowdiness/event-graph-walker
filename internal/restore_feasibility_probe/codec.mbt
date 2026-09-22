@@ -14,7 +14,7 @@ struct RawIdentity {
 
 ///|
 fn RawIdentity::RawIdentity(agent~ : String, sequence~ : Int) -> RawIdentity {
-  { agent, sequence }
+  { agent, sequence, }
 }
 
 ///|
@@ -220,7 +220,7 @@ struct R0Decoder {
 
 ///|
 fn R0Decoder::_new(bytes : Bytes) -> R0Decoder {
-  { bytes, position: 0 }
+  { bytes, position: 0, }
 }
 
 ///|

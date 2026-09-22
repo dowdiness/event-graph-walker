@@ -19,7 +19,7 @@ priv struct DecisionRoute {
 
 ///|
 fn route(kind : DecisionKind, peer : String) -> DecisionRoute {
-  { kind, peer }
+  { kind, peer, }
 }
 
 ///|

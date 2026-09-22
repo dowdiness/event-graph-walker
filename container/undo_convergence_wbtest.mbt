@@ -183,11 +183,11 @@ test "undo convergence: same-ts Undelete beats Delete (add-wins)" {
   let same_ts = 50
   let del : BlockTextOp = {
     block: block.to_inner(),
-    op: Delete({ target: x_id, timestamp: same_ts, agent: "carol" }),
+    op: Delete({ target: x_id, timestamp: same_ts, agent: "carol", }),
   }
   let undel : BlockTextOp = {
     block: block.to_inner(),
-    op: Undelete({ target: x_id, timestamp: same_ts, agent: "dave" }),
+    op: Undelete({ target: x_id, timestamp: same_ts, agent: "dave", }),
   }
   alice.apply_remote_text_op(del)
   alice.apply_remote_text_op(undel)

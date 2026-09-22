@@ -2,7 +2,7 @@
 
 ///|
 test "walk empty frontier" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
   let frontier = @core.Frontier::from_array([])
   let result = graph.walk_from_frontier(frontier)
   inspect(@rle.Spanning::span(result), content="0")
@@ -10,7 +10,7 @@ test "walk empty frontier" {
 
 ///|
 test "walk single operation" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Add single operation with no parents
   let lv0 = try! graph.add_version([], "agent-1")
@@ -22,7 +22,7 @@ test "walk single operation" {
 
 ///|
 test "walk linear history" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create linear chain: 0 -> 1 -> 2 -> 3
   let lv0 = try! graph.add_version([], "agent-1")
@@ -44,7 +44,7 @@ test "walk linear history" {
 
 ///|
 test "walk diamond pattern (concurrent operations)" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create diamond:
   //     0
@@ -82,7 +82,7 @@ test "walk diamond pattern (concurrent operations)" {
 
 ///|
 test "walk complex branching" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create complex graph:
   //       0
@@ -136,7 +136,7 @@ test "walk complex branching" {
 
 ///|
 test "walk with multiple frontier versions" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create divergent branches:
   //     0
@@ -170,7 +170,7 @@ test "walk with multiple frontier versions" {
 
 ///|
 test "diff_frontiers_lvs for incremental update" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create initial operations
   let _lv0 = try! graph.add_version([], "agent-1")
@@ -203,7 +203,7 @@ test "diff_frontiers_lvs for incremental update" {
 ///|
 test "topological sort determinism" {
   // Test that concurrent operations have deterministic ordering
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create concurrent operations with same parent
   let lv0 = try! graph.add_version([], "agent-1")
@@ -226,7 +226,7 @@ test "topological sort determinism" {
 
 ///|
 test "walk_from_frontier linear compression" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Create linear chain: 0 -> 1 -> 2 -> ... -> 9
   let _lv0 = try! graph.add_version([], "agent-1")
@@ -242,7 +242,7 @@ test "walk_from_frontier linear compression" {
 
 ///|
 test "diff_frontiers_lvs compression ratio" {
-  let graph = CausalGraph::new()
+  let graph = @causal_graph.CausalGraph::new()
 
   // Build 100 linear operations
   let _lv0 = try! graph.add_version([], "agent-1")
