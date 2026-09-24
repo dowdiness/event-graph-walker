@@ -91,6 +91,28 @@ test "IndexedState agrees with Fugue after Document::merge_remote" {
 }
 
 ///|
+test "remote snapshot fallback discards an earlier exact effect and stale index" {
+  let source = Document::new("fallback-source")
+  ignore(try! source.insert(0, "A"))
+  ignore(try! source.insert(1, "B"))
+  let operations = source.get_all_ops()
+  let doc = Document::new("fallback-destination")
+  ignore(try! doc.admit_remote(operations))
+  assert_eq(doc.to_text(), "AB")
+  let first_delete = try! source.delete(0)
+  let second_delete = try! source.delete(0)
+  // Damage only the rebuildable locator. The first delete still yields an
+  // exact effect, but the second must discard that effect and the stale index.
+  doc.indexed_state.locator.unwrap().items.remove(operations[1].lv())
+  let admission = try! doc.admit_remote([first_delete, second_delete])
+  assert_true(admission.effect_availability is SnapshotRequired)
+  assert_eq(doc.to_text(), "")
+  assert_eq(doc.visible_count(), 0)
+  ignore(try! doc.insert(0, "C"))
+  assert_eq(doc.to_text(), "C")
+}
+
+///|
 test "property: published LV locator agrees with Fugue after randomized structural mutation" {
   let seeds : Array[Int] = @quickcheck.samples(24)
   for raw_seed in seeds {
