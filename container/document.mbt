@@ -814,7 +814,7 @@ fn Document::versioned_sync_ops_between(
   to : @core.Frontier,
 ) -> SyncMessage raise DocumentError {
   let (_, advance_rle) = self.graph.diff_frontiers_lvs(from, to)
-  let advance_lvs = advance_rle.iter_units().collect()
+  let advance_lvs = @rle.Rle::iter_units(advance_rle).collect()
   let tree_ops : Array[VersionedTreeOp] = []
   let text_ops : Array[VersionedBlockTextOp] = []
   for lv in advance_lvs {

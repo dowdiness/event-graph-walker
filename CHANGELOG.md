@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Explicitly qualify the container synchronization RLE iterator call so its
+  package import is recognized by both MoonBit 0.10.12 and the CI-pinned 0.10.14.
+
+### Changed
+
+- Consolidated remote admission's cache detachment, projection publication, and
+  recovery in the internal projection workspace. Exact indexes and effects now
+  share one candidate state; snapshot fallback retains neither. Public APIs and
+  authority commit/recovery behavior are unchanged.
+
 ## [0.8.0] - 2026-08-28
 
 ### Breaking changes
