@@ -237,12 +237,26 @@ fn remote_admission_is_ready(
   op : @core.Op,
   planned : @hashset.HashSet[@core.RawVersion],
   is_admitted : (@core.RawVersion) -> Bool,
-  semantics : RemoteAdmissionSemantics?,
+  _semantics : RemoteAdmissionSemantics?,
 ) -> Bool {
-  for dependency in remote_admission_dependencies_for(op, semantics) {
-    if !is_admitted(dependency) && !planned.contains(dependency) {
+  for dependency in op.parents_iter() {
+    if !planned.contains(dependency) && !is_admitted(dependency) {
       return false
     }
+  }
+  match op.origin_left() {
+    Some(dependency) =>
+      if !planned.contains(dependency) && !is_admitted(dependency) {
+        return false
+      }
+    None => ()
+  }
+  match op.origin_right() {
+    Some(dependency) =>
+      if !planned.contains(dependency) && !is_admitted(dependency) {
+        return false
+      }
+    None => ()
   }
   true
 }
@@ -1673,10 +1687,12 @@ fn PreparedAdmission::with_pending_evidence(
       retained_pending.push(raw)
     }
   }
-  for op in self.planned {
-    let raw = remote_admission_raw(op)
-    if planner.pending.contains(raw) && seen.add_and_check(raw) {
-      retained_pending.push(raw)
+  if !planner.pending.is_empty() {
+    for op in self.planned {
+      let raw = remote_admission_raw(op)
+      if planner.pending.contains(raw) && seen.add_and_check(raw) {
+        retained_pending.push(raw)
+      }
     }
   }
   {
@@ -1763,6 +1779,11 @@ fn PreparedAdmission::remaining_raws(
   self : PreparedAdmission,
   planner : RemoteAdmissionPlanner,
 ) -> Array[@core.RawVersion] {
+  // DeferredFast's staged operations are exactly its committed plan. With no
+  // live canonical pending members, the remaining intersection is provably empty.
+  if self.storage is DeferredFast && planner.pending.is_empty() {
+    return []
+  }
   let remaining : Array[@core.RawVersion] = []
   let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for op in self.planned {

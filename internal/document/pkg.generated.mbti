@@ -67,7 +67,9 @@ pub fn Document::resolve_graph_version(Self, @causal_graph.GraphVersion) -> @cor
 pub fn Document::to_text(Self) -> String
 pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::undelete_if_deleted(Self, Int) -> TargetEditResult raise DocumentError
+pub fn Document::visible_content_at(Self, Int) -> String?
 pub fn Document::visible_count(Self) -> Int
+pub fn Document::visible_entries_between(Self, Int, Int) -> Array[(Int, String)] raise DocumentError
 pub impl @core.RawToLv for Document
 
 pub struct DocumentAdmission {

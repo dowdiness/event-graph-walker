@@ -5,7 +5,6 @@ import {
   "moonbitlang/core/bench",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
-  "moonbitlang/core/immut/hashmap" @immut/hashmap,
   "moonbitlang/core/quickcheck",
   "moonbitlang/quickcheck" @qc,
 }

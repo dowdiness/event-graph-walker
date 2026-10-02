@@ -9,10 +9,10 @@
 pub struct CausalGraph {
   priv entries : Array[@core.GraphEntry]
   priv children : Array[Array[Int]]
-  priv mut version_map : @immut/hashmap.HashMap[@core.RawVersion, Int]
+  priv version_map : Map[@core.RawVersion, Int]
   priv mut next_lv : Int
   priv mut frontier : @core.Frontier
-  priv mut agent_seqs : @immut/hashmap.HashMap[String, Int]
+  priv agent_seqs : Map[String, Int]
   // Sparse membership is graph authority; it is deliberately lazy.
   priv mut version_cache : GraphVersionCache
   // Reusable query buffers — amortize allocation across repeated calls.
@@ -37,10 +37,10 @@ pub fn CausalGraph::new() -> CausalGraph {
   {
     entries: [],
     children: [],
-    version_map: @immut/hashmap.new(),
+    version_map: Map([]),
     next_lv: 0,
     frontier: @core.Frontier::from_array([]),
-    agent_seqs: @immut/hashmap.new(),
+    agent_seqs: Map([]),
     version_cache: GraphVersionCache::Cold,
     query_visited: [],
     query_gen: 0,
@@ -161,7 +161,7 @@ fn CausalGraph::add_version_inner(
   for p in parents {
     self.children[p].push(lv)
   }
-  self.version_map = self.version_map.add(raw, lv)
+  self.version_map.set(raw, lv)
   self.next_lv = lv + 1
   self.update_frontier(lv, parents)
   match self.version_cache {
@@ -182,7 +182,7 @@ pub fn CausalGraph::add_version(
     None => 0
   }
   let lv = self.add_version_inner(parents, agent, seq)
-  self.agent_seqs = self.agent_seqs.add(agent, seq)
+  self.agent_seqs.set(agent, seq)
   lv
 }
 
@@ -196,7 +196,7 @@ pub fn CausalGraph::add_version_with_seq(
   let lv = self.add_version_inner(parents, agent, seq)
   let current_seq = self.agent_seqs.get(agent).unwrap_or(-1)
   let next_seq = if seq > current_seq { seq } else { current_seq }
-  self.agent_seqs = self.agent_seqs.add(agent, next_seq)
+  self.agent_seqs.set(agent, next_seq)
   lv
 }
 

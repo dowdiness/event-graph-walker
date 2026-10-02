@@ -1,0 +1,33 @@
+import {
+  "dowdiness/event-graph-walker/text",
+  "dowdiness/event-graph-walker/undo",
+}
+
+pkgtype(kind: "executable")
+
+options(
+  link: {
+    "js": {
+      "exports": [
+        "create",
+        "release",
+        "read",
+        "length",
+        "version",
+        "history",
+        "delta",
+        "edit",
+        "apply",
+        "undo",
+        "redo",
+        "can_undo",
+        "pending",
+        "edit_raw",
+        "insert_recorded",
+        "delete_recorded",
+        "edit_fast_prevalidated",
+      ],
+      "format": "esm",
+    },
+  },
+)

@@ -100,9 +100,9 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
     Some(raw) => deps.push(raw)
     None => ()
   }
-  let by_key : Map[String, @core.RawVersion] = Map([])
+  let by_key : Map[@core.RawVersion, @core.RawVersion] = Map([])
   for dep in deps {
-    by_key[raw_key(dep)] = dep
+    by_key[dep] = dep
   }
   let result = by_key.values().to_array()
   result.sort_by(compare_raw)
@@ -199,20 +199,20 @@ fn validate_op_structure(op : @core.Op) -> Unit raise @sync.Failure {
       detail="operation sequence must not be negative",
     )
   }
-  let seen_parents : Map[String, Bool] = Map([])
+  let seen_parents : Map[@core.RawVersion, Bool] = Map([])
+  let identity = op_identity(op)
   for parent in op.parents() {
     if parent.agent == "" || parent.seq < 0 {
       raise @sync.Failure::MalformedMessage(
         detail="operation parent identity is invalid",
       )
     }
-    let key = raw_key(parent)
-    if key == raw_key(op_identity(op)) || seen_parents.get(key) is Some(_) {
+    if parent == identity || seen_parents.get(parent) is Some(_) {
       raise @sync.Failure::MalformedMessage(
         detail="operation contains a self or duplicate parent",
       )
     }
-    seen_parents[key] = true
+    seen_parents[parent] = true
   }
   match op.content() {
     @core.Insert(text) => {
@@ -313,9 +313,9 @@ fn canonical_order(
 fn canonical_order_counted(
   ops : Array[@core.Op],
 ) -> (Array[@core.Op], Int) raise @sync.Failure {
-  let candidates : Map[String, @core.Op] = Map([])
+  let candidates : Map[@core.RawVersion, @core.Op] = Map([])
   for op in ops {
-    let key = raw_key(op_identity(op))
+    let key = op_identity(op)
     match candidates.get(key) {
       Some(previous) =>
         if op_payload_key(previous) != op_payload_key(op) {
@@ -328,18 +328,18 @@ fn canonical_order_counted(
       None => candidates[key] = op
     }
   }
-  let missing_counts : Map[String, Int] = Map([])
-  let dependency_waiters : Map[String, Array[String]] = Map([])
+  let missing_counts : Map[@core.RawVersion, Int] = Map([])
+  let dependency_waiters : Map[@core.RawVersion, Array[@core.RawVersion]] = Map([],
+  )
   candidates.each(fn(key, op) {
     let mut count = 0
     for dependency in op_dependencies(op) {
-      let dependency_key = raw_key(dependency)
+      let dependency_key = dependency
       if candidates.get(dependency_key) is Some(_) {
         count = count + 1
-        let waiters = dependency_waiters
-          .get(dependency_key)
-          .unwrap_or([])
-          .copy()
+        // Buckets are created and consumed inside this ordering pass; no
+        // caller can retain them, so extending the owned array needs no copy.
+        let waiters = dependency_waiters.get(dependency_key).unwrap_or([])
         waiters.push(key)
         dependency_waiters[dependency_key] = waiters
       }
@@ -363,7 +363,7 @@ fn canonical_order_counted(
     let next = ready[ready_index]
     ready_index = ready_index + 1
     ordered.push(next)
-    let next_key = raw_key(op_identity(next))
+    let next_key = op_identity(next)
     for waiter_key in dependency_waiters.get(next_key).unwrap_or([]) {
       let count = missing_counts.get(waiter_key).unwrap() - 1
       missing_counts[waiter_key] = count
@@ -410,30 +410,24 @@ fn SyncMessage::SyncMessage(
   heads : Array[@core.RawVersion],
   encoded_size : Int?,
 ) -> SyncMessage raise @sync.Failure {
-  let structural_operations : Array[StructuralOp] = []
-  let structural_by_key : Map[String, StructuralOp] = Map([])
+  let structural_by_key : Map[@core.RawVersion, StructuralOp] = Map([])
   for op in operations {
     let structural = StructuralOp::StructuralOp(op)
-    structural_operations.push(structural)
-    structural_by_key[raw_key(op_identity(op))] = structural
+    structural_by_key[op_identity(op)] = structural
   }
   let ordered = canonical_order(operations)
   let ordered_structural : Array[StructuralOp] = []
   for op in ordered {
-    ordered_structural.push(
-      structural_by_key.get(raw_key(op_identity(op))).unwrap(),
-    )
+    ordered_structural.push(structural_by_key.get(op_identity(op)).unwrap())
   }
-  let seen_heads : Map[String, Bool] = Map([])
+  let seen_heads : Map[@core.RawVersion, Bool] = Map([])
   for head in heads {
-    if head.agent == "" ||
-      head.seq < 0 ||
-      seen_heads.get(raw_key(head)) is Some(_) {
+    if head.agent == "" || head.seq < 0 || seen_heads.get(head) is Some(_) {
       raise @sync.Failure::MalformedMessage(
         detail="message contains an invalid or duplicate head",
       )
     }
-    seen_heads[raw_key(head)] = true
+    seen_heads[head] = true
   }
   {
     operations: ordered,
@@ -745,50 +739,97 @@ fn identity_json(raw : @core.RawVersion) -> Json {
 }
 
 ///|
-fn optional_identity_json(raw : @core.RawVersion?) -> Json {
+/// Stream the unchanged schema-2 representation without constructing a full
+/// temporary JSON tree. Core Json still owns every string's escaping rules.
+priv struct SyncJsonWriter {
+  output : StringBuilder
+  quoted_agents : Map[String, String]
+}
+
+///|
+fn SyncJsonWriter::identity(
+  self : SyncJsonWriter,
+  raw : @core.RawVersion,
+) -> Unit {
+  self.output.write_string("{\"replica_id\":")
+  let quoted = match self.quoted_agents.get(raw.agent) {
+    Some(quoted) => quoted
+    None => {
+      let quoted = raw.agent.to_json().stringify()
+      self.quoted_agents[raw.agent] = quoted
+      quoted
+    }
+  }
+  self.output.write_string(quoted)
+  self.output.write_string(",\"sequence\":")
+  self.output.write_string(raw.seq.to_string())
+  self.output.write_string("}")
+}
+
+///|
+fn SyncJsonWriter::optional_identity(
+  self : SyncJsonWriter,
+  raw : @core.RawVersion?,
+) -> Unit {
   match raw {
-    Some(value) => identity_json(value)
-    None => Json::null()
+    Some(raw) => self.identity(raw)
+    None => self.output.write_string("null")
   }
 }
 
 ///|
-fn op_json(op : @core.Op) -> Json {
-  let parents : Array[Json] = []
-  for parent in sorted_raw(op.parents()) {
-    parents.push(identity_json(parent))
+fn SyncJsonWriter::operation(self : SyncJsonWriter, op : @core.Op) -> Unit {
+  self.output.write_string("{\"id\":")
+  self.identity(op_identity(op))
+  self.output.write_string(",\"parents\":[")
+  for i, parent in sorted_raw(op.parents()) {
+    if i > 0 {
+      self.output.write_string(",")
+    }
+    self.identity(parent)
   }
-  let (kind, content) = match op.content() {
-    @core.Insert(text) => ("insert", text.to_json())
-    @core.Delete => ("delete", Json::null())
-    @core.Undelete => ("undelete", Json::null())
+  self.output.write_string("],\"kind\":")
+  match op.content() {
+    @core.Insert(text) => {
+      self.output.write_string("\"insert\",\"content\":")
+      self.output.write_string(text.to_json().stringify())
+    }
+    @core.Delete => self.output.write_string("\"delete\",\"content\":null")
+    @core.Undelete => self.output.write_string("\"undelete\",\"content\":null")
   }
-  Json::object({
-    "id": identity_json(op_identity(op)),
-    "parents": parents.to_json(),
-    "kind": kind.to_json(),
-    "content": content,
-    "origin_left": optional_identity_json(op.origin_left()),
-    "origin_right": optional_identity_json(op.origin_right()),
-  })
+  self.output.write_string(",\"origin_left\":")
+  self.optional_identity(op.origin_left())
+  self.output.write_string(",\"origin_right\":")
+  self.optional_identity(op.origin_right())
+  self.output.write_string("}")
 }
 
 ///|
 pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
-  let operations : Array[Json] = []
-  for op in self.structural_operations {
-    operations.push(op_json(op.raw()))
+  let writer : SyncJsonWriter = {
+    output: StringBuilder(),
+    quoted_agents: Map([]),
   }
-  let heads : Array[Json] = []
-  for head in self.heads {
-    heads.push(identity_json(head))
+  writer.output.write_string("{\"schema\":")
+  writer.output.write_string(text_schema.to_string())
+  writer.output.write_string(",\"format\":")
+  writer.output.write_string(text_sync_format.to_json().stringify())
+  writer.output.write_string(",\"operations\":[")
+  for i, op in self.structural_operations {
+    if i > 0 {
+      writer.output.write_string(",")
+    }
+    writer.operation(op.raw())
   }
-  Json::object({
-    "schema": text_schema.to_json(),
-    "format": text_sync_format.to_json(),
-    "operations": operations.to_json(),
-    "heads": heads.to_json(),
-  }).stringify()
+  writer.output.write_string("],\"heads\":[")
+  for i, head in self.heads {
+    if i > 0 {
+      writer.output.write_string(",")
+    }
+    writer.identity(head)
+  }
+  writer.output.write_string("]}")
+  writer.output.to_string()
 }
 
 ///|
@@ -813,13 +854,11 @@ fn decode_op(json : Json) -> @core.Op raise {
   let wire : WireOperation = @json.from_json(json)
   let id = decode_identity(wire.id)
   let parents : Array[@core.RawVersion] = []
-  let seen_parents : Map[String, Bool] = Map([])
+  let seen_parents : Map[@core.RawVersion, Bool] = Map([])
   for value in wire.parents {
     let parent = decode_identity(value)
-    guard seen_parents.get(raw_key(parent)) is None else {
-      fail("duplicate parent")
-    }
-    seen_parents[raw_key(parent)] = true
+    guard seen_parents.get(parent) is None else { fail("duplicate parent") }
+    seen_parents[parent] = true
     parents.push(parent)
   }
   let origin_left = decode_optional_identity(wire.origin_left)

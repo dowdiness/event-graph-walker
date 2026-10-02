@@ -291,16 +291,21 @@ test "property: exact transition effects reproduce authority text" {
 }
 
 ///|
-/// The accepted initial policy sends oversized committed batches to the one
-/// coherent snapshot fallback rather than publishing unproved partial effects.
-test "transition oversized batch requires snapshot" {
+/// Committed batches preserve exact sequential effects beyond the old cutoff.
+test "transition four-operation batch preserves exact effects" {
   let source = try! TextState::new("transition-oversized-source")
   try! source.insert(Pos::at(0), "ABCD")
   let receiver = try! TextState::new("transition-oversized-receiver")
   let transition = try! receiver
     .sync()
     .apply_transition(try! source.sync().export_all())
-  assert_true(transition.availability() is SnapshotRequired)
+  match transition.availability() {
+    Exact(effects) => {
+      assert_eq(effects.length(), 4)
+      assert_eq(apply_transition_effects_for_test("", effects), receiver.text())
+    }
+    _ => fail("warm four-op batch lost exact effects")
+  }
   let report = try! transition.finish()
   assert_eq(report.applied_operations(), 4)
 }
