@@ -1,0 +1,4798 @@
+{
+  "schema": 1,
+  "startedAt": "2026-10-02T08:43:04.245Z",
+  "finishedAt": "2026-10-02T08:47:54.097Z",
+  "status": "complete",
+  "config": {
+    "baseScalars": 10000,
+    "seedAlphabet": "abcdefghijklmnopqrstuvwxyz0123456789\n",
+    "seedWriter": "pr134-seed-v1",
+    "senderWriter": "pr134-sender-v1",
+    "receiverWriter": "pr134-receiver-v1",
+    "undoWriter": "pr134-undo-v1",
+    "insertPosition": 5000,
+    "remoteCases": [
+      4,
+      20,
+      32,
+      1000
+    ],
+    "undoPasteScalars": 1000,
+    "warmupPairs": 5,
+    "measuredPairs": 30,
+    "pairOrder": "AB/BA alternating including warmup",
+    "percentile": "nearest-rank ceil(n*p), median average of central two when even",
+    "forcedGc": false,
+    "outlierExclusions": []
+  },
+  "source": {
+    "base": {
+      "commit": "ed2e89e1bdc6f64e979e63d0b23d83e6b99872bc",
+      "tree": "8334ae00018b9a7919eaed46ac2a8c329cecb07c",
+      "archiveSha256": "11d4891aa647242e66a424614d2044fb43a42f9973d0d24c116707c7fe795bd5"
+    },
+    "head": {
+      "commit": "eea050d5737ea3a699948150ea92c72e757fa2ca",
+      "tree": "ba5056f85b7228bcb5cc5a32de8c9cf44a8ffe7f",
+      "archiveSha256": "a6a0b53126ca5da9380be1769d01f8ddcbb554aa593122326a4ed96b6387180d"
+    }
+  },
+  "provenance": {
+    "runtime": "v24.19.0",
+    "v8": "13.6.233.17-node.51",
+    "nodeVersions": {
+      "node": "24.19.0",
+      "acorn": "8.17.0",
+      "ada": "3.4.4",
+      "amaro": "1.1.10",
+      "ares": "1.34.6",
+      "brotli": "1.2.0",
+      "cldr": "48.0",
+      "icu": "78.3",
+      "llhttp": "9.4.3",
+      "merve": "1.2.2",
+      "modules": "137",
+      "napi": "10",
+      "nbytes": "0.1.4",
+      "ncrypto": "0.0.1",
+      "nghttp2": "1.69.0",
+      "nghttp3": "",
+      "ngtcp2": "",
+      "openssl": "3.5.7",
+      "simdjson": "4.6.4",
+      "simdutf": "6.4.0",
+      "sqlite": "3.53.3",
+      "tz": "2026b",
+      "undici": "7.29.0",
+      "unicode": "17.0",
+      "uv": "1.52.1",
+      "uvwasi": "0.0.23",
+      "v8": "13.6.233.17-node.51",
+      "zlib": "1.3.2.1-motley-3246f1b",
+      "zstd": "1.5.7"
+    },
+    "execArgv": [],
+    "platform": "linux",
+    "arch": "x64",
+    "osRelease": "6.18.44",
+    "cpu": "AMD EPYC 9V74 80-Core Processor",
+    "logicalCpus": 9,
+    "availableParallelism": 9,
+    "memoryBytes": 10451464192,
+    "loadavgAtStart": [
+      0.27,
+      0.17,
+      0.28
+    ],
+    "hostname": "84ad4f4892bd",
+    "loadavgAtEnd": [
+      1.89,
+      1.18,
+      0.69
+    ]
+  },
+  "hashes": {
+    "harnessSha256": "77ddfb1fd340027ab008bdd857256c1170a9de92cab7b9a4f45bd18a09a75f8b",
+    "configSha256": "618a8e4ab080e2c266f4309be8bd6b2065dcf9aa2dce9b69b2216f05bd90cbea",
+    "lockSha256": "616c0527df16a597284b0b7d07c6905e72d32f8b55d6145173935d83d0a00457",
+    "baseBinarySha256": "55afbfccafbcefb5d52cd919d9e1f1f19e6120e0e590cb8cd2bdc01464fdf255",
+    "headBinarySha256": "868435facd9a661de51a94f13f336dc7fedd05ba187464870cc777b195ec9cfc",
+    "fixtureSha256": "5ade1fe8839dbe87bc8086c6b2c40ef0187835771fe24cc220d68767226224aa",
+    "seedTextSha256": "a3535c39e300522b4ac75eb08252c87b53009a37e3554ada38eac6fbb10368df"
+  },
+  "timing": {
+    "clock": "performance.now; one contiguous synchronous interval per operation",
+    "included": [
+      "JSON decode, whole-packet validation/admission, transition.finish, effect serialization and report parse for receive",
+      "UndoManager.undo for Undo",
+      "first post-mutation public TextState.text() getter",
+      "full UTF-16 checksum on returned text"
+    ],
+    "excluded": [
+      "source builds",
+      "fixture generation",
+      "fresh receiver create/import, history/Version equality checks and pre-mutation text warming",
+      "remote sender edits and delta export",
+      "Undo paste and pre-Undo text warming",
+      "post-timer exact content/history/Version/effects/count checks",
+      "release/cleanup"
+    ],
+    "notMeasured": [
+      "browser/editor/render/paint",
+      "mobile",
+      "network",
+      "IndexedDB",
+      "cold projection",
+      "wasm/wasm-gc/native",
+      "growing history or long-running sessions",
+      "real documents",
+      "memory/energy"
+    ],
+    "warmState": "fresh imported 10k-op receiver per lane per pair, pre-read once before target change; post-change text is first read inside timer",
+    "pairing": "identical deterministic actor IDs/seed/history/packet and fresh restored receivers; AB/BA alternating; no forced GC; no dropped samples"
+  },
+  "rows": [
+    {
+      "scenario": "receive4-first-full-text",
+      "baseScalars": 10000,
+      "seedOperations": 10000,
+      "changedOperations": 4,
+      "warmupPairs": 5,
+      "measuredPairs": 30,
+      "packetBytes": 1177,
+      "packetSha256": "a6f2ad6420c1bd95169c8022aa87eea099727c5e8b5ae3524d0fa49a5135059f",
+      "expectedTextSha256": "83e1125dd6e54e5a05d8c2ac8a82a1ceffd40508a8c7f994057167972a53d468",
+      "warmup": [
+        {
+          "index": 0,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:07.157Z",
+          "durationMs": {
+            "base": 71.88628299999982,
+            "head": 1.3383510000003298
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 1,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:08.411Z",
+          "durationMs": {
+            "head": 0.9022959999992963,
+            "base": 63.62424800000008
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 2,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:09.716Z",
+          "durationMs": {
+            "base": 72.48966000000019,
+            "head": 0.8689059999996971
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 3,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:10.996Z",
+          "durationMs": {
+            "head": 0.8524810000008074,
+            "base": 65.2849699999997
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 4,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:12.276Z",
+          "durationMs": {
+            "base": 64.58326600000055,
+            "head": 0.843127999999524
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "index": 5,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:13.601Z",
+          "durationMs": {
+            "head": 0.8022459999992861,
+            "base": 64.9482250000001
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 6,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:14.891Z",
+          "durationMs": {
+            "base": 61.79555000000073,
+            "head": 0.8993119999995542
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 7,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:16.216Z",
+          "durationMs": {
+            "head": 0.9642189999995026,
+            "base": 67.76539599999887
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 8,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:17.465Z",
+          "durationMs": {
+            "base": 70.22769599999992,
+            "head": 0.6974979999995412
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 9,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:18.718Z",
+          "durationMs": {
+            "head": 0.8315500000007887,
+            "base": 61.61182799999915
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 10,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:20.005Z",
+          "durationMs": {
+            "base": 63.22850800000015,
+            "head": 0.7241890000004787
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 11,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:21.296Z",
+          "durationMs": {
+            "head": 0.9482349999998405,
+            "base": 69.6072630000017
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 12,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:22.610Z",
+          "durationMs": {
+            "base": 72.37285799999881,
+            "head": 0.8061109999980545
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 13,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:23.878Z",
+          "durationMs": {
+            "head": 0.8924909999986994,
+            "base": 67.05891200000042
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 14,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:25.125Z",
+          "durationMs": {
+            "base": 64.55112799999915,
+            "head": 0.7429159999992407
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 15,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:26.384Z",
+          "durationMs": {
+            "head": 0.5820139999996172,
+            "base": 66.75648700000238
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 16,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:27.740Z",
+          "durationMs": {
+            "base": 67.24014399999942,
+            "head": 0.7026259999984177
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 17,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:28.994Z",
+          "durationMs": {
+            "head": 0.743387000002258,
+            "base": 62.54128299999866
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 18,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:30.278Z",
+          "durationMs": {
+            "base": 66.61934299999848,
+            "head": 0.6750839999986056
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 19,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:31.537Z",
+          "durationMs": {
+            "head": 0.7599020000016026,
+            "base": 60.6304369999998
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 20,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:32.767Z",
+          "durationMs": {
+            "base": 64.08060999999725,
+            "head": 0.6689239999977872
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 21,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:34.006Z",
+          "durationMs": {
+            "head": 0.6230550000000221,
+            "base": 61.846944999997504
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 22,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:35.275Z",
+          "durationMs": {
+            "base": 65.90554100000008,
+            "head": 0.6416839999983495
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 23,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:36.584Z",
+          "durationMs": {
+            "head": 0.6472630000025674,
+            "base": 66.42259700000068
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 24,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:37.826Z",
+          "durationMs": {
+            "base": 70.94350400000258,
+            "head": 0.6127100000012433
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 25,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:39.109Z",
+          "durationMs": {
+            "head": 0.8660460000028252,
+            "base": 63.506405000000086
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 26,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:40.345Z",
+          "durationMs": {
+            "base": 67.86772599999676,
+            "head": 0.6744089999992866
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 27,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:41.619Z",
+          "durationMs": {
+            "head": 0.6683410000041476,
+            "base": 66.47171099999832
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 28,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:42.812Z",
+          "durationMs": {
+            "base": 66.06183799999417,
+            "head": 0.622231000001193
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 29,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:44.084Z",
+          "durationMs": {
+            "head": 0.5861169999989215,
+            "base": 63.53660999999556
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 30,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:45.333Z",
+          "durationMs": {
+            "base": 64.11921799999982,
+            "head": 0.642093999995268
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 31,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:46.720Z",
+          "durationMs": {
+            "head": 0.9597729999950388,
+            "base": 69.13969199999701
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 32,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:47.953Z",
+          "durationMs": {
+            "base": 70.12694100000226,
+            "head": 0.6030360000004293
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 33,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:49.263Z",
+          "durationMs": {
+            "head": 0.6540929999973741,
+            "base": 63.885213000001386
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 34,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:50.479Z",
+          "durationMs": {
+            "base": 65.33946800000558,
+            "head": 0.6984089999969001
+          },
+          "checks": {
+            "resultChecksum": 914421,
+            "historySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+            "versionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c",
+            "historyOperations": 10004,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "availabilities": {
+        "base": {
+          "snapshot": 35
+        },
+        "head": {
+          "exact": 35
+        }
+      },
+      "checks": {
+        "allPairsExactText": true,
+        "allPairsExactHistoryBytes": true,
+        "allPairsExactVersionBytes": true,
+        "allPairsOperationCount": true,
+        "allPairsPendingZero": true,
+        "allExactEffectsReconstructText": true,
+        "freshReceiverEverySample": true,
+        "preMutationTextRead": true,
+        "undoSingleLocalGroup": null
+      },
+      "base": {
+        "n": 30,
+        "medianMs": 65.98368949999713,
+        "p95Ms": 70.94350400000258,
+        "maxMs": 72.37285799999881,
+        "minMs": 60.6304369999998,
+        "samplesMs": [
+          64.9482250000001,
+          61.79555000000073,
+          67.76539599999887,
+          70.22769599999992,
+          61.61182799999915,
+          63.22850800000015,
+          69.6072630000017,
+          72.37285799999881,
+          67.05891200000042,
+          64.55112799999915,
+          66.75648700000238,
+          67.24014399999942,
+          62.54128299999866,
+          66.61934299999848,
+          60.6304369999998,
+          64.08060999999725,
+          61.846944999997504,
+          65.90554100000008,
+          66.42259700000068,
+          70.94350400000258,
+          63.506405000000086,
+          67.86772599999676,
+          66.47171099999832,
+          66.06183799999417,
+          63.53660999999556,
+          64.11921799999982,
+          69.13969199999701,
+          70.12694100000226,
+          63.885213000001386,
+          65.33946800000558
+        ]
+      },
+      "head": {
+        "n": 30,
+        "medianMs": 0.6979534999982207,
+        "p95Ms": 0.9597729999950388,
+        "maxMs": 0.9642189999995026,
+        "minMs": 0.5820139999996172,
+        "samplesMs": [
+          0.8022459999992861,
+          0.8993119999995542,
+          0.9642189999995026,
+          0.6974979999995412,
+          0.8315500000007887,
+          0.7241890000004787,
+          0.9482349999998405,
+          0.8061109999980545,
+          0.8924909999986994,
+          0.7429159999992407,
+          0.5820139999996172,
+          0.7026259999984177,
+          0.743387000002258,
+          0.6750839999986056,
+          0.7599020000016026,
+          0.6689239999977872,
+          0.6230550000000221,
+          0.6416839999983495,
+          0.6472630000025674,
+          0.6127100000012433,
+          0.8660460000028252,
+          0.6744089999992866,
+          0.6683410000041476,
+          0.622231000001193,
+          0.5861169999989215,
+          0.642093999995268,
+          0.9597729999950388,
+          0.6030360000004293,
+          0.6540929999973741,
+          0.6984089999969001
+        ]
+      },
+      "baseToHeadMedianRatio": 94.53880451944914,
+      "pairedRatios": {
+        "n": 30,
+        "medianRatio": 95.74744548118102,
+        "p95Ratio": 115.78643077452404,
+        "maxRatio": 116.28980856856363,
+        "minRatio": 68.71425044926717,
+        "samplesRatios": [
+          80.95799168840715,
+          68.71425044926717,
+          70.2800878224074,
+          100.68515752023104,
+          74.09275208940016,
+          87.309401275024,
+          73.40718598239192,
+          89.78026351231217,
+          75.13679353640333,
+          86.8888649592486,
+          114.69910861258712,
+          95.69834307320089,
+          84.13018118397106,
+          98.68304240677617,
+          79.78717913608851,
+          95.79654788916115,
+          99.26402163532161,
+          102.70715959906995,
+          102.62072295146982,
+          115.78643077452404,
+          73.32913609645783,
+          100.63288894434766,
+          99.45777828920536,
+          106.1693133255455,
+          108.40260562330127,
+          99.85955016005812,
+          72.03754637852326,
+          116.28980856856363,
+          97.66992308472626,
+          93.55473368799026
+        ]
+      },
+      "setupPairDurationMs": {
+        "n": 35,
+        "medianMs": 920.0554989999982,
+        "p95Ms": 1000.5900309999997,
+        "maxMs": 1014.3803980000012,
+        "minMs": 867.6446339999966,
+        "samplesMs": [
+          979.181173,
+          915.0732640000001,
+          974.2194719999998,
+          915.8982090000009,
+          947.8666819999999,
+          992.8800879999999,
+          961.3682019999997,
+          995.7348440000005,
+          947.4169020000008,
+          914.5065059999997,
+          950.2776819999999,
+          931.9443910000009,
+          969.841167999999,
+          913.5079700000024,
+          922.1503719999964,
+          939.1169229999978,
+          1000.5900309999997,
+          920.0554989999982,
+          945.7405499999986,
+          903.7964119999997,
+          904.9334799999997,
+          917.3274760000022,
+          943.7227609999973,
+          930.2099659999985,
+          869.8818719999981,
+          911.1342829999994,
+          907.6223929999978,
+          898.6977980000011,
+          867.6446339999966,
+          907.7582320000001,
+          920.0283899999995,
+          1014.3803980000012,
+          892.722778000003,
+          900.668912000001,
+          883.2283840000018
+        ]
+      },
+      "expectedHistorySha256": "ad5f7e4d3ecc237b5772ab459cdd99225c91258bf18fadfcf0beb95b594a22e2",
+      "expectedVersionSha256": "7c522c4c557b9f88136817e4dbb92e85dff52f2a6ea17c40aa6e9fdc4f8d3d5c"
+    },
+    {
+      "scenario": "receive20-first-full-text",
+      "baseScalars": 10000,
+      "seedOperations": 10000,
+      "changedOperations": 20,
+      "warmupPairs": 5,
+      "measuredPairs": 30,
+      "packetBytes": 5414,
+      "packetSha256": "490e601518d8e92ce9345588ba535fb8b7451ba496ce62af1d7bac864ad8d4dc",
+      "expectedTextSha256": "484344e2fcd5933ae00d47e275e05923204c2cd84a7707a4b43e888f285e39e4",
+      "warmup": [
+        {
+          "index": 0,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:52.626Z",
+          "durationMs": {
+            "base": 60.98880099999951,
+            "head": 1.0690560000002733
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 1,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:53.888Z",
+          "durationMs": {
+            "head": 1.5796029999983148,
+            "base": 61.51072500000009
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 2,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:55.153Z",
+          "durationMs": {
+            "base": 74.08536299999832,
+            "head": 1.2442020000016782
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 3,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:56.457Z",
+          "durationMs": {
+            "head": 1.0696549999993294,
+            "base": 74.46802800000296
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 4,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:43:57.853Z",
+          "durationMs": {
+            "base": 63.45837200000096,
+            "head": 1.0379979999997886
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "index": 5,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:43:59.088Z",
+          "durationMs": {
+            "head": 0.9776360000032582,
+            "base": 62.92928799999936
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 6,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:00.370Z",
+          "durationMs": {
+            "base": 62.91356399999495,
+            "head": 1.0796200000040699
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 7,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:01.602Z",
+          "durationMs": {
+            "head": 1.07551400000375,
+            "base": 64.26951900000131
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 8,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:02.886Z",
+          "durationMs": {
+            "base": 66.63688600000023,
+            "head": 1.0854879999969853
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 9,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:04.171Z",
+          "durationMs": {
+            "head": 1.0342919999966398,
+            "base": 67.5463560000062
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 10,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:05.468Z",
+          "durationMs": {
+            "base": 70.61091799999849,
+            "head": 2.2428040000013425
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 11,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:06.892Z",
+          "durationMs": {
+            "head": 1.3404010000012931,
+            "base": 62.91105699999753
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 12,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:08.108Z",
+          "durationMs": {
+            "base": 65.30239399999846,
+            "head": 1.160861999996996
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 13,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:09.356Z",
+          "durationMs": {
+            "head": 1.2533600000024308,
+            "base": 62.917858000000706
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 14,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:10.602Z",
+          "durationMs": {
+            "base": 66.13342399999965,
+            "head": 1.0878020000091055
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 15,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:11.849Z",
+          "durationMs": {
+            "head": 1.148023000001558,
+            "base": 66.55385599999863
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 16,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:13.027Z",
+          "durationMs": {
+            "base": 60.0459409999894,
+            "head": 1.1318690000043716
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 17,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:14.220Z",
+          "durationMs": {
+            "head": 1.323405000002822,
+            "base": 58.10785699999542
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 18,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:15.422Z",
+          "durationMs": {
+            "base": 67.04136699999799,
+            "head": 1.070056000011391
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 19,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:16.728Z",
+          "durationMs": {
+            "head": 0.9465409999975236,
+            "base": 63.686312999998336
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 20,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:17.980Z",
+          "durationMs": {
+            "base": 68.90337400000135,
+            "head": 1.167752000008477
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 21,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:19.255Z",
+          "durationMs": {
+            "head": 1.2909579999977723,
+            "base": 68.20389600000635
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 22,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:20.534Z",
+          "durationMs": {
+            "base": 89.22198399998888,
+            "head": 1.1389999999955762
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 23,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:21.867Z",
+          "durationMs": {
+            "head": 1.280321999991429,
+            "base": 63.91511800000444
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 24,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:23.092Z",
+          "durationMs": {
+            "base": 67.45346800000698,
+            "head": 1.0478719999955501
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 25,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:24.345Z",
+          "durationMs": {
+            "head": 1.5422140000009676,
+            "base": 60.649700000009034
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 26,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:25.568Z",
+          "durationMs": {
+            "base": 63.93127299999469,
+            "head": 1.0451780000003055
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 27,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:26.816Z",
+          "durationMs": {
+            "head": 1.80955800000811,
+            "base": 62.52691699999559
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 28,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:28.004Z",
+          "durationMs": {
+            "base": 62.753347000005306,
+            "head": 1.0445789999939734
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 29,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:29.219Z",
+          "durationMs": {
+            "head": 1.230586999998195,
+            "base": 60.812435999992886
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 30,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:30.460Z",
+          "durationMs": {
+            "base": 68.72055800000089,
+            "head": 1.2337810000026366
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 31,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:31.756Z",
+          "durationMs": {
+            "head": 1.5529799999931129,
+            "base": 62.30724599999667
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 32,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:33.048Z",
+          "durationMs": {
+            "base": 65.00435299999663,
+            "head": 1.3657289999973727
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 33,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:34.354Z",
+          "durationMs": {
+            "head": 1.2341820000001462,
+            "base": 65.07142200000817
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 34,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:35.784Z",
+          "durationMs": {
+            "base": 81.00793700000213,
+            "head": 1.5150639999919804
+          },
+          "checks": {
+            "resultChecksum": 915645,
+            "historySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+            "versionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916",
+            "historyOperations": 10020,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "availabilities": {
+        "base": {
+          "snapshot": 35
+        },
+        "head": {
+          "exact": 35
+        }
+      },
+      "checks": {
+        "allPairsExactText": true,
+        "allPairsExactHistoryBytes": true,
+        "allPairsExactVersionBytes": true,
+        "allPairsOperationCount": true,
+        "allPairsPendingZero": true,
+        "allExactEffectsReconstructText": true,
+        "freshReceiverEverySample": true,
+        "preMutationTextRead": true,
+        "undoSingleLocalGroup": null
+      },
+      "base": {
+        "n": 30,
+        "medianMs": 64.63693599999897,
+        "p95Ms": 81.00793700000213,
+        "maxMs": 89.22198399998888,
+        "minMs": 58.10785699999542,
+        "samplesMs": [
+          62.92928799999936,
+          62.91356399999495,
+          64.26951900000131,
+          66.63688600000023,
+          67.5463560000062,
+          70.61091799999849,
+          62.91105699999753,
+          65.30239399999846,
+          62.917858000000706,
+          66.13342399999965,
+          66.55385599999863,
+          60.0459409999894,
+          58.10785699999542,
+          67.04136699999799,
+          63.686312999998336,
+          68.90337400000135,
+          68.20389600000635,
+          89.22198399998888,
+          63.91511800000444,
+          67.45346800000698,
+          60.649700000009034,
+          63.93127299999469,
+          62.52691699999559,
+          62.753347000005306,
+          60.812435999992886,
+          68.72055800000089,
+          62.30724599999667,
+          65.00435299999663,
+          65.07142200000817,
+          81.00793700000213
+        ]
+      },
+      "head": {
+        "n": 30,
+        "medianMs": 1.1643070000027365,
+        "p95Ms": 1.80955800000811,
+        "maxMs": 2.2428040000013425,
+        "minMs": 0.9465409999975236,
+        "samplesMs": [
+          0.9776360000032582,
+          1.0796200000040699,
+          1.07551400000375,
+          1.0854879999969853,
+          1.0342919999966398,
+          2.2428040000013425,
+          1.3404010000012931,
+          1.160861999996996,
+          1.2533600000024308,
+          1.0878020000091055,
+          1.148023000001558,
+          1.1318690000043716,
+          1.323405000002822,
+          1.070056000011391,
+          0.9465409999975236,
+          1.167752000008477,
+          1.2909579999977723,
+          1.1389999999955762,
+          1.280321999991429,
+          1.0478719999955501,
+          1.5422140000009676,
+          1.0451780000003055,
+          1.80955800000811,
+          1.0445789999939734,
+          1.230586999998195,
+          1.2337810000026366,
+          1.5529799999931129,
+          1.3657289999973727,
+          1.2341820000001462,
+          1.5150639999919804
+        ]
+      },
+      "baseToHeadMedianRatio": 55.515371804727664,
+      "pairedRatios": {
+        "n": 30,
+        "medianRatio": 55.97625961778887,
+        "p95Ratio": 67.28320590462003,
+        "maxRatio": 78.33361194059299,
+        "minRatio": 31.48332087866627,
+        "samplesRatios": [
+          64.3688325714168,
+          58.27380374553804,
+          59.757026872525344,
+          61.388873944424354,
+          65.30685338398213,
+          31.48332087866627,
+          46.93450467430033,
+          56.2533651718873,
+          50.19935054563628,
+          60.79546093815426,
+          57.97258068863455,
+          53.050256699103414,
+          43.907841514783094,
+          62.65220418303745,
+          67.28320590462003,
+          59.00514321491307,
+          52.83200228057307,
+          78.33361194059299,
+          49.92112765416224,
+          64.37185839519849,
+          39.32638401672594,
+          61.167832656232726,
+          34.55369598527119,
+          60.07525232688705,
+          49.41742111698082,
+          55.69915406369043,
+          40.121087200268505,
+          47.59681679170734,
+          52.72433239181941,
+          53.46832675083754
+        ]
+      },
+      "setupPairDurationMs": {
+        "n": 35,
+        "medianMs": 913.1776959999988,
+        "p95Ms": 1017.424997999995,
+        "maxMs": 1063.506441999998,
+        "minMs": 854.968996999989,
+        "samplesMs": [
+          878.0914050000065,
+          932.5787090000013,
+          931.7016839999997,
+          947.6325450000004,
+          967.5493889999998,
+          906.3764819999997,
+          948.5550870000006,
+          913.2329200000022,
+          944.926953999995,
+          923.6746960000019,
+          963.2804800000013,
+          1017.424997999995,
+          890.2044260000039,
+          906.8083750000005,
+          909.5548869999984,
+          906.6417220000003,
+          854.968996999989,
+          885.6729999999952,
+          892.9300290000101,
+          944.7213950000005,
+          879.994366999992,
+          908.1939620000048,
+          940.3561569999874,
+          943.1727010000031,
+          897.578297,
+          907.7162459999963,
+          913.1776959999988,
+          902.9206669999985,
+          876.193081999998,
+          883.2337919999991,
+          902.584784000006,
+          948.5103119999985,
+          948.0715150000033,
+          967.2120439999999,
+          1063.506441999998
+        ]
+      },
+      "expectedHistorySha256": "b940a917d8b8af2f8eee6d9b55a219e9eadd023863f1d9918f83d24cb46386f5",
+      "expectedVersionSha256": "64bb11ad1db2bbcf1f682f5b8555741887a0bc17011500092f0dfb19f5713916"
+    },
+    {
+      "scenario": "receive32-first-full-text",
+      "baseScalars": 10000,
+      "seedOperations": 10000,
+      "changedOperations": 32,
+      "warmupPairs": 5,
+      "measuredPairs": 30,
+      "packetBytes": 8606,
+      "packetSha256": "96db4116da44163106e14da73dca4a95e1ed624176775de44792969821f4efd3",
+      "expectedTextSha256": "4fdf237da0633df151d1f06572292c8a65a41a935da877af0ca36900a275db2e",
+      "warmup": [
+        {
+          "index": 0,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:38.036Z",
+          "durationMs": {
+            "base": 61.61665100000391,
+            "head": 1.259951000000001
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 1,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:39.255Z",
+          "durationMs": {
+            "head": 1.706871999995201,
+            "base": 62.511063999991165
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 2,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:40.496Z",
+          "durationMs": {
+            "base": 64.77753799999482,
+            "head": 1.2737809999962337
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 3,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:41.765Z",
+          "durationMs": {
+            "head": 1.768683999995119,
+            "base": 60.69358900000225
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 4,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:43.049Z",
+          "durationMs": {
+            "base": 61.135739999997895,
+            "head": 1.682465999998385
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "index": 5,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:44.270Z",
+          "durationMs": {
+            "head": 1.2225949999992736,
+            "base": 62.91967200000363
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 6,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:45.531Z",
+          "durationMs": {
+            "base": 67.71002399999998,
+            "head": 1.634864000006928
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 7,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:46.764Z",
+          "durationMs": {
+            "head": 1.2185389999940526,
+            "base": 62.979120000003604
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 8,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:48.027Z",
+          "durationMs": {
+            "base": 57.28591099999903,
+            "head": 1.8239170000015292
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 9,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:49.307Z",
+          "durationMs": {
+            "head": 1.197797000000719,
+            "base": 58.42488000000594
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 10,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:50.509Z",
+          "durationMs": {
+            "base": 65.17850100000214,
+            "head": 1.504469000006793
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 11,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:51.781Z",
+          "durationMs": {
+            "head": 1.5503460000036284,
+            "base": 60.572186000004876
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 12,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:52.984Z",
+          "durationMs": {
+            "base": 63.10192200000165,
+            "head": 1.3792099999991478
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 13,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:54.212Z",
+          "durationMs": {
+            "head": 1.6369059999997262,
+            "base": 62.17359399999259
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 14,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:55.427Z",
+          "durationMs": {
+            "base": 63.502814000006765,
+            "head": 1.633230999999796
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 15,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:56.695Z",
+          "durationMs": {
+            "head": 1.5963749999937136,
+            "base": 67.45417300000554
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 16,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:44:57.928Z",
+          "durationMs": {
+            "base": 64.45689099999436,
+            "head": 1.6530599999969127
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 17,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:44:59.142Z",
+          "durationMs": {
+            "head": 1.3674129999999423,
+            "base": 65.67650600000343
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 18,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:00.369Z",
+          "durationMs": {
+            "base": 74.47827799999504,
+            "head": 1.6759860000020126
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 19,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:01.690Z",
+          "durationMs": {
+            "head": 1.5275830000027781,
+            "base": 67.33879100000195
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 20,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:02.972Z",
+          "durationMs": {
+            "base": 62.556005000005825,
+            "head": 1.365339000010863
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 21,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:04.249Z",
+          "durationMs": {
+            "head": 1.4054190000024391,
+            "base": 61.437355000001844
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 22,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:05.476Z",
+          "durationMs": {
+            "base": 60.18536600000516,
+            "head": 1.31738699998823
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 23,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:06.704Z",
+          "durationMs": {
+            "head": 1.5477240000036545,
+            "base": 61.31393000000389
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 24,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:07.981Z",
+          "durationMs": {
+            "base": 61.838879000002635,
+            "head": 1.226001000002725
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 25,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:09.215Z",
+          "durationMs": {
+            "head": 1.48841399999219,
+            "base": 58.995137999998406
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 26,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:10.385Z",
+          "durationMs": {
+            "base": 62.92491900001187,
+            "head": 1.3580280000023777
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 27,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:11.646Z",
+          "durationMs": {
+            "head": 1.424827999988338,
+            "base": 65.21031900000526
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 28,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:12.883Z",
+          "durationMs": {
+            "base": 59.478956999999355,
+            "head": 1.8512979999941308
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 29,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:14.106Z",
+          "durationMs": {
+            "head": 1.1790390000096522,
+            "base": 64.94110399999772
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 30,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:15.326Z",
+          "durationMs": {
+            "base": 64.72591700000339,
+            "head": 1.5229959999851417
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 31,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:16.668Z",
+          "durationMs": {
+            "head": 1.6473629999964032,
+            "base": 66.49155800000881
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 32,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:17.945Z",
+          "durationMs": {
+            "base": 63.930873000004794,
+            "head": 1.2404920000117272
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 33,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:19.230Z",
+          "durationMs": {
+            "head": 1.2473019999742974,
+            "base": 61.463990999996895
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 34,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:20.443Z",
+          "durationMs": {
+            "base": 62.1178919999802,
+            "head": 1.2875120000098832
+          },
+          "checks": {
+            "resultChecksum": 916575,
+            "historySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+            "versionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97",
+            "historyOperations": 10032,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "availabilities": {
+        "base": {
+          "snapshot": 35
+        },
+        "head": {
+          "exact": 35
+        }
+      },
+      "checks": {
+        "allPairsExactText": true,
+        "allPairsExactHistoryBytes": true,
+        "allPairsExactVersionBytes": true,
+        "allPairsOperationCount": true,
+        "allPairsPendingZero": true,
+        "allExactEffectsReconstructText": true,
+        "freshReceiverEverySample": true,
+        "preMutationTextRead": true,
+        "undoSingleLocalGroup": null
+      },
+      "base": {
+        "n": 30,
+        "medianMs": 62.95201950000774,
+        "p95Ms": 67.71002399999998,
+        "maxMs": 74.47827799999504,
+        "minMs": 57.28591099999903,
+        "samplesMs": [
+          62.91967200000363,
+          67.71002399999998,
+          62.979120000003604,
+          57.28591099999903,
+          58.42488000000594,
+          65.17850100000214,
+          60.572186000004876,
+          63.10192200000165,
+          62.17359399999259,
+          63.502814000006765,
+          67.45417300000554,
+          64.45689099999436,
+          65.67650600000343,
+          74.47827799999504,
+          67.33879100000195,
+          62.556005000005825,
+          61.437355000001844,
+          60.18536600000516,
+          61.31393000000389,
+          61.838879000002635,
+          58.995137999998406,
+          62.92491900001187,
+          65.21031900000526,
+          59.478956999999355,
+          64.94110399999772,
+          64.72591700000339,
+          66.49155800000881,
+          63.930873000004794,
+          61.463990999996895,
+          62.1178919999802
+        ]
+      },
+      "head": {
+        "n": 30,
+        "medianMs": 1.456620999990264,
+        "p95Ms": 1.8239170000015292,
+        "maxMs": 1.8512979999941308,
+        "minMs": 1.1790390000096522,
+        "samplesMs": [
+          1.2225949999992736,
+          1.634864000006928,
+          1.2185389999940526,
+          1.8239170000015292,
+          1.197797000000719,
+          1.504469000006793,
+          1.5503460000036284,
+          1.3792099999991478,
+          1.6369059999997262,
+          1.633230999999796,
+          1.5963749999937136,
+          1.6530599999969127,
+          1.3674129999999423,
+          1.6759860000020126,
+          1.5275830000027781,
+          1.365339000010863,
+          1.4054190000024391,
+          1.31738699998823,
+          1.5477240000036545,
+          1.226001000002725,
+          1.48841399999219,
+          1.3580280000023777,
+          1.424827999988338,
+          1.8512979999941308,
+          1.1790390000096522,
+          1.5229959999851417,
+          1.6473629999964032,
+          1.2404920000117272,
+          1.2473019999742974,
+          1.2875120000098832
+        ]
+      },
+      "baseToHeadMedianRatio": 43.217844243923786,
+      "pairedRatios": {
+        "n": 30,
+        "medianRatio": 44.26020208859329,
+        "p95Ratio": 51.68412336438226,
+        "maxRatio": 55.07969117176453,
+        "minRatio": 31.408178661611796,
+        "samplesRatios": [
+          51.46403510568996,
+          41.416303741297774,
+          51.68412336438226,
+          31.408178661611796,
+          48.776946343972206,
+          43.32325956846425,
+          39.07010822091527,
+          45.75222192417445,
+          37.982385060597856,
+          38.88170993571313,
+          42.25459118331919,
+          38.99246911794777,
+          48.029751070090896,
+          44.43848456962385,
+          44.08191960756272,
+          45.81719631498706,
+          43.714618202753215,
+          45.685410589707416,
+          39.61554514878565,
+          50.4395012727275,
+          39.63624233600864,
+          46.335509282505,
+          45.76715154428394,
+          32.128245695824184,
+          55.07969117176453,
+          42.499072223850135,
+          40.36242042594983,
+          51.53670720923667,
+          49.27755347242565,
+          48.24645673166803
+        ]
+      },
+      "setupPairDurationMs": {
+        "n": 35,
+        "medianMs": 910.3062539999955,
+        "p95Ms": 948.7176760000002,
+        "maxMs": 966.5955630000099,
+        "minMs": 860.9979259999964,
+        "samplesMs": [
+          885.8014799999946,
+          879.4917450000066,
+          917.7580650000018,
+          933.5199710000015,
+          948.7176760000002,
+          894.6749240000063,
+          936.2652180000005,
+          891.9544599999936,
+          918.4934749999957,
+          930.2934079999977,
+          891.886062000005,
+          915.6878509999951,
+          885.1535189999995,
+          897.7499769999995,
+          897.3117240000138,
+          932.1335439999966,
+          887.1574459999974,
+          886.0712980000098,
+          897.5380319999967,
+          946.5847999999969,
+          946.7136440000031,
+          939.0890810000128,
+          912.1671500000084,
+          910.667969999995,
+          933.1185430000041,
+          889.7426029999915,
+          860.9979259999964,
+          924.7711100000015,
+          910.3062539999955,
+          886.6962930000009,
+          900.6425750000053,
+          966.5955630000099,
+          929.8482730000105,
+          901.1092140000255,
+          896.6280370000168
+        ]
+      },
+      "expectedHistorySha256": "f2a0c310837ff915e40628a523348d8f4ff9348f8114a006aa5e334b552e28dd",
+      "expectedVersionSha256": "349619bbcdbb7ba867ca3081ce0fa1d3e809b5a9d095b4d1951cb4860e314e97"
+    },
+    {
+      "scenario": "receive1000-first-full-text",
+      "baseScalars": 10000,
+      "seedOperations": 10000,
+      "changedOperations": 1000,
+      "warmupPairs": 5,
+      "measuredPairs": 30,
+      "packetBytes": 268793,
+      "packetSha256": "387d03b5df72252809d5ff50fa8a1ee4203b2c6418d8f6d68946abeb4a3ea5d2",
+      "expectedTextSha256": "eb182b453c8f3184a02ebebbf67dc6417098154dd01c9d88c4ba6ad03879f090",
+      "warmup": [
+        {
+          "index": 0,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:22.716Z",
+          "durationMs": {
+            "base": 95.5054850000015,
+            "head": 34.192660000000615
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 1,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:24.181Z",
+          "durationMs": {
+            "head": 25.031655999977374,
+            "base": 94.945326999994
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 2,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:25.620Z",
+          "durationMs": {
+            "base": 92.8965179999941,
+            "head": 22.350384999997914
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 3,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:26.923Z",
+          "durationMs": {
+            "head": 23.28556899999967,
+            "base": 95.42216499999631
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 4,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:28.272Z",
+          "durationMs": {
+            "base": 94.59187400000519,
+            "head": 28.786395000002813
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "index": 5,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:29.580Z",
+          "durationMs": {
+            "head": 26.294615999999223,
+            "base": 94.2512010000064
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 6,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:30.974Z",
+          "durationMs": {
+            "base": 121.72218599999906,
+            "head": 22.917611000011675
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 7,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:32.307Z",
+          "durationMs": {
+            "head": 25.453487999999197,
+            "base": 93.58752199998708
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 8,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:33.656Z",
+          "durationMs": {
+            "base": 91.40942100001848,
+            "head": 30.465113000012934
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 9,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:35.037Z",
+          "durationMs": {
+            "head": 27.37353099999018,
+            "base": 93.45463200000813
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 10,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:36.406Z",
+          "durationMs": {
+            "base": 92.54886099998839,
+            "head": 25.810342999990098
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 11,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:37.807Z",
+          "durationMs": {
+            "head": 27.872638000000734,
+            "base": 91.19011199998204
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 12,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:39.197Z",
+          "durationMs": {
+            "base": 93.29674099999829,
+            "head": 22.81158300000243
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 13,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:40.511Z",
+          "durationMs": {
+            "head": 23.46160099998815,
+            "base": 87.31277200000477
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 14,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:41.840Z",
+          "durationMs": {
+            "base": 89.63551299998653,
+            "head": 23.17114400002174
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 15,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:43.112Z",
+          "durationMs": {
+            "head": 24.592338999995263,
+            "base": 94.45438999999897
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 16,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:44.472Z",
+          "durationMs": {
+            "base": 93.55801300000167,
+            "head": 22.065614000021014
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 17,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:45.802Z",
+          "durationMs": {
+            "head": 23.16325099999085,
+            "base": 90.30655199999455
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 18,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:47.318Z",
+          "durationMs": {
+            "base": 93.67567300001974,
+            "head": 43.708631999994395
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 19,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:48.783Z",
+          "durationMs": {
+            "head": 22.881701000005705,
+            "base": 91.11135299998568
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 20,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:50.175Z",
+          "durationMs": {
+            "base": 93.72825099999318,
+            "head": 26.233029000024544
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 21,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:51.593Z",
+          "durationMs": {
+            "head": 22.085637000011047,
+            "base": 91.33757400000468
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 22,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:53.056Z",
+          "durationMs": {
+            "base": 99.3133080000116,
+            "head": 34.323615000001155
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 23,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:54.452Z",
+          "durationMs": {
+            "head": 26.158204999985173,
+            "base": 95.87135199998738
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 24,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:55.867Z",
+          "durationMs": {
+            "base": 114.9192439999897,
+            "head": 28.83514800001285
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 25,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:45:57.315Z",
+          "durationMs": {
+            "head": 25.245444000000134,
+            "base": 88.9638130000094
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 26,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:45:58.737Z",
+          "durationMs": {
+            "base": 99.18885999999475,
+            "head": 27.297051999979885
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 27,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:00.123Z",
+          "durationMs": {
+            "head": 25.217089000012493,
+            "base": 97.28072999999858
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 28,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:01.488Z",
+          "durationMs": {
+            "base": 95.13086100001237,
+            "head": 28.042100999999093
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 29,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:02.882Z",
+          "durationMs": {
+            "head": 24.54891900002258,
+            "base": 98.81385799997952
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 30,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:04.294Z",
+          "durationMs": {
+            "base": 96.92283799999859,
+            "head": 28.62781500001438
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 31,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:05.729Z",
+          "durationMs": {
+            "head": 24.41895399999339,
+            "base": 97.54143599999952
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 32,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:07.124Z",
+          "durationMs": {
+            "base": 98.5407380000106,
+            "head": 27.133381000021473
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 33,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:08.469Z",
+          "durationMs": {
+            "head": 25.433898999996018,
+            "base": 95.09094600001117
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        },
+        {
+          "index": 34,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:09.791Z",
+          "durationMs": {
+            "base": 93.11432799999602,
+            "head": 27.187692999985302
+          },
+          "checks": {
+            "resultChecksum": 991571,
+            "historySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+            "versionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4",
+            "historyOperations": 11000,
+            "baseAvailability": "snapshot",
+            "headAvailability": "exact"
+          }
+        }
+      ],
+      "availabilities": {
+        "base": {
+          "snapshot": 35
+        },
+        "head": {
+          "exact": 35
+        }
+      },
+      "checks": {
+        "allPairsExactText": true,
+        "allPairsExactHistoryBytes": true,
+        "allPairsExactVersionBytes": true,
+        "allPairsOperationCount": true,
+        "allPairsPendingZero": true,
+        "allExactEffectsReconstructText": true,
+        "freshReceiverEverySample": true,
+        "preMutationTextRead": true,
+        "undoSingleLocalGroup": null
+      },
+      "base": {
+        "n": 30,
+        "medianMs": 93.70196200000646,
+        "p95Ms": 114.9192439999897,
+        "maxMs": 121.72218599999906,
+        "minMs": 87.31277200000477,
+        "samplesMs": [
+          94.2512010000064,
+          121.72218599999906,
+          93.58752199998708,
+          91.40942100001848,
+          93.45463200000813,
+          92.54886099998839,
+          91.19011199998204,
+          93.29674099999829,
+          87.31277200000477,
+          89.63551299998653,
+          94.45438999999897,
+          93.55801300000167,
+          90.30655199999455,
+          93.67567300001974,
+          91.11135299998568,
+          93.72825099999318,
+          91.33757400000468,
+          99.3133080000116,
+          95.87135199998738,
+          114.9192439999897,
+          88.9638130000094,
+          99.18885999999475,
+          97.28072999999858,
+          95.13086100001237,
+          98.81385799997952,
+          96.92283799999859,
+          97.54143599999952,
+          98.5407380000106,
+          95.09094600001117,
+          93.11432799999602
+        ]
+      },
+      "head": {
+        "n": 30,
+        "medianMs": 25.631915499994648,
+        "p95Ms": 34.323615000001155,
+        "maxMs": 43.708631999994395,
+        "minMs": 22.065614000021014,
+        "samplesMs": [
+          26.294615999999223,
+          22.917611000011675,
+          25.453487999999197,
+          30.465113000012934,
+          27.37353099999018,
+          25.810342999990098,
+          27.872638000000734,
+          22.81158300000243,
+          23.46160099998815,
+          23.17114400002174,
+          24.592338999995263,
+          22.065614000021014,
+          23.16325099999085,
+          43.708631999994395,
+          22.881701000005705,
+          26.233029000024544,
+          22.085637000011047,
+          34.323615000001155,
+          26.158204999985173,
+          28.83514800001285,
+          25.245444000000134,
+          27.297051999979885,
+          25.217089000012493,
+          28.042100999999093,
+          24.54891900002258,
+          28.62781500001438,
+          24.41895399999339,
+          27.133381000021473,
+          25.433898999996018,
+          27.187692999985302
+        ]
+      },
+      "baseToHeadMedianRatio": 3.6556753630069525,
+      "pairedRatios": {
+        "n": 30,
+        "medianRatio": 3.6709319555294524,
+        "p95Ratio": 4.239991372998393,
+        "maxRatio": 5.31129470693682,
+        "minRatio": 2.14318473751436,
+        "samplesRatios": [
+          3.584429641414394,
+          5.31129470693682,
+          3.676805395000875,
+          3.000462233636871,
+          3.4140510407678737,
+          3.5857276673938,
+          3.2716713789336924,
+          4.089884555578118,
+          3.721518066906383,
+          3.868411201445316,
+          3.8408054638486058,
+          4.239991372998393,
+          3.8986993665107814,
+          2.14318473751436,
+          3.9818435264040453,
+          3.5729099754323257,
+          4.1356096724744225,
+          2.8934396333255767,
+          3.6650585160580293,
+          3.985387694210499,
+          3.5239551738527126,
+          3.633683959720919,
+          3.857730366893276,
+          3.3924298682190557,
+          4.025181638339702,
+          3.3856177287700757,
+          3.9944968977797295,
+          3.6317161506681614,
+          3.738748274498773,
+          3.4248705103462203
+        ]
+      },
+      "setupPairDurationMs": {
+        "n": 35,
+        "medianMs": 932.8124729999981,
+        "p95Ms": 1015.7725440000067,
+        "maxMs": 1034.6627020000014,
+        "minMs": 843.3172140000097,
+        "samplesMs": [
+          902.2640070000198,
+          1015.7725440000067,
+          965.6033849999949,
+          856.656083000009,
+          889.637418999977,
+          872.0929809999943,
+          946.4753619999974,
+          882.8193749999919,
+          912.3906920000154,
+          885.9906659999979,
+          907.7425920000242,
+          950.0132430000231,
+          909.008926999988,
+          864.8869059999997,
+          914.1952810000221,
+          843.3172140000097,
+          935.0863499999978,
+          895.2237599999935,
+          1034.6627020000014,
+          938.9326109999965,
+          942.9080739999772,
+          964.8261050000146,
+          945.3492729999998,
+          882.6886300000187,
+          981.7305869999982,
+          932.9117440000118,
+          982.464645,
+          941.2950629999978,
+          932.0821399999841,
+          932.8124729999981,
+          973.9931109999889,
+          984.2552959999884,
+          947.8946699999797,
+          909.5963449999981,
+          899.4616730000125
+        ]
+      },
+      "expectedHistorySha256": "f05dacc157a96289c7319aeb87584c4661255c093d63d85eadc0bd2877ba26cf",
+      "expectedVersionSha256": "2033ffc0523767c08680e15bb3b71d3316c63a0607e44456e3bc855c92eb55d4"
+    },
+    {
+      "scenario": "undo1000-first-full-text",
+      "baseScalars": 10000,
+      "seedOperations": 10000,
+      "changedOperations": 1000,
+      "warmupPairs": 5,
+      "measuredPairs": 30,
+      "packetBytes": null,
+      "packetSha256": null,
+      "expectedTextSha256": "a3535c39e300522b4ac75eb08252c87b53009a37e3554ada38eac6fbb10368df",
+      "warmup": [
+        {
+          "index": 0,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:11.381Z",
+          "durationMs": {
+            "base": 1571.8107909999962,
+            "head": 12.894694999995409
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 1,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:14.350Z",
+          "durationMs": {
+            "head": 6.257958000001963,
+            "base": 1714.7374370000034
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 2,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:17.435Z",
+          "durationMs": {
+            "base": 1606.6048670000164,
+            "head": 5.449640000006184
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 3,
+          "phase": "warmup",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:20.343Z",
+          "durationMs": {
+            "head": 6.513850999996066,
+            "base": 1597.000944999978
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 4,
+          "phase": "warmup",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:23.360Z",
+          "durationMs": {
+            "base": 1642.0036609999952,
+            "head": 5.983413999987533
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        }
+      ],
+      "pairs": [
+        {
+          "index": 5,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:26.330Z",
+          "durationMs": {
+            "head": 4.793688000005204,
+            "base": 1562.3767999999982
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 6,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:29.237Z",
+          "durationMs": {
+            "base": 1646.4378859999997,
+            "head": 4.634067999984836
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 7,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:32.175Z",
+          "durationMs": {
+            "head": 4.130922999989707,
+            "base": 1629.6032339999801
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 8,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:35.209Z",
+          "durationMs": {
+            "base": 1549.6200800000224,
+            "head": 4.402711000002455
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 9,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:37.973Z",
+          "durationMs": {
+            "head": 8.633242000010796,
+            "base": 1513.6676300000108
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 10,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:40.830Z",
+          "durationMs": {
+            "base": 1630.828834999993,
+            "head": 4.679757000005338
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 11,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:43.875Z",
+          "durationMs": {
+            "head": 4.53770300000906,
+            "base": 1731.3142879999941
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 12,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:47.000Z",
+          "durationMs": {
+            "base": 1586.9287799999875,
+            "head": 4.595291000005091
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 13,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:50.046Z",
+          "durationMs": {
+            "head": 4.700868000014452,
+            "base": 1623.4191759999958
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 14,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:52.961Z",
+          "durationMs": {
+            "base": 1583.6858900000225,
+            "head": 4.2292100000195205
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 15,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:46:55.902Z",
+          "durationMs": {
+            "head": 4.7613799999817275,
+            "base": 1640.349882999988
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 16,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:46:58.779Z",
+          "durationMs": {
+            "base": 1618.805874999991,
+            "head": 4.515439999988303
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 17,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:01.625Z",
+          "durationMs": {
+            "head": 3.9903619999822695,
+            "base": 1515.63857000001
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 18,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:04.475Z",
+          "durationMs": {
+            "base": 1698.9026449999947,
+            "head": 5.418716000014683
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 19,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:07.596Z",
+          "durationMs": {
+            "head": 4.341509000019869,
+            "base": 1596.9608109999972
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 20,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:10.476Z",
+          "durationMs": {
+            "base": 1604.8098270000191,
+            "head": 4.340557999996236
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 21,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:13.308Z",
+          "durationMs": {
+            "head": 4.111023000004934,
+            "base": 1590.7623959999764
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 22,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:16.251Z",
+          "durationMs": {
+            "base": 1602.3773570000194,
+            "head": 4.32947100000456
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 23,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:19.203Z",
+          "durationMs": {
+            "head": 4.640989000006812,
+            "base": 1604.050820000004
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 24,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:22.120Z",
+          "durationMs": {
+            "base": 1521.6048249999876,
+            "head": 10.130051999993157
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 25,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:25.032Z",
+          "durationMs": {
+            "head": 4.337238000007346,
+            "base": 1724.320366000029
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 26,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:28.174Z",
+          "durationMs": {
+            "base": 1711.790091999981,
+            "head": 8.960599999991246
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 27,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:31.398Z",
+          "durationMs": {
+            "head": 3.8438050000113435,
+            "base": 1785.3035479999962
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 28,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:34.631Z",
+          "durationMs": {
+            "base": 1563.7644919999875,
+            "head": 4.391293999971822
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 29,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:37.459Z",
+          "durationMs": {
+            "head": 4.009409999998752,
+            "base": 1569.7491530000116
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 30,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:40.409Z",
+          "durationMs": {
+            "base": 1601.3281069999794,
+            "head": 4.165547999960836
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 31,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:43.473Z",
+          "durationMs": {
+            "head": 4.171163999999408,
+            "base": 1586.8702049999847
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 32,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:46.402Z",
+          "durationMs": {
+            "base": 1674.9952099999646,
+            "head": 4.467493000032846
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 33,
+          "phase": "measured",
+          "order": [
+            "head",
+            "base"
+          ],
+          "startedAt": "2026-10-02T08:47:49.339Z",
+          "durationMs": {
+            "head": 5.161015000019688,
+            "base": 1593.908059999987
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        },
+        {
+          "index": 34,
+          "phase": "measured",
+          "order": [
+            "base",
+            "head"
+          ],
+          "startedAt": "2026-10-02T08:47:52.296Z",
+          "durationMs": {
+            "base": 1607.5617489999859,
+            "head": 4.385296000051312
+          },
+          "checks": {
+            "resultChecksum": 914155,
+            "historySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+            "versionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0",
+            "historyOperations": 12000,
+            "baseAvailability": "undo-true",
+            "headAvailability": "undo-true"
+          }
+        }
+      ],
+      "availabilities": {
+        "base": {},
+        "head": {}
+      },
+      "checks": {
+        "allPairsExactText": true,
+        "allPairsExactHistoryBytes": true,
+        "allPairsExactVersionBytes": true,
+        "allPairsOperationCount": true,
+        "allPairsPendingZero": true,
+        "allExactEffectsReconstructText": true,
+        "freshReceiverEverySample": true,
+        "preMutationTextRead": true,
+        "undoSingleLocalGroup": true
+      },
+      "base": {
+        "n": 30,
+        "medianMs": 1603.2140885000117,
+        "p95Ms": 1731.3142879999941,
+        "maxMs": 1785.3035479999962,
+        "minMs": 1513.6676300000108,
+        "samplesMs": [
+          1562.3767999999982,
+          1646.4378859999997,
+          1629.6032339999801,
+          1549.6200800000224,
+          1513.6676300000108,
+          1630.828834999993,
+          1731.3142879999941,
+          1586.9287799999875,
+          1623.4191759999958,
+          1583.6858900000225,
+          1640.349882999988,
+          1618.805874999991,
+          1515.63857000001,
+          1698.9026449999947,
+          1596.9608109999972,
+          1604.8098270000191,
+          1590.7623959999764,
+          1602.3773570000194,
+          1604.050820000004,
+          1521.6048249999876,
+          1724.320366000029,
+          1711.790091999981,
+          1785.3035479999962,
+          1563.7644919999875,
+          1569.7491530000116,
+          1601.3281069999794,
+          1586.8702049999847,
+          1674.9952099999646,
+          1593.908059999987,
+          1607.5617489999859
+        ]
+      },
+      "head": {
+        "n": 30,
+        "medianMs": 4.43510200001765,
+        "p95Ms": 8.960599999991246,
+        "maxMs": 10.130051999993157,
+        "minMs": 3.8438050000113435,
+        "samplesMs": [
+          4.793688000005204,
+          4.634067999984836,
+          4.130922999989707,
+          4.402711000002455,
+          8.633242000010796,
+          4.679757000005338,
+          4.53770300000906,
+          4.595291000005091,
+          4.700868000014452,
+          4.2292100000195205,
+          4.7613799999817275,
+          4.515439999988303,
+          3.9903619999822695,
+          5.418716000014683,
+          4.341509000019869,
+          4.340557999996236,
+          4.111023000004934,
+          4.32947100000456,
+          4.640989000006812,
+          10.130051999993157,
+          4.337238000007346,
+          8.960599999991246,
+          3.8438050000113435,
+          4.391293999971822,
+          4.009409999998752,
+          4.165547999960836,
+          4.171163999999408,
+          4.467493000032846,
+          5.161015000019688,
+          4.385296000051312
+        ]
+      },
+      "baseToHeadMedianRatio": 361.4830253044082,
+      "pairedRatios": {
+        "n": 30,
+        "medianRatio": 362.54227824567863,
+        "p95Ratio": 397.5618506517531,
+        "maxRatio": 464.4625697699877,
+        "minRatio": 150.2070102898796,
+        "samplesRatios": [
+          325.9237564059868,
+          355.2899711453063,
+          394.4888912245618,
+          351.96952059745877,
+          175.3301517550554,
+          348.4857942406267,
+          381.5397984391084,
+          345.3380384394001,
+          345.34455679142764,
+          374.46376273410704,
+          344.5114405920727,
+          358.5045698767306,
+          379.8248304306087,
+          313.52494668393604,
+          367.8354256533129,
+          369.7243135563241,
+          386.9504977223594,
+          370.1092713170574,
+          345.6269385679754,
+          150.2070102898796,
+          397.5618506517531,
+          191.03520880316648,
+          464.4625697699877,
+          356.10562444919924,
+          391.51624628074956,
+          384.42195529016465,
+          380.43821940355497,
+          374.929565639532,
+          308.83616110278825,
+          366.57998661462665
+        ]
+      },
+      "setupPairDurationMs": {
+        "n": 35,
+        "medianMs": 1152.0198249999958,
+        "p95Ms": 1258.463105999981,
+        "maxMs": 1299.703125,
+        "minMs": 1025.0017680000165,
+        "samplesMs": [
+          1152.0198249999958,
+          1187.2648500000068,
+          1151.365473999991,
+          1120.5119859999977,
+          1220.8339320000086,
+          1120.3903870000213,
+          1153.6324819999863,
+          1111.5586049999984,
+          1172.5349409999908,
+          1025.0017680000165,
+          1148.4617410000064,
+          1226.7252739999967,
+          1195.816531999997,
+          1247.2213800000027,
+          1084.8127209999948,
+          1167.430038999999,
+          1061.0599860000075,
+          1048.7195779999893,
+          1139.2547559999803,
+          1227.4240960000025,
+          1096.0605400000059,
+          1045.6713580000214,
+          1159.5663800000038,
+          1129.5321730000142,
+          1116.1915100000042,
+          1158.718794000015,
+          1209.131440999976,
+          1299.703125,
+          1244.2903939999524,
+          1085.9986970000318,
+          1202.549639999983,
+          1258.463105999981,
+          1129.6634780000313,
+          1078.931419999979,
+          1164.1961600000504
+        ]
+      },
+      "expectedHistorySha256": "16ea9f4f6096d1cbbf1d456b4d2df6ed0c4384bb716f84220dd21e722c90e499",
+      "expectedVersionSha256": "1432e4170a65c8cd4be136425d00a88e880b9e2536deb8f8cb2693c018d06cc0"
+    }
+  ],
+  "sink": 914155
+}

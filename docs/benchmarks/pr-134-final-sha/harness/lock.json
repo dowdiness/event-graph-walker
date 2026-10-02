@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/dowdiness/event-graph-walker",
+  "pullRequest": 134,
+  "compiler": "0.10.14+7d59c7ec9",
+  "moon": "0.1.20260920 (914d7da 2026-09-20)",
+  "node": "v24.19.0",
+  "sources": {
+    "base": {
+      "commit": "ed2e89e1bdc6f64e979e63d0b23d83e6b99872bc",
+      "tree": "8334ae00018b9a7919eaed46ac2a8c329cecb07c",
+      "archiveSha256": "11d4891aa647242e66a424614d2044fb43a42f9973d0d24c116707c7fe795bd5"
+    },
+    "head": {
+      "commit": "eea050d5737ea3a699948150ea92c72e757fa2ca",
+      "tree": "ba5056f85b7228bcb5cc5a32de8c9cf44a8ffe7f",
+      "archiveSha256": "a6a0b53126ca5da9380be1769d01f8ddcbb554aa593122326a4ed96b6387180d"
+    }
+  },
+  "vendorManifestSha256": "5ad233d53cdfcbd02e633a8ea3c394dc22b52a5edcc627affce94538e8f2b8a5",
+  "bridge": {
+    "bridge/moon.pkg": "6b84a5489527c98f080ce8108235e50c7b6fc40c8a0c424e0cd82ad4d6ac83a1",
+    "bridge/main.mbt": "9d5885eab7692618c91c51299775a944a693b503098751abdb32c255ea31166f"
+  }
+}
