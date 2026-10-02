@@ -218,18 +218,6 @@ fn LvLocator::marker_rank(self : LvLocator, node : Int) -> Int {
 }
 
 ///|
-/// Insert one detached marker immediately before a stable anchor.
-fn LvLocator::insert_marker_before(
-  self : LvLocator,
-  anchor : Int,
-  marker : Int,
-) -> Unit {
-  let position = self.marker_rank(anchor)
-  let (left, right) = self.split_rank(self.rank_root, position)
-  self.rank_root = self.merge_rank(self.merge_rank(left, marker), right)
-}
-
-///|
 /// Toggle a content marker and refresh only its treap ancestor path.
 fn LvLocator::set_visible(self : LvLocator, node : Int, visible : Bool) -> Unit {
   self.nodes[node].visible = visible
@@ -460,9 +448,15 @@ fn LvLocator::add_item(self : LvLocator, item : @fugue.Item[String]) -> Bool {
         }
       }
   }
-  self.insert_marker_before(anchor, open_node)
-  self.insert_marker_before(anchor, content_node)
-  self.insert_marker_before(anchor, close_node)
+  // The detached interval has the same priorities and in-order sequence as
+  // three scalar splices, but the resident treap is split and joined once.
+  let position = self.marker_rank(anchor)
+  let (left, right) = self.split_rank(self.rank_root, position)
+  let markers = self.merge_rank(
+    self.merge_rank(open_node, content_node),
+    close_node,
+  )
+  self.rank_root = self.merge_rank(self.merge_rank(left, markers), right)
   self.set_children(parent, item.side, self.insert_sibling(siblings, item.id.0))
   true
 }

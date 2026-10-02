@@ -13,10 +13,9 @@ priv struct ProjectionWorkspace {
 ///|
 fn ProjectionWorkspace::ProjectionWorkspace(
   snapshot : (@order_tree.OrderTree[VisibleRun]?, LvLocator?),
-  operation_count : Int,
 ) -> ProjectionWorkspace {
   let candidate = match snapshot {
-    (Some(_), Some(_)) if operation_count <= 3 =>
+    (Some(_), Some(_)) =>
       ProjectionCandidate::Exact(IndexedState::from_snapshot(snapshot), [])
     _ => ProjectionCandidate::SnapshotRequired
   }
@@ -24,50 +23,112 @@ fn ProjectionWorkspace::ProjectionWorkspace(
 }
 
 ///|
-/// Apply one committed operation. Losing exactness drops the whole candidate;
-/// an invalid index and stale effects cannot survive as independent fields.
-fn ProjectionWorkspace::project(
+/// Apply a complete committed prefix without changing its admission boundary.
+/// Topology ranks advance for every operation. Consecutive visible insertions
+/// are accumulated with a linear builder and written to the OrderTree once.
+/// Effects retain their original sequential, one-visibility-change granularity.
+fn ProjectionWorkspace::project_all(
   self : ProjectionWorkspace,
   tree : @fugue.FugueTree[String],
-  operation : @core.Op,
+  operations : ArrayView[@core.Op],
   causal_graph : @causal_graph.CausalGraph,
 ) -> Unit raise DocumentError {
   let (indexed, effects) = match self.candidate {
     Exact(indexed, effects) => (indexed, effects)
     SnapshotRequired => {
-      apply_projection(tree, operation, causal_graph)
+      for operation in operations {
+        apply_projection(tree, operation, causal_graph)
+      }
       return
     }
   }
-  let change = apply_projection_with_visible_change(
-    tree, operation, causal_graph,
-  )
-  if @fugue_projection.is_became_hidden(change) {
-    let lv = @fugue_projection.visibility_identity(change)
-    match indexed.lv_to_position(tree, lv.0) {
-      Some(position) =>
-        if indexed.delete_at(position) {
-          effects.push(Delete(start=position, end=position + 1))
-        } else {
+  let mut pending : ProjectionInsertRun? = None
+  for operation in operations {
+    if self.candidate is SnapshotRequired {
+      apply_projection(tree, operation, causal_graph)
+      continue
+    }
+    let change = apply_projection_with_visible_change(
+      tree, operation, causal_graph,
+    )
+    if @fugue_projection.is_became_hidden(change) {
+      match pending {
+        Some(run) => {
+          indexed.flush_projection_run(run)
+          pending = None
+        }
+        None => ()
+      }
+      let lv = @fugue_projection.visibility_identity(change)
+      match indexed.lv_to_position(tree, lv.0) {
+        Some(position) =>
+          if indexed.delete_at(position) {
+            effects.push(Delete(start=position, end=position + 1))
+          } else {
+            self.candidate = SnapshotRequired
+          }
+        None => self.candidate = SnapshotRequired
+      }
+    } else if @fugue_projection.is_became_visible(change) {
+      let lv = @fugue_projection.visibility_identity(change)
+      match (tree.get(lv), indexed.locate_visible(tree, lv.0)) {
+        (Some(item), Some(position)) => {
+          match pending {
+            Some(run) if !run.text.is_empty() &&
+              !item.content.is_empty() &&
+              run.position + run.count == position &&
+              run.start_lv + run.count == lv.0 => {
+              run.text.write_string(item.content)
+              run.count = run.count + 1
+            }
+            _ => {
+              match pending {
+                Some(run) => indexed.flush_projection_run(run)
+                None => ()
+              }
+              let text = StringBuilder()
+              text.write_string(item.content)
+              pending = Some({ position, start_lv: lv.0, count: 1, text, })
+            }
+          }
+          effects.push(Insert(position~, text=item.content))
+        }
+        _ => {
           self.candidate = SnapshotRequired
+          pending = None
         }
-      None => self.candidate = SnapshotRequired
+      }
     }
-  } else if @fugue_projection.is_became_visible(change) {
-    let lv = @fugue_projection.visibility_identity(change)
-    match tree.get(lv) {
-      Some(item) =>
-        match
-          indexed.insert_visible(tree, lv.0, {
-            start_lv: lv.0,
-            text: item.content,
-            count: 1,
-          }) {
-          Some(position) => effects.push(Insert(position~, text=item.content))
-          None => self.candidate = SnapshotRequired
-        }
-      None => self.candidate = SnapshotRequired
+  }
+  if self.candidate is Exact(_, _) {
+    match pending {
+      Some(run) => indexed.flush_projection_run(run)
+      None => ()
     }
+  }
+}
+
+///|
+priv struct ProjectionInsertRun {
+  position : Int
+  start_lv : Int
+  mut count : Int
+  text : StringBuilder
+}
+
+///|
+fn IndexedState::flush_projection_run(
+  self : IndexedState,
+  run : ProjectionInsertRun,
+) -> Unit {
+  match self.cache {
+    Some(cache) =>
+      cache.insert_at(run.position, {
+        start_lv: run.start_lv,
+        text: run.text.to_string(),
+        count: run.count,
+      })
+    None => ()
   }
 }
 
@@ -114,7 +175,7 @@ fn ProjectionWorkspace::commit_and_project(
   // Authority has advanced: the old derived state must never become readable.
   doc.invalidate_cache()
   doc.cursor = None
-  let workspace = ProjectionWorkspace(detached, committed.length())
+  let workspace = ProjectionWorkspace(detached)
   try doc.project_remote_ops(committed, workspace) catch {
     _ => {
       doc.invalidate_cache()

@@ -134,22 +134,34 @@ fn IndexedState::insert_visible(
   lv : Int,
   run : VisibleRun,
 ) -> Int? {
+  match (self.cache, self.locate_visible(tree, lv)) {
+    (Some(cache), Some(position)) => {
+      cache.insert_at(position, run)
+      Some(position)
+    }
+    _ => None
+  }
+}
+
+///|
+/// Update topology and visibility independently from the visible run buffer.
+/// A projection workspace may defer adjacent run writes until the next read.
+fn IndexedState::locate_visible(
+  self : IndexedState,
+  tree : @fugue.FugueTree[String],
+  lv : Int,
+) -> Int? {
   match (self.cache, self.locator, tree.get(@fugue.Lv(lv))) {
-    (Some(cache), Some(locator), Some(item)) => {
+    (Some(_), Some(locator), Some(item)) => {
       let located = if locator.contains(lv) {
         locator.show(lv)
       } else {
         locator.add_item(item)
       }
-      if !located {
-        return None
-      }
-      match locator.position(lv) {
-        Some(position) => {
-          cache.insert_at(position, run)
-          Some(position)
-        }
-        None => None
+      if located {
+        locator.position(lv)
+      } else {
+        None
       }
     }
     _ => None
@@ -243,5 +255,29 @@ fn IndexedState::lv_to_position(
   match self.locator {
     Some(locator) => locator.position(lv)
     None => None
+  }
+}
+
+///|
+/// Remove a prevalidated contiguous visible interval in one OrderTree edit.
+/// Topology identities remain present and only their visible weights change.
+fn IndexedState::delete_range_known(
+  self : IndexedState,
+  start : Int,
+  end : Int,
+  targets : Array[Int],
+) -> Bool {
+  match (self.cache, self.locator) {
+    (Some(cache), Some(locator)) => {
+      for lv in targets {
+        if !locator.hide(lv) {
+          return false
+        }
+      }
+      let before = cache.span()
+      cache.delete_range(start, end)
+      cache.span() == before - targets.length()
+    }
+    _ => false
   }
 }

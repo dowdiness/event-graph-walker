@@ -39,6 +39,10 @@ pub impl @rle.Spanning for VisibleRun with fn logical_length(self) -> Int {
 /// Safety: this merge condition is valid only when runs are appended in
 /// document order (tree traversal). Do not use with arbitrary insertion.
 pub impl @rle.Mergeable for VisibleRun with fn can_merge(self, other) -> Bool {
+  // Positive-count legacy empty items must remain isolated: mixing them with
+  // scalar text would make both scalar slicing and its BMP proof ambiguous.
+  (self.count == 0 || !self.text.is_empty()) &&
+  (other.count == 0 || !other.text.is_empty()) &&
   self.start_lv + self.count == other.start_lv
 }
 
@@ -63,8 +67,20 @@ pub impl @rle.Sliceable for VisibleRun with fn slice(
       @rle.RleError::InvalidSlice(reason=@rle.SliceError::IndexOutOfBounds),
     )
   }
-  let text_start = item_offset_to_utf16(self.text, start)
-  let text_end = item_offset_to_utf16(self.text, end)
+  // All production nonempty runs contain one scalar per item. Both merging
+  // and projection batching isolate positive-count legacy empty items. Under
+  // that invariant, equal scalar and UTF-16 lengths prove a BMP-only run.
+  let bmp_only = self.text.length() == self.count
+  let text_start = if bmp_only {
+    start
+  } else {
+    item_offset_to_utf16(self.text, start)
+  }
+  let text_end = if bmp_only {
+    end
+  } else {
+    item_offset_to_utf16(self.text, end)
+  }
   match @rle.slice_string_view(self.text, start=text_start, end=text_end) {
     Ok(sliced_text) =>
       Ok({

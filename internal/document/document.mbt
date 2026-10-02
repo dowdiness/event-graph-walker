@@ -402,7 +402,7 @@ pub fn Document::delete_range(
     return
   }
 
-  // Collect all target LVs before mutating (cache is invalidated after first delete)
+  // Collect all target LVs before mutating; position input is prevalidated.
   let target_lvs : Array[Int] = []
   for i = start; i < end; i = i + 1 {
     match self.lv_at_position(i) {
@@ -413,20 +413,15 @@ pub fn Document::delete_range(
 
   // Invalidate before the first mutation so exception paths cannot leave a
   // stale cache behind.
-  self.invalidate_cache()
-  let cg = self.oplog.causal_graph()
+  let indexed = IndexedState::from_snapshot(self.indexed_state.take_cache())
   for lv in target_lvs {
     let op = self.oplog.delete(lv) catch { e => raise DocumentError::OpLog(e) }
-    let (del_ts, del_agent) = match cg[op.lv()] {
-      Some(entry) => (entry.timestamp, entry.agent)
-      None =>
-        raise DocumentError::OpLog(
-          @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
-        )
-    }
-    self.tree.delete_with_ts(@fugue.Lv(lv), del_ts, del_agent) catch {
-      e => raise DocumentError::Fugue(e)
-    }
+    // The canonical cache stays detached throughout the range. Reuse target
+    // projection so a post-commit failure repairs or fails closed at authority.
+    self.project_local_target(op)
+  }
+  if indexed.delete_range_known(start, end, target_lvs) {
+    self.indexed_state.restore_cache(indexed.take_cache())
   }
 }
 
@@ -507,18 +502,7 @@ fn Document::commit_undelete_by_lv(
   let op = self.oplog.undelete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
-  let cg = self.oplog.causal_graph()
-  let (undel_ts, undel_agent) = match cg[op.lv()] {
-    Some(entry) => (entry.timestamp, entry.agent)
-    None =>
-      raise DocumentError::OpLog(
-        @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
-      )
-  }
-  self.tree.undelete_with_ts(@fugue.Lv(target_lv), undel_ts, undel_agent) catch {
-    e => raise DocumentError::Fugue(e)
-  }
-  self.invalidate_cache()
+  self.project_local_target(op)
   op
 }
 
@@ -532,18 +516,7 @@ fn Document::commit_delete_by_lv(
   let op = self.oplog.delete(target_lv) catch {
     e => raise DocumentError::OpLog(e)
   }
-  let cg = self.oplog.causal_graph()
-  let (del_ts, del_agent) = match cg[op.lv()] {
-    Some(entry) => (entry.timestamp, entry.agent)
-    None =>
-      raise DocumentError::OpLog(
-        @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
-      )
-  }
-  self.tree.delete_with_ts(@fugue.Lv(target_lv), del_ts, del_agent) catch {
-    e => raise DocumentError::Fugue(e)
-  }
-  self.invalidate_cache()
+  self.project_local_target(op)
   op
 }
 
@@ -576,13 +549,11 @@ pub fn Document::delete_if_visible(
   target_lv : Int,
 ) -> TargetEditResult raise DocumentError {
   self.ensure_projection_ready()
-  self.validate_target_lv(target_lv)
-  match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
-    Some(_) => {
-      ignore(self.commit_delete_by_lv(target_lv))
-      Applied
-    }
-    None => Stale
+  if self.target_is_visible(target_lv) {
+    ignore(self.commit_delete_by_lv(target_lv))
+    Applied
+  } else {
+    Stale
   }
 }
 
@@ -593,13 +564,11 @@ pub fn Document::undelete_if_deleted(
   target_lv : Int,
 ) -> TargetEditResult raise DocumentError {
   self.ensure_projection_ready()
-  self.validate_target_lv(target_lv)
-  match self.tree.lv_to_position(@fugue.Lv(target_lv)) {
-    Some(_) => Stale
-    None => {
-      ignore(self.commit_undelete_by_lv(target_lv))
-      Applied
-    }
+  if self.target_is_visible(target_lv) {
+    Stale
+  } else {
+    ignore(self.commit_undelete_by_lv(target_lv))
+    Applied
   }
 }
 
@@ -623,9 +592,7 @@ fn Document::project_remote_ops(
     None => ()
   }
   let cg = self.oplog.causal_graph()
-  for applied in applied_ops {
-    workspace.project(self.tree, applied, cg)
-  }
+  workspace.project_all(self.tree, applied_ops, cg)
 }
 
 ///|
@@ -730,3 +697,99 @@ pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
 #deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
 pub extend InsertCursor with @debug.Debug::{to_repr}
+
+///|
+/// Visibility is owned by ItemState, including merge delete counts. A missing
+/// identity remains an invariant failure; only an existing hidden item is stale.
+fn Document::target_is_visible(
+  self : Document,
+  lv : Int,
+) -> Bool raise DocumentError {
+  match self.tree.get(@fugue.Lv(lv)) {
+    Some(item) => item.state.is_visible(delete_count=item.delete_count)
+    None => raise DocumentError::Fugue(@fugue.MissingItem(id=@fugue.Lv(lv)))
+  }
+}
+
+///|
+/// Project one committed compensating edit while preserving a warm index.
+/// Cache detachment ensures an internal projection failure cannot leave stale
+/// derived state readable. Cold indexes are never rebuilt per undo character.
+fn Document::project_local_target(
+  self : Document,
+  op : @core.Op,
+) -> Unit raise DocumentError {
+  let indexed = IndexedState::from_snapshot(self.indexed_state.take_cache())
+  let change = {
+    errdefer self.recover_projection(self.get_frontier())
+    apply_projection_with_visible_change(
+      self.tree,
+      op,
+      self.oplog.causal_graph(),
+    )
+  }
+  if !indexed.is_ready() {
+    return
+  }
+  let valid = if @fugue_projection.is_became_hidden(change) {
+    let lv = @fugue_projection.visibility_identity(change)
+    match indexed.lv_to_position(self.tree, lv.0) {
+      Some(position) => indexed.delete_at(position)
+      None => false
+    }
+  } else if @fugue_projection.is_became_visible(change) {
+    let lv = @fugue_projection.visibility_identity(change)
+    match self.tree.get(lv) {
+      Some(item) =>
+        indexed.insert_visible(self.tree, lv.0, {
+          start_lv: lv.0,
+          text: item.content,
+          count: 1,
+        })
+        is Some(_)
+      None => false
+    }
+  } else {
+    true
+  }
+  if valid {
+    self.indexed_state.restore_cache(indexed.take_cache())
+  }
+}
+
+///|
+/// Read one visible character through the position index without a root scan.
+pub fn Document::visible_content_at(self : Document, position : Int) -> String? {
+  match self.lv_at_position(position) {
+    Some(lv) => self.tree.get(@fugue.Lv(lv)).map(item => item.content)
+    None => None
+  }
+}
+
+///|
+/// Capture just a validated visible interval for local undo recording.
+pub fn Document::visible_entries_between(
+  self : Document,
+  start : Int,
+  end : Int,
+) -> Array[(Int, String)] raise DocumentError {
+  self.ensure_projection_ready()
+  if start < 0 ||
+    end < start ||
+    end > self.indexed_state.visible_span(self.tree) {
+    raise DocumentError::InvalidPosition(pos=end)
+  }
+  let entries : Array[(Int, String)] = Array(capacity=end - start)
+  for position = start; position < end; position = position + 1 {
+    match self.lv_at_position(position) {
+      Some(lv) =>
+        match self.tree.get(@fugue.Lv(lv)) {
+          Some(item) => entries.push((lv, item.content))
+          None =>
+            raise DocumentError::Fugue(@fugue.MissingItem(id=@fugue.Lv(lv)))
+        }
+      None => raise DocumentError::InvalidPosition(pos=position)
+    }
+  }
+  entries
+}

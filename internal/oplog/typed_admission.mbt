@@ -176,19 +176,21 @@ fn OpLog::admission_receipt(
   let pending_from_transition : Array[@core.RawVersion] = []
   let pending_retained : Array[@core.RawVersion] = []
   let pending_staged : Array[@core.RawVersion] = []
-  for raw in prepared.retained_pending {
-    if self.planner.pending.contains(raw) {
-      pending_retained.push(raw)
+  if !self.planner.pending.is_empty() {
+    for raw in prepared.retained_pending {
+      if self.planner.pending.contains(raw) {
+        pending_retained.push(raw)
+      }
     }
-  }
-  for raw in prepared.staged_raws() {
-    if self.planner.pending.contains(raw) {
-      pending_staged.push(raw)
+    for raw in prepared.staged_raws() {
+      if self.planner.pending.contains(raw) {
+        pending_staged.push(raw)
+      }
     }
-  }
-  for raw in prepared.transition_pending_candidates() {
-    if self.planner.pending.contains(raw) {
-      pending_from_transition.push(raw)
+    for raw in prepared.transition_pending_candidates() {
+      if self.planner.pending.contains(raw) {
+        pending_from_transition.push(raw)
+      }
     }
   }
   AdmissionReceipt::from_parts(

@@ -380,10 +380,10 @@ test "incremental insert: delete_range then non-sequential insert" {
     ),
   )
   assert_true(doc.indexed_state.is_ready())
-  // delete_range invalidates cache
+  // delete_range preserves the warmed index
   try! doc.delete_range(1, 3) // delete "bc"
-  assert_true(!doc.indexed_state.is_ready())
-  // Non-sequential insert after delete — should lazy-build and maintain cache
+  assert_true(doc.indexed_state.is_ready())
+  // Non-sequential insert after delete reuses the matching index
   let _ = try! doc.insert(1, "xy")
   // Cache should be valid after the insert
   assert_true(doc.indexed_state.is_ready())

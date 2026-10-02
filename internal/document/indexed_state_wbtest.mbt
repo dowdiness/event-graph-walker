@@ -28,14 +28,14 @@ test "IndexedState agrees with Fugue after local insert and delete" {
   assert_indexed_state_matches_tree(doc)
 
   try! doc.delete_range(1, 4)
-  // Large local batches invalidate rather than maintaining many index edits.
-  assert_true(!doc.indexed_state.is_ready())
+  // Contiguous local ranges retain topology and update the sequence once.
+  assert_true(doc.indexed_state.is_ready())
   assert_indexed_state_matches_tree(doc)
   assert_true(doc.indexed_state.is_ready())
 
   let _ = try! doc.undelete(1)
-  // Local undelete remains a conservative invalidation path.
-  assert_true(!doc.indexed_state.is_ready())
+  // Local undelete maintains the same warm generation.
+  assert_true(doc.indexed_state.is_ready())
   assert_indexed_state_matches_tree(doc)
   assert_true(doc.indexed_state.is_ready())
 }

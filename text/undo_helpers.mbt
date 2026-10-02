@@ -47,12 +47,7 @@ pub fn TextState::delete_and_record(
   if pos_val >= doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
-  let items = self.inner.get_visible_items()
-  let content : String? = if pos_val < items.length() {
-    Some(items[pos_val].1.content)
-  } else {
-    None
-  }
+  let content = self.inner.visible_content_at(pos_val)
   let op = self.inner.delete(pos_val) catch {
     err => raise TextError::from_document_error(err, () => doc_len)
   }
@@ -80,19 +75,15 @@ pub fn TextState::delete_range_and_record(
   if start == end {
     return
   }
-  let items = self.inner.get_visible_items()
+  let items = self.inner.visible_entries_between(start, end) catch {
+    err => raise TextError::from_document_error(err, () => doc_len)
+  }
   self.inner.delete_range(start, end) catch {
     err => raise TextError::from_document_error(err, () => doc_len)
   }
   let agent = self.inner.agent_id()
-  for i = start; i < end; i = i + 1 {
-    let (target_lv, item) = items[i]
-    mgr.record_delete(
-      target_lv.0,
-      agent,
-      timestamp_ms,
-      content=Some(item.content),
-    )
+  for (target_lv, content) in items {
+    mgr.record_delete(target_lv, agent, timestamp_ms, content=Some(content))
   }
 }
 

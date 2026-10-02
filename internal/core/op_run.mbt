@@ -134,6 +134,13 @@ pub impl @rle.Mergeable for OpRun with fn can_merge(a : OpRun, b : OpRun) -> Boo
   }
   match (a.content, b.content) {
     (Inserts(chars_a), Inserts(chars_b)) => {
+      // Packing bound, not a history or protocol limit. Pure merges copy their
+      // left array to preserve exposed snapshots; bounding new insert runs
+      // prevents quadratic copying during long sequential typing and replay.
+      // Existing larger runs still decompress and merge() remains pure.
+      if a.count > 256 - b.count {
+        return false
+      }
       // A multi-character or empty insert is a singleton logical operation.
       // Do not merge it: ordinary typing runs have one character per op.
       if chars_a.length() != a.count ||
