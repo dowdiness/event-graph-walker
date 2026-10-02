@@ -1,0 +1,75 @@
+{
+  "capturedAt": "2026-10-02T08:42:35.229837+00:00",
+  "compiler": "v0.10.14+7d59c7ec9 (2026-09-18)",
+  "moon": "moon 0.1.20260920 (914d7da 2026-09-20)\n\nFeature flags enabled: rr_moon_pkg",
+  "node": "v24.19.0",
+  "coreModule": "name = \"moonbitlang/core\"\n\nversion = \"0.10.14+7d59c7ec9\"\n\nreadme = \"README.md\"\n\nrepository = \"https://github.com/moonbitlang/core\"\n\nlicense = \"Apache-2.0\"\n\nkeywords = [ \"core\", \"standard library\" ]\n\nwarnings = \"+test_unqualified_package+unqualified_local_using+missing_doc+unnecessary_view_op+unnecessary_annotation+prefer_fixed_array+prefer_readonly_array-implicit_use_builtin+implicit_impl_as_method\"\n",
+  "coreSourceManifestSha256": "774ff7b444163d4c77fcdd1d9fdd0fa1b9c652b628979355894847775e15b85d",
+  "coreBuiltManifestSha256": "3351867c18e92a9dbfca927117dbd96bb19fc12b8ea6da1f02058c6d6a7397ee",
+  "binaries": {
+    "moon": {
+      "sha256": "6da4919f45f4abf7c6d7f3cf8d9a457de77dca430d6fb811d21b27ae1ac8e11d"
+    },
+    "moonc": {
+      "sha256": "d163b2c4c878ca584870764b75e633d73e8b9c178dcc6b00c692f6b2a6b1b2dc"
+    },
+    "node": {
+      "sha256": "bc17c508ffeed0ec622934f9b7fa72f8e78da65350e63c3eceb56fa688aa5e12"
+    }
+  },
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "osRelease": "PRETTY_NAME=\"Debian GNU/Linux 13 (trixie)\"\nNAME=\"Debian GNU/Linux\"\nVERSION_ID=\"13\"\nVERSION=\"13 (trixie)\"\nVERSION_CODENAME=trixie\nDEBIAN_VERSION_FULL=13.6\nID=debian\nHOME_URL=\"https://www.debian.org/\"\nSUPPORT_URL=\"https://www.debian.org/support\"\nBUG_REPORT_URL=\"https://bugs.debian.org/\"\n",
+  "cpuInfo": [
+    "vendor_id\t: AuthenticAMD",
+    "cpu family\t: 25",
+    "model\t\t: 17",
+    "model name\t: AMD EPYC 9V74 80-Core Processor",
+    "stepping\t: 1"
+  ],
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "cpuPinning": "No taskset/affinity override; scheduler may migrate within allowed CPU set",
+  "host": "virtualized shared cloud environment, not dedicated hardware",
+  "networkAndIDB": "None used in benchmark; all fixtures/packets/binaries local",
+  "gc": "Node default GC; no explicit GC or heap/optimization flags",
+  "concurrentWork": "Parent reports all other local engineering jobs idle for build and timing window; host co-tenancy not controlled",
+  "buildCommand": "moon build --target js --release bridge",
+  "dependencies": {
+    "dowdiness-alga": {
+      "module": "name = \"dowdiness/alga\"\n\nversion = \"0.4.0\"\n\nimport {\n  \"moonbitlang/quickcheck@0.14.0\",\n}\n\nreadme = \"README.md\"\n\nrepository = \"https://github.com/dowdiness/alga\"\n\nlicense = \"Apache-2.0\"\n\nkeywords = [\n  \"graph\",\n  \"directed-graph\",\n  \"algebraic-graphs\",\n  \"algorithm\",\n  \"trait\",\n]\n\ndescription = \"Algebraic graphs for MoonBit \u2014 directed graph trait and algorithm library inspired by Haskell's alga\"\n\noptions(\n  source: \"src\",\n)\n",
+      "treeManifest": "provenance/vendor-manifest.json"
+    },
+    "dowdiness-btree": {
+      "module": "name = \"dowdiness/btree\"\n\nversion = \"0.2.0\"\n\nimport {\n  \"dowdiness/rle@0.2.2\",\n  \"moonbitlang/quickcheck@0.14.0\",\n}\n\nreadme = \"README.md\"\n\nrepository = \"https://github.com/dowdiness/canopy\"\n\nlicense = \"Apache-2.0\"\n\nkeywords = [ \"btree\", \"data-structure\", \"counted-sequence\" ]\n\ndescription = \"Generic counted B-tree with O(log n) indexed access, insert, delete, and range operations\"\n",
+      "treeManifest": "provenance/vendor-manifest.json"
+    },
+    "dowdiness-order-tree": {
+      "module": "name = \"dowdiness/order-tree\"\n\nversion = \"0.1.2\"\n\nimport {\n  \"dowdiness/btree@0.2.0\",\n  \"dowdiness/rle@0.2.3\",\n  \"moonbitlang/quickcheck@0.14.0\",\n}\n\nreadme = \"README.md\"\n\nrepository = \"https://github.com/dowdiness/order-tree\"\n\nlicense = \"Apache-2.0\"\n\nkeywords = [ \"btree\", \"order-statistic\", \"data-structure\" ]\n\ndescription = \"Order-statistic B-tree with O(log n) position-indexed operations\"\n",
+      "treeManifest": "provenance/vendor-manifest.json"
+    },
+    "dowdiness-rle": {
+      "module": "name = \"dowdiness/rle\"\n\nversion = \"0.2.3\"\n\nimport {\n  \"moonbitlang/quickcheck@0.14.0\",\n}\n\nreadme = \"README.md\"\n\nrepository = \"https://github.com/dowdiness/rle\"\n\nlicense = \"Apache-2.0\"\n\nkeywords = [ \"rle\", \"run-length-encoding\", \"data-structure\" ]\n\ndescription = \"Generic run-length encoded sequence with O(log n) position lookup\"\n",
+      "treeManifest": "provenance/vendor-manifest.json"
+    },
+    "moonbitlang-quickcheck": {
+      "module": "{\n  \"name\": \"moonbitlang/quickcheck\",\n  \"version\": \"0.14.0\",\n  \"readme\": \"README.md\",\n  \"repository\": \"https://github.com/moonbitlang/quickcheck\",\n  \"license\": \"Apache-2.0\",\n  \"keywords\": [\n    \"property-based-testing\",\n    \"quickcheck\"\n  ],\n  \"description\": \"Automatic testing of MoonBit programs\",\n  \"source\": \"src\"\n}\n",
+      "treeManifest": "provenance/vendor-manifest.json"
+    },
+    "moonbitlang-x": {
+      "module": "{\n  \"name\": \"moonbitlang/x\",\n  \"version\": \"0.4.43\",\n  \"readme\": \"README.md\",\n  \"repository\": \"https://github.com/moonbitlang/x\",\n  \"license\": \"Apache-2.0\",\n  \"keywords\": [\"experimental\", \"moonbitlang\", \"json\", \"time\", \"crypto\"],\n  \"description\": \"experimental packages for moonbitlang/core\"\n}\n",
+      "treeManifest": "provenance/vendor-manifest.json"
+    }
+  },
+  "environmentFlags": {
+    "NEW_MOON_MOD": "0"
+  }
+}

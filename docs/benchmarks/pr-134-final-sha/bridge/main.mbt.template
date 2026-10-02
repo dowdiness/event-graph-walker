@@ -1,0 +1,205 @@
+///|
+/// Imperative FFI shell. Handles keep live TextState and its local UndoManager together.
+let docs : Map[Int, (@text.TextState, @undo.UndoManager)] = Map([])
+
+///|
+let next_id : Ref[Int] = Ref(0)
+
+///|
+pub fn create(writer : String) -> Int {
+  let id = next_id.val
+  next_id.val = id + 1
+  docs[id] = (try! @text.TextState::new(writer), @undo.UndoManager::new(writer))
+  id
+}
+
+///|
+pub fn release(id : Int) -> Unit {
+  docs.remove(id)
+}
+
+///|
+pub fn read(id : Int) -> String {
+  docs[id].0.text()
+}
+
+///|
+pub fn length(id : Int) -> Int {
+  docs[id].0.len()
+}
+
+///|
+pub fn version(id : Int) -> String {
+  try! docs[id].0.version().to_json_string()
+}
+
+///|
+pub fn history(id : Int) -> String {
+  (try! docs[id].0.sync().export_all()).to_json_string()
+}
+
+///|
+pub fn delta(id : Int, since : String) -> String {
+  (try! docs[id].0
+  .sync()
+  .export_since(try! @text.Version::from_json_string(since))).to_json_string()
+}
+
+///|
+/// Each call is an intentional undo group in this small experiment, not a typing-group policy.
+pub fn edit(
+  id : Int,
+  start : Int,
+  end : Int,
+  inserted : String,
+  timestamp : Int,
+) -> String {
+  let (doc, mgr) = docs[id]
+  mgr.stop_capturing()
+  doc.replace_range_and_record(
+    @text.Range::from_ints(start, end),
+    inserted,
+    mgr,
+    timestamp_ms=timestamp,
+  ) catch {
+    e => return e.message()
+  }
+  "ok"
+}
+
+///|
+/// JSON transport boundary. Exposes real transition availability and sequential scalar effects.
+pub fn apply(id : Int, payload : String) -> String {
+  let doc = docs[id].0
+  let transition = doc.sync().apply_transition(doc.sync().decode_json(payload)) catch {
+      e => return ({ "error": e.message().to_json() } : Json).stringify()
+    }
+  let effects : Array[Json] = []
+  let availability = match transition.availability() {
+    Exact(items) => {
+      for item in items {
+        match item {
+          Insert(pos, text) =>
+            effects.push({
+              "kind": "insert",
+              "pos": pos.value().to_json(),
+              "text": text.to_json(),
+            })
+          Delete(range) =>
+            effects.push({
+              "kind": "delete",
+              "start": range.start().value().to_json(),
+              "end": range.end().value().to_json(),
+            })
+        }
+      }
+      "exact"
+    }
+    SnapshotRequired => "snapshot"
+    Unavailable => "unavailable"
+  }
+  let report = transition.finish() catch {
+    e => return ({ "error": e.message().to_json() } : Json).stringify()
+  }
+  (
+    {
+      "availability": availability.to_json(),
+      "effects": effects.to_json(),
+      "applied": report.applied_operations().to_json(),
+      "duplicates": report.duplicate_operations().to_json(),
+      "pending": report.pending_operations().to_json(),
+    } : Json).stringify()
+}
+
+///|
+pub fn undo(id : Int) -> Bool {
+  try! docs[id].1.undo(docs[id].0)
+}
+
+///|
+pub fn redo(id : Int) -> Bool {
+  try! docs[id].1.redo(docs[id].0)
+}
+
+///|
+pub fn can_undo(id : Int) -> Bool {
+  docs[id].1.can_undo()
+}
+
+///|
+pub fn pending(id : Int) -> Int {
+  docs[id].0.sync().pending_sync_count()
+}
+
+///|
+fn main {
+  ()
+}
+
+///|
+/// Benchmark-only controls: separate mutation and undo-recording costs.
+pub fn edit_raw(id : Int, start : Int, end : Int, inserted : String) -> String {
+  docs[id].0.replace_range(@text.Range::from_ints(start, end), inserted) catch {
+    e => return e.message()
+  }
+  "ok"
+}
+
+///|
+pub fn insert_recorded(
+  id : Int,
+  pos : Int,
+  inserted : String,
+  timestamp : Int,
+) -> String {
+  let (doc, mgr) = docs[id]
+  mgr.stop_capturing()
+  doc.insert_and_record(
+    @text.Pos::at(pos),
+    inserted,
+    mgr,
+    timestamp_ms=timestamp,
+  ) catch {
+    e => return e.message()
+  }
+  "ok"
+}
+
+///|
+pub fn delete_recorded(id : Int, pos : Int, timestamp : Int) -> String {
+  let (doc, mgr) = docs[id]
+  mgr.stop_capturing()
+  doc.delete_and_record(@text.Pos::at(pos), mgr, timestamp_ms=timestamp) catch {
+    e => return e.message()
+  }
+  "ok"
+}
+
+///|
+/// Experimental small-range adapter; JS shell validates scalar bounds and text first.
+/// No EGW sources changed. Every compensating operation remains in one undo group.
+pub fn edit_fast_prevalidated(
+  id : Int,
+  start : Int,
+  end : Int,
+  inserted : String,
+  timestamp : Int,
+) -> String {
+  let (doc, mgr) = docs[id]
+  mgr.stop_capturing()
+  for i = start; i < end; i = i + 1 {
+    doc.delete_and_record(@text.Pos::at(start), mgr, timestamp_ms=timestamp) catch {
+      e => return e.message()
+    }
+  }
+  doc.insert_and_record(
+    @text.Pos::at(start),
+    inserted,
+    mgr,
+    timestamp_ms=timestamp,
+  ) catch {
+    e => return e.message()
+  }
+  mgr.stop_capturing()
+  "ok"
+}
