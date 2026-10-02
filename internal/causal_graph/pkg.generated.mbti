@@ -35,6 +35,7 @@ pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int r
 pub fn CausalGraph::children_count(Self, Int) -> Int
 pub fn CausalGraph::current_graph_version(Self) -> GraphVersion
 pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange])
+pub fn CausalGraph::from_topological_ops_experimental(ArrayView[@core.Op]) -> Self raise CausalGraphError
 #alias("_[_]")
 pub fn CausalGraph::get_entry(Self, Int) -> @core.GraphEntry?
 pub fn CausalGraph::get_frontier(Self) -> @core.Frontier

@@ -50,6 +50,14 @@ pub fn AdmissionReceipt::pending_retained(Self) -> ArrayView[@core.RawVersion]
 pub fn AdmissionReceipt::pending_staged(Self) -> ArrayView[@core.RawVersion]
 pub fn AdmissionReceipt::redelivery_count(Self) -> Int
 
+pub struct ClosedHistory {
+  // private fields
+}
+pub fn ClosedHistory::consume_experimental(Self, String) -> (OpLog, Array[@core.Op]) raise OpLogError
+pub fn ClosedHistory::heads_experimental(Self) -> Array[@core.RawVersion] raise OpLogError
+pub fn ClosedHistory::prepare_experimental(Array[@core.Op]) -> Self raise OpLogError
+pub fn ClosedHistory::version_experimental(Self) -> @causal_graph.GraphVersion raise OpLogError
+
 pub struct OpLog {
   // private fields
 }

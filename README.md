@@ -197,3 +197,10 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+## Experimental accepted-history archive
+
+A separate, bounded compact archive and validated fresh-document bulk restore are
+available for experimentation. Existing schema 2 synchronization is unchanged.
+See [the API, limits, example and validation notes](docs/experiments/compact-history/README.md)
+before use; pending packets and local Undo stacks are not archived.

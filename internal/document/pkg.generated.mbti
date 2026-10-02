@@ -50,6 +50,7 @@ pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError
 pub fn Document::delete_if_visible(Self, Int) -> TargetEditResult raise DocumentError
 pub fn Document::delete_range(Self, Int, Int) -> Unit raise DocumentError
 pub fn Document::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
+pub fn Document::from_closed_history_experimental(String, @oplog.ClosedHistory) -> Self raise DocumentError
 pub fn Document::get_all_ops(Self) -> Array[@core.Op]
 pub fn Document::get_all_runs(Self) -> Array[@core.OpRun]
 pub fn Document::get_frontier(Self) -> @core.Frontier
