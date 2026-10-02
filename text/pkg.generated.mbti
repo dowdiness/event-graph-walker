@@ -99,6 +99,7 @@ pub fn TextState::delete(Self, Pos) -> Unit raise TextError
 pub fn TextState::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::delete_range(Self, Range) -> Unit raise TextError
 pub fn TextState::delete_range_and_record(Self, Range, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
+pub fn TextState::export_compact_experimental(Self) -> String raise TextError
 pub fn TextState::insert(Self, Pos, String) -> Unit raise TextError
 pub fn TextState::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::is_empty(Self) -> Bool
@@ -107,6 +108,7 @@ pub fn TextState::new(String) -> Self raise TextError
 pub fn TextState::new_with_sync_limits(String, @sync.Limits) -> Self raise TextError
 pub fn TextState::replace_range(Self, Range, String) -> Unit raise TextError
 pub fn TextState::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
+pub fn TextState::restore_compact_direct_experimental(String, String, String) -> Self raise TextError
 pub fn TextState::sync(Self) -> SyncSession
 pub fn TextState::text(Self) -> String
 pub fn TextState::version(Self) -> Version

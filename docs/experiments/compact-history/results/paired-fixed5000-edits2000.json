@@ -1,0 +1,105 @@
+{
+  "name": "fixed5000-edits2000",
+  "pairs": 4,
+  "provisional": true,
+  "method": "same process, warm both paths once, alternating AB/BA pairs; each sample creates a fresh document; GC outside timed section; decode+structural proof+canonical order+admission+expectedVersion+pending0+firsttext+full checksum included; fixture/module setup excluded; no tail-latency claim",
+  "compactBytes": 162195,
+  "warmups": [
+    {
+      "lane": "control",
+      "phase": "warmup",
+      "totalMs": 378.22646999999995,
+      "checksum": 441552,
+      "heapAfter": 60384184,
+      "rssAfter": 161271808
+    },
+    {
+      "lane": "direct",
+      "phase": "warmup",
+      "totalMs": 252.460235,
+      "checksum": 441552,
+      "heapAfter": 36043056,
+      "rssAfter": 232480768
+    }
+  ],
+  "rows": [
+    {
+      "lane": "control",
+      "phase": "measured",
+      "totalMs": 372.8451929999999,
+      "checksum": 441552,
+      "heapAfter": 61914880,
+      "rssAfter": 234041344,
+      "repeat": 0
+    },
+    {
+      "lane": "direct",
+      "phase": "measured",
+      "totalMs": 232.24672299999997,
+      "checksum": 441552,
+      "heapAfter": 34224600,
+      "rssAfter": 234782720,
+      "repeat": 0
+    },
+    {
+      "lane": "direct",
+      "phase": "measured",
+      "totalMs": 207.4452150000002,
+      "checksum": 441552,
+      "heapAfter": 34168584,
+      "rssAfter": 234659840,
+      "repeat": 1
+    },
+    {
+      "lane": "control",
+      "phase": "measured",
+      "totalMs": 312.18801600000006,
+      "checksum": 441552,
+      "heapAfter": 61935632,
+      "rssAfter": 234553344,
+      "repeat": 1
+    },
+    {
+      "lane": "control",
+      "phase": "measured",
+      "totalMs": 318.9159810000001,
+      "checksum": 441552,
+      "heapAfter": 62466376,
+      "rssAfter": 233832448,
+      "repeat": 2
+    },
+    {
+      "lane": "direct",
+      "phase": "measured",
+      "totalMs": 219.4519489999998,
+      "checksum": 441552,
+      "heapAfter": 33628728,
+      "rssAfter": 238411776,
+      "repeat": 2
+    },
+    {
+      "lane": "direct",
+      "phase": "measured",
+      "totalMs": 212.95109999999977,
+      "checksum": 441552,
+      "heapAfter": 34171104,
+      "rssAfter": 238804992,
+      "repeat": 3
+    },
+    {
+      "lane": "control",
+      "phase": "measured",
+      "totalMs": 320.95553199999995,
+      "checksum": 441552,
+      "heapAfter": 60895872,
+      "rssAfter": 238100480,
+      "repeat": 3
+    }
+  ],
+  "medians": {
+    "control": 319.9357565,
+    "direct": 216.20152449999978
+  },
+  "controlEngineSha256": "73a4b93605fbf8810a6aa3454d8f763a21e88f8b1a8b109c3e6f8f4480885851",
+  "engineSha256": "18d6b1feb7c0738bf97b8f33e4f862bd53cb3bf849734b41ea000de2a959a02e"
+}
