@@ -54,12 +54,16 @@ The existing canonical-operation shortlex comparator, Fugue lexical sibling comp
 | JSON nesting | 16 |
 | Actors / heads | 4096 each |
 | Actor UTF-8 bytes total | 1 MiB |
+| Version JSON UTF-8 bytes (each embedded/external token) | 512 KiB |
+| Version sparse intervals (total across all actors) | 4096 |
 | Expanded accepted operations | 100,000 |
 | Parents per operation | 256 |
 | Expanded dependency edges | 1,000,000 |
 | Expanded identity bytes | 64 MiB |
 | Inserted UTF-8 bytes | 400,000 |
 | Raw sequence | 0 through 2,147,483,647 |
+
+The existing schema-2 Version encoder and decoder enforce both Version limits, so they also apply to compact export and direct restore. The limits are inclusive and count encoded UTF-8 bytes and canonical sparse intervals, respectively. Fragmentation can therefore make export reject well below 100,000 accepted operations: one actor with sequences `0, 2, ..., 8192`, each causally following the previous operation, has only one head but 4097 intervals. Export rejects that history without truncating or mutating the source document; the corresponding 4096-interval history can round-trip when the other bounds are satisfied.
 
 These are bounded input/expansion policies, not a 64 MiB heap ceiling or adversarial wall-time guarantee. The expected Version checks sparse membership and frontier, not payload authenticity. It is not a cryptographic digest/signature; an attacker who rewrites both archive and metadata is outside this integrity check. Applications still own atomic durable storage, authentication and future migration.
 
