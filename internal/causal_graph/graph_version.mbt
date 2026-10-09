@@ -70,7 +70,7 @@ fn HaveSummary::copy(self : HaveSummary) -> HaveSummary {
 
 ///|
 /// Insert one identity into canonical sparse membership. This is the only
-/// interval union algorithm used by reconstruction and incremental admission.
+/// interval union algorithm used by reconstruction and incremental change application.
 fn HaveSummary::insert(self : HaveSummary, raw : @core.RawVersion) -> Unit {
   let sequence = raw.seq.reinterpret_as_uint()
   let entry_index = match

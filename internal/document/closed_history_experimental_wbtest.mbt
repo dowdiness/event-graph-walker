@@ -7,7 +7,7 @@ test "direct Document matches canonical Fugue topology winner tuples and indexed
   ignore(source.undelete(1))
   let ops = source.get_all_ops()
   let ordinary = Document::new("fresh")
-  ignore(ordinary.admit_remote(ops))
+  ignore(ordinary.apply_changes(ops))
   let direct = Document::from_closed_history_experimental(
     "fresh",
     @oplog.ClosedHistory::prepare_experimental(ops),

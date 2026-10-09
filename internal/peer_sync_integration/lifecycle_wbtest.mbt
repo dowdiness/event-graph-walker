@@ -104,7 +104,7 @@ test "duplicate peer availability preserves recovery metadata" {
       inspect(metadata.recovering, content="true")
       @debug.assert_eq(metadata.retry_count, 2)
     }
-    None => fail("admitted peer metadata missing")
+    None => fail("recorded peer metadata missing")
   }
   let (state, decisions) = transition(state, PeerAvailable("source"))
   inspect(decisions.length(), content="0")
@@ -113,7 +113,7 @@ test "duplicate peer availability preserves recovery metadata" {
       inspect(metadata.recovering, content="true")
       @debug.assert_eq(metadata.retry_count, 2)
     }
-    None => fail("duplicate admission removed peer metadata")
+    None => fail("duplicate change application removed peer metadata")
   }
   let (state, decisions) = transition(state, PeerDisconnected("source"))
   inspect(decisions.length(), content="0")

@@ -1,6 +1,6 @@
 /// Generic test-only lifecycle shell.
 ///
-/// Peer IDs, admission, connectivity, retry budget, scheduling, and fan-out
+/// Peer IDs, change application, connectivity, retry budget, scheduling, and fan-out
 /// live here. Payload T is opaque to this shell. Runtime recovery and terminal
 /// metadata are updated only from public policy decisions.
 

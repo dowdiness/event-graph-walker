@@ -29,8 +29,8 @@ pub struct Document {
   priv mut projection_health : ProjectionHealth
   // Target evidence required to validate a recovered tree before it becomes Ready.
   priv mut projection_verification : ProjectionRecoveryVerification?
-  // Package-local admission hooks used only by white-box boundary tests.
-  priv mut admission_hooks : AdmissionBoundaryHooks?
+  // Package-local change application hooks used only by white-box boundary tests.
+  priv mut apply_changes_hooks : ApplyChangesBoundaryHooks?
 }
 
 ///|
@@ -46,7 +46,7 @@ pub fn Document::new(agent_id : String) -> Document {
     cursor: None,
     projection_health: ProjectionHealth::Ready,
     projection_verification: None,
-    admission_hooks: None,
+    apply_changes_hooks: None,
   }
 }
 
@@ -583,7 +583,7 @@ fn Document::project_remote_ops(
     return
   }
   self.observe_projection_finalization(applied_ops)
-  match self.admission_projection_failure() {
+  match self.apply_changes_projection_failure() {
     Some(failure) =>
       match failure(applied_ops) {
         Some(error) => raise error
@@ -596,18 +596,17 @@ fn Document::project_remote_ops(
 }
 
 ///|
-/// Apply one remote operation through the typed batch-admission shell while
-/// preserving the legacy Unit-returning error contract.
+/// Apply one remote operation through the typed batch-change application shell.
 pub fn Document::apply_remote(
   self : Document,
   op : @core.Op,
 ) -> Unit raise DocumentError {
-  let admission = self.admit_remote([op])
-  admission.raise_legacy_remote_error()
+  let changes = self.apply_changes([op])
+  ignore(changes.report())
 }
 
 ///|
-/// Merge a complete-frontier remote batch through the typed admission shell.
+/// Merge a complete-frontier remote batch through the typed change application shell.
 /// Closure validation remains the only merge-specific responsibility.
 pub fn Document::merge_remote(
   self : Document,
@@ -617,8 +616,8 @@ pub fn Document::merge_remote(
   self.oplog.validate_remote_batch(remote_ops, remote_frontier) catch {
     e => raise DocumentError::OpLog(e)
   }
-  let admission = self.admit_remote(remote_ops)
-  admission.raise_legacy_remote_error()
+  let changes = self.apply_changes(remote_ops)
+  ignore(changes.report())
 }
 
 ///|
@@ -635,7 +634,7 @@ pub fn Document::get_all_ops(self : Document) -> Array[@core.Op] {
 }
 
 ///|
-/// Collect locally admitted operations absent from a peer's sparse version.
+/// Collect locally recorded operations absent from a peer's sparse version.
 pub fn Document::collect_missing_ops(
   self : Document,
   peer : @causal_graph.GraphVersion,

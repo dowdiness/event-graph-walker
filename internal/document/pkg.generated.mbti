@@ -37,9 +37,10 @@ pub struct Document {
   agent_id : String
   // private fields
 }
-pub fn Document::admit_remote(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentAdmission raise DocumentError
 pub fn Document::agent_id(Self) -> String
+pub fn Document::apply_changes(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentChanges raise DocumentError
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
+pub fn Document::apply_structural_changes(Self, ArrayView[@core.StructuralOp], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentChanges raise DocumentError
 pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::clear_pending(Self) -> Unit
@@ -73,12 +74,13 @@ pub fn Document::visible_count(Self) -> Int
 pub fn Document::visible_entries_between(Self, Int, Int) -> Array[(Int, String)] raise DocumentError
 pub impl @core.RawToLv for Document
 
-pub struct DocumentAdmission {
-  outcome : @oplog.AdmissionOutcome
+pub struct DocumentChanges {
+  outcome : @oplog.ApplyChangesOutcome
   projection : ProjectionStatus
   effects : Array[ProjectionEffect]
   effect_availability : ProjectionEffectAvailability
 }
+pub fn DocumentChanges::report(Self) -> @oplog.ApplyChangesReport raise DocumentError
 
 type IndexedState
 

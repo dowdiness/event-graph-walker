@@ -75,7 +75,7 @@ test "duplicate RawVersion is rejected without graph mutation" {
 }
 
 ///|
-test "graph admission owns parent storage and rejects invalid identities" {
+test "graph change application owns parent storage and rejects invalid identities" {
   let graph = @causal_graph.CausalGraph::new()
   let root = try! graph.add_version([], "agent")
   let caller_parents = [root]

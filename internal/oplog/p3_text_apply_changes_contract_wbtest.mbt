@@ -19,7 +19,7 @@ fn p3_receipt_has_op(
   expected : @core.RawVersion,
 ) -> Bool {
   for op in ops {
-    if remote_admission_raw(op) == expected {
+    if apply_changes_raw(op) == expected {
       return true
     }
   }
@@ -27,26 +27,26 @@ fn p3_receipt_has_op(
 }
 
 ///|
-test "P3 redelivery evidence is independent of admitted ownership" {
+test "P3 redelivery evidence is independent of recorded ownership" {
   let receiver = OpLog("p3-admitted-redelivery")
-  let admitted = p0_insert("p3-admitted-redelivery-peer", 0, [], "A", None)
-  let admitted_plan = try! receiver.prepare_remote([admitted])
-  ignore(try! receiver.commit_remote(admitted_plan))
-  let duplicate_plan = try! receiver.prepare_remote([admitted])
-  let outcome = try! receiver.commit_admission(duplicate_plan)
+  let applied = p0_insert("p3-admitted-redelivery-peer", 0, [], "A", None)
+  let action = try! ApplyChanges(receiver, [applied])
+  ignore(try! p1_apply_success(receiver, action))
+  let duplicate_action = try! ApplyChanges(receiver, [applied])
+  let outcome = try! receiver.apply_changes(duplicate_action)
 
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.redelivery_count(), 1)
       assert_eq(receipt.committed().length(), 0)
       assert_true(
         p3_receipt_has_raw(
-          receipt.already_admitted(),
-          remote_admission_raw(admitted),
+          receipt.already_applied(),
+          apply_changes_raw(applied),
         ),
       )
     }
-    AdmissionOutcome::Partial(..) => fail("admitted redelivery must complete")
+    ApplyChangesOutcome::Failed(..) => fail("recorded redelivery must complete")
   }
 }
 
@@ -55,24 +55,24 @@ test "P3 redelivery evidence is independent of pending ownership" {
   let receiver = OpLog("p3-pending-redelivery")
   let missing = p0_raw("p3-pending-redelivery-missing", 0)
   let pending = p0_insert("p3-pending-redelivery-peer", 0, [missing], "P", None)
-  let pending_plan = try! receiver.prepare_remote([pending])
-  ignore(try! receiver.commit_remote(pending_plan))
-  let duplicate_plan = try! receiver.prepare_remote([pending])
-  let outcome = try! receiver.commit_admission(duplicate_plan)
+  let action = try! ApplyChanges(receiver, [pending])
+  ignore(try! p1_apply_success(receiver, action))
+  let duplicate_action = try! ApplyChanges(receiver, [pending])
+  let outcome = try! receiver.apply_changes(duplicate_action)
 
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.redelivery_count(), 1)
       assert_eq(receipt.committed().length(), 0)
       assert_eq(receipt.pending_after_count(), 1)
       assert_true(
         p3_receipt_has_raw(
           receipt.pending_from_transition(),
-          remote_admission_raw(pending),
+          apply_changes_raw(pending),
         ),
       )
     }
-    AdmissionOutcome::Partial(..) => fail("pending redelivery must complete")
+    ApplyChangesOutcome::Failed(..) => fail("pending redelivery must complete")
   }
 }
 
@@ -83,25 +83,25 @@ test "P3 pending redelivery contributes to delivery and committed evidence" {
   let pending = p0_insert(
     "p3-wake-redelivery-peer",
     0,
-    [remote_admission_raw(dependency)],
+    [apply_changes_raw(dependency)],
     "P",
     None,
   )
-  let pending_plan = try! receiver.prepare_remote([pending])
-  ignore(try! receiver.commit_remote(pending_plan))
-  let wake_plan = try! receiver.prepare_remote([dependency, pending])
-  let outcome = try! receiver.commit_admission(wake_plan)
+  let action = try! ApplyChanges(receiver, [pending])
+  ignore(try! p1_apply_success(receiver, action))
+  let wake_action = try! ApplyChanges(receiver, [dependency, pending])
+  let outcome = try! receiver.apply_changes(wake_action)
 
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.redelivery_count(), 1)
       assert_eq(receipt.committed().length(), 2)
       assert_true(
-        p3_receipt_has_op(receipt.committed(), remote_admission_raw(pending)),
+        p3_receipt_has_op(receipt.committed(), apply_changes_raw(pending)),
       )
       assert_eq(receipt.pending_after_count(), 0)
     }
-    AdmissionOutcome::Partial(..) => fail("dependency wake must complete")
+    ApplyChangesOutcome::Failed(..) => fail("dependency wake must complete")
   }
 }
 
@@ -116,39 +116,39 @@ test "P3 discarded pending redelivery preserves delivery evidence" {
     "invalid",
     Some(missing_target),
   )
-  let pending_plan = try! receiver.prepare_remote([pending_invalid])
-  ignore(try! receiver.commit_remote(pending_plan))
+  let action = try! ApplyChanges(receiver, [pending_invalid])
+  ignore(try! p1_apply_success(receiver, action))
   let root = p0_insert("p3-discard-target", 0, [], "A", None)
   let target = p0_delete(
     "p3-discard-target",
     1,
-    [remote_admission_raw(root)],
-    remote_admission_raw(root),
+    [apply_changes_raw(root)],
+    apply_changes_raw(root),
   )
 
-  let discard_plan = try! receiver.prepare_remote([
+  let discard_action = try! ApplyChanges(receiver, [
     root, target, pending_invalid,
   ])
-  let outcome = try! receiver.commit_admission(discard_plan)
+  let outcome = try! receiver.apply_changes(discard_action)
 
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.redelivery_count(), 1)
       assert_true(
         p3_receipt_has_raw(
           receipt.discarded_pending(),
-          remote_admission_raw(pending_invalid),
+          apply_changes_raw(pending_invalid),
         ),
       )
       assert_true(
         !p3_receipt_has_op(
           receipt.committed(),
-          remote_admission_raw(pending_invalid),
+          apply_changes_raw(pending_invalid),
         ),
       )
       assert_eq(receipt.pending_after_count(), 0)
     }
-    AdmissionOutcome::Partial(..) =>
+    ApplyChangesOutcome::Failed(..) =>
       fail("pending rejection closure must complete")
   }
 }
@@ -157,14 +157,18 @@ test "P3 discarded pending redelivery preserves delivery evidence" {
 test "P3 complete-after limit accepts a ready operation at zero" {
   let receiver = OpLog("p3-after-ready-zero")
   let ready = p0_insert("p3-after-ready-zero-peer", 0, [], "A", None)
-  let plan = try! receiver.prepare_remote([ready], max_pending_after_complete=0)
-  let outcome = try! receiver.commit_admission(plan)
+  let action = try! ApplyChanges(
+    receiver,
+    [ready],
+    max_pending_after_complete=0,
+  )
+  let outcome = try! receiver.apply_changes(action)
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 1)
       assert_eq(receipt.pending_after_count(), 0)
     }
-    AdmissionOutcome::Partial(..) => fail("ready operation must complete")
+    ApplyChangesOutcome::Failed(..) => fail("ready operation must complete")
   }
 }
 
@@ -179,17 +183,18 @@ test "P3 complete-after limit accepts mixed ready and unresolved batch" {
     "B",
     None,
   )
-  let plan = try! receiver.prepare_remote(
+  let action = try! ApplyChanges(
+    receiver,
     [ready, unresolved],
     max_pending_after_complete=1,
   )
-  let outcome = try! receiver.commit_admission(plan)
+  let outcome = try! receiver.apply_changes(action)
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 1)
       assert_eq(receipt.pending_after_count(), 1)
     }
-    AdmissionOutcome::Partial(..) => fail("mixed batch must complete")
+    ApplyChangesOutcome::Failed(..) => fail("mixed batch must complete")
   }
 }
 
@@ -198,17 +203,18 @@ test "P3 complete-after limit accepts all-ready batch over the limit" {
   let receiver = OpLog("p3-after-all-ready")
   let first = p0_insert("p3-after-all-ready-first", 0, [], "A", None)
   let second = p0_insert("p3-after-all-ready-second", 0, [], "B", None)
-  let plan = try! receiver.prepare_remote(
+  let action = try! ApplyChanges(
+    receiver,
     [first, second],
     max_pending_after_complete=1,
   )
-  let outcome = try! receiver.commit_admission(plan)
+  let outcome = try! receiver.apply_changes(action)
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 2)
       assert_eq(receipt.pending_after_count(), 0)
     }
-    AdmissionOutcome::Partial(..) => fail("all-ready batch must complete")
+    ApplyChangesOutcome::Failed(..) => fail("all-ready batch must complete")
   }
 }
 
@@ -224,13 +230,13 @@ test "P3 complete-after limit is rechecked at begin" {
     "B",
     None,
   )
-  let plan = PreparedAdmission::{
+  let plan = ApplyChanges::{
     planned: [ready],
     storage: ImmediateGeneral(
       [
         {
           op: ready,
-          raw: remote_admission_raw(ready),
+          raw: apply_changes_raw(ready),
           arrival: 0,
           dependencies: [],
           waiting_dependencies: [],
@@ -238,7 +244,7 @@ test "P3 complete-after limit is rechecked at begin" {
         },
         {
           op: unresolved,
-          raw: remote_admission_raw(unresolved),
+          raw: apply_changes_raw(unresolved),
           arrival: 1,
           dependencies: [missing],
           waiting_dependencies: [missing],
@@ -257,14 +263,14 @@ test "P3 complete-after limit is rechecked at begin" {
     required_pending: 2,
     max_pending: Some(2),
     max_pending_after_complete: Some(0),
-    already_admitted: [],
+    already_applied: [],
     duplicate_of_pending: [],
     retained_pending: [],
     touched_retained_pending: [],
     consumed: false,
   }
-  let result : Result[AdmissionOutcome, OpLogError] = Ok(
-    receiver.commit_admission(plan),
+  let result : Result[ApplyChangesOutcome, OpLogError] = Ok(
+    receiver.apply_changes(plan),
   ) catch {
     error => Err(error)
   }
@@ -277,22 +283,22 @@ test "P3 complete-after limit is rechecked at begin" {
   }
   assert_eq(receiver.op_count(), 0)
   assert_true(!receiver.has_pending())
-  assert_eq(receiver.planner.generation(), 0)
+  assert_eq(receiver.pending_changes.generation(), 0)
 }
 
 ///|
-test "P3 core admission does not count repeated raw identities as redelivery" {
+test "P3 core change application does not count repeated raw identities as redelivery" {
   let receiver = OpLog("p3-core-raw-duplicate")
   let operation = p0_insert("p3-core-raw-duplicate-peer", 0, [], "A", None)
-  let duplicate_plan = try! receiver.prepare_remote([operation, operation])
-  let outcome = try! receiver.commit_admission(duplicate_plan)
+  let duplicate_action = try! ApplyChanges(receiver, [operation, operation])
+  let outcome = try! receiver.apply_changes(duplicate_action)
   match outcome {
-    AdmissionOutcome::Complete(receipt) => {
+    ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.redelivery_count(), 0)
       assert_eq(receipt.committed().length(), 1)
-      assert_eq(receipt.already_admitted().length(), 0)
+      assert_eq(receipt.already_applied().length(), 0)
     }
-    AdmissionOutcome::Partial(..) =>
+    ApplyChangesOutcome::Failed(..) =>
       fail("canonical raw duplicate must complete")
   }
 }

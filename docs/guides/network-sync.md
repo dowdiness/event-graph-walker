@@ -128,7 +128,7 @@ For text, the causal graph owns two facts exposed behind one opaque `Version`:
 its frontier names the exact checkout checkpoint, while its range summary names
 the operations known in that frontier's causal closure. The graph keeps this
 summary cold until first observation and then advances it with identity
-admission. `export_since` uses the summary for exact set difference. `checkout`
+apply. `export_since` uses the summary for exact set difference. `checkout`
 resolves a maximal frontier and validates that the resident closure equals the
 supplied summary before returning a view.
 Declared operation parents, not adjacent sequence numbers, define text

@@ -114,7 +114,7 @@ test "panic derived reader fails closed after recovery failure" {
 }
 
 ///|
-test "recovery failure blocks later mutation and remote admission" {
+test "recovery failure blocks later mutation and remote change application" {
   let doc = Document::new("recovery-mutation-failure")
   ignore(try! doc.insert(0, "abc"))
   let frontier = doc.get_frontier()
@@ -152,7 +152,7 @@ test "recovery failure blocks later mutation and remote admission" {
   }
   match remote_result {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
-    _ => fail("expected admission recovery failure")
+    _ => fail("expected change application recovery failure")
   }
   assert_eq(doc.oplog.op_count(), before_count)
   assert_eq(doc.get_frontier(), before_frontier)

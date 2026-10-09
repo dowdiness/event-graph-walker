@@ -183,7 +183,7 @@ pub fn TextState::sync(self : TextState) -> SyncSession {
   SyncSession::{
     doc: self,
     prepare_for_mutation_override: None,
-    admit_remote_override: None,
+    apply_changes_override: None,
   }
 }
 

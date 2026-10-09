@@ -1,4 +1,4 @@
-///| Generated typed-admission ownership traces.
+///| Generated typed-change application ownership traces.
 
 ///|
 struct TypedOwnershipTrace {
@@ -37,7 +37,7 @@ fn typed_ownership_unique_raws(
   let raws : Array[@core.RawVersion] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for operation in operations {
-    let raw = remote_admission_raw(operation)
+    let raw = apply_changes_raw(operation)
     if seen.add_and_check(raw) {
       raws.push(raw)
     }
@@ -87,46 +87,51 @@ fn typed_ownership_assert_authority(
 ///|
 fn typed_ownership_property(trace : TypedOwnershipTrace) -> Bool {
   let receiver = OpLog("p1-ownership-property")
-  let admitted = p0_insert("p1-property-admitted", 0, [], "A", None)
+  let applied = p0_insert("p1-property-admitted", 0, [], "A", None)
   let missing = p0_raw("p1-property-missing", 0)
   let pending = p0_insert("p1-property-pending", 0, [missing], "P", None)
-  if (try! receiver.commit_remote(try! receiver.prepare_remote([admitted]))).length() !=
+  if (try! p1_apply_success(receiver, try! ApplyChanges(receiver, [applied])))
+    .committed()
+    .length() !=
     1 {
     return false
   }
-  ignore(try! receiver.commit_remote(try! receiver.prepare_remote([pending])))
+  ignore(
+    try! p1_apply_success(receiver, try! ApplyChanges(receiver, [pending])),
+  )
 
   let dependency = p0_insert("p1-property-missing", 0, [], "D", None)
   let fresh = p0_insert("p1-property-fresh", 0, [], "N", None)
   let wake_pending = trace.mode % 2 == 1
   let operations = if wake_pending {
-    [admitted, dependency, pending, fresh]
+    [applied, dependency, pending, fresh]
   } else {
-    [admitted, pending, fresh]
+    [applied, pending, fresh]
   }
-  let plan : PreparedAdmission = match
-    (Ok(receiver.prepare_remote(operations)) catch { error => Err(error) }) {
-    Ok(plan) => plan
+  let action : ApplyChanges = match
+    (Ok(ApplyChanges(receiver, operations)) catch { error => Err(error) }) {
+    Ok(action) => action
     Err(_) => return false
   }
-  if plan.required_pending != receiver.planner.required_pending_set_oracle(plan) {
+  if action.required_pending !=
+    receiver.pending_changes.required_pending_set_oracle(action) {
     return false
   }
-  let operation_count = plan.operations().length()
+  let operation_count = action.operations().length()
   if operation_count == 0 {
     return false
   }
   let fail_enabled = trace.mode >= 2
   let failure_index = trace.mode % operation_count
   let mut attempt = 0
-  let outcome_result : Result[AdmissionOutcome, OpLogError] = Ok(
-    receiver.commit_admission_with(plan, operation => {
+  let outcome_result : Result[ApplyChangesOutcome, OpLogError] = Ok(
+    receiver.apply_changes_with(action, operation => {
       let index = attempt
       attempt += 1
       if fail_enabled && index == failure_index {
         raise @causal_graph.CausalGraphError::MissingParent(lv=-200)
       }
-      receiver.commit_one_remote_for_admission(operation)
+      receiver.commit_one_remote_for_apply_changes(operation)
     }),
   ) catch {
     error => Err(error)
@@ -135,66 +140,66 @@ fn typed_ownership_property(trace : TypedOwnershipTrace) -> Bool {
     Ok(outcome) => outcome
     Err(_) => return false
   }
-  let receipt = match outcome {
-    AdmissionOutcome::Complete(receipt) => receipt
-    AdmissionOutcome::Partial(receipt~, error~) => {
+  let report = match outcome {
+    ApplyChangesOutcome::Succeeded(report) => report
+    ApplyChangesOutcome::Failed(report~, error~) => {
       match error {
         @causal_graph.CausalGraphError::MissingParent(_) => ()
         _ => return false
       }
-      receipt
+      report
     }
   }
 
-  let committed = typed_ownership_unique_raws(receipt.committed())
-  let already_admitted = receipt.already_admitted()
-  let pending = receipt.pending_from_transition()
-  let discarded_pending = receipt.discarded_pending()
-  let discarded_staged = receipt.discarded_staged()
-  if !typed_ownership_disjoint(committed, already_admitted) ||
+  let committed = typed_ownership_unique_raws(report.committed())
+  let already_applied = report.already_applied()
+  let pending = report.pending_from_transition()
+  let discarded_pending = report.discarded_pending()
+  let discarded_staged = report.discarded_staged()
+  if !typed_ownership_disjoint(committed, already_applied) ||
     !typed_ownership_disjoint(committed, pending) ||
     !typed_ownership_disjoint(committed, discarded_pending) ||
     !typed_ownership_disjoint(committed, discarded_staged) ||
-    !typed_ownership_disjoint(already_admitted, pending) ||
-    !typed_ownership_disjoint(already_admitted, discarded_pending) ||
-    !typed_ownership_disjoint(already_admitted, discarded_staged) ||
+    !typed_ownership_disjoint(already_applied, pending) ||
+    !typed_ownership_disjoint(already_applied, discarded_pending) ||
+    !typed_ownership_disjoint(already_applied, discarded_staged) ||
     !typed_ownership_disjoint(pending, discarded_pending) ||
     !typed_ownership_disjoint(pending, discarded_staged) ||
     !typed_ownership_disjoint(discarded_pending, discarded_staged) ||
     !typed_ownership_disjoint(
-      receipt.pending_retained(),
-      receipt.pending_staged(),
+      report.pending_retained(),
+      report.pending_staged(),
     ) {
     return false
   }
-  for raw in receipt.pending_retained() {
+  for raw in report.pending_retained() {
     if !typed_ownership_contains(pending, raw) {
       return false
     }
   }
-  for raw in receipt.pending_staged() {
+  for raw in report.pending_staged() {
     if !typed_ownership_contains(pending, raw) {
       return false
     }
   }
   if !typed_ownership_assert_authority(receiver, committed) ||
-    !typed_ownership_assert_authority(receiver, already_admitted) {
+    !typed_ownership_assert_authority(receiver, already_applied) {
     return false
   }
   for raw in pending {
-    if !receiver.planner.pending.contains(raw) {
+    if !receiver.pending_changes.pending.contains(raw) {
       return false
     }
   }
   for raw in discarded_pending {
     if receiver.graph.raw_to_lv(raw) is Some(_) ||
-      receiver.planner.pending.contains(raw) {
+      receiver.pending_changes.pending.contains(raw) {
       return false
     }
   }
   for raw in discarded_staged {
     if receiver.graph.raw_to_lv(raw) is Some(_) ||
-      receiver.planner.pending.contains(raw) {
+      receiver.pending_changes.pending.contains(raw) {
       return false
     }
   }
@@ -202,7 +207,7 @@ fn typed_ownership_property(trace : TypedOwnershipTrace) -> Bool {
   let mut owned_count = 0
   for raw in affected {
     if typed_ownership_contains(committed, raw) ||
-      typed_ownership_contains(already_admitted, raw) ||
+      typed_ownership_contains(already_applied, raw) ||
       typed_ownership_contains(pending, raw) ||
       typed_ownership_contains(discarded_pending, raw) ||
       typed_ownership_contains(discarded_staged, raw) {
@@ -226,7 +231,7 @@ test "property generator: typed ownership traces are valid" {
 }
 
 ///|
-test "property: typed admission ownership partition is disjoint" {
+test "property: typed change application ownership partition is disjoint" {
   @qc.quick_check_fn(typed_ownership_property, max_success=100, max_size=24)
 }
 

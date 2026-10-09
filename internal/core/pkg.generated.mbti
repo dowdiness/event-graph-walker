@@ -10,6 +10,18 @@ import {
 // Values
 
 // Errors
+pub suberror OpStructureError {
+  EmptyReplica
+  NegativeSequence
+  InvalidParentIdentity
+  InvalidParentShape
+  EmptyInsert
+  MalformedInsertUtf16
+  MultiScalarInsert
+  InvalidOriginIdentity
+  MissingDeleteTarget
+  DeleteHasRightTarget
+}
 
 // Types and methods
 pub struct Frontier {
@@ -110,6 +122,12 @@ pub fn RawVersion::to_string(Self) -> String
 pub impl Hash for RawVersion
 pub impl Show for RawVersion
 pub impl @json.FromJson for RawVersion
+
+pub struct StructuralOp {
+  // private fields
+}
+pub fn StructuralOp::StructuralOp(Op) -> Self raise OpStructureError
+pub fn StructuralOp::raw(Self) -> Op
 
 // Type aliases
 pub type AgentId = String

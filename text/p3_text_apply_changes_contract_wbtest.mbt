@@ -1,7 +1,7 @@
 ///| P3 red tests for Text report mapping and the core-owned ingress seam.
 
 ///|
-test "P3 same-message raw duplicates canonicalize before admission" {
+test "P3 same-message raw duplicates canonicalize before change application" {
   let operation = "{\"id\":{\"replica_id\":\"p3-raw\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null}"
   let json = "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[" +
     operation +
@@ -22,35 +22,35 @@ test "P3 same-message raw duplicates canonicalize before admission" {
 }
 
 ///|
-test "P3 one message invokes one Document admission boundary" {
+test "P3 one message invokes one Document change application boundary" {
   let source = try! TextState::new("p3-boundary-source")
   try! source.insert(Pos::at(0), "A")
   try! source.insert(Pos::at(1), "B")
   let message = try! source.sync().export_all()
   let receiver = try! TextState::new("p3-boundary-receiver")
-  let mut admission_calls = 0
+  let mut apply_changes_calls = 0
   let session = SyncSession::{
     doc: receiver,
     prepare_for_mutation_override: None,
-    admit_remote_override: Some((
+    apply_changes_override: Some((
       document,
       operations,
       max_pending_after_complete,
     ) => {
-      admission_calls = admission_calls + 1
-      document.admit_remote(operations, max_pending_after_complete~)
+      apply_changes_calls = apply_changes_calls + 1
+      document.apply_structural_changes(operations, max_pending_after_complete~)
     }),
   }
 
   let report = try! session.apply(message)
 
-  assert_eq(admission_calls, 1)
+  assert_eq(apply_changes_calls, 1)
   assert_eq(report.applied_operations(), 2)
   assert_eq(report.pending_operations(), 0)
 }
 
 ///|
-test "P3 complete and duplicate admission preserve exact graph version" {
+test "P3 complete and duplicate change application preserve exact graph version" {
   let source = try! TextState::new("p3-version-source")
   try! source.insert(Pos::at(0), "A")
   let message = try! source.sync().export_all()

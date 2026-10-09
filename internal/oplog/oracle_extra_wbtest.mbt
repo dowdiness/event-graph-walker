@@ -8,7 +8,9 @@ test "closed history retained runs survive same actor append at packing boundari
       "seed",
     )
     let reference = OpLog("seed")
-    ignore(reference.commit_admission(reference.prepare_remote(operations)))
+    ignore(
+      try! p1_apply_success(reference, try! ApplyChanges(reference, operations)),
+    )
     let retained = actual.get_all_runs()
     let retained_value = @debug.to_string(retained)
     let version = actual.graph.current_graph_version()
@@ -88,11 +90,13 @@ test "closed history mixed kind and sparse sequence packing matches replay" {
     "eraser",
   )
   let reference = OpLog("eraser")
-  ignore(reference.commit_admission(reference.prepare_remote(operations)))
+  ignore(
+    try! p1_apply_success(reference, try! ApplyChanges(reference, operations)),
+  )
   closed_log_compare(actual, reference)
   for lv = 0; lv < operations.length(); lv = lv + 1 {
     assert_true(
-      planner_lifecycle_same_ops([actual.get_op(lv).unwrap()], [
+      pending_changes_lifecycle_same_ops([actual.get_op(lv).unwrap()], [
         reference.get_op(lv).unwrap(),
       ]),
     )
@@ -117,7 +121,7 @@ test "closed proof invalid writer is pre-adoption and successful adoption is one
   let heads = proof.heads_experimental()
   assert_true(
     try proof.consume_experimental("") catch {
-      OpLogError::InvalidAdmission => true
+      OpLogError::InvalidApplyChanges => true
       _ => false
     } noraise {
       _ => false
@@ -131,7 +135,7 @@ test "closed proof invalid writer is pre-adoption and successful adoption is one
   assert_eq(log.graph.current_graph_version(), version)
   assert_true(
     try proof.heads_experimental() catch {
-      OpLogError::ConsumedAdmission => true
+      OpLogError::ConsumedApplyChanges => true
       _ => false
     } noraise {
       _ => false
@@ -139,7 +143,7 @@ test "closed proof invalid writer is pre-adoption and successful adoption is one
   )
   assert_true(
     try proof.consume_experimental("fresh-again") catch {
-      OpLogError::ConsumedAdmission => true
+      OpLogError::ConsumedApplyChanges => true
       _ => false
     } noraise {
       _ => false

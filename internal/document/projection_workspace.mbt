@@ -23,7 +23,7 @@ fn ProjectionWorkspace::ProjectionWorkspace(
 }
 
 ///|
-/// Apply a complete committed prefix without changing its admission boundary.
+/// Apply a complete committed prefix without changing its change application boundary.
 /// Topology ranks advance for every operation. Consecutive visible insertions
 /// are accumulated with a linear builder and written to the OrderTree once.
 /// Effects retain their original sequential, one-visibility-change granularity.
@@ -137,22 +137,22 @@ fn IndexedState::flush_projection_run(
 /// A committed authority prefix is never rolled back after projection failure.
 fn ProjectionWorkspace::commit_and_project(
   doc : Document,
-  prepared : @oplog.PreparedAdmission,
+  action : @oplog.ApplyChanges,
   recovered : Bool,
-) -> DocumentAdmission raise DocumentError {
+) -> DocumentChanges raise DocumentError {
   let detached = doc.indexed_state.take_cache()
-  doc.observe_commit_admission()
-  let outcome = doc.commit_admission_for_document(prepared) catch {
+  doc.observe_apply_changes()
+  let outcome = doc.apply_changes_for_document(action) catch {
     error => {
       doc.indexed_state.restore_cache(detached)
       raise DocumentError::OpLog(error)
     }
   }
-  let receipt = match outcome {
-    Complete(receipt) => receipt
-    Partial(receipt~, ..) => receipt
+  let report = match outcome {
+    Succeeded(report) => report
+    Failed(report~, ..) => report
   }
-  let committed = receipt.committed()
+  let committed = report.committed()
   if committed.is_empty() {
     doc.indexed_state.restore_cache(detached)
     doc.cursor = None
@@ -168,7 +168,7 @@ fn ProjectionWorkspace::commit_and_project(
         ProjectionEffectAvailability::Exact(effects[:]),
       )
     }
-    return DocumentAdmission::DocumentAdmission(
+    return DocumentChanges::DocumentChanges(
       outcome, status, effects, availability,
     )
   }
@@ -181,7 +181,7 @@ fn ProjectionWorkspace::commit_and_project(
       doc.invalidate_cache()
       doc.cursor = None
       let (status, availability) = try
-        doc.recover_projection_for_admission(receipt.frontier_after())
+        doc.recover_projection_for_apply_changes(report.frontier_after())
       catch {
         DocumentError::ProjectionRecoveryRequired(error~, ..) =>
           (
@@ -196,7 +196,7 @@ fn ProjectionWorkspace::commit_and_project(
             ProjectionEffectAvailability::SnapshotRequired,
           )
       }
-      DocumentAdmission::DocumentAdmission(outcome, status, [], availability)
+      DocumentChanges::DocumentChanges(outcome, status, [], availability)
     }
   } noraise {
     _ => {
@@ -217,9 +217,7 @@ fn ProjectionWorkspace::commit_and_project(
         }
         SnapshotRequired => ([], ProjectionEffectAvailability::SnapshotRequired)
       }
-      DocumentAdmission::DocumentAdmission(
-        outcome, status, effects, availability,
-      )
+      DocumentChanges::DocumentChanges(outcome, status, effects, availability)
     }
   }
 }

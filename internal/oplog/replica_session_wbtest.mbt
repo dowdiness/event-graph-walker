@@ -25,7 +25,7 @@ test "prototype: sessions use fresh writer identities over one authority" {
 }
 
 ///|
-test "prototype: pending delivery becomes visible only after admission" {
+test "prototype: pending delivery becomes visible only after change application" {
   let authority = OpLog("coordinator-pending")
   let page = ReplicaSession::attach(authority, "page-pending")
   let peer = OpLog("peer-pending")
@@ -81,7 +81,7 @@ test "prototype: concurrent peer branches converge at a fresh session frontier" 
 }
 
 ///|
-test "prototype: partial admission exposes only the committed prefix" {
+test "prototype: partial change application exposes only the committed prefix" {
   let authority = OpLog("coordinator-partial")
   let page = ReplicaSession::attach(authority, "page-partial")
   let first = @core.Op::insert(
@@ -111,33 +111,32 @@ test "prototype: partial admission exposes only the committed prefix" {
     None,
     None,
   )
-  let plan = try! authority.prepare_remote([first, failed, suffix])
-  let failed_raw = remote_admission_raw(failed)
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
-    authority.commit_remote_with(plan, op => {
-      if remote_admission_raw(op) == failed_raw {
-        raise OpLogError::CausalGraphError(
-          error=@causal_graph.CausalGraphError::MissingParent(lv=-99),
-        )
+  let action = try! ApplyChanges(authority, [first, failed, suffix])
+  let failed_raw = apply_changes_raw(failed)
+  match
+    (try! authority.apply_changes_with(action, op => {
+      if apply_changes_raw(op) == failed_raw {
+        raise @causal_graph.CausalGraphError::MissingParent(lv=-99)
       }
-      authority.commit_one_remote(op)
-    }),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Err(OpLogError::PartialRemoteAdmission(committed~, error~)) => {
-      ignore(error)
-      assert_eq(committed.length(), 1)
+      authority.commit_one_remote_for_apply_changes(op)
+    })) {
+    ApplyChangesOutcome::Failed(report~, error~) => {
+      match error {
+        @causal_graph.CausalGraphError::MissingParent(lv~) => assert_eq(lv, -99)
+        _ => fail("expected causal failure")
+      }
+      assert_eq(report.committed().length(), 1)
       assert_eq(page.pull().advance.length(), 1)
     }
-    _ => fail("expected partial remote admission")
+    ApplyChangesOutcome::Succeeded(_) =>
+      fail("expected partial remote change application")
   }
 
   ignore(
-    try! authority.commit_remote(
-      try! authority.prepare_remote([failed, suffix]),
-    ),
+    (try! p1_apply_success(
+      authority,
+      try! ApplyChanges(authority, [failed, suffix]),
+    )).committed(),
   )
   assert_eq(page.pull().advance.length(), 2)
 }

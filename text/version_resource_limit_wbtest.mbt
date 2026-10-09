@@ -101,7 +101,7 @@ test "Version encoder rejects output above 512 KiB" {
 }
 
 ///|
-test "admitted fragmented Version reports local encoding failure" {
+test "recorded fragmented Version reports local encoding failure" {
   let document = try! version_resource_text_state(1, 4097)
   assert_version_encode_limit(
     document.version(),

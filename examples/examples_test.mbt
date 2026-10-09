@@ -28,7 +28,7 @@ fn restore_text_history(
     fail("history exceeds pre-decode code-unit budget")
   }
   let expected = @text.Version::from_json_string(saved_version_json)
-  // Normal network admission retains its usual pending budget.
+  // Normal network change application retains its usual pending budget.
   let candidate = @text.TextState::new(fresh_replica_id)
   let message = candidate.sync().decode_json(history_json)
   let report = candidate.sync().apply_with_limits(message, restore_limits)

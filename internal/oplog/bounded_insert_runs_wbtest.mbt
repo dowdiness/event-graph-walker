@@ -22,13 +22,13 @@ test "bounded insert packing preserves boundary operations and snapshots" {
     assert_eq(still_retained.length(), count)
     for i = 0; i < count; i = i + 1 {
       assert_true(
-        remote_admission_same_logical_operation(
+        apply_changes_same_logical_operation(
           expected[i],
           log.get_op(i).unwrap(),
         ),
       )
       assert_true(
-        remote_admission_same_logical_operation(expected[i], still_retained[i]),
+        apply_changes_same_logical_operation(expected[i], still_retained[i]),
       )
     }
     assert_true(log.get_op(count).unwrap().content() is @core.Insert("Z"))

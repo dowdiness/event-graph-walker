@@ -21,34 +21,40 @@ pub(all) suberror OpLogError {
   MissingRemoteFrontier(raw~ : @core.RawVersion)
   DuplicateOperation(raw~ : @core.RawVersion)
   ConflictingIdentity(raw~ : @core.RawVersion)
-  StaleAdmission
-  ConsumedAdmission
-  InvalidAdmission
-  PartialRemoteAdmission(committed~ : Array[@core.Op], error~ : @causal_graph.CausalGraphError)
+  StaleApplyChanges
+  ConsumedApplyChanges
+  InvalidApplyChanges
+  PartialApplyChanges(committed~ : Array[@core.Op], error~ : @causal_graph.CausalGraphError)
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
 }
 
 // Types and methods
-pub enum AdmissionOutcome {
-  Complete(AdmissionReceipt)
-  Partial(receipt~ : AdmissionReceipt, error~ : @causal_graph.CausalGraphError)
-}
-
-pub struct AdmissionReceipt {
+pub struct ApplyChanges {
   // private fields
 }
-pub fn AdmissionReceipt::already_admitted(Self) -> ArrayView[@core.RawVersion]
-pub fn AdmissionReceipt::committed(Self) -> ArrayView[@core.Op]
-pub fn AdmissionReceipt::discarded_pending(Self) -> ArrayView[@core.RawVersion]
-pub fn AdmissionReceipt::discarded_staged(Self) -> ArrayView[@core.RawVersion]
-pub fn AdmissionReceipt::frontier_after(Self) -> @core.Frontier
-pub fn AdmissionReceipt::frontier_before(Self) -> @core.Frontier
-pub fn AdmissionReceipt::pending_after_count(Self) -> Int
-pub fn AdmissionReceipt::pending_before_count(Self) -> Int
-pub fn AdmissionReceipt::pending_from_transition(Self) -> ArrayView[@core.RawVersion]
-pub fn AdmissionReceipt::pending_retained(Self) -> ArrayView[@core.RawVersion]
-pub fn AdmissionReceipt::pending_staged(Self) -> ArrayView[@core.RawVersion]
-pub fn AdmissionReceipt::redelivery_count(Self) -> Int
+pub fn ApplyChanges::ApplyChanges(OpLog, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> Self raise OpLogError
+pub fn ApplyChanges::operations(Self) -> ArrayView[@core.Op]
+
+pub enum ApplyChangesOutcome {
+  Succeeded(ApplyChangesReport)
+  Failed(report~ : ApplyChangesReport, error~ : @causal_graph.CausalGraphError)
+}
+
+pub struct ApplyChangesReport {
+  // private fields
+}
+pub fn ApplyChangesReport::already_applied(Self) -> ArrayView[@core.RawVersion]
+pub fn ApplyChangesReport::committed(Self) -> ArrayView[@core.Op]
+pub fn ApplyChangesReport::discarded_pending(Self) -> ArrayView[@core.RawVersion]
+pub fn ApplyChangesReport::discarded_staged(Self) -> ArrayView[@core.RawVersion]
+pub fn ApplyChangesReport::frontier_after(Self) -> @core.Frontier
+pub fn ApplyChangesReport::frontier_before(Self) -> @core.Frontier
+pub fn ApplyChangesReport::pending_after_count(Self) -> Int
+pub fn ApplyChangesReport::pending_before_count(Self) -> Int
+pub fn ApplyChangesReport::pending_from_transition(Self) -> ArrayView[@core.RawVersion]
+pub fn ApplyChangesReport::pending_retained(Self) -> ArrayView[@core.RawVersion]
+pub fn ApplyChangesReport::pending_staged(Self) -> ArrayView[@core.RawVersion]
+pub fn ApplyChangesReport::redelivery_count(Self) -> Int
 
 pub struct ClosedHistory {
   // private fields
@@ -62,13 +68,12 @@ pub struct OpLog {
   // private fields
 }
 pub fn OpLog::OpLog(String) -> Self
+pub fn OpLog::apply_changes(Self, ApplyChanges) -> ApplyChangesOutcome raise OpLogError
+pub fn OpLog::apply_changes_with_failure(Self, ApplyChanges, (@core.Op) -> @causal_graph.CausalGraphError?) -> ApplyChangesOutcome raise OpLogError
 pub fn OpLog::apply_remote(Self, @core.Op) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::causal_graph(Self) -> @causal_graph.CausalGraph
 pub fn OpLog::clear_pending(Self) -> Unit
 pub fn OpLog::collect_missing_ops(Self, @causal_graph.GraphVersion) -> Array[@core.Op] raise OpLogError
-pub fn OpLog::commit_admission(Self, PreparedAdmission) -> AdmissionOutcome raise OpLogError
-pub fn OpLog::commit_admission_with_failure(Self, PreparedAdmission, (@core.Op) -> @causal_graph.CausalGraphError?) -> AdmissionOutcome raise OpLogError
-pub fn OpLog::commit_remote(Self, PreparedAdmission) -> Array[@core.Op] raise OpLogError
 pub fn OpLog::delete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
 pub fn OpLog::discard_pending_dependents(Self, Array[@core.RawVersion]) -> Unit
@@ -84,16 +89,10 @@ pub fn OpLog::insert(Self, String, Int, Int) -> @core.Op raise OpLogError
 pub fn OpLog::op_count(Self) -> Int
 pub fn OpLog::pending_count(Self) -> Int
 pub fn OpLog::plan_remote(Self, Array[@core.Op]) -> Array[@core.Op] raise OpLogError
-pub fn OpLog::prepare_remote(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> PreparedAdmission raise OpLogError
 pub fn OpLog::undelete(Self, Int) -> @core.Op raise OpLogError
 pub fn OpLog::validate_remote_batch(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise OpLogError
 pub fn OpLog::walk_and_collect(Self, @core.Frontier) -> Array[@core.Op]
 pub fn OpLog::walk_filtered(Self, @core.Frontier, (@core.Op) -> Bool) -> Array[@core.Op]
-
-pub struct PreparedAdmission {
-  // private fields
-}
-pub fn PreparedAdmission::operations(Self) -> ArrayView[@core.Op]
 
 // Type aliases
 

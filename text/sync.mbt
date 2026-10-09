@@ -110,42 +110,6 @@ fn op_dependencies(op : @core.Op) -> Array[@core.RawVersion] {
 }
 
 ///|
-fn validate_insert_scalar(text : String) -> Unit raise @sync.Failure {
-  let len = text.length()
-  if len == 0 {
-    raise @sync.Failure::InvalidContent(
-      detail="insert content must not be empty",
-    )
-  }
-  let first = text[0].to_int()
-  let consumed = if first >= 0xD800 && first <= 0xDBFF {
-    if len < 2 {
-      raise @sync.Failure::InvalidContent(
-        detail="insert content contains malformed UTF-16",
-      )
-    }
-    let second = text[1].to_int()
-    if second < 0xDC00 || second > 0xDFFF {
-      raise @sync.Failure::InvalidContent(
-        detail="insert content contains malformed UTF-16",
-      )
-    }
-    2
-  } else if first >= 0xDC00 && first <= 0xDFFF {
-    raise @sync.Failure::InvalidContent(
-      detail="insert content contains malformed UTF-16",
-    )
-  } else {
-    1
-  }
-  if consumed != len {
-    raise @sync.Failure::InvalidContent(
-      detail="insert content must contain exactly one Unicode scalar value",
-    )
-  }
-}
-
-///|
 fn is_well_formed_utf16(text : String) -> Bool {
   let mut index = 0
   while index < text.length() {
@@ -169,94 +133,50 @@ fn is_well_formed_utf16(text : String) -> Bool {
 }
 
 ///|
-/// State-independent proof for a text operation.
-priv struct StructuralOp {
-  op : @core.Op
-}
-
-///|
-fn StructuralOp::StructuralOp(
-  op : @core.Op,
-) -> StructuralOp raise @sync.Failure {
-  validate_op_structure(op)
-  { op, }
-}
-
-///|
-fn StructuralOp::raw(self : StructuralOp) -> @core.Op {
-  self.op
-}
-
-///|
-fn validate_op_structure(op : @core.Op) -> Unit raise @sync.Failure {
-  if op.agent() == "" {
-    raise @sync.Failure::MalformedMessage(
-      detail="operation replica_id must not be empty",
-    )
-  }
-  if op.seq() < 0 {
-    raise @sync.Failure::MalformedMessage(
-      detail="operation sequence must not be negative",
-    )
-  }
-  let seen_parents : Map[@core.RawVersion, Bool] = Map([])
-  let identity = op_identity(op)
-  for parent in op.parents() {
-    if parent.agent == "" || parent.seq < 0 {
+/// Convert core structural failures to the existing text synchronization
+/// error taxonomy and details.
+fn structural_op(op : @core.Op) -> @core.StructuralOp raise @sync.Failure {
+  @core.StructuralOp(op) catch {
+    @core.OpStructureError::EmptyReplica =>
+      raise @sync.Failure::MalformedMessage(
+        detail="operation replica_id must not be empty",
+      )
+    @core.OpStructureError::NegativeSequence =>
+      raise @sync.Failure::MalformedMessage(
+        detail="operation sequence must not be negative",
+      )
+    @core.OpStructureError::InvalidParentIdentity =>
       raise @sync.Failure::MalformedMessage(
         detail="operation parent identity is invalid",
       )
-    }
-    if parent == identity || seen_parents.get(parent) is Some(_) {
+    @core.OpStructureError::InvalidParentShape =>
       raise @sync.Failure::MalformedMessage(
         detail="operation contains a self or duplicate parent",
       )
-    }
-    seen_parents[parent] = true
-  }
-  match op.content() {
-    @core.Insert(text) => {
-      validate_insert_scalar(text)
-      match op.origin_left() {
-        Some(origin) =>
-          if origin.agent == "" || origin.seq < 0 {
-            raise @sync.Failure::MalformedMessage(
-              detail="operation origin identity is invalid",
-            )
-          }
-        None => ()
-      }
-      match op.origin_right() {
-        Some(origin) =>
-          if origin.agent == "" || origin.seq < 0 {
-            raise @sync.Failure::MalformedMessage(
-              detail="operation origin identity is invalid",
-            )
-          }
-        None => ()
-      }
-    }
-    @core.Delete | @core.Undelete => {
-      if op.origin_left() is None {
-        raise @sync.Failure::MalformedMessage(
-          detail="delete and undelete operations require a target",
-        )
-      }
-      if op.origin_right() is Some(_) {
-        raise @sync.Failure::MalformedMessage(
-          detail="delete and undelete operations cannot have a right target",
-        )
-      }
-      match op.origin_left() {
-        Some(origin) =>
-          if origin.agent == "" || origin.seq < 0 {
-            raise @sync.Failure::MalformedMessage(
-              detail="operation origin identity is invalid",
-            )
-          }
-        None => ()
-      }
-    }
+    @core.OpStructureError::EmptyInsert =>
+      raise @sync.Failure::InvalidContent(
+        detail="insert content must not be empty",
+      )
+    @core.OpStructureError::MalformedInsertUtf16 =>
+      raise @sync.Failure::InvalidContent(
+        detail="insert content contains malformed UTF-16",
+      )
+    @core.OpStructureError::MultiScalarInsert =>
+      raise @sync.Failure::InvalidContent(
+        detail="insert content must contain exactly one Unicode scalar value",
+      )
+    @core.OpStructureError::InvalidOriginIdentity =>
+      raise @sync.Failure::MalformedMessage(
+        detail="operation origin identity is invalid",
+      )
+    @core.OpStructureError::MissingDeleteTarget =>
+      raise @sync.Failure::MalformedMessage(
+        detail="delete and undelete operations require a target",
+      )
+    @core.OpStructureError::DeleteHasRightTarget =>
+      raise @sync.Failure::MalformedMessage(
+        detail="delete and undelete operations cannot have a right target",
+      )
   }
 }
 
@@ -397,26 +317,25 @@ fn canonical_order_counted(
 pub(all) struct SyncMessage {
   // Raw storage is private; the structural array carries the parse proof.
   priv operations : Array[@core.Op]
-  priv structural_operations : Array[StructuralOp]
+  priv structural_operations : Array[@core.StructuralOp]
   priv heads : Array[@core.RawVersion]
   priv encoded_size : Int?
   priv decoded_operation_count : Int
 }
 
 ///|
-/// Validating custom constructor used by decode and export paths.
 fn SyncMessage::SyncMessage(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
   encoded_size : Int?,
 ) -> SyncMessage raise @sync.Failure {
-  let structural_by_key : Map[@core.RawVersion, StructuralOp] = Map([])
+  let structural_by_key : Map[@core.RawVersion, @core.StructuralOp] = Map([])
   for op in operations {
-    let structural = StructuralOp::StructuralOp(op)
+    let structural = structural_op(op)
     structural_by_key[op_identity(op)] = structural
   }
   let ordered = canonical_order(operations)
-  let ordered_structural : Array[StructuralOp] = []
+  let ordered_structural : Array[@core.StructuralOp] = []
   for op in ordered {
     ordered_structural.push(structural_by_key.get(op_identity(op)).unwrap())
   }
@@ -475,10 +394,14 @@ pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
 /// A sync session bound to a `TextState`.
 pub(all) struct SyncSession {
   priv doc : TextState
-  // White-box seam for proving admission-guard ordering; production uses None.
+  // White-box seam for proving change application-guard ordering; production uses None.
   priv prepare_for_mutation_override : (() -> Unit raise TextError)?
-  // White-box seam for counting the single Text-to-Document admission call.
-  priv admit_remote_override : ((@document.Document, Array[@core.Op], Int) -> @document.DocumentAdmission raise @document.DocumentError)?
+  // White-box seam for counting the single Text-to-Document change application call.
+  priv apply_changes_override : ((
+    @document.Document,
+    ArrayView[@core.StructuralOp],
+    Int,
+  ) -> @document.DocumentChanges raise @document.DocumentError)?
 }
 
 ///|
@@ -1035,7 +958,7 @@ fn validate_message_limits(
 
 ///|
 /// Run the Document-owned recovery transition before sync preflight.
-fn SyncSession::prepare_for_admission(
+fn SyncSession::prepare_for_apply_changes(
   self : SyncSession,
 ) -> Unit raise TextError {
   match self.prepare_for_mutation_override {
@@ -1045,14 +968,18 @@ fn SyncSession::prepare_for_admission(
 }
 
 ///|
-fn SyncSession::admit_remote(
+fn SyncSession::apply_changes(
   self : SyncSession,
-  operations : Array[@core.Op],
+  operations : ArrayView[@core.StructuralOp],
   max_pending_after_complete : Int,
-) -> @document.DocumentAdmission raise @document.DocumentError {
-  match self.admit_remote_override {
-    Some(admit) => admit(self.doc.inner, operations, max_pending_after_complete)
-    None => self.doc.inner.admit_remote(operations, max_pending_after_complete~)
+) -> @document.DocumentChanges raise @document.DocumentError {
+  match self.apply_changes_override {
+    Some(apply) => apply(self.doc.inner, operations, max_pending_after_complete)
+    None =>
+      self.doc.inner.apply_structural_changes(
+        operations,
+        max_pending_after_complete~,
+      )
   }
 }
 
@@ -1062,22 +989,22 @@ pub fn SyncSession::apply_transition_with_limits(
   self : SyncSession,
   message : SyncMessage,
   limits : @sync.Limits,
-) -> TextAdmissionTransition raise TextError {
+) -> TextSyncTransition raise TextError {
   let version_before = self.doc.transition_version()
-  self.prepare_for_admission()
+  self.prepare_for_apply_changes()
   map_sync_failure(fn() raise @sync.Failure {
     validate_message_limits(message, limits)
   })
-  let admission = self.admit_remote(
-    message.operations.copy(),
+  let changes = self.apply_changes(
+    message.structural_operations[:],
     limits.max_pending_operations(),
   ) catch {
     error => raise TextError::from_document_error(error, () => self.doc.len())
   }
-  let outcome = admission.outcome
-  let projection = admission.projection
+  let outcome = changes.outcome
+  let projection = changes.projection
   let effects : Array[TextEffect] = []
-  let availability = match admission.effect_availability {
+  let availability = match changes.effect_availability {
     @document.ProjectionEffectAvailability::Exact(projected) => {
       for effect in projected {
         match effect {
@@ -1101,23 +1028,21 @@ pub fn SyncSession::apply_transition_with_limits(
     | @document.ProjectionStatus::Projected
     | @document.ProjectionStatus::Recovered =>
       match outcome {
-        @oplog.AdmissionOutcome::Complete(receipt) =>
+        @oplog.ApplyChangesOutcome::Succeeded(report) =>
           Ok({
-            applied_operations: receipt.committed().length(),
-            duplicate_operations: receipt.redelivery_count(),
-            pending_operations: receipt.pending_after_count(),
+            applied_operations: report.committed().length(),
+            duplicate_operations: report.redelivery_count(),
+            pending_operations: report.pending_after_count(),
           })
-        @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
-          let _ = receipt
+        @oplog.ApplyChangesOutcome::Failed(error~, ..) =>
           Err(
             TextError::from_oplog_error(
               @oplog.OpLogError::CausalGraphError(error~),
             ),
           )
-        }
       }
   }
-  TextAdmissionTransition::new(
+  TextSyncTransition(
     version_before,
     self.doc.transition_version(),
     effects,
@@ -1133,7 +1058,7 @@ pub fn SyncSession::apply_with_limits(
   message : SyncMessage,
   limits : @sync.Limits,
 ) -> SyncReport raise TextError {
-  self.apply_transition_with_limits(message, limits).finish()
+  self.apply_transition_with_limits(message, limits).report()
 }
 
 ///|
@@ -1141,7 +1066,7 @@ pub fn SyncSession::apply_with_limits(
 pub fn SyncSession::apply_transition(
   self : SyncSession,
   message : SyncMessage,
-) -> TextAdmissionTransition raise TextError {
+) -> TextSyncTransition raise TextError {
   self.apply_transition_with_limits(message, self.doc.sync_limits)
 }
 

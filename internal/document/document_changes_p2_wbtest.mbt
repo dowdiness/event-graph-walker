@@ -1,4 +1,4 @@
-///| P2.1 red tests for the typed Document batch-admission boundary.
+///| P2.1 red tests for the typed Document batch-change application boundary.
 
 ///|
 fn p2_remote_insert(
@@ -65,48 +65,16 @@ fn p2_assert_identity_prefix(
 }
 
 ///|
-test "P2 red complete batch has one typed transition and one projection" {
-  let mut prepare_count = 0
-  let mut commit_count = 0
-  let mut projection_count = 0
-  let projected_ops : Array[@core.Op] = []
+test "structural changes commit their identities and project the complete text" {
   let doc = Document::new("p2-complete")
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
-    on_projection_finalization: committed => {
-      projection_count = projection_count + 1
-      for op in committed {
-        projected_ops.push(op)
-      }
-    },
-    prepare_override: None,
-    commit_failure: None,
-    projection_failure: None,
-    recovery_checkout: None,
-  })
   let incoming = p2_ready_batch("p2-complete-peer", 3)
-
-  let admission = try! doc.admit_remote(incoming)
-  assert_eq(prepare_count, 1)
-  assert_eq(commit_count, 1)
-  assert_eq(projection_count, 1)
-  p2_assert_operation_prefix(projected_ops, incoming, 3)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
-      p2_assert_operation_prefix(receipt.committed(), incoming, 3)
-      assert_eq(receipt.pending_from_transition().length(), 0)
-    }
-    @oplog.AdmissionOutcome::Partial(..) =>
-      fail("complete batch must not be partial")
-  }
-  match admission.projection {
-    ProjectionStatus::Projected => ()
-    ProjectionStatus::Skipped
-    | ProjectionStatus::Recovered
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("complete committed batch must be projected")
-  }
+  let structural = incoming.map(op => try! @core.StructuralOp(op))
+  let changes = try! doc.apply_structural_changes(structural[:])
+  let report = try! changes.report()
+  p2_assert_operation_prefix(report.committed(), incoming, 3)
+  assert_eq(report.pending_from_transition().length(), 0)
+  assert_true(changes.projection is ProjectionStatus::Projected)
+  assert_eq(doc.to_text(), "xxx")
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
 }
@@ -117,28 +85,28 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
   let mut commit_count = 0
   let mut projection_count = 0
   let duplicate_doc = Document::new("p2-duplicate")
-  duplicate_doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  duplicate_doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
   })
   let incoming = p2_ready_batch("p2-duplicate-peer", 2)
-  ignore(try! duplicate_doc.admit_remote(incoming))
-  let duplicate = try! duplicate_doc.admit_remote(incoming)
+  ignore(try! duplicate_doc.apply_changes(incoming))
+  let duplicate = try! duplicate_doc.apply_changes(incoming)
 
   assert_eq(prepare_count, 2)
   assert_eq(commit_count, 2)
   assert_eq(projection_count, 1)
   match duplicate.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 0)
-      p2_assert_identity_prefix(receipt.already_admitted(), incoming, 2)
+      p2_assert_identity_prefix(receipt.already_applied(), incoming, 2)
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("duplicate-only batch must be complete")
   }
   match duplicate.projection {
@@ -153,25 +121,25 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
   let mut pending_commit_count = 0
   let mut pending_projection_count = 0
   let pending_doc = Document::new("p2-pending")
-  pending_doc.set_admission_hooks({
-    on_prepare_remote: () => pending_prepare_count = pending_prepare_count + 1,
-    on_commit_admission: () => pending_commit_count = pending_commit_count + 1,
+  pending_doc.set_apply_changes_hooks({
+    on_action: () => pending_prepare_count = pending_prepare_count + 1,
+    on_apply_changes: () => pending_commit_count = pending_commit_count + 1,
     on_projection_finalization: _ => {
       pending_projection_count = pending_projection_count + 1
     },
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
   })
   let pending_incoming = p2_pending_batch("p2-pending-peer")
-  let pending = try! pending_doc.admit_remote(pending_incoming)
+  let pending = try! pending_doc.apply_changes(pending_incoming)
 
   assert_eq(pending_prepare_count, 1)
   assert_eq(pending_commit_count, 1)
   assert_eq(pending_projection_count, 0)
   match pending.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 0)
       p2_assert_identity_prefix(
         receipt.pending_from_transition(),
@@ -179,7 +147,7 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
         1,
       )
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("pending-only batch must be complete")
   }
   match pending.projection {
@@ -200,16 +168,16 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
     let projected_ops : Array[@core.Op] = []
     let agent = "p2-partial-peer-" + failed_index.to_string()
     let doc = Document::new("p2-partial-" + failed_index.to_string())
-    doc.set_admission_hooks({
-      on_prepare_remote: () => prepare_count = prepare_count + 1,
-      on_commit_admission: () => commit_count = commit_count + 1,
+    doc.set_apply_changes_hooks({
+      on_action: () => prepare_count = prepare_count + 1,
+      on_apply_changes: () => commit_count = commit_count + 1,
       on_projection_finalization: committed => {
         projection_count = projection_count + 1
         for op in committed {
           projected_ops.push(op)
         }
       },
-      prepare_override: None,
+      action_override: None,
       commit_failure: Some(op => {
         if op.seq() == failed_index {
           Some(@causal_graph.CausalGraphError::MissingParent(lv=-201))
@@ -220,16 +188,16 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
       projection_failure: None,
       recovery_checkout: None,
     })
-    assert_true(doc.admission_commit_failure() is Some(_))
+    assert_true(doc.apply_changes_commit_failure() is Some(_))
 
     let incoming = p2_ready_batch(agent, 3)
-    let admission = try! doc.admit_remote(incoming)
+    let change = try! doc.apply_changes(incoming)
     assert_eq(prepare_count, 1)
     assert_eq(commit_count, 1)
     assert_eq(projection_count, if failed_index == 0 { 0 } else { 1 })
     p2_assert_operation_prefix(projected_ops, incoming, failed_index)
-    match admission.outcome {
-      @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
+    match change.outcome {
+      @oplog.ApplyChangesOutcome::Failed(report=receipt, error~) => {
         p2_assert_operation_prefix(receipt.committed(), incoming, failed_index)
         assert_eq(receipt.pending_from_transition().length(), 3 - failed_index)
         match error {
@@ -238,10 +206,10 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
           _ => fail("partial cause must be preserved")
         }
       }
-      @oplog.AdmissionOutcome::Complete(_) =>
+      @oplog.ApplyChangesOutcome::Succeeded(_) =>
         fail("injected partial boundary must remain partial")
     }
-    match admission.projection {
+    match change.projection {
       ProjectionStatus::Skipped if failed_index == 0 => ()
       ProjectionStatus::Projected if failed_index > 0 => ()
       ProjectionStatus::Skipped

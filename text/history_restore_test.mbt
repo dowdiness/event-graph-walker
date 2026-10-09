@@ -321,7 +321,7 @@ test "restore accepts exact byte and operation budgets but rejects one less" {
 ///|
 /// Same immutable suffix operations, not new edits under different writer IDs:
 /// new writer IDs can legitimately change concurrent insertion ordering.
-test "property: restore at a generated cut preserves future admission and deltas" {
+test "property: restore at a generated cut preserves future change application and deltas" {
   @qc.quick_check_fn(fn(input : (RealOps, UInt)) -> Bool {
     let (ops, cut_seed) = input
     let source = try! @text.TextState::new("source")

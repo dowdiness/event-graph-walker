@@ -2,16 +2,16 @@
 // Each case forces one snapshot strategy independently of production selection.
 
 ///|
-/// Construct mixed ready state only through production planner transitions.
-fn benchmark_ready_matrix_planner(
+/// Construct mixed ready state only through production pending-changes owner transitions.
+fn benchmark_ready_matrix_pending_changes(
   stale_ready : Int,
   live_ready : Int,
   live_unresolved : Int,
-) -> RemoteAdmissionPlanner raise OpLogError {
-  let planner = RemoteAdmissionPlanner()
+) -> PendingChanges raise OpLogError {
+  let pending_changes = PendingChanges()
   let missing = @core.RawVersion("ready-matrix-missing", 0)
   for i in 0..<live_unresolved {
-    planner.register_pending(
+    pending_changes.register_pending(
       @core.Op::insert(
         -1,
         [missing],
@@ -25,30 +25,30 @@ fn benchmark_ready_matrix_planner(
     )
   }
   for i in 0..<live_ready {
-    planner.register_pending(
+    pending_changes.register_pending(
       @core.Op::insert(-1, [], "ready-matrix-live", i, "l", None, None),
       _ => false,
     )
   }
   for i in 0..<stale_ready {
     let op = @core.Op::insert(-1, [], "ready-matrix-stale", i, "s", None, None)
-    planner.register_pending(op, _ => false)
-    planner.acknowledge_admitted(remote_admission_raw(op))
+    pending_changes.register_pending(op, _ => false)
+    pending_changes.acknowledge_applied(apply_changes_raw(op))
   }
-  planner
+  pending_changes
 }
 
 ///|
 /// Return the compatibility-ordered live identities after either copying the
 /// retained queue or rebuilding a disposable queue from canonical order.
 fn benchmark_ready_matrix_order(
-  planner : RemoteAdmissionPlanner,
+  pending_changes : PendingChanges,
   rebuild : Bool,
 ) -> Array[@core.RawVersion] {
   let ready = if rebuild {
-    let rebuilt : @priority_queue.PriorityQueue[RemoteAdmissionReady] = Default::default()
-    for entry in planner.pending_order {
-      match planner.pending.get(entry.raw) {
+    let rebuilt : @priority_queue.PriorityQueue[ReadyChange] = Default::default()
+    for entry in pending_changes.pending_order {
+      match pending_changes.pending.get(entry.raw) {
         Some(node) =>
           if node.arrival == entry.arrival && node.unresolved_count == 0 {
             rebuilt.push({
@@ -62,11 +62,11 @@ fn benchmark_ready_matrix_order(
     }
     rebuilt
   } else {
-    planner.ready.copy()
+    pending_changes.ready.copy()
   }
   let raws : Array[@core.RawVersion] = []
   while ready.pop() is Some(entry) {
-    match planner.pending.get(entry.raw) {
+    match pending_changes.pending.get(entry.raw) {
       Some(node) =>
         if node.arrival == -entry.arrival_key && node.unresolved_count == 0 {
           raws.push(entry.raw)
@@ -86,19 +86,19 @@ fn benchmark_ready_matrix_run(
   live_unresolved : Int,
   rebuild : Bool,
 ) -> Unit raise {
-  let planner = try! benchmark_ready_matrix_planner(
+  let pending_changes = try! benchmark_ready_matrix_pending_changes(
     stale_ready, live_ready, live_unresolved,
   )
-  assert_eq(planner.pending.length(), live_ready + live_unresolved)
+  assert_eq(pending_changes.pending.length(), live_ready + live_unresolved)
   assert_eq(
-    planner.pending_order.length(),
+    pending_changes.pending_order.length(),
     stale_ready + live_ready + live_unresolved,
   )
-  assert_eq(planner.ready.length(), stale_ready + live_ready)
-  assert_eq(planner.stale_ready_refs, stale_ready)
-  assert_eq(planner.stale_count(), stale_ready * 2)
-  let copied = benchmark_ready_matrix_order(planner, false)
-  let rebuilt = benchmark_ready_matrix_order(planner, true)
+  assert_eq(pending_changes.ready.length(), stale_ready + live_ready)
+  assert_eq(pending_changes.stale_ready_refs, stale_ready)
+  assert_eq(pending_changes.stale_count(), stale_ready * 2)
+  let copied = benchmark_ready_matrix_order(pending_changes, false)
+  let rebuilt = benchmark_ready_matrix_order(pending_changes, true)
   assert_eq(copied.length(), live_ready)
   assert_eq(rebuilt.length(), live_ready)
   for i in 0..<live_ready {
@@ -107,7 +107,7 @@ fn benchmark_ready_matrix_run(
   b.bench(fn() {
     let mut total = 0
     for _ in 0..<100 {
-      total += benchmark_ready_matrix_order(planner, rebuild).length()
+      total += benchmark_ready_matrix_order(pending_changes, rebuild).length()
     }
     b.keep(total)
   })

@@ -4,7 +4,7 @@
 /// OpLog - stores operations with causal graph
 pub struct OpLog {
   priv operations : @rle.Rle[@core.OpRun] // All operations in LV order, RLE-compressed
-  priv planner : RemoteAdmissionPlanner // Canonical remote pending owner
+  priv pending_changes : PendingChanges // Canonical remote pending owner
   priv graph : @causal_graph.CausalGraph // The causal graph
   priv agent_id : String // This agent's ID
 }
@@ -14,7 +14,7 @@ pub struct OpLog {
 pub fn OpLog::OpLog(agent_id : String) -> OpLog {
   {
     operations: @rle.Rle::Rle(),
-    planner: RemoteAdmissionPlanner(),
+    pending_changes: PendingChanges(),
     graph: @causal_graph.CausalGraph::new(),
     agent_id,
   }
@@ -75,9 +75,13 @@ pub fn OpLog::insert(
     origin_right_raw,
   )
   self.add_op(op)
-  self.planner.acknowledge_admitted(@core.RawVersion(op.agent(), op.seq()))
+  self.pending_changes.acknowledge_applied(
+    @core.RawVersion(op.agent(), op.seq()),
+  )
   ignore(
-    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+    self.pending_changes.maybe_compact(raw => {
+      self.graph.raw_to_lv(raw) is Some(_)
+    }),
   )
   op
 }
@@ -114,9 +118,13 @@ pub fn OpLog::delete(
     Some(origin_left_raw),
   )
   self.add_op(op)
-  self.planner.acknowledge_admitted(@core.RawVersion(op.agent(), op.seq()))
+  self.pending_changes.acknowledge_applied(
+    @core.RawVersion(op.agent(), op.seq()),
+  )
   ignore(
-    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+    self.pending_changes.maybe_compact(raw => {
+      self.graph.raw_to_lv(raw) is Some(_)
+    }),
   )
   op
 }
@@ -153,9 +161,13 @@ pub fn OpLog::undelete(
     Some(origin_left_raw),
   )
   self.add_op(op)
-  self.planner.acknowledge_admitted(@core.RawVersion(op.agent(), op.seq()))
+  self.pending_changes.acknowledge_applied(
+    @core.RawVersion(op.agent(), op.seq()),
+  )
   ignore(
-    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+    self.pending_changes.maybe_compact(raw => {
+      self.graph.raw_to_lv(raw) is Some(_)
+    }),
   )
   op
 }
@@ -241,7 +253,7 @@ pub fn OpLog::get_all_ops(self : OpLog) -> Array[@core.Op] {
 }
 
 ///|
-/// Collect exactly the locally admitted operations absent from a peer's sparse
+/// Collect exactly the locally recorded operations absent from a peer's sparse
 /// version. Sparse subtraction happens in the causal graph representation;
 /// only identities in the resulting ranges are resolved and decompressed.
 pub fn OpLog::collect_missing_ops(
@@ -342,7 +354,7 @@ pub fn OpLog::validate_remote_batch(
     let raw = @core.RawVersion(op.agent(), op.seq())
     match batch.get(raw) {
       Some(previous) =>
-        if !remote_admission_same_logical_operation(previous, op) {
+        if !apply_changes_same_logical_operation(previous, op) {
           raise OpLogError::ConflictingIdentity(raw~)
         }
       None => batch.set(raw, op)
@@ -365,60 +377,60 @@ pub fn OpLog::validate_remote_batch(
 ///|
 /// Report whether remote operations are waiting for dependencies.
 pub fn OpLog::has_pending(self : OpLog) -> Bool {
-  self.planner.has_pending()
+  self.pending_changes.has_pending()
 }
 
 ///|
 /// Return the live canonical pending membership count.
 pub fn OpLog::pending_count(self : OpLog) -> Int {
-  self.planner.pending_count()
+  self.pending_changes.pending_count()
 }
 
 ///|
 /// Clear all canonical pending membership without touching authority state.
 pub fn OpLog::clear_pending(self : OpLog) -> Unit {
-  self.planner.clear_pending()
+  self.pending_changes.clear_pending()
 }
 
 ///|
 /// Classify duplicate delivery evidence without treating it as terminal
 /// ownership. The resulting arrays are unique and preserve incoming order.
-fn OpLog::remote_admission_duplicate_evidence(
+fn OpLog::apply_changes_duplicate_evidence(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> (Array[@core.RawVersion], Array[@core.RawVersion]) {
-  let already_admitted : Array[@core.RawVersion] = []
+  let already_applied : Array[@core.RawVersion] = []
   let duplicate_of_pending : Array[@core.RawVersion] = []
-  let admitted_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+  let applied_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   let pending_seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for op in incoming {
-    let raw = remote_admission_raw(op)
+    let raw = apply_changes_raw(op)
     if self.graph.raw_to_lv(raw) is Some(_) {
-      if admitted_seen.add_and_check(raw) {
-        already_admitted.push(raw)
+      if applied_seen.add_and_check(raw) {
+        already_applied.push(raw)
       }
-    } else if self.planner.pending.contains(raw) {
+    } else if self.pending_changes.pending.contains(raw) {
       if pending_seen.add_and_check(raw) {
         duplicate_of_pending.push(raw)
       }
     }
   }
-  (already_admitted, duplicate_of_pending)
+  (already_applied, duplicate_of_pending)
 }
 
 ///|
-/// Compare incoming operations with full payloads retained in admitted history.
+/// Compare incoming operations with full payloads retained in recorded history.
 fn OpLog::preflight_remote_identities(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> Unit raise OpLogError {
   for op in incoming {
-    let raw = remote_admission_raw(op)
+    let raw = apply_changes_raw(op)
     match self.graph.raw_to_lv(raw) {
       Some(lv) =>
         match self.get_op(lv) {
-          Some(admitted) =>
-            if !remote_admission_same_logical_operation(admitted, op) {
+          Some(applied) =>
+            if !apply_changes_same_logical_operation(applied, op) {
               raise OpLogError::ConflictingIdentity(raw~)
             }
           None => raise OpLogError::MissingLocalVersion(lv~)
@@ -429,8 +441,8 @@ fn OpLog::preflight_remote_identities(
 }
 
 ///|
-/// Look up an admitted operation without expanding the resident history.
-fn OpLog::admitted_op(self : OpLog, raw : @core.RawVersion) -> @core.Op? {
+/// Look up an recorded operation without expanding the resident history.
+fn OpLog::applied_op(self : OpLog, raw : @core.RawVersion) -> @core.Op? {
   match self.graph.raw_to_lv(raw) {
     Some(lv) => self.get_op(lv)
     None => None
@@ -438,52 +450,52 @@ fn OpLog::admitted_op(self : OpLog, raw : @core.RawVersion) -> @core.Op? {
 }
 
 ///|
-/// Build the core semantic view without giving the planner graph ownership.
-fn OpLog::remote_admission_semantics(self : OpLog) -> RemoteAdmissionSemantics {
-  { op_of: raw => self.admitted_op(raw), }
+/// Build the core semantic view without giving the pending-changes owner graph ownership.
+fn OpLog::apply_changes_semantics(self : OpLog) -> ChangeSemantics {
+  { op_of: raw => self.applied_op(raw), }
 }
 
 ///|
-/// Prepare a remote admission without changing graph, log, or planner state.
+/// Prepare a remote change application without changing graph, log, or pending-changes owner state.
 ///
 /// `max_pending` is a hard bound on the unique pending membership immediately
 /// after begin applies the prepared discard and staged-registration transition.
 /// It covers both complete and partial commit outcomes. The optional
 /// `max_pending_after_complete` is a separate compatibility bound on the live
 /// pending membership after every planned operation commits successfully.
-pub fn OpLog::prepare_remote(
-  self : OpLog,
+pub fn ApplyChanges::ApplyChanges(
+  oplog : OpLog,
   incoming : Array[@core.Op],
   max_pending? : Int,
   max_pending_after_complete? : Int,
-) -> PreparedAdmission raise OpLogError {
-  self.preflight_remote_identities(incoming)
-  let (already_admitted, duplicate_of_pending) = self.remote_admission_duplicate_evidence(
+) -> ApplyChanges raise OpLogError {
+  oplog.preflight_remote_identities(incoming)
+  let (already_applied, duplicate_of_pending) = oplog.apply_changes_duplicate_evidence(
     incoming,
   )
-  let prepared = self.planner.prepare_with_semantics(
+  let action = oplog.pending_changes.prepare_with_semantics(
     incoming,
-    raw => self.graph.raw_to_lv(raw) is Some(_),
-    Some(self.remote_admission_semantics()),
+    raw => oplog.graph.raw_to_lv(raw) is Some(_),
+    Some(oplog.apply_changes_semantics()),
   )
-  prepared.with_prospective(
-    self.planner,
+  action.with_prospective(
+    oplog.pending_changes,
     max_pending,
     max_pending_after_complete,
-    already_admitted,
+    already_applied,
     duplicate_of_pending,
   )
 }
 
 ///|
 /// Preview the operations that remote application would drain without mutating
-/// the causal graph or pending planner. The result preserves drain order.
+/// the causal graph or pending state. The result preserves drain order.
 pub fn OpLog::plan_remote(
   self : OpLog,
   incoming : Array[@core.Op],
 ) -> Array[@core.Op] raise OpLogError {
-  let prepared = self.prepare_remote(incoming)
-  prepared.operations().to_owned()
+  let action = ApplyChanges(self, incoming)
+  action.operations().to_owned()
 }
 
 ///|
@@ -492,14 +504,16 @@ pub fn OpLog::discard_pending_dependents(
   self : OpLog,
   roots : Array[@core.RawVersion],
 ) -> Unit {
-  self.planner.reject_pending_dependents(roots)
+  self.pending_changes.reject_pending_dependents(roots)
   ignore(
-    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+    self.pending_changes.maybe_compact(raw => {
+      self.graph.raw_to_lv(raw) is Some(_)
+    }),
   )
 }
 
 ///|
-/// Apply a remote operation through the prepared-admission compatibility wrapper.
+/// Apply a remote operation through the `ApplyChanges` action compatibility wrapper.
 pub fn OpLog::apply_remote(
   self : OpLog,
   op : @core.Op,
@@ -508,42 +522,47 @@ pub fn OpLog::apply_remote(
   if (op.is_delete() || op.is_undelete()) && op.origin_left() is None {
     raise OpLogError::MissingOrigin
   }
-  let prepared = self.prepare_remote([op])
-  self.commit_remote(prepared)
+  match self.apply_changes(ApplyChanges(self, [op])) {
+    ApplyChangesOutcome::Succeeded(report) => report.committed().to_owned()
+    ApplyChangesOutcome::Failed(report~, error~) =>
+      raise OpLogError::PartialApplyChanges(
+        committed=report.committed().to_owned(),
+        error~,
+      )
+  }
 }
 
 ///|
-/// Translate planner lifecycle failures to the public OpLog error boundary.
-fn OpLog::begin_admission(
+/// Translate pending-changes owner lifecycle failures to the public OpLog error boundary.
+fn OpLog::begin_apply_changes(
   self : OpLog,
-  prepared : PreparedAdmission,
+  action : ApplyChanges,
 ) -> Unit raise OpLogError {
   match
-    self.planner.begin_plan_with_semantics(
-      prepared,
+    self.pending_changes.begin(
+      action,
       raw => self.graph.raw_to_lv(raw) is Some(_),
-      Some(self.remote_admission_semantics()),
+      semantics=self.apply_changes_semantics(),
     ) {
-    RemoteAdmissionBeginResult::Applied => ()
-    RemoteAdmissionBeginResult::Stale => raise OpLogError::StaleAdmission
-    RemoteAdmissionBeginResult::Consumed => raise OpLogError::ConsumedAdmission
-    RemoteAdmissionBeginResult::Conflict => raise OpLogError::InvalidAdmission
-    RemoteAdmissionBeginResult::PendingLimit(limit~, required~) =>
+    BeginApplyResult::Started => ()
+    BeginApplyResult::Stale => raise OpLogError::StaleApplyChanges
+    BeginApplyResult::Consumed => raise OpLogError::ConsumedApplyChanges
+    BeginApplyResult::Conflict => raise OpLogError::InvalidApplyChanges
+    BeginApplyResult::PendingLimit(limit~, required~) =>
       raise OpLogError::PendingLimitExceeded(limit~, required~)
   }
 }
 
 ///|
-/// Commit a prepared admission through the typed post-begin outcome seam.
-fn OpLog::commit_admission_with(
+fn OpLog::apply_changes_with(
   self : OpLog,
-  prepared : PreparedAdmission,
+  action : ApplyChanges,
   commit_one : (@core.Op) -> @core.Op raise @causal_graph.CausalGraphError,
-) -> AdmissionOutcome raise OpLogError {
+) -> ApplyChangesOutcome raise OpLogError {
   let frontier_before = self.get_frontier()
-  self.begin_admission(prepared)
+  self.begin_apply_changes(action)
   let committed : Array[@core.Op] = []
-  for op in prepared.operations() {
+  for op in action.operations() {
     let result : Result[@core.Op, @causal_graph.CausalGraphError] = Ok(
       commit_one(op),
     ) catch {
@@ -552,58 +571,34 @@ fn OpLog::commit_admission_with(
     match result {
       Err(error) => {
         ignore(
-          self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+          self.pending_changes.maybe_compact(raw => {
+            self.graph.raw_to_lv(raw) is Some(_)
+          }),
         )
-        return AdmissionOutcome::Partial(
-          receipt=self.admission_receipt(prepared, committed, frontier_before),
+        return ApplyChangesOutcome::Failed(
+          report=self.apply_changes_report(action, committed, frontier_before),
           error~,
         )
       }
       Ok(local_op) => {
-        self.planner.acknowledge_admitted(remote_admission_raw(op))
+        self.pending_changes.acknowledge_applied(apply_changes_raw(op))
         committed.push(local_op)
       }
     }
   }
   ignore(
-    self.planner.maybe_compact(raw => self.graph.raw_to_lv(raw) is Some(_)),
+    self.pending_changes.maybe_compact(raw => {
+      self.graph.raw_to_lv(raw) is Some(_)
+    }),
   )
-  AdmissionOutcome::Complete(
-    self.admission_receipt(prepared, committed, frontier_before),
+  ApplyChangesOutcome::Succeeded(
+    self.apply_changes_report(action, committed, frontier_before),
   )
-}
-
-///|
-/// Commit a prepared admission with an injectable legacy error shell. The
-/// canonical typed transition is still implemented by commit_admission_with.
-fn OpLog::commit_remote_with(
-  self : OpLog,
-  prepared : PreparedAdmission,
-  commit_one : (@core.Op) -> @core.Op raise OpLogError,
-) -> Array[@core.Op] raise OpLogError {
-  let outcome = self.commit_admission_with(prepared, op => {
-    let result : Result[@core.Op, OpLogError] = Ok(commit_one(op)) catch {
-      error => Err(error)
-    }
-    match result {
-      Ok(local_op) => local_op
-      Err(OpLogError::CausalGraphError(error~)) => raise error
-      Err(_) => abort("non-causal error escaped the post-begin admission seam")
-    }
-  })
-  match outcome {
-    AdmissionOutcome::Complete(receipt) => receipt.committed().to_owned()
-    AdmissionOutcome::Partial(receipt~, error~) =>
-      raise OpLogError::PartialRemoteAdmission(
-        committed=receipt.committed().to_owned(),
-        error~,
-      )
-  }
 }
 
 ///|
 /// Commit one operation through the narrow post-begin causal-error seam.
-fn OpLog::commit_one_remote_for_admission(
+fn OpLog::commit_one_remote_for_apply_changes(
   self : OpLog,
   op : @core.Op,
 ) -> @core.Op raise @causal_graph.CausalGraphError {
@@ -614,73 +609,44 @@ fn OpLog::commit_one_remote_for_admission(
   }
   match result {
     Err(OpLogError::CausalGraphError(error~)) => raise error
-    Err(_) => abort("non-causal error escaped the production admission seam")
+    Err(_) =>
+      abort("non-causal error escaped the production change application seam")
     Ok((keep_pending, local_op)) => {
       guard !keep_pending else {
         abort("prepared remote operation lost dependency readiness")
       }
       match local_op {
         Some(committed) => committed
-        None => abort("prepared remote operation was admitted outside OpLog")
+        None => abort("prepared remote operation was recorded outside OpLog")
       }
     }
   }
 }
 
 ///|
-/// Legacy single-operation shell retained for white-box compatibility tests.
-fn OpLog::commit_one_remote(
+/// Inject a causal failure before committing an operation.
+pub fn OpLog::apply_changes_with_failure(
   self : OpLog,
-  op : @core.Op,
-) -> @core.Op raise OpLogError {
-  let result : Result[@core.Op, @causal_graph.CausalGraphError] = Ok(
-    self.commit_one_remote_for_admission(op),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Ok(committed) => committed
-    Err(error) => raise OpLogError::CausalGraphError(error~)
-  }
-}
-
-///|
-/// Commit a prepared admission with a narrow per-operation causal failure
-/// capability. The normal Document path uses `commit_admission`; this adapter
-/// lets a direct dependent exercise the typed partial boundary without owning
-/// planner or pending state.
-pub fn OpLog::commit_admission_with_failure(
-  self : OpLog,
-  prepared : PreparedAdmission,
+  action : ApplyChanges,
   failure : (@core.Op) -> @causal_graph.CausalGraphError?,
-) -> AdmissionOutcome raise OpLogError {
-  self.commit_admission_with(prepared, op => {
+) -> ApplyChangesOutcome raise OpLogError {
+  self.apply_changes_with(action, op => {
     match failure(op) {
       Some(error) => raise error
-      None => self.commit_one_remote_for_admission(op)
+      None => self.commit_one_remote_for_apply_changes(op)
     }
   })
 }
 
 ///|
-/// Commit a prepared remote admission through the typed capability.
-pub fn OpLog::commit_admission(
+/// Commit a prepared remote change application through the typed capability.
+pub fn OpLog::apply_changes(
   self : OpLog,
-  prepared : PreparedAdmission,
-) -> AdmissionOutcome raise OpLogError {
-  self.commit_admission_with(prepared, op => {
-    self.commit_one_remote_for_admission(op)
+  action : ApplyChanges,
+) -> ApplyChangesOutcome raise OpLogError {
+  self.apply_changes_with(action, op => {
+    self.commit_one_remote_for_apply_changes(op)
   })
-}
-
-///|
-/// Commit a prepared remote admission exactly once through the legacy result
-/// shape. Partial typed evidence is translated only after receipt construction.
-pub fn OpLog::commit_remote(
-  self : OpLog,
-  prepared : PreparedAdmission,
-) -> Array[@core.Op] raise OpLogError {
-  self.commit_remote_with(prepared, op => self.commit_one_remote(op))
 }
 
 ///|

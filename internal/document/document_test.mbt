@@ -313,7 +313,7 @@ test "merge_remote accepts a valid insert-delete batch" {
 }
 
 ///|
-test "core admission discards pending graph-only targets and dependents" {
+test "core change application discards pending graph-only targets and dependents" {
   let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let target_raw = @core.RawVersion("remote-target", 0)
@@ -356,7 +356,7 @@ test "core admission discards pending graph-only targets and dependents" {
   inspect(doc.causal_snapshot().op_count(), content="2")
   inspect(doc.to_text(), content="")
 
-  // The target is now an ordinary duplicate; unrelated valid admission works.
+  // The target is now an ordinary duplicate; unrelated valid change application works.
   try! doc.apply_remote(target_delete)
   let valid_insert = @core.Op::insert(-1, [], "other", 0, "y", None, None)
   try! doc.apply_remote(valid_insert)

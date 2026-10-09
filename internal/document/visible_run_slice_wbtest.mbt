@@ -43,7 +43,7 @@ test "legacy empty insert and astral neighbor preserve indexed edit semantics" {
       Some(@core.RawVersion("legacy-empty", 0)),
       None,
     )
-    ignore(try! doc.admit_remote([empty, astral]))
+    ignore(try! doc.apply_changes([empty, astral]))
     if cold {
       doc.invalidate_cache()
     }
@@ -67,7 +67,7 @@ test "visible scalar packing agrees across warm cold and remote boundary edits" 
     let remote = Document::new("bounded-remote")
     ignore(try! warm.insert(0, text))
     ignore(try! cold.insert(0, text))
-    ignore(try! remote.admit_remote(warm.get_all_ops()))
+    ignore(try! remote.apply_changes(warm.get_all_ops()))
     cold.invalidate_cache()
     for doc in [warm, cold, remote] {
       assert_eq(doc.to_text(), text)

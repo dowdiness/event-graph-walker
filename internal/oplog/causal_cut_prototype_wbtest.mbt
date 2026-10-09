@@ -2,11 +2,11 @@
 ///
 /// This is deliberately not a public checkpoint or restore API. OpLog remains
 /// Causal Authority. The candidate append-only live store is used only while
-/// capturing a snapshot; matched admission benchmarks rejected keeping a
+/// capturing a snapshot; matched change application benchmarks rejected keeping a
 /// duplicate node map on every typing operation.
 
 ///|
-/// One structural node per admitted operation. Parent identities remain in the
+/// One structural node per recorded operation. Parent identities remain in the
 /// operation payload and resolve through the append-only node store.
 priv struct CausalNode {
   operation : @core.Op
@@ -37,10 +37,7 @@ fn CausalCut::append(self : CausalCut, operation : @core.Op) -> Unit {
   let raw = @core.RawVersion(operation.agent(), operation.seq())
   match self.nodes.get(raw) {
     Some(existing) => {
-      guard remote_admission_same_logical_operation(
-        existing.operation,
-        operation,
-      ) else {
+      guard apply_changes_same_logical_operation(existing.operation, operation) else {
         abort("causal cut identity conflict")
       }
       return
@@ -84,7 +81,7 @@ fn CausalCut::snapshot(self : CausalCut) -> CausalCutSnapshot {
 
 ///|
 /// Rebuild an exact immutable snapshot from a topologically ordered log.
-/// This is the explicit-capture reference path after the per-admission
+/// This is the explicit-capture reference path after the per-change application
 /// duplicate-store performance gate returned NO-GO.
 fn CausalCut::from_operations(
   operations : ArrayView[@core.Op],
@@ -123,7 +120,7 @@ fn CausalCutSnapshot::equal(
     let node = entry.1
     match other.nodes.get(raw) {
       Some(other_node) =>
-        if !remote_admission_same_logical_operation(
+        if !apply_changes_same_logical_operation(
             node.operation,
             other_node.operation,
           ) ||
@@ -138,7 +135,7 @@ fn CausalCutSnapshot::equal(
 
 ///|
 /// Explicit capture seam for whitebox tests and future coordinator work.
-/// The matched admission gate rejected maintaining a duplicate node map on
+/// The matched change application gate rejected maintaining a duplicate node map on
 /// every edit; capture currently rebuilds from OpLog at this boundary.
 fn OpLog::causal_cut(self : OpLog) -> CausalCutSnapshot {
   CausalCut::from_operations(self.get_all_ops())

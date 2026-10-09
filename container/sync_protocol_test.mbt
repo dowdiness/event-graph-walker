@@ -175,8 +175,8 @@ test "container sync retains authoritative pending payload after identity confli
   let authoritative = try! @container.SyncMessage::from_json_string(
     "{\"schema\":1,\"format\":\"event-graph-walker/container-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":0,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":0},\"parent\":{\"kind\":\"root\"},\"position\":[32768]}},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"domain\":\"tree\",\"payload\":{\"kind\":\"move\",\"timestamp\":1,\"agent\":\"alice\",\"target\":{\"kind\":\"node\",\"replica_id\":\"alice\",\"sequence\":1},\"parent\":{\"kind\":\"root\"},\"position\":[49152]}}]}",
   )
-  let admitted = try! receiver.sync().apply(authoritative)
-  inspect(admitted.applied_tree_operations(), content="2")
+  let applied = try! receiver.sync().apply(authoritative)
+  inspect(applied.applied_tree_operations(), content="2")
   inspect(receiver.children(@container.root_id).length(), content="2")
   inspect(receiver.sync().pending_sync_count(), content="0")
 }

@@ -6,25 +6,20 @@ test "allocation-free readiness preserves every repeated dependency check" {
   let op = @core.Op::insert(0, [a, a, b], "target", 0, "x", Some(b), Some(c))
   for mask = 0; mask < 64; mask = mask + 1 {
     let planned : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-    let admitted : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
+    let applied : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
     for index, raw in [a, b, c] {
       if mask.land(1 << index) != 0 {
         planned.add(raw)
       }
       if mask.land(1 << (index + 3)) != 0 {
-        admitted.add(raw)
+        applied.add(raw)
       }
     }
-    let expected = remote_admission_dependencies_for(op, None)
+    let expected = apply_changes_dependencies_for(op, None)
       .iter()
-      .all(raw => planned.contains(raw) || admitted.contains(raw))
+      .all(raw => planned.contains(raw) || applied.contains(raw))
     assert_eq(
-      remote_admission_is_ready(
-        op,
-        planned,
-        raw => admitted.contains(raw),
-        None,
-      ),
+      apply_changes_is_ready(op, planned, raw => applied.contains(raw), None),
       expected,
     )
   }
@@ -32,11 +27,11 @@ test "allocation-free readiness preserves every repeated dependency check" {
 
 ///|
 test "empty pending shortcut distinguishes deferred complete from staged missing" {
-  let planner = RemoteAdmissionPlanner()
+  let pending_changes = PendingChanges()
   let ready = @core.Op::insert(0, [], "ready", 0, "x", None, None)
-  let complete = try! planner.prepare([ready], _ => false)
+  let complete = try! pending_changes.prepare([ready], _ => false)
   assert_true(complete.storage is DeferredFast)
-  assert_eq(complete.remaining_raws(planner), [])
+  assert_eq(complete.remaining_raws(pending_changes), [])
   let parent = @core.RawVersion("absent", 0)
   let missing = @core.Op::insert(
     0,
@@ -47,8 +42,10 @@ test "empty pending shortcut distinguishes deferred complete from staged missing
     Some(parent),
     None,
   )
-  let incomplete = try! planner.prepare([missing], _ => false)
+  let incomplete = try! pending_changes.prepare([missing], _ => false)
   assert_true(incomplete.storage is ImmediateGeneral(_, planned_count=_))
-  assert_eq(incomplete.remaining_raws(planner), [@core.RawVersion("missing", 0)])
-  assert_true(planner.pending.is_empty())
+  assert_eq(incomplete.remaining_raws(pending_changes), [
+    @core.RawVersion("missing", 0),
+  ])
+  assert_true(pending_changes.pending.is_empty())
 }

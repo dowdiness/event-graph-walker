@@ -29,14 +29,14 @@ pub(all) suberror OpLogError {
   DuplicateOperation(raw~ : @core.RawVersion)
   /// A RawVersion was reused for a different logical operation payload.
   ConflictingIdentity(raw~ : @core.RawVersion)
-  /// A prepared admission was invalidated by another admission.
-  StaleAdmission
-  /// A prepared admission was committed or rejected already.
-  ConsumedAdmission
-  /// A prepared admission failed its internal consistency checks.
-  InvalidAdmission
-  /// A remote admission committed a prefix before a causal graph failure.
-  PartialRemoteAdmission(
+  /// A `ApplyChanges` action was invalidated by another change application.
+  StaleApplyChanges
+  /// A `ApplyChanges` action was committed or rejected already.
+  ConsumedApplyChanges
+  /// A `ApplyChanges` action failed its internal consistency checks.
+  InvalidApplyChanges
+  /// A remote change application committed a prefix before a causal graph failure.
+  PartialApplyChanges(
     committed~ : Array[@core.Op],
     error~ : @causal_graph.CausalGraphError
   )

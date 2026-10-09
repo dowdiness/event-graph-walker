@@ -208,69 +208,36 @@ pub fn Branch::checkout_version_vector(
 }
 
 ///|
-/// Merge remote operations into this branch
-///
-/// This properly uses the eg-walker algorithm:
-/// 1. Adds remote operations to the oplog with LV translation
-/// 2. Uses branch.advance() to apply the new operations
-///
-/// # Arguments
-/// * `remote_ops` - Array of remote operations to merge
-///
-/// # Returns
-/// A new Branch with the merged state
 fn Branch::merge_remote_ops_with(
   self : Branch,
   remote_ops : Array[@core.Op],
-  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
+  apply : (@oplog.ApplyChanges) -> @oplog.ApplyChangesOutcome raise @oplog.OpLogError,
 ) -> Branch raise BranchError {
-  let prepared = self.oplog.prepare_remote(remote_ops) catch {
-    e => raise BranchError::OpLog(e)
-  }
-  let outcome = commit_prepared_admission(prepared, commit)
-  match outcome {
-    BranchRemoteAdmissionOutcome::Complete => self.advance_to_current()
-    BranchRemoteAdmissionOutcome::Partial(committed, error) => {
-      let _ = self.advance_to_current()
-      raise BranchError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~),
-      )
-    }
-  }
-}
-
-///|
-/// Translate only partial admission into a branch projection outcome.
-priv enum BranchRemoteAdmissionOutcome {
-  Complete
-  Partial(Array[@core.Op], @causal_graph.CausalGraphError)
-}
-
-///|
-/// Catch only a typed partial admission; unknown OpLog failures propagate.
-fn commit_prepared_admission(
-  prepared : @oplog.PreparedAdmission,
-  commit : (@oplog.PreparedAdmission) -> Array[@core.Op] raise @oplog.OpLogError,
-) -> BranchRemoteAdmissionOutcome raise BranchError {
-  try commit(prepared) catch {
-    @oplog.OpLogError::PartialRemoteAdmission(committed~, error~) =>
-      BranchRemoteAdmissionOutcome::Partial(committed, error)
+  let action = @oplog.ApplyChanges(self.oplog, remote_ops) catch {
     error => raise BranchError::OpLog(error)
-  } noraise {
-    applied => {
-      let _ = applied
-      BranchRemoteAdmissionOutcome::Complete
-    }
+  }
+  let outcome = apply(action) catch { error => raise BranchError::OpLog(error) }
+  // Projection must reflect the committed prefix before reporting failure.
+  let updated = self.advance_to_current()
+  match outcome {
+    Succeeded(_) => updated
+    Failed(report~, error~) =>
+      raise BranchError::OpLog(
+        @oplog.OpLogError::PartialApplyChanges(
+          committed=report.committed().to_owned(),
+          error~,
+        ),
+      )
   }
 }
 
 ///|
-/// Merge remote operations into this branch using one prepared admission.
+/// Merge remote operations into this branch using one `ApplyChanges` action.
 pub fn Branch::merge_remote_ops(
   self : Branch,
   remote_ops : Array[@core.Op],
 ) -> Branch raise BranchError {
-  self.merge_remote_ops_with(remote_ops, prepared => {
-    self.oplog.commit_remote(prepared)
+  self.merge_remote_ops_with(remote_ops, action => {
+    self.oplog.apply_changes(action)
   })
 }

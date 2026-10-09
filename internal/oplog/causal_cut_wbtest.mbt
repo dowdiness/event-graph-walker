@@ -96,38 +96,38 @@ test "prototype: pending remote operations enter the cut only after drain" {
 }
 
 ///|
-test "prototype: partial remote admission leaves an exact cut prefix" {
+test "prototype: partial remote change application leaves an exact cut prefix" {
   let log = OpLog("partial-cut")
   let first = @core.Op::insert(-1, [], "partial-first", 0, "a", None, None)
   let failed = @core.Op::insert(-1, [], "partial-failed", 0, "b", None, None)
   let suffix = @core.Op::insert(-1, [], "partial-suffix", 0, "c", None, None)
-  let plan = try! log.prepare_remote([first, failed, suffix])
-  let failed_raw = remote_admission_raw(failed)
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
-    log.commit_remote_with(plan, op => {
-      if remote_admission_raw(op) == failed_raw {
-        raise OpLogError::CausalGraphError(
-          error=@causal_graph.CausalGraphError::MissingParent(lv=-99),
-        )
+  let action = try! ApplyChanges(log, [first, failed, suffix])
+  let failed_raw = apply_changes_raw(failed)
+  match
+    (try! log.apply_changes_with(action, op => {
+      if apply_changes_raw(op) == failed_raw {
+        raise @causal_graph.CausalGraphError::MissingParent(lv=-99)
       }
-      log.commit_one_remote(op)
-    }),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Err(OpLogError::PartialRemoteAdmission(committed~, error~)) => {
-      ignore(error)
-      inspect(committed.length(), content="1")
+      log.commit_one_remote_for_apply_changes(op)
+    })) {
+    ApplyChangesOutcome::Failed(report~, error~) => {
+      match error {
+        @causal_graph.CausalGraphError::MissingParent(lv~) => assert_eq(lv, -99)
+        _ => fail("expected causal failure")
+      }
+      inspect(report.committed().length(), content="1")
       inspect(log.causal_cut().op_count(), content="1")
       inspect(
         log.causal_cut().equal(CausalCut::from_operations(log.get_all_ops())),
         content="true",
       )
     }
-    _ => fail("expected partial remote admission")
+    ApplyChangesOutcome::Succeeded(_) =>
+      fail("expected partial remote change application")
   }
-  ignore(try! log.commit_remote(try! log.prepare_remote([failed, suffix])))
+  ignore(
+    (try! p1_apply_success(log, try! ApplyChanges(log, [failed, suffix]))).committed(),
+  )
   inspect(log.causal_cut().op_count(), content="3")
   inspect(
     log.causal_cut().equal(CausalCut::from_operations(log.get_all_ops())),
