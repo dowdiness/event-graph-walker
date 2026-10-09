@@ -72,7 +72,7 @@ test "P3 complete-after limit removes a pending wake from final membership" {
 }
 
 ///|
-test "P3 zero pending limit admits a sparse same-agent root" {
+test "P3 zero pending limit applies a sparse same-agent root" {
   let receiver = try! TextState::new("p3-limit-sparse-receiver")
   let sparse = try! SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"p3-limit-sparse\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[]}",

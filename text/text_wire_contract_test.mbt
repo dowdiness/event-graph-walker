@@ -1,13 +1,13 @@
 ///|
-test "SyncSession admission uses per-call limits atomically" {
+test "SyncSession change application uses per-call limits atomically" {
   let source = try! @text.TextState::new("source")
   try! source.insert(@text.Pos::at(0), "A")
   let message = try! source.sync().export_all()
   let encoded_size = @utf8.encode(message.to_json_string()).length()
   let receiver = try! @text.TextState::new("receiver")
   let exact = try! @sync.Limits::Limits(max_encoded_bytes=encoded_size)
-  let admitted = try! receiver.sync().apply_with_limits(message, exact)
-  inspect(admitted.applied_operations(), content="1")
+  let applied = try! receiver.sync().apply_with_limits(message, exact)
+  inspect(applied.applied_operations(), content="1")
   inspect(receiver.text(), content="A")
 
   let before_text = receiver.text()
@@ -24,7 +24,7 @@ test "SyncSession admission uses per-call limits atomically" {
     ) => ()
     _ => fail("expected per-call encoded byte limit")
   } noraise {
-    _ => fail("over-limit admission must reject")
+    _ => fail("over-limit change application must reject")
   }
   inspect(receiver.text(), content=before_text)
   inspect(receiver.version() == before_version, content="true")
@@ -83,12 +83,12 @@ test "text sync retains authoritative pending payload after identity conflict" {
   let authoritative = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"A\",\"origin_left\":null,\"origin_right\":null},{\"id\":{\"replica_id\":\"alice\",\"sequence\":1},\"parents\":[{\"replica_id\":\"alice\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":1}]}",
   )
-  let admitted = try! receiver
+  let applied = try! receiver
     .sync()
     .apply_with_limits(authoritative, Default::default())
-  inspect(admitted.applied_operations(), content="2")
-  inspect(admitted.duplicate_operations(), content="1")
-  inspect(admitted.pending_operations(), content="0")
+  inspect(applied.applied_operations(), content="2")
+  inspect(applied.duplicate_operations(), content="1")
+  inspect(applied.pending_operations(), content="0")
   inspect(receiver.text(), content="AB")
   inspect(receiver.sync().pending_sync_count(), content="0")
 
@@ -123,7 +123,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
     ) => ()
     _ => fail("expected pending-operation limit")
   } noraise {
-    _ => fail("over-limit pending admission must reject")
+    _ => fail("over-limit pending change application must reject")
   }
   inspect(strict_receiver.text(), content=before_text)
   inspect(strict_receiver.version() == before_version, content="true")
@@ -442,14 +442,11 @@ test "core and text reject known invalid origin with the same atomic meaning" {
     1,
     Some(@core.RawVersion("receiver", 0)),
   )
-  ignore(
-    try! core_receiver.commit_remote(
-      try! core_receiver.prepare_remote([root, delete]),
-    ),
-  )
+  let action = try! @oplog.ApplyChanges(core_receiver, [root, delete])
+  ignore(try! core_receiver.apply_changes(action))
   let core_before_count = core_receiver.op_count()
   let core_before_frontier = try! core_receiver.get_frontier_raw()
-  try core_receiver.prepare_remote([bad]) catch {
+  try @oplog.ApplyChanges(core_receiver, [bad]) catch {
     @oplog.OpLogError::OriginTargetNotInsert(operation=_, target=_) => ()
     _ =>
       fail("core path must classify known invalid origin as non-insert target")
@@ -464,7 +461,7 @@ test "core and text reject known invalid origin with the same atomic meaning" {
 }
 
 ///|
-test "same-agent sequence hole admits without an implicit predecessor" {
+test "same-agent sequence hole applies without an implicit predecessor" {
   let receiver = try! @text.TextState::new("receiver")
   let malformed_future = try! @text.SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"alice\",\"sequence\":2},\"parents\":[],\"kind\":\"insert\",\"content\":\"C\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"alice\",\"sequence\":2}]}",

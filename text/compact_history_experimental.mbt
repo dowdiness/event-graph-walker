@@ -551,9 +551,9 @@ fn compact_chain_message(
   if !compact_is_single_chain(operations, heads) {
     return SyncMessage::SyncMessage(operations, heads, Some(encoded_size))
   }
-  let structural_operations : Array[StructuralOp] = []
+  let structural_operations : Array[@core.StructuralOp] = []
   for op in operations {
-    structural_operations.push(StructuralOp::StructuralOp(op))
+    structural_operations.push(structural_op(op))
   }
   // Unique checked consecutive identities, valid first actor, and sole proved
   // last head establish the exact original head invariants without a head map.
@@ -568,7 +568,7 @@ fn compact_chain_message(
 
 ///|
 /// Separate offline importer: complete proof -> direct authority -> canonical
-/// projection -> derived index. No live planner/pending registration is needed.
+/// projection -> derived index. No live pending-changes owner/pending registration is needed.
 pub fn TextState::restore_compact_direct_experimental(
   source : String,
   writer : String,

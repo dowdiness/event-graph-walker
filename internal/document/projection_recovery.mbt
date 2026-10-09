@@ -123,10 +123,10 @@ fn Document::ensure_projection_ready(
 }
 
 ///|
-/// Ensure the projection is ready for typed admission and report whether this
-/// entry guard performed recovery so the admission result can retain that
+/// Ensure the projection is ready for typed change application and report whether this
+/// entry guard performed recovery so the change application result can retain that
 /// evidence even when no committed operations are projected.
-fn Document::ensure_projection_ready_for_admission(
+fn Document::ensure_projection_ready_for_apply_changes(
   self : Document,
 ) -> Bool raise DocumentError {
   match self.projection_health {

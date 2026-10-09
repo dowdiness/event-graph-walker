@@ -1,4 +1,4 @@
-/// P2.3 differential gate: typed batch admission is checked against the
+/// P2.3 differential gate: typed batch change application is checked against the
 /// legacy wrappers and a fresh Branch checkout at every meaningful boundary.
 
 ///|
@@ -28,11 +28,11 @@ fn p2_diff_hooks(
   projection_error : DocumentError?,
   recovery_error : @branch.BranchError?,
 ) -> Unit {
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       match failed_index {
         Some(index) if op.seq() == index =>
@@ -53,17 +53,17 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
   let complete = p2_ready_batch("p2-diff-complete", 3)
   let typed_complete = Document::new("p2-diff-typed-complete")
   let legacy_complete = Document::new("p2-diff-legacy-complete")
-  let typed = try! typed_complete.admit_remote(complete)
+  let typed = try! typed_complete.apply_changes(complete)
   try! legacy_complete.merge_remote(
     complete,
     try! typed_complete.get_frontier_raw(),
   )
   match typed.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       p2_assert_operation_prefix(receipt.committed(), complete, 3)
       assert_eq(receipt.frontier_after(), typed_complete.get_frontier())
     }
-    @oplog.AdmissionOutcome::Partial(..) => fail("complete differential case")
+    @oplog.ApplyChangesOutcome::Failed(..) => fail("complete differential case")
   }
   match typed.projection {
     ProjectionStatus::Projected => ()
@@ -71,7 +71,7 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
   }
   p2_diff_assert_state(typed_complete, legacy_complete)
 
-  let typed_duplicate = try! typed_complete.admit_remote(complete)
+  let typed_duplicate = try! typed_complete.apply_changes(complete)
   let legacy_duplicate : Result[Unit, DocumentError] = Ok(
     legacy_complete.merge_remote(
       complete,
@@ -85,9 +85,10 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     Err(_) => fail("duplicate wrapper must not fail")
   }
   match typed_duplicate.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       assert_eq(receipt.committed().length(), 0)
-    @oplog.AdmissionOutcome::Partial(..) => fail("duplicate differential case")
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("duplicate differential case")
   }
   match typed_duplicate.projection {
     ProjectionStatus::Skipped => ()
@@ -98,7 +99,7 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
   let pending = p2_pending_batch("p2-diff-pending")
   let typed_pending_doc = Document::new("p2-diff-typed-pending")
   let legacy_pending_doc = Document::new("p2-diff-legacy-pending")
-  let typed_pending = try! typed_pending_doc.admit_remote(pending)
+  let typed_pending = try! typed_pending_doc.apply_changes(pending)
   let legacy_pending : Result[Unit, DocumentError] = Ok(
     legacy_pending_doc.apply_remote(pending[0]),
   ) catch {
@@ -106,14 +107,13 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
   }
   match legacy_pending {
     Ok(_) => ()
-    Err(DocumentError::OpLog(@oplog.OpLogError::PartialRemoteAdmission(..))) =>
-      ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::PartialApplyChanges(..))) => ()
     Err(_) => fail("pending wrapper error shape changed")
   }
   match typed_pending.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_identity_prefix(receipt.pending_from_transition(), pending, 1)
-    @oplog.AdmissionOutcome::Partial(..) => fail("pending differential case")
+    @oplog.ApplyChangesOutcome::Failed(..) => fail("pending differential case")
   }
   match typed_pending.projection {
     ProjectionStatus::Skipped => ()
@@ -137,14 +137,14 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     )
     p2_diff_hooks(typed_doc, Some(failed_index), None, None)
     p2_diff_hooks(legacy_doc, Some(failed_index), None, None)
-    let typed_result = try! typed_doc.admit_remote(incoming)
+    let typed_result = try! typed_doc.apply_changes(incoming)
     let legacy_result : Result[Unit, DocumentError] = Ok(
       legacy_doc.merge_remote(incoming, remote_frontier),
     ) catch {
       error => Err(error)
     }
     match typed_result.outcome {
-      @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
+      @oplog.ApplyChangesOutcome::Failed(report=receipt, error~) => {
         p2_assert_operation_prefix(receipt.committed(), incoming, failed_index)
         match error {
           @causal_graph.CausalGraphError::MissingParent(lv~) =>
@@ -152,7 +152,7 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
           _ => fail("typed prefix cause changed")
         }
       }
-      @oplog.AdmissionOutcome::Complete(_) => fail("prefix must be partial")
+      @oplog.ApplyChangesOutcome::Succeeded(_) => fail("prefix must be partial")
     }
     match typed_result.projection {
       ProjectionStatus::Skipped if failed_index == 0 => ()
@@ -162,7 +162,7 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     match legacy_result {
       Err(
         DocumentError::OpLog(
-          @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
+          @oplog.OpLogError::PartialApplyChanges(committed~, error~)
         )
       ) => {
         assert_eq(committed.length(), failed_index)
@@ -196,7 +196,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
   legacy_doc.replace_projection_tree(@fugue.FugueTree::new())
   p2_diff_hooks(typed_doc, None, None, None)
   p2_diff_hooks(legacy_doc, None, None, None)
-  let typed = try! typed_doc.admit_remote(incoming)
+  let typed = try! typed_doc.apply_changes(incoming)
   try! legacy_doc.apply_remote(incoming[0])
   match typed.projection {
     ProjectionStatus::Recovered => ()
@@ -213,7 +213,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
   )
   p2_diff_hooks(recovery_t, None, Some(projection_error), None)
   p2_diff_hooks(recovery_l, None, Some(projection_error), None)
-  let recovered = try! recovery_t.admit_remote(batch)
+  let recovered = try! recovery_t.apply_changes(batch)
   let legacy_recovery : Result[Unit, DocumentError] = Ok(
     recovery_l.merge_remote(batch, [@core.RawVersion("p2-diff-recovery", 1)]),
   ) catch {
@@ -243,7 +243,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     Some(projection_error),
     Some(@branch.BranchError::MissingOp(lv=992)),
   )
-  let required_admission = try! required.admit_remote(batch)
+  let required_change = try! required.apply_changes(batch)
   let required_error : Result[Unit, DocumentError] = Ok(
     required_legacy.merge_remote(batch, [
       @core.RawVersion("p2-diff-recovery", 1),
@@ -251,10 +251,10 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
   ) catch {
     error => Err(error)
   }
-  match required_admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+  match required_change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_operation_prefix(receipt.committed(), batch, 2)
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("recovery control must retain receipt")
   }
   match required_error {
@@ -272,7 +272,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     required.get_all_ops(),
     required_legacy.get_all_ops(),
   )
-  match required_admission.projection {
+  match required_change.projection {
     ProjectionStatus::RecoveryRequired(error~) =>
       match error {
         @branch.BranchError::MissingOp(lv~) => assert_eq(lv, 992)
@@ -325,11 +325,11 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
   let retry_l = Document::new("p2-diff-retry-legacy")
   let mut typed_fail = true
   let mut legacy_fail = true
-  retry_t.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  retry_t.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       if typed_fail && op.seq() == 1 {
         Some(@causal_graph.CausalGraphError::MissingParent(lv=-312))
@@ -340,11 +340,11 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     projection_failure: None,
     recovery_checkout: None,
   })
-  retry_l.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  retry_l.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       if legacy_fail && op.seq() == 1 {
         Some(@causal_graph.CausalGraphError::MissingParent(lv=-312))
@@ -355,7 +355,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     projection_failure: None,
     recovery_checkout: None,
   })
-  let first = try! retry_t.admit_remote(retry_batch)
+  let first = try! retry_t.apply_changes(retry_batch)
   let legacy_first : Result[Unit, DocumentError] = Ok(
     retry_l.merge_remote(retry_batch, [
       @core.RawVersion(retry_batch[2].agent(), retry_batch[2].seq()),
@@ -364,7 +364,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     error => Err(error)
   }
   match first.outcome {
-    @oplog.AdmissionOutcome::Partial(receipt~, ..) =>
+    @oplog.ApplyChangesOutcome::Failed(report=receipt, ..) =>
       p2_assert_operation_prefix(receipt.committed(), retry_batch, 1)
     _ => fail("retry first typed transition changed")
   }
@@ -373,17 +373,16 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     _ => fail("retry first projection status changed")
   }
   match legacy_first {
-    Err(DocumentError::OpLog(@oplog.OpLogError::PartialRemoteAdmission(..))) =>
-      ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::PartialApplyChanges(..))) => ()
     _ => fail("retry first legacy prefix should expose partial error")
   }
   p2_diff_assert_state(retry_t, retry_l)
   typed_fail = false
   legacy_fail = false
-  let retry = try! retry_t.admit_remote([])
+  let retry = try! retry_t.apply_changes([])
   try! retry_l.merge_remote([], [])
   match retry.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_operation_prefix(
         receipt.committed(),
         [retry_batch[1], retry_batch[2]],
@@ -405,7 +404,7 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   let legacy_doc = Document::new("p2-diff-wrapper-legacy")
   p2_diff_hooks(typed_doc, Some(0), None, None)
   p2_diff_hooks(legacy_doc, Some(0), None, None)
-  let typed = try! typed_doc.admit_remote([op])
+  let typed = try! typed_doc.apply_changes([op])
   let legacy : Result[Unit, DocumentError] = Ok(legacy_doc.apply_remote(op)) catch {
     error => Err(error)
   }
@@ -416,7 +415,7 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   match legacy {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
+        @oplog.OpLogError::PartialApplyChanges(committed~, error~)
       )
     ) => {
       assert_eq(committed.length(), 0)
@@ -432,7 +431,7 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   let ops = source.get_all_ops()
   let frontier = try! source.get_frontier_raw()
   let merged = Document::new("p2-diff-merge-wrapper")
-  let control = try! merged.admit_remote(ops)
+  let control = try! merged.apply_changes(ops)
   let closure : Result[Unit, DocumentError] = Ok(
     Document::new("p2-diff-merge-closure").merge_remote([ops[1]], frontier),
   ) catch {
@@ -454,13 +453,13 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
 fn p2_diff_rejection_hooks(
   doc : Document,
   counters : Array[Int],
-  prepare_override : ((Array[@core.Op]) -> @oplog.PreparedAdmission raise @oplog.OpLogError)?,
+  action_override : ((Array[@core.Op]) -> @oplog.ApplyChanges raise @oplog.OpLogError)?,
 ) -> Unit {
-  doc.set_admission_hooks({
-    on_prepare_remote: () => counters[0] = counters[0] + 1,
-    on_commit_admission: () => counters[1] = counters[1] + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => counters[0] = counters[0] + 1,
+    on_apply_changes: () => counters[1] = counters[1] + 1,
     on_projection_finalization: _ => counters[2] = counters[2] + 1,
-    prepare_override,
+    action_override,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
@@ -480,17 +479,17 @@ fn p2_diff_assert_rejection_counts(
 }
 
 ///|
-fn p2_diff_assert_valid_admission(
-  admission : DocumentAdmission,
+fn p2_diff_assert_valid_apply_changes(
+  change : DocumentChanges,
   operation : @core.Op,
 ) -> Unit raise {
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_operation_prefix(receipt.committed(), [operation], 1)
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("valid rejection follow-up must not be partial")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::Projected => ()
     _ => fail("valid rejection follow-up must project")
   }
@@ -513,8 +512,8 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   let legacy_malformed_counts = [0, 0, 0]
   p2_diff_rejection_hooks(typed_malformed, typed_malformed_counts, None)
   p2_diff_rejection_hooks(legacy_malformed, legacy_malformed_counts, None)
-  let typed_malformed_result : Result[DocumentAdmission, DocumentError] = Ok(
-    typed_malformed.admit_remote([malformed]),
+  let typed_malformed_result : Result[DocumentChanges, DocumentError] = Ok(
+    typed_malformed.apply_changes([malformed]),
   ) catch {
     error => Err(error)
   }
@@ -545,17 +544,19 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   let malformed_follow_up = p2_ready_batch("p2-diff-malformed-follow-up", 1)[0]
   p2_diff_rejection_hooks(typed_malformed, typed_malformed_counts, None)
   p2_diff_rejection_hooks(legacy_malformed, legacy_malformed_counts, None)
-  let typed_malformed_admission = try! typed_malformed.admit_remote([
+  let typed_malformed_change = try! typed_malformed.apply_changes([
     malformed_follow_up,
   ])
-  p2_diff_assert_valid_admission(typed_malformed_admission, malformed_follow_up)
+  p2_diff_assert_valid_apply_changes(
+    typed_malformed_change, malformed_follow_up,
+  )
   try! legacy_malformed.apply_remote(malformed_follow_up)
   p2_diff_assert_state(typed_malformed, legacy_malformed)
 
   let typed_stale = Document::new("p2-diff-stale")
   let legacy_stale = Document::new("p2-diff-stale")
-  let typed_stale_plan = try! typed_stale.oplog.prepare_remote([])
-  let legacy_stale_plan = try! legacy_stale.oplog.prepare_remote([])
+  let typed_stale_action = try! @oplog.ApplyChanges(typed_stale.oplog, [])
+  let legacy_stale_action = try! @oplog.ApplyChanges(legacy_stale.oplog, [])
   ignore(try! typed_stale.insert(0, "seed"))
   ignore(try! legacy_stale.insert(0, "seed"))
   let typed_stale_counts = [0, 0, 0]
@@ -563,15 +564,15 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   p2_diff_rejection_hooks(
     typed_stale,
     typed_stale_counts,
-    Some(_ => typed_stale_plan),
+    Some(_ => typed_stale_action),
   )
   p2_diff_rejection_hooks(
     legacy_stale,
     legacy_stale_counts,
-    Some(_ => legacy_stale_plan),
+    Some(_ => legacy_stale_action),
   )
-  let typed_stale_result : Result[DocumentAdmission, DocumentError] = Ok(
-    typed_stale.admit_remote([]),
+  let typed_stale_result : Result[DocumentChanges, DocumentError] = Ok(
+    typed_stale.apply_changes([]),
   ) catch {
     error => Err(error)
   }
@@ -581,11 +582,11 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
     error => Err(error)
   }
   match typed_stale_result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleApplyChanges)) => ()
     _ => fail("typed stale rejection changed")
   }
   match legacy_stale_result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleApplyChanges)) => ()
     _ => fail("legacy stale rejection changed")
   }
   p2_diff_assert_rejection_counts(typed_stale_counts, 1, 1, 0)
@@ -594,31 +595,31 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   let stale_follow_up = p2_ready_batch("p2-diff-stale-follow-up", 1)[0]
   p2_diff_rejection_hooks(typed_stale, typed_stale_counts, None)
   p2_diff_rejection_hooks(legacy_stale, legacy_stale_counts, None)
-  let typed_stale_admission = try! typed_stale.admit_remote([stale_follow_up])
-  p2_diff_assert_valid_admission(typed_stale_admission, stale_follow_up)
+  let typed_stale_change = try! typed_stale.apply_changes([stale_follow_up])
+  p2_diff_assert_valid_apply_changes(typed_stale_change, stale_follow_up)
   try! legacy_stale.apply_remote(stale_follow_up)
   p2_diff_assert_state(typed_stale, legacy_stale)
 
   let typed_consumed = Document::new("p2-diff-typed-consumed")
   let legacy_consumed = Document::new("p2-diff-legacy-consumed")
-  let typed_consumed_plan = try! typed_consumed.oplog.prepare_remote([])
-  let legacy_consumed_plan = try! legacy_consumed.oplog.prepare_remote([])
-  ignore(try! typed_consumed.oplog.commit_admission(typed_consumed_plan))
-  ignore(try! legacy_consumed.oplog.commit_admission(legacy_consumed_plan))
+  let typed_consumed_action = try! @oplog.ApplyChanges(typed_consumed.oplog, [])
+  let legacy_consumed_action = try! @oplog.ApplyChanges(legacy_consumed.oplog, [])
+  ignore(try! typed_consumed.oplog.apply_changes(typed_consumed_action))
+  ignore(try! legacy_consumed.oplog.apply_changes(legacy_consumed_action))
   let typed_consumed_counts = [0, 0, 0]
   let legacy_consumed_counts = [0, 0, 0]
   p2_diff_rejection_hooks(
     typed_consumed,
     typed_consumed_counts,
-    Some(_ => typed_consumed_plan),
+    Some(_ => typed_consumed_action),
   )
   p2_diff_rejection_hooks(
     legacy_consumed,
     legacy_consumed_counts,
-    Some(_ => legacy_consumed_plan),
+    Some(_ => legacy_consumed_action),
   )
-  let typed_consumed_result : Result[DocumentAdmission, DocumentError] = Ok(
-    typed_consumed.admit_remote([]),
+  let typed_consumed_result : Result[DocumentChanges, DocumentError] = Ok(
+    typed_consumed.apply_changes([]),
   ) catch {
     error => Err(error)
   }
@@ -628,11 +629,11 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
     error => Err(error)
   }
   match typed_consumed_result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedAdmission)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedApplyChanges)) => ()
     _ => fail("typed consumed rejection changed")
   }
   match legacy_consumed_result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedAdmission)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedApplyChanges)) => ()
     _ => fail("legacy consumed rejection changed")
   }
   p2_diff_assert_rejection_counts(typed_consumed_counts, 1, 1, 0)
@@ -641,10 +642,10 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   let consumed_follow_up = p2_ready_batch("p2-diff-consumed-follow-up", 1)[0]
   p2_diff_rejection_hooks(typed_consumed, typed_consumed_counts, None)
   p2_diff_rejection_hooks(legacy_consumed, legacy_consumed_counts, None)
-  let typed_consumed_admission = try! typed_consumed.admit_remote([
+  let typed_consumed_change = try! typed_consumed.apply_changes([
     consumed_follow_up,
   ])
-  p2_diff_assert_valid_admission(typed_consumed_admission, consumed_follow_up)
+  p2_diff_assert_valid_apply_changes(typed_consumed_change, consumed_follow_up)
   try! legacy_consumed.apply_remote(consumed_follow_up)
   p2_diff_assert_state(typed_consumed, legacy_consumed)
 
@@ -655,13 +656,13 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   let legacy_limit_counts = [0, 0, 0]
   p2_diff_rejection_hooks(typed_limit, typed_limit_counts, None)
   p2_diff_rejection_hooks(legacy_limit, legacy_limit_counts, None)
-  let typed_limit_result : Result[DocumentAdmission, DocumentError] = Ok(
-    typed_limit.admit_remote(limit_incoming, max_pending=0),
+  let typed_limit_result : Result[DocumentChanges, DocumentError] = Ok(
+    typed_limit.apply_changes(limit_incoming, max_pending=0),
   ) catch {
     error => Err(error)
   }
-  let legacy_limit_result : Result[DocumentAdmission, DocumentError] = Ok(
-    legacy_limit.admit_remote(limit_incoming, max_pending=0),
+  let legacy_limit_result : Result[DocumentChanges, DocumentError] = Ok(
+    legacy_limit.apply_changes(limit_incoming, max_pending=0),
   ) catch {
     error => Err(error)
   }
@@ -693,8 +694,8 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   let limit_follow_up = p2_ready_batch("p2-diff-limit-follow-up", 1)[0]
   p2_diff_rejection_hooks(typed_limit, typed_limit_counts, None)
   p2_diff_rejection_hooks(legacy_limit, legacy_limit_counts, None)
-  let typed_limit_admission = try! typed_limit.admit_remote([limit_follow_up])
-  p2_diff_assert_valid_admission(typed_limit_admission, limit_follow_up)
+  let typed_limit_change = try! typed_limit.apply_changes([limit_follow_up])
+  p2_diff_assert_valid_apply_changes(typed_limit_change, limit_follow_up)
   try! legacy_limit.apply_remote(limit_follow_up)
   p2_diff_assert_state(typed_limit, legacy_limit)
 }

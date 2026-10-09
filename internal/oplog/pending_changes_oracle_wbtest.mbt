@@ -1,9 +1,9 @@
-///| Test-only fixed-point oracle and characterization tests for remote admission.
+///| Test-only fixed-point oracle and characterization tests for remote change application.
 
 ///|
 /// This is intentionally the historical fixed-point algorithm rather than a
 /// production helper. `known` is the test's explicit view of the causal-graph
-/// identities already admitted by the OpLog.
+/// identities already recorded by the OpLog.
 fn oracle_plan_remote_candidates(
   candidates : Array[@core.Op],
   known : Array[@core.RawVersion],
@@ -111,10 +111,10 @@ fn oracle_compare_plan(
   incoming : Array[@core.Op],
   known : Array[@core.RawVersion],
 ) -> Unit raise {
-  let pending_before = oracle_raws(oplog.planner.pending_operations())
+  let pending_before = oracle_raws(oplog.pending_changes.pending_operations())
   let op_count_before = oplog.op_count()
   let frontier_before = oplog.get_frontier_raw()
-  let candidates = oplog.planner.pending_operations()
+  let candidates = oplog.pending_changes.pending_operations()
   for op in incoming {
     candidates.push(op)
   }
@@ -122,9 +122,9 @@ fn oracle_compare_plan(
     candidates.copy(),
     known,
   )
-  let prepared = oplog.prepare_remote(incoming)
-  let current_planned = prepared.operations().to_owned()
-  let current_remaining = prepared.remaining_raws(oplog.planner)
+  let action = ApplyChanges(oplog, incoming)
+  let current_planned = action.operations().to_owned()
+  let current_remaining = action.remaining_raws(oplog.pending_changes)
   oracle_assert_op_sequence(current_planned, oracle_planned)
   oracle_assert_raw_sequence(current_remaining, oracle_raws(oracle_remaining))
 
@@ -132,7 +132,7 @@ fn oracle_compare_plan(
   assert_eq(oplog.op_count(), op_count_before)
   oracle_assert_raw_sequence(oplog.get_frontier_raw(), frontier_before)
   oracle_assert_raw_sequence(
-    oracle_raws(oplog.planner.pending_operations()),
+    oracle_raws(oplog.pending_changes.pending_operations()),
     pending_before,
   )
 
@@ -146,7 +146,7 @@ fn oracle_compare_plan(
   assert_eq(oplog.op_count(), op_count_before)
   oracle_assert_raw_sequence(oplog.get_frontier_raw(), frontier_before)
   oracle_assert_raw_sequence(
-    oracle_raws(oplog.planner.pending_operations()),
+    oracle_raws(oplog.pending_changes.pending_operations()),
     pending_before,
   )
   assert_eq(oplog.has_pending(), !pending_before.is_empty())
@@ -381,7 +381,7 @@ test "oracle matches repeated dependencies across parents and origins" {
 }
 
 ///|
-test "oracle matches graph-known dependencies and admitted duplicates" {
+test "oracle matches graph-known dependencies and recorded duplicates" {
   let oplog = OpLog("local")
   let seed = @core.Op::insert(-1, [], "known", 0, "s", None, None)
   ignore(try! oplog.apply_remote(seed))
@@ -399,7 +399,7 @@ test "oracle matches graph-known dependencies and admitted duplicates" {
   let child_plan = try! oplog.plan_remote([child])
   oracle_assert_agents(child_plan, ["known-child"])
 
-  // An identity already admitted in the graph is a no-op.
+  // An identity already recorded in the graph is a no-op.
   try! oracle_compare_plan(oplog, [seed], [seed_raw])
   let duplicate_plan = try! oplog.plan_remote([seed])
   assert_eq(duplicate_plan.length(), 0)
@@ -442,12 +442,13 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
   try! oracle_compare_plan(oplog, [independent], [])
   let planned = try! oplog.plan_remote([independent])
   oracle_assert_agents(planned, ["independent-pending-test"])
-  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
-    oracle_raw(pending_op),
-  ])
+  oracle_assert_raw_sequence(
+    oracle_raws(oplog.pending_changes.pending_operations()),
+    [oracle_raw(pending_op)],
+  )
 
   // The unresolved duplicate remains pending until its dependency arrives;
-  // once the dependency is supplied, fixed-point planning admits one identity.
+  // once the dependency is supplied, fixed-point planning applies one identity.
   let unknown_op = @core.Op::insert(-1, [], "unknown", 0, "u", None, None)
   try! oracle_compare_plan(oplog, [pending_op, unknown_op], [])
   let resolved_plan = try! oplog.plan_remote([pending_op, unknown_op])
@@ -455,7 +456,7 @@ test "oracle preserves unknown pending dependencies and pending duplicates" {
 }
 
 ///|
-test "oracle characterizes malformed delete and undelete admission" {
+test "oracle characterizes malformed delete and undelete change application" {
   let oplog = OpLog("local")
   let delete_raw = @core.RawVersion("malformed-delete", 0)
   let delete_seed = @core.Op::insert(
@@ -564,7 +565,7 @@ test "oracle matches apply order while preserving unrelated pending" {
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
   assert_eq((try! oplog.apply_remote(unrelated)).length(), 0)
 
-  let candidates = oplog.planner.pending_operations()
+  let candidates = oplog.pending_changes.pending_operations()
   candidates.push(parent)
   let (oracle_planned, oracle_remaining) = try! oracle_plan_remote_candidates(
     candidates.copy(),
@@ -577,14 +578,14 @@ test "oracle matches apply order while preserving unrelated pending" {
   let applied = try! oplog.apply_remote(parent)
   oracle_assert_op_sequence(applied, public_planned)
   oracle_assert_op_sequence(
-    oplog.planner.pending_operations(),
+    oplog.pending_changes.pending_operations(),
     oracle_remaining,
   )
   assert_eq(oplog.has_pending(), true)
 }
 
 ///|
-test "oracle differentially covers the public remote admission lifecycle" {
+test "oracle differentially covers the public remote change application lifecycle" {
   for size in [1, 2, 4, 5] {
     let prefix = "lifecycle-\{size}"
     let generated = oracle_generated_insert_dag(size, prefix)
@@ -622,11 +623,11 @@ test "oracle differentially covers the public remote admission lifecycle" {
     assert_eq((try! oplog.apply_remote(pending_child)).length(), 0)
     assert_eq((try! oplog.apply_remote(pending_root)).length(), 0)
     oracle_assert_raw_sequence(
-      oracle_raws(oplog.planner.pending_operations()),
+      oracle_raws(oplog.pending_changes.pending_operations()),
       [oracle_raw(pending_child), oracle_raw(pending_root)],
     )
 
-    let candidates = oplog.planner.pending_operations()
+    let candidates = oplog.pending_changes.pending_operations()
     for op in incoming {
       candidates.push(op)
     }
@@ -635,33 +636,36 @@ test "oracle differentially covers the public remote admission lifecycle" {
       candidates.copy(),
       known,
     )
-    let plan = try! oplog.prepare_remote(incoming)
-    oracle_assert_op_sequence(plan.operations().to_owned(), oracle_planned)
+    let action = try! ApplyChanges(oplog, incoming)
+    oracle_assert_op_sequence(action.operations().to_owned(), oracle_planned)
     oracle_assert_raw_sequence(
-      plan.remaining_raws(oplog.planner),
+      action.remaining_raws(oplog.pending_changes),
       oracle_raws(oracle_remaining),
     )
-    let committed = try! oplog.commit_remote(plan)
-    oracle_assert_op_sequence(committed, oracle_planned)
-    oracle_assert_op_sequence(oplog.get_all_ops(), committed)
+    let report = try! p1_apply_success(oplog, action)
+    oracle_assert_op_sequence(report.committed().to_owned(), oracle_planned)
+    oracle_assert_op_sequence(
+      oplog.get_all_ops(),
+      report.committed().to_owned(),
+    )
     assert_eq(oplog.op_count(), oracle_planned.length())
     oracle_assert_raw_sequence(
-      oracle_raws(oplog.planner.pending_operations()),
+      oracle_raws(oplog.pending_changes.pending_operations()),
       oracle_raws(oracle_remaining),
     )
     assert_eq(oplog.has_pending(), true)
 
-    // The same admitted identity is a no-op on retransmission.
+    // The same recorded identity is a no-op on retransmission.
     let count_before_duplicate = oplog.op_count()
     let duplicate = try! oplog.apply_remote(incoming_base[0])
     assert_eq(duplicate.length(), 0)
     assert_eq(oplog.op_count(), count_before_duplicate)
     oracle_assert_raw_sequence(
-      oracle_raws(oplog.planner.pending_operations()),
+      oracle_raws(oplog.pending_changes.pending_operations()),
       oracle_raws(oracle_remaining),
     )
 
-    // A later prepared admission supplies the missing root and drains the retained
+    // A later `ApplyChanges` action supplies the missing root and drains the retained
     // component in the same fixed-point order.
     let missing_root = @core.Op::insert(
       -1,
@@ -672,21 +676,27 @@ test "oracle differentially covers the public remote admission lifecycle" {
       None,
       None,
     )
-    let later_candidates = oplog.planner.pending_operations()
+    let later_candidates = oplog.pending_changes.pending_operations()
     later_candidates.push(missing_root)
     let later_known = oracle_raws(oplog.get_all_ops())
     let (later_planned, later_remaining) = try! oracle_plan_remote_candidates(
       later_candidates.copy(),
       later_known,
     )
-    let later_plan = try! oplog.prepare_remote([missing_root])
-    oracle_assert_op_sequence(later_plan.operations().to_owned(), later_planned)
+    let later_action = try! ApplyChanges(oplog, [missing_root])
+    oracle_assert_op_sequence(
+      later_action.operations().to_owned(),
+      later_planned,
+    )
     oracle_assert_raw_sequence(
-      later_plan.remaining_raws(oplog.planner),
+      later_action.remaining_raws(oplog.pending_changes),
       oracle_raws(later_remaining),
     )
-    let later_committed = try! oplog.commit_remote(later_plan)
-    oracle_assert_op_sequence(later_committed, later_planned)
+    let later_report = try! p1_apply_success(oplog, later_action)
+    oracle_assert_op_sequence(
+      later_report.committed().to_owned(),
+      later_planned,
+    )
     assert_eq(later_remaining.length(), 0)
     assert_eq(oplog.has_pending(), false)
     assert_eq(
@@ -696,12 +706,12 @@ test "oracle differentially covers the public remote admission lifecycle" {
     let all_after = oplog.get_all_ops()
     assert_eq(
       all_after.length(),
-      oracle_planned.length() + later_committed.length(),
+      oracle_planned.length() + later_report.committed().length(),
     )
-    for i in 0..<later_committed.length() {
+    for i in 0..<later_report.committed().length() {
       assert_eq(
         oracle_raw(all_after[oracle_planned.length() + i]),
-        oracle_raw(later_committed[i]),
+        oracle_raw(later_report.committed()[i]),
       )
     }
   }
@@ -757,20 +767,19 @@ test "oracle matches transitive discard and retry behavior" {
   ignore(try! oplog.apply_remote(root))
   ignore(try! oplog.apply_remote(unrelated))
   try! oracle_compare_plan(oplog, [], [])
-  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
-    oracle_raw(grandchild),
-    child_raw,
-    root_raw,
-    oracle_raw(unrelated),
-  ])
+  oracle_assert_raw_sequence(
+    oracle_raws(oplog.pending_changes.pending_operations()),
+    [oracle_raw(grandchild), child_raw, root_raw, oracle_raw(unrelated)],
+  )
 
   oplog.discard_pending_dependents([root_raw])
-  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
-    oracle_raw(unrelated),
-  ])
+  oracle_assert_raw_sequence(
+    oracle_raws(oplog.pending_changes.pending_operations()),
+    [oracle_raw(unrelated)],
+  )
   assert_eq(oplog.has_pending(), true)
 
-  // Re-admit the rejected identity, then retry its dependent identities.
+  // Re-apply the rejected identity, then retry its dependent identities.
   let retry_root = @core.Op::insert(
     -1,
     [],
@@ -789,7 +798,8 @@ test "oracle matches transitive discard and retry behavior" {
   try! oracle_compare_plan(oplog, [grandchild], [root_raw, child_raw])
   ignore(try! oplog.apply_remote(grandchild))
   assert_eq(oplog.has_pending(), true)
-  oracle_assert_raw_sequence(oracle_raws(oplog.planner.pending_operations()), [
-    oracle_raw(unrelated),
-  ])
+  oracle_assert_raw_sequence(
+    oracle_raws(oplog.pending_changes.pending_operations()),
+    [oracle_raw(unrelated)],
+  )
 }

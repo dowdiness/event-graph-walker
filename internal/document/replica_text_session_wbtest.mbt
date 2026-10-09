@@ -46,17 +46,17 @@ test "prototype: duplicate publish is idempotent" {
 ///|
 test "prototype: conflicting identity is not silently filtered" {
   let authority = Document::new("authority-conflict")
-  let admitted = try! authority.insert(0, "a")
+  let applied = try! authority.insert(0, "a")
   let conflict = @core.Op::insert(
     -1,
     [],
-    admitted.agent(),
-    admitted.seq(),
+    applied.agent(),
+    applied.seq(),
     "different",
     None,
     None,
   )
-  let candidates = replica_text_unadmitted_operations(authority, [conflict])
+  let candidates = replica_text_unapplied_operations(authority, [conflict])
   assert_eq(candidates.length(), 1)
 }
 
@@ -117,7 +117,7 @@ fn ReplicaTextSession::insert(
 fn ReplicaTextSession::publish(
   self : ReplicaTextSession,
 ) -> Int raise DocumentError {
-  let operations = replica_text_unadmitted_operations(
+  let operations = replica_text_unapplied_operations(
     self.authority,
     self.session.get_all_ops(),
   )
@@ -132,7 +132,7 @@ fn ReplicaTextSession::publish(
 fn ReplicaTextSession::pull(
   self : ReplicaTextSession,
 ) -> Int raise DocumentError {
-  let operations = replica_text_unadmitted_operations(
+  let operations = replica_text_unapplied_operations(
     self.session,
     self.authority.get_all_ops(),
   )
@@ -145,7 +145,7 @@ fn ReplicaTextSession::pull(
 
 ///|
 /// Compare causal identity, not destination-local LVs.
-fn replica_text_unadmitted_operations(
+fn replica_text_unapplied_operations(
   destination : Document,
   source_operations : Array[@core.Op],
 ) -> Array[@core.Op] {

@@ -97,7 +97,7 @@ test "remote snapshot fallback discards an earlier exact effect and stale index"
   ignore(try! source.insert(1, "B"))
   let operations = source.get_all_ops()
   let doc = Document::new("fallback-destination")
-  ignore(try! doc.admit_remote(operations))
+  ignore(try! doc.apply_changes(operations))
   assert_eq(doc.to_text(), "AB")
   let first_delete = try! source.delete(0)
   let second_delete = try! source.delete(0)
@@ -106,10 +106,10 @@ test "remote snapshot fallback discards an earlier exact effect and stale index"
   // exact effect, but the second must discard that effect and the stale index.
   // The third operation must still be projected within the same batch.
   doc.indexed_state.locator.unwrap().items.remove(operations[1].lv())
-  let admission = try! doc.admit_remote([
+  let change = try! doc.apply_changes([
     first_delete, second_delete, third_insert,
   ])
-  assert_true(admission.effect_availability is SnapshotRequired)
+  assert_true(change.effect_availability is SnapshotRequired)
   assert_eq(doc.to_text(), "C")
   assert_eq(doc.visible_count(), 1)
   ignore(try! doc.insert(1, "D"))

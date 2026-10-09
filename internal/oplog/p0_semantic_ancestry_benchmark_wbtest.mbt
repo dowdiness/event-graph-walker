@@ -47,8 +47,8 @@ fn p0_benchmark_valid_ancestry(b : @bench.T, ops : Array[@core.Op]) -> Unit {
   b.bench(
     fn() {
       let oplog = OpLog("benchmark")
-      let plan = try! oplog.prepare_remote(ops)
-      b.keep(plan.operations().length())
+      let action = try! ApplyChanges(oplog, ops)
+      b.keep(action.operations().length())
     },
     count=1,
   )
@@ -59,8 +59,8 @@ fn p0_benchmark_sparse_fork(b : @bench.T, ops : Array[@core.Op]) -> Unit {
   b.bench(
     fn() {
       let oplog = OpLog("benchmark")
-      let plan = try! oplog.prepare_remote(ops)
-      b.keep(plan.operations().length())
+      let action = try! ApplyChanges(oplog, ops)
+      b.keep(action.operations().length())
     },
     count=1,
   )

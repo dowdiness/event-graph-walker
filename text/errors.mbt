@@ -184,11 +184,10 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
           sequence=raw.seq,
         ),
       )
-    StaleAdmission => TextError::Internal(detail="stale prepared admission")
-    ConsumedAdmission =>
-      TextError::Internal(detail="consumed prepared admission")
-    InvalidAdmission => TextError::Internal(detail="invalid prepared admission")
-    PartialRemoteAdmission(committed=_, error~) =>
+    StaleApplyChanges => TextError::Internal(detail="stale ApplyChanges")
+    ConsumedApplyChanges => TextError::Internal(detail="consumed ApplyChanges")
+    InvalidApplyChanges => TextError::Internal(detail="invalid ApplyChanges")
+    PartialApplyChanges(committed=_, error~) =>
       TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~))
     CausalGraphError(error~) =>
       match error {

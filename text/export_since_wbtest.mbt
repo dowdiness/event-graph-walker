@@ -33,7 +33,7 @@ fn assert_export_since_matches_oracle(
   assert_export_since_version_matches_oracle(source, peer_version)
 
   // Apply both messages to equivalent receivers. This checks payloads and
-  // admission effects independently of byte equality.
+  // change application effects independently of byte equality.
   let peer_snapshot = try! peer.sync().export_all()
   let actual_receiver = try! TextState::new("actual-receiver")
   let oracle_receiver = try! TextState::new("oracle-receiver")
@@ -81,7 +81,7 @@ test "export_since matches full-scan oracle at empty full and incremental cuts" 
 }
 
 ///|
-test "export_since keeps hot sparse knowledge current after remote admission" {
+test "export_since keeps hot sparse knowledge current after remote change application" {
   let source = try! TextState::new("source")
   let peer = try! TextState::new("peer")
   try! source.insert(Pos::at(0), "A")
@@ -133,7 +133,7 @@ test "export_since resolves the maximum signed sequence identity" {
 }
 
 ///|
-test "export_since excludes pending operations until dependency admission" {
+test "export_since excludes pending operations until dependency change application" {
   let source = try! TextState::new("source")
   let dependency = @core.RawVersion("remote", 0)
   let child = @core.RawVersion("remote", 1)
@@ -159,10 +159,10 @@ test "export_since excludes pending operations until dependency admission" {
 
   ignore(try! source.sync().apply(export_root_message("remote", 0, "A")))
   assert_eq(source.sync().pending_sync_count(), 0)
-  let admitted = try! source.sync().export_since(Version::empty())
-  assert_eq(admitted.op_count(), 2)
+  let applied = try! source.sync().export_since(Version::empty())
+  assert_eq(applied.op_count(), 2)
   assert_eq(
-    admitted.to_canonical_bytes(),
+    applied.to_canonical_bytes(),
     export_since_full_scan_oracle(source, Version::empty()).to_canonical_bytes(),
   )
 }
@@ -182,7 +182,7 @@ test "export_since accepts peer membership that is not a local causal cut" {
 }
 
 ///|
-test "export_since canonical bytes do not depend on local LV admission order" {
+test "export_since canonical bytes do not depend on local LV change application order" {
   let first = try! TextState::new("first")
   let second = try! TextState::new("second")
   let a = export_root_message("a", 0, "A")

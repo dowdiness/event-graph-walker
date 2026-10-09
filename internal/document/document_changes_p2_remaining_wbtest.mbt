@@ -155,11 +155,11 @@ test "P2 red malformed current input is fully atomic" {
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
@@ -174,15 +174,15 @@ test "P2 red malformed current input is fully atomic" {
     None,
   )
 
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([malformed]),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([malformed]),
   ) catch {
     error => Err(error)
   }
   match result {
     Err(DocumentError::ContentError(reason~)) =>
       assert_eq(reason, ContentErrorReason::MultipleCodepoints)
-    _ => fail("malformed input must fail before admission")
+    _ => fail("malformed input must fail before change application")
   }
   p2_assert_document_snapshot(doc, before)
   assert_eq(prepare_count, 0)
@@ -191,33 +191,33 @@ test "P2 red malformed current input is fully atomic" {
 }
 
 ///|
-test "P2 red stale prepared admission does not mutate Document" {
+test "P2 red stale `ApplyChanges` action does not mutate Document" {
   let doc = Document::new("p2-stale")
-  let stale_plan = try! doc.oplog.prepare_remote([])
+  let stale_action = try! @oplog.ApplyChanges(doc.oplog, [])
   ignore(try! doc.insert(0, "baseline"))
   ignore(doc.to_text())
   let before = p2_snapshot_document(doc)
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: Some(_ => stale_plan),
+    action_override: Some(_ => stale_action),
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
   })
 
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([]),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([]),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
-    _ => fail("expected stale admission")
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleApplyChanges)) => ()
+    _ => fail("expected stale change application")
   }
   p2_assert_document_snapshot(doc, before)
   assert_eq(prepare_count, 1)
@@ -226,38 +226,38 @@ test "P2 red stale prepared admission does not mutate Document" {
 }
 
 ///|
-test "P2 red consumed prepared admission does not mutate Document" {
+test "P2 red consumed `ApplyChanges` action does not mutate Document" {
   let doc = Document::new("p2-consumed")
-  let consumed_plan = try! doc.oplog.prepare_remote([])
-  let consumed_outcome = try! doc.oplog.commit_admission(consumed_plan)
+  let consumed_action = try! @oplog.ApplyChanges(doc.oplog, [])
+  let consumed_outcome = try! doc.oplog.apply_changes(consumed_action)
   match consumed_outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
-      assert_eq(receipt.committed().length(), 0)
-    @oplog.AdmissionOutcome::Partial(..) =>
-      fail("empty admission cannot be partial")
+    @oplog.ApplyChangesOutcome::Succeeded(report) =>
+      assert_eq(report.committed().length(), 0)
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("empty change application cannot be partial")
   }
   let before = p2_snapshot_document(doc)
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: Some(_ => consumed_plan),
+    action_override: Some(_ => consumed_action),
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
   })
 
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([]),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([]),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedAdmission)) => ()
-    _ => fail("expected consumed admission")
+    Err(DocumentError::OpLog(@oplog.OpLogError::ConsumedApplyChanges)) => ()
+    _ => fail("expected consumed change application")
   }
   p2_assert_document_snapshot(doc, before)
   assert_eq(prepare_count, 1)
@@ -274,19 +274,19 @@ test "P2 red pending limit rejection is fully atomic" {
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
   })
   let incoming = p2_pending_batch("p2-limit-peer")
 
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote(incoming, max_pending=0),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes(incoming, max_pending=0),
   ) catch {
     error => Err(error)
   }
@@ -331,11 +331,11 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: Some(frontier => {
@@ -348,7 +348,7 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
     }),
   })
 
-  let admission = try! doc.admit_remote([unready])
+  let change = try! doc.apply_changes([unready])
   assert_eq(recovery_calls, 1)
   assert_true(recovery_saw_no_pending)
   assert_true(recovery_saw_invalid_derived_state)
@@ -358,15 +358,15 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
   assert_eq(prepare_count, 1)
   assert_eq(commit_count, 1)
   assert_eq(projection_count, 0)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 0)
       p2_assert_identity_prefix(receipt.pending_from_transition(), [unready], 1)
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("unready input must remain a complete pending transition")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::Recovered => ()
     ProjectionStatus::Projected
     | ProjectionStatus::Skipped
@@ -374,8 +374,7 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
       fail("successful preflight recovery must be reported")
   }
   assert_true(
-    admission.effect_availability
-    is ProjectionEffectAvailability::SnapshotRequired,
+    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
   )
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
@@ -396,11 +395,11 @@ test "P2 green preflight recovery remains sticky for projected batch" {
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let mut recovery_calls = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: Some(frontier => {
@@ -409,16 +408,16 @@ test "P2 green preflight recovery remains sticky for projected batch" {
     }),
   })
 
-  let admission = try! doc.admit_remote([incoming])
+  let change = try! doc.apply_changes([incoming])
   assert_eq(recovery_calls, 1)
   assert_eq(projection_count, 1)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_operation_prefix(receipt.committed(), [incoming], 1)
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("known-origin batch must complete after recovery")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::Recovered => ()
     ProjectionStatus::Projected
     | ProjectionStatus::Skipped
@@ -426,8 +425,7 @@ test "P2 green preflight recovery remains sticky for projected batch" {
       fail("successful preflight recovery must remain sticky")
   }
   assert_true(
-    admission.effect_availability
-    is ProjectionEffectAvailability::SnapshotRequired,
+    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
   )
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
@@ -446,9 +444,9 @@ test "P2 red preflight recovery then stale rejection keeps authority unchanged" 
     [missing],
     Some(known_raw),
   )
-  let stale_plan = try! doc.oplog.prepare_remote([unready])
-  let generation_tick = try! doc.oplog.prepare_remote([])
-  ignore(try! doc.oplog.commit_admission(generation_tick))
+  let stale_action = try! @oplog.ApplyChanges(doc.oplog, [unready])
+  let generation_action = try! @oplog.ApplyChanges(doc.oplog, [])
+  ignore(try! doc.oplog.apply_changes(generation_action))
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
   let before_ops = doc.get_all_ops()
@@ -458,11 +456,11 @@ test "P2 red preflight recovery then stale rejection keeps authority unchanged" 
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: Some(_ => stale_plan),
+    action_override: Some(_ => stale_action),
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: Some(frontier => {
@@ -474,13 +472,13 @@ test "P2 red preflight recovery then stale rejection keeps authority unchanged" 
     }),
   })
 
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([unready]),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([unready]),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleAdmission)) => ()
+    Err(DocumentError::OpLog(@oplog.OpLogError::StaleApplyChanges)) => ()
     _ => fail("expected stale rejection after preflight recovery")
   }
   assert_eq(recovery_calls, 1)
@@ -510,11 +508,11 @@ test "P2 red post-commit projection failure preserves receipt and recovers" {
   let mut recovery_calls = 0
   let mut recovery_saw_partial_tree = false
   let mut recovery_saw_invalid_cache = false
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: Some(committed => {
       let applied : Result[Unit, DocumentError] = Ok(
@@ -539,20 +537,20 @@ test "P2 red post-commit projection failure preserves receipt and recovers" {
     }),
   })
 
-  let admission = try! doc.admit_remote(incoming)
+  let change = try! doc.apply_changes(incoming)
   assert_eq(projection_count, 1)
   assert_eq(recovery_calls, 1)
   assert_true(recovery_saw_partial_tree)
   assert_true(recovery_saw_invalid_cache)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       p2_assert_operation_prefix(receipt.committed(), incoming, 2)
       assert_eq(doc.get_frontier(), receipt.frontier_after())
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
-      fail("projection failure must not erase the admission outcome")
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("projection failure must not erase the change application outcome")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::Recovered => ()
     ProjectionStatus::Projected
     | ProjectionStatus::Skipped
@@ -573,11 +571,11 @@ test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
   let incoming = p2_ready_batch("p2-recovery-required-peer", 2)
   let mut recovery_calls = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: Some(committed => {
       let applied : Result[Unit, DocumentError] = Ok(
@@ -601,18 +599,18 @@ test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
     }),
   })
 
-  let admission = try! doc.admit_remote(incoming)
+  let change = try! doc.apply_changes(incoming)
   assert_eq(projection_count, 1)
   assert_true(recovery_calls >= 1)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       p2_assert_operation_prefix(receipt.committed(), incoming, 2)
       assert_eq(doc.get_frontier(), receipt.frontier_after())
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
-      fail("recovery failure must retain the admission receipt")
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("recovery failure must retain the change application receipt")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::RecoveryRequired(..) => ()
     ProjectionStatus::Projected
     | ProjectionStatus::Recovered
@@ -620,7 +618,7 @@ test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
       fail("failed checkout must return RecoveryRequired")
   }
   assert_true(
-    admission.effect_availability is ProjectionEffectAvailability::Unavailable,
+    change.effect_availability is ProjectionEffectAvailability::Unavailable,
   )
   assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
   assert_true(!doc.indexed_state.is_ready())
@@ -643,16 +641,16 @@ test "P2 red retry drains only core pending suffix" {
   let mut commit_count = 0
   let mut projection_count = 0
   let projected_ops : Array[@core.Op] = []
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: committed => {
       projection_count = projection_count + 1
       for op in committed {
         projected_ops.push(op)
       }
     },
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       if fail_enabled && op.seq() == 1 {
         Some(@causal_graph.CausalGraphError::MissingParent(lv=-202))
@@ -664,14 +662,14 @@ test "P2 red retry drains only core pending suffix" {
     recovery_checkout: None,
   })
 
-  let first = try! doc.admit_remote(incoming)
+  let first = try! doc.apply_changes(incoming)
   match first.effect_availability {
     ProjectionEffectAvailability::Exact(effects) =>
       assert_eq(effects.length(), 1)
     _ => fail("warm committed partial prefix must publish exact effects")
   }
   match first.outcome {
-    @oplog.AdmissionOutcome::Partial(receipt~, error~) => {
+    @oplog.ApplyChangesOutcome::Failed(report=receipt, error~) => {
       p2_assert_operation_prefix(receipt.committed(), incoming, 1)
       let suffix = [incoming[1], incoming[2]]
       p2_assert_identity_prefix(receipt.pending_from_transition(), suffix, 2)
@@ -681,20 +679,20 @@ test "P2 red retry drains only core pending suffix" {
         _ => fail("expected retryable causal cause")
       }
     }
-    @oplog.AdmissionOutcome::Complete(_) =>
-      fail("first admission must leave a pending suffix")
+    @oplog.ApplyChangesOutcome::Succeeded(_) =>
+      fail("first change application must leave a pending suffix")
   }
   assert_eq(projected_ops.length(), 1)
   fail_enabled = false
 
-  let retry = try! doc.admit_remote([])
+  let retry = try! doc.apply_changes([])
   match retry.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       let suffix = [incoming[1], incoming[2]]
       p2_assert_operation_prefix(receipt.committed(), suffix, 2)
-      assert_eq(receipt.already_admitted().length(), 0)
+      assert_eq(receipt.already_applied().length(), 0)
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("cleared failure must drain the pending suffix")
   }
   assert_eq(prepare_count, 2)
@@ -706,7 +704,7 @@ test "P2 red retry drains only core pending suffix" {
 }
 
 ///|
-test "P2 red apply_remote remains compatible with one-op admission" {
+test "P2 red apply_remote remains compatible with one-op change application" {
   let source = Document::new("p2-compat-source")
   let remote = try! source.insert(0, "R")
   let legacy = Document::new("p2-compat-legacy")
@@ -714,11 +712,11 @@ test "P2 red apply_remote remains compatible with one-op admission" {
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  legacy.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  legacy.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
@@ -728,11 +726,11 @@ test "P2 red apply_remote remains compatible with one-op admission" {
   assert_eq(prepare_count, 1)
   assert_eq(commit_count, 1)
   assert_eq(projection_count, 1)
-  let admission = try! batch.admit_remote([remote])
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+  let change = try! batch.apply_changes([remote])
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_operation_prefix(receipt.committed(), [remote], 1)
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("one valid operation must complete")
   }
   assert_eq(legacy.to_text(), batch.to_text())
@@ -741,17 +739,17 @@ test "P2 red apply_remote remains compatible with one-op admission" {
 }
 
 ///|
-test "P2 wrapper apply_remote translates partial admission" {
+test "P2 wrapper apply_remote translates partial change application" {
   let doc = Document::new("p2-wrapper-partial")
   let incoming = p2_ready_batch("p2-wrapper-partial-peer", 1)[0]
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(_ => {
       Some(@causal_graph.CausalGraphError::MissingParent(lv=-204))
     }),
@@ -765,7 +763,7 @@ test "P2 wrapper apply_remote translates partial admission" {
   match result {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
+        @oplog.OpLogError::PartialApplyChanges(committed~, error~)
       )
     ) => {
       assert_eq(committed.length(), 0)
@@ -793,11 +791,11 @@ test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       if op.seq() == 1 {
         Some(@causal_graph.CausalGraphError::MissingParent(lv=-205))
@@ -828,7 +826,7 @@ test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
         _ => fail("recovery failure must retain its branch cause")
       }
     }
-    Err(DocumentError::OpLog(@oplog.OpLogError::PartialRemoteAdmission(..))) =>
+    Err(DocumentError::OpLog(@oplog.OpLogError::PartialApplyChanges(..))) =>
       fail("recovery failure must take priority over partial legacy error")
     _ => fail("merge wrapper must expose typed recovery failure")
   }
@@ -842,7 +840,7 @@ test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
 }
 
 ///|
-test "P2 red merge_remote keeps closure validation while batch admission accepts incomplete input" {
+test "P2 red merge_remote keeps closure validation while batch change application accepts incomplete input" {
   let source = Document::new("p2-merge-source")
   ignore(try! source.insert(0, "a"))
   ignore(try! source.insert(1, "b"))
@@ -853,13 +851,13 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
   let mut merged_prepare_count = 0
   let mut merged_commit_count = 0
   let mut merged_projection_count = 0
-  merged.set_admission_hooks({
-    on_prepare_remote: () => merged_prepare_count = merged_prepare_count + 1,
-    on_commit_admission: () => merged_commit_count = merged_commit_count + 1,
+  merged.set_apply_changes_hooks({
+    on_action: () => merged_prepare_count = merged_prepare_count + 1,
+    on_apply_changes: () => merged_commit_count = merged_commit_count + 1,
     on_projection_finalization: _ => {
       merged_projection_count = merged_projection_count + 1
     },
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
@@ -869,7 +867,7 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
   assert_eq(merged_commit_count, 1)
   assert_eq(merged_projection_count, 1)
   let batched = Document::new("p2-merge-batch")
-  ignore(try! batched.admit_remote(remote_ops))
+  ignore(try! batched.apply_changes(remote_ops))
   assert_eq(merged.to_text(), batched.to_text())
   assert_eq(merged.get_frontier(), batched.get_frontier())
 
@@ -878,13 +876,13 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
   let mut invalid_prepare_count = 0
   let mut invalid_commit_count = 0
   let mut invalid_projection_count = 0
-  incomplete.set_admission_hooks({
-    on_prepare_remote: () => invalid_prepare_count = invalid_prepare_count + 1,
-    on_commit_admission: () => invalid_commit_count = invalid_commit_count + 1,
+  incomplete.set_apply_changes_hooks({
+    on_action: () => invalid_prepare_count = invalid_prepare_count + 1,
+    on_apply_changes: () => invalid_commit_count = invalid_commit_count + 1,
     on_projection_finalization: _ => {
       invalid_projection_count = invalid_projection_count + 1
     },
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: None,
@@ -904,9 +902,9 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
   assert_eq(incomplete.get_all_ops().length(), 0)
   assert_true(!incomplete.oplog.has_pending())
 
-  let pending = try! incomplete.admit_remote(second_only)
+  let pending = try! incomplete.apply_changes(second_only)
   match pending.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 0)
       p2_assert_identity_prefix(
         receipt.pending_from_transition(),
@@ -914,7 +912,7 @@ test "P2 red merge_remote keeps closure validation while batch admission accepts
         1,
       )
     }
-    @oplog.AdmissionOutcome::Partial(..) =>
+    @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("incomplete batch should be pending, not partial")
   }
   match pending.projection {
@@ -935,26 +933,26 @@ fn p2_assert_fresh_cursor_convergence(doc : Document) -> Unit raise {
 }
 
 ///|
-test "P2 red remote complete admission resets cursor before local insert" {
+test "P2 red remote complete change application resets cursor before local insert" {
   let source = Document::new("p2-cursor-complete-source")
   let remote = try! source.insert(0, "R")
   let doc = Document::new("p2-cursor-complete")
   ignore(try! doc.insert(0, "a"))
-  ignore(try! doc.admit_remote([remote]))
+  ignore(try! doc.apply_changes([remote]))
   ignore(try! doc.insert(doc.visible_count(), "l"))
   p2_assert_fresh_cursor_convergence(doc)
 }
 
 ///|
-test "P2 red partial admission resets cursor before local insert" {
+test "P2 red partial change application resets cursor before local insert" {
   let doc = Document::new("p2-cursor-partial")
   ignore(try! doc.insert(0, "a"))
   let incoming = p2_ready_batch("p2-cursor-partial-peer", 2)
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       if op.seq() == 1 {
         Some(@causal_graph.CausalGraphError::MissingParent(lv=-203))
@@ -965,10 +963,10 @@ test "P2 red partial admission resets cursor before local insert" {
     projection_failure: None,
     recovery_checkout: None,
   })
-  let admission = try! doc.admit_remote(incoming)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Partial(..) => ()
-    @oplog.AdmissionOutcome::Complete(_) =>
+  let change = try! doc.apply_changes(incoming)
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Failed(..) => ()
+    @oplog.ApplyChangesOutcome::Succeeded(_) =>
       fail("expected partial cursor fixture")
   }
   ignore(try! doc.insert(doc.visible_count(), "l"))
@@ -976,15 +974,15 @@ test "P2 red partial admission resets cursor before local insert" {
 }
 
 ///|
-test "P2 red recovered admission resets cursor before local insert" {
+test "P2 red recovered change application resets cursor before local insert" {
   let doc = Document::new("p2-cursor-recovery")
   ignore(try! doc.insert(0, "a"))
   let incoming = p2_ready_batch("p2-cursor-recovery-peer", 1)
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: Some(_ => {
       Some(
@@ -995,8 +993,8 @@ test "P2 red recovered admission resets cursor before local insert" {
       @branch.Branch::checkout(doc.oplog, frontier)
     }),
   })
-  let admission = try! doc.admit_remote(incoming)
-  match admission.projection {
+  let change = try! doc.apply_changes(incoming)
+  match change.projection {
     ProjectionStatus::Recovered => ()
     ProjectionStatus::Projected
     | ProjectionStatus::Skipped
@@ -1004,15 +1002,14 @@ test "P2 red recovered admission resets cursor before local insert" {
       fail("expected successful recovery")
   }
   assert_true(
-    admission.effect_availability
-    is ProjectionEffectAvailability::SnapshotRequired,
+    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
   )
   ignore(try! doc.insert(doc.visible_count(), "l"))
   p2_assert_fresh_cursor_convergence(doc)
 }
 
 ///|
-test "P2 green entry recovery is sticky for duplicate-only admission" {
+test "P2 green entry recovery is sticky for duplicate-only change application" {
   let doc = Document::new("p2-entry-duplicate")
   let incoming = p2_ready_batch("p2-entry-duplicate-peer", 1)
   let mut recovery_ready = false
@@ -1021,11 +1018,11 @@ test "P2 green entry recovery is sticky for duplicate-only admission" {
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: Some(_ => {
       if projection_failure {
@@ -1048,7 +1045,7 @@ test "P2 green entry recovery is sticky for duplicate-only admission" {
     }),
   })
 
-  let first = try! doc.admit_remote(incoming)
+  let first = try! doc.apply_changes(incoming)
   match first.projection {
     ProjectionStatus::RecoveryRequired(..) => ()
     ProjectionStatus::Skipped
@@ -1059,33 +1056,34 @@ test "P2 green entry recovery is sticky for duplicate-only admission" {
   recovery_ready = true
   projection_failure = false
   projection_count = 0
-  let admission = try! doc.admit_remote(incoming)
+  let change = try! doc.apply_changes(incoming)
   assert_eq(recovery_calls, 2)
   assert_eq(prepare_count, 2)
   assert_eq(commit_count, 2)
   assert_eq(projection_count, 0)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       assert_eq(receipt.committed().length(), 0)
-    @oplog.AdmissionOutcome::Partial(..) =>
-      fail("duplicate-only admission must be complete")
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("duplicate-only change application must be complete")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::Recovered => ()
     ProjectionStatus::Skipped
     | ProjectionStatus::Projected
     | ProjectionStatus::RecoveryRequired(..) =>
-      fail("entry recovery must remain sticky for duplicate-only admission")
+      fail(
+        "entry recovery must remain sticky for duplicate-only change application",
+      )
   }
   assert_true(
-    admission.effect_availability
-    is ProjectionEffectAvailability::SnapshotRequired,
+    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
   )
   assert_true(doc.projection_health is ProjectionHealth::Ready)
 }
 
 ///|
-test "P2 green entry recovery is sticky for projected admission" {
+test "P2 green entry recovery is sticky for projected change application" {
   let doc = Document::new("p2-entry-projected")
   let seed = p2_ready_batch("p2-entry-projected-seed", 1)
   let incoming = p2_ready_batch("p2-entry-projected-peer", 1)
@@ -1093,11 +1091,11 @@ test "P2 green entry recovery is sticky for projected admission" {
   let mut recovery_calls = 0
   let mut projection_failure = true
   let mut projection_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => projection_count = projection_count + 1,
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: Some(_ => {
       if projection_failure {
@@ -1120,7 +1118,7 @@ test "P2 green entry recovery is sticky for projected admission" {
     }),
   })
 
-  let first = try! doc.admit_remote(seed)
+  let first = try! doc.apply_changes(seed)
   match first.projection {
     ProjectionStatus::RecoveryRequired(..) => ()
     ProjectionStatus::Skipped
@@ -1131,21 +1129,21 @@ test "P2 green entry recovery is sticky for projected admission" {
   recovery_ready = true
   projection_failure = false
   projection_count = 0
-  let admission = try! doc.admit_remote(incoming)
+  let change = try! doc.apply_changes(incoming)
   assert_eq(recovery_calls, 2)
   assert_eq(projection_count, 1)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) =>
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
       p2_assert_operation_prefix(receipt.committed(), incoming, 1)
-    @oplog.AdmissionOutcome::Partial(..) =>
-      fail("complete admission must not be partial")
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("complete change application must not be partial")
   }
-  match admission.projection {
+  match change.projection {
     ProjectionStatus::Recovered => ()
     ProjectionStatus::Skipped
     | ProjectionStatus::Projected
     | ProjectionStatus::RecoveryRequired(..) =>
-      fail("entry recovery must remain sticky for projected admission")
+      fail("entry recovery must remain sticky for projected change application")
   }
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
@@ -1169,11 +1167,11 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
   let mut recovery_calls = 0
   let mut prepare_count = 0
   let mut commit_count = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_count = prepare_count + 1,
-    on_commit_admission: () => commit_count = commit_count + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_count = prepare_count + 1,
+    on_apply_changes: () => commit_count = commit_count + 1,
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: Some(_frontier => {
@@ -1186,8 +1184,8 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
     }),
   })
 
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([unready]),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([unready]),
   ) catch {
     error => Err(error)
   }
@@ -1227,7 +1225,7 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
 }
 
 ///|
-test "P2 red divergence is repaired before invalid admission rejection" {
+test "P2 red divergence is repaired before invalid change application rejection" {
   let doc = Document::new("p2-invalid-with-divergence")
   let known = try! doc.insert(0, "Y")
   ignore(doc.to_text())
@@ -1260,7 +1258,7 @@ test "P2 red divergence is repaired before invalid admission rejection" {
   let before_ops = doc.get_all_ops()
   let mut recovery_calls = 0
   let result : Result[Bool, DocumentError] = Ok(
-    doc.ensure_admission_targets(
+    doc.ensure_apply_changes_targets(
       [invalid_noninsert, invalid_dependent],
       [incoming],
       frontier => {
@@ -1274,7 +1272,7 @@ test "P2 red divergence is repaired before invalid admission rejection" {
   match result {
     Err(DocumentError::MissingOrigin(raw~)) =>
       assert_eq(raw, invalid_noninsert_raw)
-    _ => fail("invalid admission must remain the returned error")
+    _ => fail("invalid change application must remain the returned error")
   }
   assert_eq(recovery_calls, 1)
   assert_eq(doc.get_frontier(), before_frontier)
@@ -1311,13 +1309,13 @@ test "P2 red recovery retains all missing target verification" {
     partial_tree,
     doc.oplog,
   )
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
+  let result : Result[DocumentChanges, DocumentError] = Ok(
     {
-      doc.set_admission_hooks({
-        on_prepare_remote: () => (),
-        on_commit_admission: () => (),
+      doc.set_apply_changes_hooks({
+        on_action: () => (),
+        on_apply_changes: () => (),
         on_projection_finalization: _ => (),
-        prepare_override: None,
+        action_override: None,
         commit_failure: None,
         projection_failure: None,
         recovery_checkout: Some(frontier => {
@@ -1334,7 +1332,7 @@ test "P2 red recovery retains all missing target verification" {
           }
         }),
       })
-      doc.admit_remote([incoming])
+      doc.apply_changes([incoming])
     },
   ) catch {
     error => Err(error)
@@ -1378,13 +1376,13 @@ test "P2 red recovery retains verification after checkout failure" {
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
   let mut recovery_calls = 0
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
+  let result : Result[DocumentChanges, DocumentError] = Ok(
     {
-      doc.set_admission_hooks({
-        on_prepare_remote: () => (),
-        on_commit_admission: () => (),
+      doc.set_apply_changes_hooks({
+        on_action: () => (),
+        on_apply_changes: () => (),
         on_projection_finalization: _ => (),
-        prepare_override: None,
+        action_override: None,
         commit_failure: None,
         projection_failure: None,
         recovery_checkout: Some(frontier => {
@@ -1401,7 +1399,7 @@ test "P2 red recovery retains verification after checkout failure" {
           }
         }),
       })
-      doc.admit_remote([incoming])
+      doc.apply_changes([incoming])
     },
   ) catch {
     error => Err(error)
@@ -1441,11 +1439,11 @@ test "P2 red recovery retains present origins across swapped missing targets" {
   let doc = Document::new("p2-swapped-recovery-targets")
   let first_input = p2_remote_insert("p2-swapped-origin-y1", 0, [], None)
   let second_input = p2_remote_insert("p2-swapped-origin-y2", 0, [], None)
-  ignore(try! doc.admit_remote([first_input, second_input]))
+  ignore(try! doc.apply_changes([first_input, second_input]))
   ignore(doc.to_text())
-  let admitted = doc.get_all_ops()
-  let first = admitted[0]
-  let second = admitted[1]
+  let applied = doc.get_all_ops()
+  let first = applied[0]
+  let second = applied[1]
   let first_raw = @core.RawVersion(first.agent(), first.seq())
   let second_raw = @core.RawVersion(second.agent(), second.seq())
   let initial_tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
@@ -1472,11 +1470,11 @@ test "P2 red recovery retains present origins across swapped missing targets" {
     doc.oplog,
   )
   let mut recovery_calls = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => (),
-    on_commit_admission: () => (),
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
     on_projection_finalization: _ => (),
-    prepare_override: None,
+    action_override: None,
     commit_failure: None,
     projection_failure: None,
     recovery_checkout: Some(frontier => {
@@ -1488,8 +1486,8 @@ test "P2 red recovery retains present origins across swapped missing targets" {
       }
     }),
   })
-  let initial_result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([incoming]),
+  let initial_result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([incoming]),
   ) catch {
     error => Err(error)
   }

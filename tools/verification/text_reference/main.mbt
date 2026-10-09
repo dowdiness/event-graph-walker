@@ -74,7 +74,7 @@ fn Driver::apply_line(
           report.pending_operations() != 0
         ) {
         raise Failure::Failure(
-          "line \{line_number}: duplicate sync was not an idempotent admission",
+          "line \{line_number}: duplicate sync was not an idempotent change application",
         )
       }
     }

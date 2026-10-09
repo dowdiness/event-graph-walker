@@ -135,7 +135,7 @@ test "export_since oracle H10000 D50" (b : @bench.T) {
 }
 
 ///|
-test "export_since after hot remote admission H10000 D1" (b : @bench.T) {
+test "export_since after hot remote change application H10000 D1" (b : @bench.T) {
   let (document, peer) = export_benchmark_fixture(10000, 0)
   let raw = @core.RawVersion("remote-benchmark", 1000000)
   let remote = try! SyncMessage::SyncMessage(

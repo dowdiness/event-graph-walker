@@ -2,7 +2,7 @@
 
 ///|
 /// These benchmarks measure the current implementation and compare duplicate
-/// pending delivery with a distinct prepare+admit operation. They do not
+/// pending delivery with a distinct prepare+apply operation. They do not
 /// authorize a further optimization without a reproduced regression.
 
 ///|
@@ -12,7 +12,7 @@ fn p1_pending_benchmark_fixture(
   let target = OpLog("p1-pending-benchmark")
   if count == 0 {
     let seed = p0_insert("p1-benchmark-seed", 0, [], "S", None)
-    ignore(try! target.commit_remote(try! target.prepare_remote([seed])))
+    ignore(try! p1_apply_success(target, try! ApplyChanges(target, [seed])))
     return (target, [seed])
   }
   let missing = p0_raw("p1-benchmark-missing", 0)
@@ -20,7 +20,7 @@ fn p1_pending_benchmark_fixture(
   let mut first_operation = first
   for seq in 0..<count {
     let operation = p0_insert("p1-benchmark-pending", seq, [missing], "P", None)
-    target.planner.register_pending(operation, _ => false)
+    target.pending_changes.register_pending(operation, _ => false)
     if seq == 0 {
       first_operation = Some(operation)
     }
@@ -40,12 +40,12 @@ fn p1_pending_benchmark_prepare(
 ) -> Unit raise OpLogError {
   let (target, incoming) = p1_pending_benchmark_fixture(count)
   b.bench(fn() {
-    let result : Result[PreparedAdmission, OpLogError] = match max_pending {
+    let result : Result[ApplyChanges, OpLogError] = match max_pending {
       Some(limit) =>
-        Ok(target.prepare_remote(incoming, max_pending=limit)) catch {
+        Ok(ApplyChanges(target, incoming, max_pending=limit)) catch {
           error => Err(error)
         }
-      None => Ok(target.prepare_remote(incoming)) catch { error => Err(error) }
+      None => Ok(ApplyChanges(target, incoming)) catch { error => Err(error) }
     }
     match result {
       Ok(plan) => {
@@ -81,12 +81,12 @@ fn p1_pending_benchmark_prepare_and_commit(
 ) -> Unit raise OpLogError {
   let (target, incoming) = p1_pending_benchmark_fixture(count)
   b.bench(fn() {
-    let result : Result[PreparedAdmission, OpLogError] = match max_pending {
+    let result : Result[ApplyChanges, OpLogError] = match max_pending {
       Some(limit) =>
-        Ok(target.prepare_remote(incoming, max_pending=limit)) catch {
+        Ok(ApplyChanges(target, incoming, max_pending=limit)) catch {
           error => Err(error)
         }
-      None => Ok(target.prepare_remote(incoming)) catch { error => Err(error) }
+      None => Ok(ApplyChanges(target, incoming)) catch { error => Err(error) }
     }
     match result {
       Ok(plan) => {
@@ -98,20 +98,20 @@ fn p1_pending_benchmark_prepare_and_commit(
             "duplicate-pending prepare+commit reported the wrong pending count",
           )
         }
-        let outcome : Result[AdmissionOutcome, OpLogError] = Ok(
-          target.commit_admission(plan),
+        let outcome : Result[ApplyChangesOutcome, OpLogError] = Ok(
+          target.apply_changes(plan),
         ) catch {
           error => Err(error)
         }
         match outcome {
-          Ok(AdmissionOutcome::Complete(receipt)) => {
+          Ok(ApplyChangesOutcome::Succeeded(receipt)) => {
             let pending_after = receipt.pending_after_count()
             if pending_after != count {
               abort("duplicate-pending commit changed pending membership")
             }
             b.keep(pending_after)
           }
-          Ok(AdmissionOutcome::Partial(..)) =>
+          Ok(ApplyChangesOutcome::Failed(..)) =>
             abort("duplicate-pending commit unexpectedly became partial")
           Err(_) => abort("duplicate-pending commit unexpectedly failed")
         }
@@ -159,55 +159,59 @@ fn p1_pending_benchmark_prepare_and_admit(
       "N",
       None,
     )
-    let raw = remote_admission_raw(operation)
-    let result : Result[PreparedAdmission, OpLogError] = match max_pending {
+    let raw = apply_changes_raw(operation)
+    let result : Result[ApplyChanges, OpLogError] = match max_pending {
       Some(limit) =>
-        Ok(target.prepare_remote([operation], max_pending=limit)) catch {
+        Ok(ApplyChanges(target, [operation], max_pending=limit)) catch {
           error => Err(error)
         }
       None =>
-        Ok(target.prepare_remote([operation])) catch {
+        Ok(ApplyChanges(target, [operation])) catch {
           error => Err(error)
         }
     }
     match result {
       Ok(plan) => {
         if expect_pending_limit_rejection {
-          abort("fresh admission unexpectedly prepared under the pending limit")
+          abort(
+            "fresh change application unexpectedly prepared under the pending limit",
+          )
         }
         if plan.required_pending != count + 1 {
-          abort("fresh admission reported the wrong pending count")
+          abort("fresh change application reported the wrong pending count")
         }
-        let outcome : Result[AdmissionOutcome, OpLogError] = Ok(
-          target.commit_admission(plan),
+        let outcome : Result[ApplyChangesOutcome, OpLogError] = Ok(
+          target.apply_changes(plan),
         ) catch {
           error => Err(error)
         }
         match outcome {
-          Ok(AdmissionOutcome::Complete(receipt)) => {
+          Ok(ApplyChangesOutcome::Succeeded(receipt)) => {
             if receipt.committed().length() != 1 {
-              abort("fresh admission did not commit exactly one operation")
+              abort(
+                "fresh change application did not commit exactly one operation",
+              )
             }
             previous = Some(raw)
             next_seq += 1
             b.keep(1)
           }
-          Ok(AdmissionOutcome::Partial(..)) =>
-            abort("fresh admission unexpectedly became partial")
-          Err(_) => abort("fresh admission commit unexpectedly failed")
+          Ok(ApplyChangesOutcome::Failed(..)) =>
+            abort("fresh change application unexpectedly became partial")
+          Err(_) => abort("fresh change application commit unexpectedly failed")
         }
       }
       Err(OpLogError::PendingLimitExceeded(limit~, required~)) => {
         ignore(limit)
         if !expect_pending_limit_rejection {
-          abort("fresh admission unexpectedly hit the pending limit")
+          abort("fresh change application unexpectedly hit the pending limit")
         }
         if required != count + 1 {
-          abort("fresh admission reported the wrong rejection count")
+          abort("fresh change application reported the wrong rejection count")
         }
         b.keep(required)
       }
-      Err(_) => abort("fresh admission prepare unexpectedly failed")
+      Err(_) => abort("fresh change application prepare unexpectedly failed")
     }
   })
 }
@@ -255,21 +259,21 @@ test "bench: P1 duplicate-pending prepare+commit bounded reject" (b : @bench.T) 
 }
 
 ///|
-test "bench: P1 valid fresh prepare+admit unbounded" (b : @bench.T) {
+test "bench: P1 valid fresh prepare+apply unbounded" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_admit(b, count, None, false)
   }
 }
 
 ///|
-test "bench: P1 valid fresh prepare+admit bounded pass" (b : @bench.T) {
+test "bench: P1 valid fresh prepare+apply bounded pass" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_admit(b, count, Some(count + 1), false)
   }
 }
 
 ///|
-test "bench: P1 valid fresh prepare+admit bounded reject" (b : @bench.T) {
+test "bench: P1 valid fresh prepare+apply bounded reject" (b : @bench.T) {
   for count in [0, 1000, 10000, 100000] {
     p1_pending_benchmark_prepare_and_admit(b, count, Some(count), true)
   }

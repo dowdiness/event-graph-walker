@@ -1,6 +1,7 @@
 import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/causal_graph",
+  "dowdiness/event-graph-walker/internal/oplog/order" @change_order,
   "dowdiness/rle",
   "moonbitlang/core/bench",
   "moonbitlang/core/hashset",

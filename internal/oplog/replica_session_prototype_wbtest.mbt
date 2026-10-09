@@ -2,7 +2,7 @@
 ///
 /// A session deliberately stores only a writer identity and an observed
 /// frontier. It shares the retained OpLog instead of copying its causal graph
-/// or maintaining a per-admission causal-cut map. This is causal-layer proof,
+/// or maintaining a per-change application causal-cut map. This is causal-layer proof,
 /// not a text/tree restore API.
 
 ///|
@@ -62,7 +62,7 @@ fn ReplicaSession::insert(
 ) -> @core.Op raise OpLogError {
   let parent_lvs = self.frontier.to_array()
   let parents = replica_session_raw_versions(self.authority, parent_lvs)
-  let operation = replica_session_admit_insert(
+  let operation = replica_session_apply_insert(
     self.authority,
     self.writer_id,
     parents,
@@ -106,12 +106,12 @@ fn replica_session_resolve_origin(
 }
 
 ///|
-/// Admit a local insert against explicit session parents and identity.
+/// Record a local insert against explicit session parents and identity.
 ///
 /// This is intentionally test-only. It isolates the missing production seam:
 /// local operation allocation must accept a session writer and observed
 /// parents rather than silently using OpLog's coordinator writer/frontier.
-fn replica_session_admit_insert(
+fn replica_session_apply_insert(
   authority : OpLog,
   writer_id : String,
   parents : Array[@core.RawVersion],
@@ -139,11 +139,11 @@ fn replica_session_admit_insert(
     lv, parents, writer_id, seq, text, origin_left, origin_right,
   )
   authority.add_op(operation)
-  authority.planner.acknowledge_admitted(
+  authority.pending_changes.acknowledge_applied(
     @core.RawVersion(operation.agent(), operation.seq()),
   )
   ignore(
-    authority.planner.maybe_compact(raw => {
+    authority.pending_changes.maybe_compact(raw => {
       authority.graph.raw_to_lv(raw) is Some(_)
     }),
   )

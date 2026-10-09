@@ -1,5 +1,5 @@
 ///|
-/// Admit sparse identities through the public schema-2 decoder and receiver.
+/// Decode sparse identities through the public schema-2 receiver path.
 /// Every operation depends on the previous one, including across actors, so
 /// there is exactly one head and the head limit cannot mask the range limit.
 fn compact_sparse_version_source_for_test(

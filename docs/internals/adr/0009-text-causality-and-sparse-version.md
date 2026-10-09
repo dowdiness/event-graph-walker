@@ -54,7 +54,7 @@ separate version contracts and are not interchangeable with text versions.
   export.
 
 **Resident graph**
-: The locally admitted causal graph against which a checkpoint can be resolved
+: The locally applied causal graph against which a checkpoint can be resolved
   and validated.
 
 ## Authority and ownership
@@ -99,9 +99,9 @@ The frontier must also be the maximal antichain of that closure. A redundant
 ancestor in the frontier makes the Version invalid even if the union of
 reachable operations would otherwise be unchanged.
 
-## Operation admission and pending delivery
+## Applying changes and pending delivery
 
-An operation is ready for admission only when all dependencies needed to apply
+An operation is ready to be applied only when all dependencies needed to apply
 it are available. Dependencies include:
 
 - every declared causal parent;
@@ -113,10 +113,10 @@ implicit dependency.
 
 Operations with missing dependencies remain pending. Pending operations do not
 enter the causal graph, do not advance its frontier, and do not appear in a
-Version. Admission inserts the operation identity, advances the frontier, and
+Version. Applying changes inserts the operation identity, advances the frontier, and
 updates a warm knowledge-summary cache as one atomic authority transition.
 
-Re-delivery of an already admitted identity is idempotent only when the logical
+Re-delivery of an already applied identity is idempotent only when the logical
 operation is equivalent: content and origins match, and declared parents name
 the same set regardless of array order. Reusing the identity for any other
 operation is a terminal conflict rejected before graph, operation log, or
@@ -136,9 +136,9 @@ the sibling identity order.
 ## Version construction and cache policy
 
 A graph starts with its knowledge-summary cache cold. Local editing and remote
-admission do not build or update a sparse summary while the cache remains cold.
-The first request for the current Version constructs the summary from admitted
-graph identities. Later admissions update the warm summary at the same point
+apply work do not build or update a sparse summary while the cache remains cold.
+The first request for the current Version constructs the summary from applied
+graph identities. Later applies update the warm summary at the same point
 that the graph accepts the corresponding identity.
 
 A Version request returns defensive copies of the current maximal frontier and
@@ -292,7 +292,7 @@ and outbound local serialization failure are distinct events even when both use
 
 Wire data is untrusted. Structural validation and resource checks occur before
 it reaches graph authority. Contextual checkpoint validation occurs before
-checkout. Operation admission validates identity and dependencies before
+checkout. Applying changes validates identity and dependencies before
 mutation.
 
 Knowledge supplied for delta export is a request-scoped peer claim, not a local
@@ -302,7 +302,7 @@ local causality.
 
 ## Performance policy
 
-The common local append path performs graph admission and projection work only.
+The common local append path performs graph apply and projection work only.
 It does not scan history to maintain a Version before one is requested.
 After the first Version request, incremental range insertion is allowed because
 its cost is coupled to the accepted identity transition.
@@ -355,7 +355,7 @@ behavior whenever peers diverge.
 ### Text-owned summary cache
 
 Maintaining ranges in the text façade duplicates graph knowledge and allows
-identity admission and summary advancement to drift. The cache belongs beside
+identity apply and summary advancement to drift. The cache belongs beside
 the graph transition it summarizes.
 
 ### Public checkpoint and summary types

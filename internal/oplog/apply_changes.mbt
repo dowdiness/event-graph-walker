@@ -1,9 +1,9 @@
-///| Typed evidence for one remote-admission transition.
+///| Typed evidence for one remote-change application transition.
 
 ///|
-pub struct AdmissionReceipt {
+pub struct ApplyChangesReport {
   priv committed : Array[@core.Op]
-  priv already_admitted : Array[@core.RawVersion]
+  priv already_applied : Array[@core.RawVersion]
   priv pending_from_transition : Array[@core.RawVersion]
   priv pending_retained : Array[@core.RawVersion]
   priv pending_staged : Array[@core.RawVersion]
@@ -17,15 +17,15 @@ pub struct AdmissionReceipt {
 }
 
 ///|
-pub enum AdmissionOutcome {
-  Complete(AdmissionReceipt)
-  Partial(receipt~ : AdmissionReceipt, error~ : @causal_graph.CausalGraphError)
+pub enum ApplyChangesOutcome {
+  Succeeded(ApplyChangesReport)
+  Failed(report~ : ApplyChangesReport, error~ : @causal_graph.CausalGraphError)
 }
 
 ///|
-fn AdmissionReceipt::from_parts(
+fn ApplyChangesReport::from_parts(
   committed : Array[@core.Op],
-  already_admitted : Array[@core.RawVersion],
+  already_applied : Array[@core.RawVersion],
   pending_from_transition : Array[@core.RawVersion],
   pending_retained : Array[@core.RawVersion],
   pending_staged : Array[@core.RawVersion],
@@ -36,10 +36,10 @@ fn AdmissionReceipt::from_parts(
   pending_after_count : Int,
   frontier_before : @core.Frontier,
   frontier_after : @core.Frontier,
-) -> AdmissionReceipt {
+) -> ApplyChangesReport {
   {
     committed: committed.copy(),
-    already_admitted: already_admitted.copy(),
+    already_applied: already_applied.copy(),
     pending_from_transition: pending_from_transition.copy(),
     pending_retained: pending_retained.copy(),
     pending_staged: pending_staged.copy(),
@@ -54,79 +54,83 @@ fn AdmissionReceipt::from_parts(
 }
 
 ///|
-pub fn AdmissionReceipt::committed(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::committed(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.Op] {
   self.committed[:]
 }
 
 ///|
-pub fn AdmissionReceipt::already_admitted(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::already_applied(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.RawVersion] {
-  self.already_admitted[:]
+  self.already_applied[:]
 }
 
 ///|
-pub fn AdmissionReceipt::pending_from_transition(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::pending_from_transition(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.RawVersion] {
   self.pending_from_transition[:]
 }
 
 ///|
-pub fn AdmissionReceipt::pending_retained(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::pending_retained(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.RawVersion] {
   self.pending_retained[:]
 }
 
 ///|
-pub fn AdmissionReceipt::pending_staged(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::pending_staged(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.RawVersion] {
   self.pending_staged[:]
 }
 
 ///|
-pub fn AdmissionReceipt::discarded_pending(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::discarded_pending(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.RawVersion] {
   self.discarded_pending[:]
 }
 
 ///|
-pub fn AdmissionReceipt::discarded_staged(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::discarded_staged(
+  self : ApplyChangesReport,
 ) -> ArrayView[@core.RawVersion] {
   self.discarded_staged[:]
 }
 
 ///|
-pub fn AdmissionReceipt::redelivery_count(self : AdmissionReceipt) -> Int {
+pub fn ApplyChangesReport::redelivery_count(self : ApplyChangesReport) -> Int {
   self.redelivery_count
 }
 
 ///|
-pub fn AdmissionReceipt::pending_before_count(self : AdmissionReceipt) -> Int {
+pub fn ApplyChangesReport::pending_before_count(
+  self : ApplyChangesReport,
+) -> Int {
   self.pending_before_count
 }
 
 ///|
-pub fn AdmissionReceipt::pending_after_count(self : AdmissionReceipt) -> Int {
+pub fn ApplyChangesReport::pending_after_count(
+  self : ApplyChangesReport,
+) -> Int {
   self.pending_after_count
 }
 
 ///|
-pub fn AdmissionReceipt::frontier_before(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::frontier_before(
+  self : ApplyChangesReport,
 ) -> @core.Frontier {
   self.frontier_before
 }
 
 ///|
-pub fn AdmissionReceipt::frontier_after(
-  self : AdmissionReceipt,
+pub fn ApplyChangesReport::frontier_after(
+  self : ApplyChangesReport,
 ) -> @core.Frontier {
   self.frontier_after
 }
@@ -134,8 +138,8 @@ pub fn AdmissionReceipt::frontier_after(
 ///|
 /// Return the transition-local identities that can remain pending after the
 /// actual commit attempt. Delivery provenance alone never adds an identity.
-fn PreparedAdmission::transition_pending_candidates(
-  self : PreparedAdmission,
+fn ApplyChanges::transition_pending_candidates(
+  self : ApplyChanges,
 ) -> Array[@core.RawVersion] {
   let result : Array[@core.RawVersion] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
@@ -145,7 +149,7 @@ fn PreparedAdmission::transition_pending_candidates(
     }
   }
   for op in self.planned {
-    let raw = remote_admission_raw(op)
+    let raw = apply_changes_raw(op)
     if seen.add_and_check(raw) {
       result.push(raw)
     }
@@ -164,46 +168,46 @@ fn PreparedAdmission::transition_pending_candidates(
 }
 
 ///|
-/// Construct receipt-owned actual evidence from the post-commit planner and
+/// Construct receipt-owned actual evidence from the post-commit pending-changes owner and
 /// authority state. Unrelated retained pending work is represented by counts,
 /// not copied into the receipt.
-fn OpLog::admission_receipt(
+fn OpLog::apply_changes_report(
   self : OpLog,
-  prepared : PreparedAdmission,
+  action : ApplyChanges,
   committed : Array[@core.Op],
   frontier_before : @core.Frontier,
-) -> AdmissionReceipt {
+) -> ApplyChangesReport {
   let pending_from_transition : Array[@core.RawVersion] = []
   let pending_retained : Array[@core.RawVersion] = []
   let pending_staged : Array[@core.RawVersion] = []
-  if !self.planner.pending.is_empty() {
-    for raw in prepared.retained_pending {
-      if self.planner.pending.contains(raw) {
+  if !self.pending_changes.pending.is_empty() {
+    for raw in action.retained_pending {
+      if self.pending_changes.pending.contains(raw) {
         pending_retained.push(raw)
       }
     }
-    for raw in prepared.staged_raws() {
-      if self.planner.pending.contains(raw) {
+    for raw in action.staged_raws() {
+      if self.pending_changes.pending.contains(raw) {
         pending_staged.push(raw)
       }
     }
-    for raw in prepared.transition_pending_candidates() {
-      if self.planner.pending.contains(raw) {
+    for raw in action.transition_pending_candidates() {
+      if self.pending_changes.pending.contains(raw) {
         pending_from_transition.push(raw)
       }
     }
   }
-  AdmissionReceipt::from_parts(
+  ApplyChangesReport::from_parts(
     committed,
-    prepared.already_admitted,
+    action.already_applied,
     pending_from_transition,
     pending_retained,
     pending_staged,
-    prepared.discarded_pending.to_array(),
-    prepared.discarded_staged.to_array(),
-    prepared.already_admitted.length() + prepared.duplicate_of_pending.length(),
-    prepared.pending_before_count,
-    self.planner.pending_count(),
+    action.discarded_pending.to_array(),
+    action.discarded_staged.to_array(),
+    action.already_applied.length() + action.duplicate_of_pending.length(),
+    action.pending_before_count,
+    self.pending_changes.pending_count(),
     frontier_before,
     self.get_frontier(),
   )

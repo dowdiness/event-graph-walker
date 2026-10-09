@@ -10,7 +10,7 @@ fn Document::from_closed_history_internal(
     error => raise DocumentError::OpLog(error)
   }
   if fault_after_adoption {
-    raise DocumentError::OpLog(@oplog.OpLogError::InvalidAdmission)
+    raise DocumentError::OpLog(@oplog.OpLogError::InvalidApplyChanges)
   }
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   for op in local_operations {
@@ -18,7 +18,7 @@ fn Document::from_closed_history_internal(
   }
   let indexed = IndexedState::from_tree_bulk_experimental(tree)
   guard indexed is Some(indexed) else {
-    raise DocumentError::OpLog(@oplog.OpLogError::InvalidAdmission)
+    raise DocumentError::OpLog(@oplog.OpLogError::InvalidApplyChanges)
   }
   {
     tree,
@@ -28,7 +28,7 @@ fn Document::from_closed_history_internal(
     cursor: None,
     projection_health: ProjectionHealth::Ready,
     projection_verification: None,
-    admission_hooks: None,
+    apply_changes_hooks: None,
   }
 }
 

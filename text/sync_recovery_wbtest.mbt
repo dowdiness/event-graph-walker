@@ -1,5 +1,5 @@
 ///|
-test "sync admission retries recovery before duplicate-only preparation" {
+test "sync change application retries recovery before duplicate-only preparation" {
   let source = try! TextState::new("source")
   try! source.insert(Pos::at(0), "A")
   let message = try! source.sync().export_all()
@@ -17,7 +17,7 @@ test "sync admission retries recovery before duplicate-only preparation" {
         raise TextError::ProjectionRecoveryRequired
       }
     }),
-    admit_remote_override: None,
+    apply_changes_override: None,
   }
   let before_version = session.current_version()
 

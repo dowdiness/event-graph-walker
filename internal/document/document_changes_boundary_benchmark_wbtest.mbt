@@ -1,4 +1,4 @@
-/// P2.3 M-boundary benchmark for the Document admission shell.
+/// P2.3 M-boundary benchmark for the Document change application shell.
 ///
 /// The inner clock measures only the remote boundary after each lane has built
 /// the same initial state. `moonbitlang/core/bench` exposes timing and `keep`,
@@ -16,7 +16,7 @@ enum P2BoundaryCase {
 ///|
 enum P2BoundaryLane {
   ApplyEach
-  AdmitBatch
+  ApplyBatch
 }
 
 ///|
@@ -58,7 +58,7 @@ fn p2_boundary_case_name(case : P2BoundaryCase) -> String {
 fn p2_boundary_lane_name(lane : P2BoundaryLane) -> String {
   match lane {
     ApplyEach => "M-apply_remote"
-    AdmitBatch => "1-admit_remote"
+    ApplyBatch => "1-apply_changes"
   }
 }
 
@@ -89,20 +89,20 @@ fn p2_boundary_fixture(
   }
   let doc = Document::new("p2-boundary-target-" + iteration.to_string())
   if case is DuplicateOnly {
-    let seeded : Result[DocumentAdmission, DocumentError] = Ok(
-      doc.admit_remote(incoming),
+    let seeded : Result[DocumentChanges, DocumentError] = Ok(
+      doc.apply_changes(incoming),
     ) catch {
       error => Err(error)
     }
     match seeded {
-      Ok(admission) =>
-        match admission.outcome {
-          @oplog.AdmissionOutcome::Complete(receipt) =>
+      Ok(change) =>
+        match change.outcome {
+          @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
             p2_boundary_expect(
               receipt.committed().length() == count,
               "duplicate fixture committed the wrong count",
             )
-          @oplog.AdmissionOutcome::Partial(..) =>
+          @oplog.ApplyChangesOutcome::Failed(..) =>
             abort("duplicate fixture seeding became partial")
         }
       Err(_) => abort("duplicate fixture seeding failed")
@@ -143,7 +143,7 @@ fn p2_boundary_apply_each(
         }
       Err(
         DocumentError::OpLog(
-          @oplog.OpLogError::PartialRemoteAdmission(committed~, error~)
+          @oplog.OpLogError::PartialApplyChanges(committed~, error~)
         )
       ) =>
         match failure_index {
@@ -174,24 +174,24 @@ fn p2_boundary_apply_each(
 }
 
 ///|
-fn p2_boundary_admit_batch(
+fn p2_boundary_apply_batch(
   doc : Document,
   incoming : Array[@core.Op],
   case : P2BoundaryCase,
   failure_index : Int?,
 ) -> (String, Int) {
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote(incoming),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes(incoming),
   ) catch {
     error => Err(error)
   }
-  let admission = match result {
-    Ok(admission) => admission
-    Err(_) => abort("admit_remote exposed an unexpected error")
+  let change = match result {
+    Ok(change) => change
+    Err(_) => abort("apply_changes exposed an unexpected error")
   }
   let mut pending_count = 0
-  match (case, admission.outcome) {
-    (Complete, @oplog.AdmissionOutcome::Complete(receipt)) => {
+  match (case, change.outcome) {
+    (Complete, @oplog.ApplyChangesOutcome::Succeeded(receipt)) => {
       p2_boundary_expect(
         receipt.committed().length() == incoming.length(),
         "complete batch committed the wrong count",
@@ -202,7 +202,7 @@ fn p2_boundary_admit_batch(
         "complete batch retained pending work",
       )
     }
-    (DuplicateOnly, @oplog.AdmissionOutcome::Complete(receipt)) => {
+    (DuplicateOnly, @oplog.ApplyChangesOutcome::Succeeded(receipt)) => {
       p2_boundary_expect(
         receipt.committed().length() == 0,
         "duplicate batch committed an operation",
@@ -213,11 +213,11 @@ fn p2_boundary_admit_batch(
         "duplicate batch retained pending work",
       )
       p2_boundary_expect(
-        receipt.already_admitted().length() == incoming.length(),
-        "duplicate batch lost an already-admitted identity",
+        receipt.already_applied().length() == incoming.length(),
+        "duplicate batch lost an already-recorded identity",
       )
     }
-    (PendingOnly, @oplog.AdmissionOutcome::Complete(receipt)) => {
+    (PendingOnly, @oplog.ApplyChangesOutcome::Succeeded(receipt)) => {
       p2_boundary_expect(
         receipt.committed().length() == 0,
         "pending batch committed an operation",
@@ -228,7 +228,7 @@ fn p2_boundary_admit_batch(
         "pending batch lost a pending identity",
       )
     }
-    (Partial, @oplog.AdmissionOutcome::Partial(receipt~, error~)) => {
+    (Partial, @oplog.ApplyChangesOutcome::Failed(report=receipt, error~)) => {
       let expected = match failure_index {
         Some(index) => index
         None => abort("partial case did not have a failure index")
@@ -246,16 +246,16 @@ fn p2_boundary_admit_batch(
         @causal_graph.CausalGraphError::MissingParent(lv~) =>
           p2_boundary_expect(
             lv == -401,
-            "admit_remote changed the partial cause",
+            "apply_changes changed the partial cause",
           )
-        _ => abort("admit_remote changed the partial cause")
+        _ => abort("apply_changes changed the partial cause")
       }
     }
-    (_, @oplog.AdmissionOutcome::Complete(_))
-    | (_, @oplog.AdmissionOutcome::Partial(..)) =>
-      abort("admit_remote returned the wrong outcome kind")
+    (_, @oplog.ApplyChangesOutcome::Succeeded(_))
+    | (_, @oplog.ApplyChangesOutcome::Failed(..)) =>
+      abort("apply_changes returned the wrong outcome kind")
   }
-  let projection_status = match (case, admission.projection) {
+  let projection_status = match (case, change.projection) {
     (Complete, ProjectionStatus::Projected) => "Projected"
     (DuplicateOnly, ProjectionStatus::Skipped)
     | (PendingOnly, ProjectionStatus::Skipped) => "Skipped"
@@ -269,25 +269,26 @@ fn p2_boundary_admit_batch(
         Some(index) if index > 0 => "Projected"
         _ => abort("partial batch projected an empty prefix")
       }
-    _ => abort("admit_remote returned the wrong projection status")
+    _ => abort("apply_changes returned the wrong projection status")
   }
   (projection_status, pending_count)
 }
 
 ///|
 fn p2_boundary_pending_probe(doc : Document) -> Int {
-  let result : Result[DocumentAdmission, DocumentError] = Ok(
-    doc.admit_remote([]),
+  let result : Result[DocumentChanges, DocumentError] = Ok(
+    doc.apply_changes([]),
   ) catch {
     error => Err(error)
   }
-  let admission = match result {
-    Ok(admission) => admission
+  let change = match result {
+    Ok(change) => change
     Err(_) => abort("pending probe exposed an unexpected error")
   }
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => receipt.pending_after_count()
-    @oplog.AdmissionOutcome::Partial(receipt~, ..) =>
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
+      receipt.pending_after_count()
+    @oplog.ApplyChangesOutcome::Failed(report=receipt, ..) =>
       receipt.pending_after_count()
   }
 }
@@ -324,13 +325,13 @@ fn p2_boundary_run(
   let mut commit_calls = 0
   let mut projection_attempts = 0
   let mut recovery_checkouts = 0
-  doc.set_admission_hooks({
-    on_prepare_remote: () => prepare_calls = prepare_calls + 1,
-    on_commit_admission: () => commit_calls = commit_calls + 1,
+  doc.set_apply_changes_hooks({
+    on_action: () => prepare_calls = prepare_calls + 1,
+    on_apply_changes: () => commit_calls = commit_calls + 1,
     on_projection_finalization: _ => {
       projection_attempts = projection_attempts + 1
     },
-    prepare_override: None,
+    action_override: None,
     commit_failure: Some(op => {
       match failure_index {
         Some(index) if op.seq() == index =>
@@ -350,7 +351,7 @@ fn p2_boundary_run(
       p2_boundary_apply_each(doc, incoming, failure_index)
       ("legacy-wrapper", 0)
     }
-    AdmitBatch => p2_boundary_admit_batch(doc, incoming, case, failure_index)
+    ApplyBatch => p2_boundary_apply_batch(doc, incoming, case, failure_index)
   }
   let elapsed_us = @bench.monotonic_clock_end(start)
   let committed_count = doc.get_all_ops().length() - initial_count
@@ -362,7 +363,7 @@ fn p2_boundary_run(
     Complete | DuplicateOnly => 0
     PendingOnly | Partial => {
       let probed = p2_boundary_pending_probe(doc)
-      if lane is AdmitBatch {
+      if lane is ApplyBatch {
         p2_boundary_expect(
           probed == batch_pending_count,
           "pending probe disagreed with the batch receipt",
@@ -384,7 +385,7 @@ fn p2_boundary_run(
     Partial =>
       match lane {
         ApplyEach => 1
-        AdmitBatch =>
+        ApplyBatch =>
           match failure_index {
             Some(index) => count - index
             None => abort("partial case did not have a failure index")
@@ -426,7 +427,7 @@ fn p2_boundary_run(
           }
         Complete | DuplicateOnly | PendingOnly => count
       }
-    AdmitBatch => 1
+    ApplyBatch => 1
   }
   let expected_commit = expected_prepare
   let expected_projection = match lane {
@@ -440,7 +441,7 @@ fn p2_boundary_run(
             None => abort("partial case did not have a failure index")
           }
       }
-    AdmitBatch =>
+    ApplyBatch =>
       match case {
         Complete => 1
         DuplicateOnly | PendingOnly => 0
@@ -492,7 +493,7 @@ fn p2_boundary_bench_case(
   count : Int,
   lane : P2BoundaryLane,
 ) -> Unit {
-  let benchmark_name = "bench: document admission boundary " +
+  let benchmark_name = "bench: document change application boundary " +
     p2_boundary_case_name(case) +
     " M=" +
     count.to_string() +
@@ -537,26 +538,26 @@ fn p2_boundary_bench_case(
 fn p2_boundary_bench_matrix(b : @bench.T, case : P2BoundaryCase) -> Unit {
   for count in [1, 10, 100, 1000] {
     p2_boundary_bench_case(b, case, count, ApplyEach)
-    p2_boundary_bench_case(b, case, count, AdmitBatch)
+    p2_boundary_bench_case(b, case, count, ApplyBatch)
   }
 }
 
 ///|
-test "bench: document admission boundary complete" (b : @bench.T) {
+test "bench: document change application boundary complete" (b : @bench.T) {
   p2_boundary_bench_matrix(b, Complete)
 }
 
 ///|
-test "bench: document admission boundary duplicate-only" (b : @bench.T) {
+test "bench: document change application boundary duplicate-only" (b : @bench.T) {
   p2_boundary_bench_matrix(b, DuplicateOnly)
 }
 
 ///|
-test "bench: document admission boundary pending-only" (b : @bench.T) {
+test "bench: document change application boundary pending-only" (b : @bench.T) {
   p2_boundary_bench_matrix(b, PendingOnly)
 }
 
 ///|
-test "bench: document admission boundary partial" (b : @bench.T) {
+test "bench: document change application boundary partial" (b : @bench.T) {
   p2_boundary_bench_matrix(b, Partial)
 }

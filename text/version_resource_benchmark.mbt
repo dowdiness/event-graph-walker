@@ -115,7 +115,7 @@ fn version_resource_text_state(
     }
   }
   ignore(
-    document.admit_remote(
+    document.apply_changes(
       operations,
       max_pending=operations.length(),
       max_pending_after_complete=0,

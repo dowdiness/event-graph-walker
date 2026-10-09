@@ -1,5 +1,5 @@
 ///|
-/// Test-only ordinary admission oracle. Never a second public archive API.
+/// Test-only ordinary change application oracle. Never a second public archive API.
 fn compact_restore_replay_for_test(
   archive : String,
   writer : String,

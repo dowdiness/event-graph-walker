@@ -111,7 +111,7 @@ test "bulk derived indexes equal old builder across edits tombstones and legacy 
   }
   let legacy = Document::new("legacy-bulk")
   ignore(
-    legacy.admit_remote([
+    legacy.apply_changes([
       @core.Op::insert(0, [], "legacy", 0, "", None, None),
       @core.Op::insert(
         0,

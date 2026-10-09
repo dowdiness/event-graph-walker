@@ -23,7 +23,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
     Some(right),
   )
-  assert_true(remote_admission_same_logical_operation(first, reordered))
+  assert_true(apply_changes_same_logical_operation(first, reordered))
 
   let parent_conflict = @core.Op::insert(
     99,
@@ -34,7 +34,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
     Some(right),
   )
-  assert_true(!remote_admission_same_logical_operation(first, parent_conflict))
+  assert_true(!apply_changes_same_logical_operation(first, parent_conflict))
   let content_conflict = @core.Op::insert(
     99,
     [left, right, right],
@@ -44,7 +44,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
     Some(right),
   )
-  assert_true(!remote_admission_same_logical_operation(first, content_conflict))
+  assert_true(!apply_changes_same_logical_operation(first, content_conflict))
   let left_origin_conflict = @core.Op::insert(
     99,
     [left, right, right],
@@ -55,7 +55,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(right),
   )
   assert_true(
-    !remote_admission_same_logical_operation(first, left_origin_conflict),
+    !apply_changes_same_logical_operation(first, left_origin_conflict),
   )
   let right_origin_conflict = @core.Op::insert(
     99,
@@ -67,7 +67,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
   )
   assert_true(
-    !remote_admission_same_logical_operation(first, right_origin_conflict),
+    !apply_changes_same_logical_operation(first, right_origin_conflict),
   )
   let delete_conflict = @core.Op::delete(
     99,
@@ -76,7 +76,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     3,
     Some(left),
   )
-  assert_true(!remote_admission_same_logical_operation(first, delete_conflict))
+  assert_true(!apply_changes_same_logical_operation(first, delete_conflict))
   let agent_conflict = @core.Op::insert(
     99,
     [left, right, right],
@@ -86,7 +86,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
     Some(right),
   )
-  assert_true(!remote_admission_same_logical_operation(first, agent_conflict))
+  assert_true(!apply_changes_same_logical_operation(first, agent_conflict))
   let seq_conflict = @core.Op::insert(
     99,
     [left, right, right],
@@ -96,7 +96,7 @@ test "OpLog logical operation equality ignores destination LV and parent order" 
     Some(left),
     Some(right),
   )
-  assert_true(!remote_admission_same_logical_operation(first, seq_conflict))
+  assert_true(!apply_changes_same_logical_operation(first, seq_conflict))
 }
 
 ///|
@@ -148,51 +148,51 @@ test "get_ops_rle expands a middle slice from a compressed run" {
 }
 
 ///|
-test "prepared admission is opaque, read-only, and single use" {
+test "`ApplyChanges` action is opaque, read-only, and single use" {
   let oplog = OpLog("local")
   let first = @core.Op::insert(-1, [], "opaque-first", 0, "a", None, None)
   let second = @core.Op::insert(-1, [], "opaque-second", 0, "b", None, None)
-  let plan = try! oplog.prepare_remote([first, second])
-  let view = plan.operations()
+  let action = try! ApplyChanges(oplog, [first, second])
+  let view = action.operations()
   assert_eq(view.length(), 2)
   let copy = view.to_owned()
   copy[0] = second
-  assert_eq(plan.operations()[0].agent(), "opaque-first")
-  let applied = try! oplog.commit_remote(plan)
-  assert_eq(applied.length(), 2)
-  let reused : Result[Array[@core.Op], OpLogError] = Ok(
-    oplog.commit_remote(plan),
+  assert_eq(action.operations()[0].agent(), "opaque-first")
+  let report = try! p1_apply_success(oplog, action)
+  assert_eq(report.committed().length(), 2)
+  let reused : Result[ApplyChangesOutcome, OpLogError] = Ok(
+    oplog.apply_changes(action),
   ) catch {
     error => Err(error)
   }
   match reused {
-    Err(OpLogError::ConsumedAdmission) => ()
-    _ => fail("expected consumed prepared admission")
+    Err(OpLogError::ConsumedApplyChanges) => ()
+    _ => fail("expected consumed ApplyChanges")
   }
 }
 
 ///|
-test "prepared admission rejects stale values before local mutation" {
+test "`ApplyChanges` action rejects stale values before local mutation" {
   let oplog = OpLog("local")
   let incoming = @core.Op::insert(-1, [], "stale-incoming", 0, "r", None, None)
-  let plan = try! oplog.prepare_remote([incoming])
+  let action = try! ApplyChanges(oplog, [incoming])
   ignore(try! oplog.insert("local", -1, -1))
   let count_before = oplog.op_count()
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
-    oplog.commit_remote(plan),
+  let result : Result[ApplyChangesOutcome, OpLogError] = Ok(
+    oplog.apply_changes(action),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(OpLogError::StaleAdmission) => ()
-    _ => fail("expected stale prepared admission")
+    Err(OpLogError::StaleApplyChanges) => ()
+    _ => fail("expected stale ApplyChanges")
   }
   assert_eq(oplog.op_count(), count_before)
   assert_eq(oplog.has_pending(), false)
 }
 
 ///|
-test "remote admission rejects generation mismatch after remote admission" {
+test "remote change application rejects generation mismatch after remote change application" {
   let oplog = OpLog("local")
   let stale = @core.Op::insert(-1, [], "stale-remote", 0, "s", None, None)
   let independent = @core.Op::insert(
@@ -204,23 +204,23 @@ test "remote admission rejects generation mismatch after remote admission" {
     None,
     None,
   )
-  let plan = try! oplog.prepare_remote([stale])
-  let admitted = try! oplog.apply_remote(independent)
-  assert_eq(admitted.length(), 1)
+  let action = try! ApplyChanges(oplog, [stale])
+  let applied = try! oplog.apply_remote(independent)
+  assert_eq(applied.length(), 1)
   let ops_after = oplog.get_all_ops()
-  let pending_after = oplog.planner.pending_operations()
+  let pending_after = oplog.pending_changes.pending_operations()
   let count_after = oplog.op_count()
   let runs_after = oplog.operations.length()
   let frontier_after = oplog.get_frontier_raw()
 
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
-    oplog.commit_remote(plan),
+  let result : Result[ApplyChangesOutcome, OpLogError] = Ok(
+    oplog.apply_changes(action),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(OpLogError::StaleAdmission) => ()
-    _ => fail("expected stale prepared admission")
+    Err(OpLogError::StaleApplyChanges) => ()
+    _ => fail("expected stale ApplyChanges")
   }
 
   assert_eq(oplog.op_count(), count_after)
@@ -234,39 +234,39 @@ test "remote admission rejects generation mismatch after remote admission" {
     assert_eq(ops_now[i].seq(), ops_after[i].seq())
     assert_eq(ops_now[i].content(), ops_after[i].content())
   }
-  let pending_now = oplog.planner.pending_operations()
+  let pending_now = oplog.pending_changes.pending_operations()
   assert_eq(pending_now.length(), pending_after.length())
   for i in 0..<pending_after.length() {
     assert_eq(
-      remote_admission_raw(pending_now[i]),
-      remote_admission_raw(pending_after[i]),
+      apply_changes_raw(pending_now[i]),
+      apply_changes_raw(pending_after[i]),
     )
   }
   assert_eq(oplog.has_pending(), !pending_after.is_empty())
 }
 
 ///|
-test "remote admission begin rejects internal conflicts atomically" {
+test "remote change application begin rejects internal conflicts atomically" {
   let oplog = OpLog("local")
   let first = @core.Op::insert(-1, [], "conflict-first", 0, "a", None, None)
   let second = @core.Op::insert(-1, [], "conflict-second", 0, "b", None, None)
-  let plan = try! oplog.prepare_remote([first, second])
-  plan.planned[1] = plan.planned[0]
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
-    oplog.commit_remote(plan),
+  let action = try! ApplyChanges(oplog, [first, second])
+  action.planned[1] = action.planned[0]
+  let result : Result[ApplyChangesOutcome, OpLogError] = Ok(
+    oplog.apply_changes(action),
   ) catch {
     error => Err(error)
   }
   match result {
-    Err(OpLogError::InvalidAdmission) => ()
-    _ => fail("expected invalid prepared admission")
+    Err(OpLogError::InvalidApplyChanges) => ()
+    _ => fail("expected invalid ApplyChanges")
   }
   assert_eq(oplog.op_count(), 0)
   assert_eq(oplog.has_pending(), false)
 }
 
 ///|
-test "remote admission duplicate pending identities remain one node" {
+test "remote change application duplicate pending identities remain one node" {
   let oplog = OpLog("local")
   let parent_raw = @core.RawVersion("duplicate-parent", 0)
   let child = @core.Op::insert(
@@ -281,14 +281,14 @@ test "remote admission duplicate pending identities remain one node" {
   let parent = @core.Op::insert(-1, [], "duplicate-parent", 0, "p", None, None)
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
   assert_eq((try! oplog.apply_remote(child)).length(), 0)
-  assert_eq(oplog.planner.pending_operations().length(), 1)
+  assert_eq(oplog.pending_changes.pending_operations().length(), 1)
   let applied = try! oplog.apply_remote(parent)
   assert_eq(applied.length(), 2)
   assert_eq(oplog.has_pending(), false)
 }
 
 ///|
-test "remote admission discard removes dependents and permits retry" {
+test "remote change application discard removes dependents and permits retry" {
   let oplog = OpLog("local")
   let root_raw = @core.RawVersion("discard-root", 0)
   let root = @core.Op::insert(
@@ -319,7 +319,7 @@ test "remote admission discard removes dependents and permits retry" {
 }
 
 ///|
-test "remote admission preserves committed prefix on injected graph failure" {
+test "remote change application preserves committed prefix on injected graph failure" {
   let oplog = OpLog("local")
   let first = @core.Op::insert(-1, [], "partial-first", 0, "a", None, None)
   let failed = @core.Op::insert(-1, [], "partial-failed", 0, "b", None, None)
@@ -335,44 +335,40 @@ test "remote admission preserves committed prefix on injected graph failure" {
       None,
       None,
     )
-    oplog.planner.register_pending(stale, _ => false)
-    oplog.planner.acknowledge_admitted(remote_admission_raw(stale))
+    oplog.pending_changes.register_pending(stale, _ => false)
+    oplog.pending_changes.acknowledge_applied(apply_changes_raw(stale))
   }
-  assert_eq(oplog.planner.stale_count(), 1024)
-  let plan = try! oplog.prepare_remote([first, failed, suffix])
-  let failed_raw = remote_admission_raw(failed)
-  let result : Result[Array[@core.Op], OpLogError] = Ok(
-    oplog.commit_remote_with(plan, op => {
-      if remote_admission_raw(op) == failed_raw {
-        raise OpLogError::CausalGraphError(
-          error=@causal_graph.CausalGraphError::MissingParent(lv=-99),
-        )
+  assert_eq(oplog.pending_changes.stale_count(), 1024)
+  let action = try! ApplyChanges(oplog, [first, failed, suffix])
+  let failed_raw = apply_changes_raw(failed)
+  match
+    (try! oplog.apply_changes_with(action, op => {
+      if apply_changes_raw(op) == failed_raw {
+        raise @causal_graph.CausalGraphError::MissingParent(lv=-99)
       }
-      oplog.commit_one_remote(op)
-    }),
-  ) catch {
-    error => Err(error)
-  }
-  match result {
-    Err(OpLogError::PartialRemoteAdmission(committed~, error~)) => {
-      assert_eq(committed.length(), 1)
-      assert_eq(committed[0].agent(), "partial-first")
+      oplog.commit_one_remote_for_apply_changes(op)
+    })) {
+    ApplyChangesOutcome::Failed(report~, error~) => {
+      assert_eq(report.committed().length(), 1)
+      assert_eq(report.committed()[0].agent(), "partial-first")
       match error {
         @causal_graph.CausalGraphError::MissingParent(lv~) => assert_eq(lv, -99)
         _ => fail("expected injected causal graph failure")
       }
     }
-    _ => fail("expected partial remote admission")
+    ApplyChangesOutcome::Succeeded(_) =>
+      fail("expected partial remote change application")
   }
-  assert_eq(oplog.planner.stale_count(), 0)
-  let pending = oplog.planner.pending_operations()
+  assert_eq(oplog.pending_changes.stale_count(), 0)
+  let pending = oplog.pending_changes.pending_operations()
   assert_eq(pending.length(), 2)
   assert_eq(pending[0].agent(), "partial-failed")
   assert_eq(pending[1].agent(), "partial-suffix")
-  let retried = try! oplog.commit_remote(
-    try! oplog.prepare_remote([failed, suffix]),
+  let retried = try! p1_apply_success(
+    oplog,
+    try! ApplyChanges(oplog, [failed, suffix]),
   )
-  assert_eq(retried.length(), 2)
+  assert_eq(retried.committed().length(), 2)
   assert_eq(oplog.has_pending(), false)
 }
 
@@ -409,7 +405,7 @@ test "get_ops_rle keeps clamped invalid-LV behavior" {
 }
 
 ///|
-test "collect_missing_ops work follows delta rather than admitted history" {
+test "collect_missing_ops work follows delta rather than recorded history" {
   for history in [1000, 10000] {
     let oplog = OpLog("agent")
     let mut previous = -1

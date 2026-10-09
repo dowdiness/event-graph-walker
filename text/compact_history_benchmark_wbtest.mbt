@@ -58,7 +58,9 @@ test "compact restore 100k operations direct" (b : @bench.T) {
 }
 
 ///|
-test "compact restore 100k operations ordinary admission" (b : @bench.T) {
+test "compact restore 100k operations ordinary change application" (
+  b : @bench.T,
+) {
   let (archive, version) = try! compact_benchmark_archive(false)
   b.bench(fn() {
     b.keep(
@@ -80,7 +82,7 @@ test "compact restore 95k operations 5k visible direct" (b : @bench.T) {
 }
 
 ///|
-test "compact restore 95k operations 5k visible ordinary admission" (
+test "compact restore 95k operations 5k visible ordinary change application" (
   b : @bench.T,
 ) {
   let (archive, version) = try! compact_benchmark_archive(true)

@@ -37,5 +37,5 @@ This directory contains resources for contributors working on the implementation
 | [0005](adr/0005-rawversion-identity-conflicts.md) | RawVersion identity conflicts |
 | [0006](adr/0006-local-mutation-footprint-evidence.md) | Local mutation footprint evidence |
 | [0007](adr/0007-prepared-local-mutation-is-feasible-but-full-history-evidence-is-not-promotable.md) | Prepared local mutation feasibility |
-| [0008](adr/0008-core-owned-batch-remote-admission-over-legacy-op.md) | Core-owned batch remote admission |
+| [0008](adr/0008-core-owned-batch-remote-admission-over-legacy-op.md) | Core-owned batch application of remote changes |
 | [0009](adr/0009-text-causality-and-sparse-version.md) | Text causality and sparse version |

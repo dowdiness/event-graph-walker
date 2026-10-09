@@ -45,19 +45,19 @@ fn batch_replay_effects(
 
 ///|
 fn batch_assert_exact(
-  admission : DocumentAdmission,
+  change : DocumentChanges,
   before : String,
   expected : Array[ProjectionEffect],
   after : String,
 ) -> Unit raise {
-  assert_true(admission.projection is Projected)
-  match admission.effect_availability {
+  assert_true(change.projection is Projected)
+  match change.effect_availability {
     Exact(effects) => {
       assert_eq(effects.length(), expected.length())
-      assert_eq(admission.effects.length(), expected.length())
+      assert_eq(change.effects.length(), expected.length())
       for index = 0; index < effects.length(); index = index + 1 {
         batch_assert_effect(effects[index], expected[index])
-        batch_assert_effect(admission.effects[index], expected[index])
+        batch_assert_effect(change.effects[index], expected[index])
       }
       assert_eq(batch_replay_effects(before, effects), after)
     }
@@ -97,7 +97,7 @@ fn batch_assert_canonical(doc : Document, expected : String) -> Unit raise {
 /// Exercise new local origins and run slicing after publishing the batch.
 fn batch_assert_later_edits(doc : Document) -> Unit raise {
   let replay = Document::new(doc.agent_id())
-  ignore(try! replay.admit_remote(doc.get_all_ops()))
+  ignore(try! replay.apply_changes(doc.get_all_ops()))
   try! replay.recover_projection(replay.get_frontier())
   assert_eq(replay.to_text(), doc.to_text())
   let middle = doc.visible_count() / 2
@@ -122,10 +122,10 @@ test "batch projection flushes an insert run before deleting inside it" {
   ignore(try! source.delete(1))
   let doc = Document::new("batch-buffer-delete-destination")
   let before = doc.to_text()
-  let admission = try! doc.admit_remote(source.get_all_ops())
+  let change = try! doc.apply_changes(source.get_all_ops())
   assert_true(doc.indexed_state.is_ready())
   batch_assert_exact(
-    admission,
+    change,
     before,
     [
       Insert(position=0, text="a"),
@@ -148,11 +148,11 @@ test "batch projection flushes before prepend and middle insertions" {
     ignore(try! source.insert(position, "XY"))
     let doc = Document::new("batch-nonconsecutive-destination")
     let before = doc.to_text()
-    let admission = try! doc.admit_remote(source.get_all_ops())
+    let change = try! doc.apply_changes(source.get_all_ops())
     let expected = if position == 0 { "XYabcd" } else { "abXYcd" }
     assert_true(doc.indexed_state.is_ready())
     batch_assert_exact(
-      admission,
+      change,
       before,
       [
         Insert(position=0, text="a"),
@@ -181,10 +181,10 @@ test "batch projection handles repeated hide show and unchanged visibility" {
   ignore(try! source.undelete(1))
   let doc = Document::new("batch-visibility-destination")
   let before = doc.to_text()
-  let admission = try! doc.admit_remote(source.get_all_ops())
+  let change = try! doc.apply_changes(source.get_all_ops())
   assert_true(doc.indexed_state.is_ready())
   batch_assert_exact(
-    admission,
+    change,
     before,
     [
       Insert(position=0, text="A"),
@@ -206,7 +206,7 @@ test "batch projection splits and deletes astral runs in scalar coordinates" {
   let source = Document::new("batch-astral-source")
   ignore(try! source.insert(0, "L🌱R"))
   let doc = Document::new("batch-astral-destination")
-  ignore(try! doc.admit_remote(source.get_all_ops()))
+  ignore(try! doc.apply_changes(source.get_all_ops()))
   let before = doc.to_text()
   assert_eq(before, "L🌱R")
   let baseline_count = source.get_all_ops().length()
@@ -214,10 +214,10 @@ test "batch projection splits and deletes astral runs in scalar coordinates" {
   ignore(try! source.insert(2, "🧪"))
   ignore(try! source.delete(3))
   let operations = source.get_all_ops()
-  let admission = try! doc.admit_remote(operations[baseline_count:].to_owned())
+  let change = try! doc.apply_changes(operations[baseline_count:].to_owned())
   assert_true(doc.indexed_state.is_ready())
   batch_assert_exact(
-    admission,
+    change,
     before,
     [
       Insert(position=1, text="😀"),
@@ -239,24 +239,25 @@ test "batch projection consumes a pending drain larger than its incoming packet"
   ignore(try! source.delete(1))
   let operations = source.get_all_ops()
   let doc = Document::new("batch-pending-destination")
-  let pending = try! doc.admit_remote(operations[1:].to_owned())
+  let pending = try! doc.apply_changes(operations[1:].to_owned())
   assert_true(pending.projection is Skipped)
   assert_eq(doc.pending_count(), 4)
   assert_true(doc.indexed_state.is_ready())
   let before = doc.to_text()
   let incoming = [operations[0]]
-  let admission = try! doc.admit_remote(incoming)
-  match admission.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => {
+  let change = try! doc.apply_changes(incoming)
+  match change.outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       assert_eq(receipt.committed().length(), 5)
       assert_true(receipt.committed().length() > incoming.length())
     }
-    @oplog.AdmissionOutcome::Partial(..) => fail("pending drain must complete")
+    @oplog.ApplyChangesOutcome::Failed(..) =>
+      fail("pending drain must complete")
   }
   assert_eq(doc.pending_count(), 0)
   assert_true(doc.indexed_state.is_ready())
   batch_assert_exact(
-    admission,
+    change,
     before,
     [
       Insert(position=0, text="p"),
@@ -276,7 +277,7 @@ test "batch projection drops buffered effects after locator invariant failure" {
   let source = Document::new("batch-fallback-source")
   ignore(try! source.insert(0, "AB"))
   let doc = Document::new("batch-fallback-destination")
-  ignore(try! doc.admit_remote(source.get_all_ops()))
+  ignore(try! doc.apply_changes(source.get_all_ops()))
   assert_eq(doc.to_text(), "AB")
   let baseline_count = source.get_all_ops().length()
   ignore(try! source.insert(2, "xy"))
@@ -287,10 +288,10 @@ test "batch projection drops buffered effects after locator invariant failure" {
   // must be discarded, while z must still reach the authoritative tree.
   doc.indexed_state.locator.unwrap().items.remove(0)
   let operations = source.get_all_ops()
-  let admission = try! doc.admit_remote(operations[baseline_count:].to_owned())
-  assert_true(admission.projection is Projected)
-  assert_true(admission.effect_availability is SnapshotRequired)
-  assert_eq(admission.effects.length(), 0)
+  let change = try! doc.apply_changes(operations[baseline_count:].to_owned())
+  assert_true(change.projection is Projected)
+  assert_true(change.effect_availability is SnapshotRequired)
+  assert_eq(change.effects.length(), 0)
   assert_true(!doc.indexed_state.is_ready())
   assert_eq(doc.tree.to_text(), "Bxyz")
   batch_assert_canonical(doc, "Bxyz")

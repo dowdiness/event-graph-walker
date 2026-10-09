@@ -1,7 +1,7 @@
-///| Generated model traces for the private remote-admission planner lifecycle.
+///| Generated model traces for the private remote-change application pending-changes owner lifecycle.
 
 ///|
-enum PlannerLifecycleEvent {
+enum PendingChangesLifecycleEvent {
   MalformedBegin
   StaleBegin
   PrepareUnresolved
@@ -16,17 +16,17 @@ enum PlannerLifecycleEvent {
 } derive(Debug)
 
 ///|
-struct PlannerLifecycleTrace {
+struct PendingChangesLifecycleTrace {
   depth : Int
   arrival_mode : Int
   acknowledgement_prefix : Int
 } derive(Debug)
 
 ///|
-struct PlannerLifecycleFixture {
+struct PendingChangesLifecycleFixture {
   malformed_probe : @core.Op
   stale_probe : @core.Op
-  external_admission : @core.Op
+  external_apply_changes : @core.Op
   blocker : @core.Op
   unrelated_blocker : @core.Op
   unrelated_waiter : @core.Op
@@ -35,22 +35,22 @@ struct PlannerLifecycleFixture {
 }
 
 ///|
-struct PlannerLifecyclePending {
+struct PendingChangesLifecyclePending {
   op : @core.Op
   arrival : Int
 }
 
 ///|
-struct PlannerLifecycleModel {
-  mut pending : Array[PlannerLifecyclePending]
-  admitted : @hashset.HashSet[@core.RawVersion]
-  admitted_order : Array[@core.RawVersion]
+struct PendingChangesLifecycleModel {
+  mut pending : Array[PendingChangesLifecyclePending]
+  applied : @hashset.HashSet[@core.RawVersion]
+  applied_order : Array[@core.RawVersion]
   mut next_arrival : Int
   mut generation : Int
 }
 
 ///|
-struct PlannerLifecycleModelPlan {
+struct PendingChangesLifecycleModelPlan {
   staged : Array[@core.Op]
   planned : Array[@core.Op]
   remaining : Array[@core.Op]
@@ -60,7 +60,7 @@ struct PlannerLifecycleModelPlan {
 }
 
 ///|
-struct PlannerLifecycleNodeSnapshot {
+struct PendingChangesLifecycleNodeSnapshot {
   raw : @core.RawVersion
   op : @core.Op
   arrival : Int
@@ -71,24 +71,24 @@ struct PlannerLifecycleNodeSnapshot {
 }
 
 ///|
-struct PlannerLifecycleOrderSnapshot {
+struct PendingChangesLifecycleOrderSnapshot {
   raw : @core.RawVersion
   arrival : Int
 }
 
 ///|
-struct PlannerLifecycleWaiterSnapshot {
+struct PendingChangesLifecycleWaiterSnapshot {
   dependency : @core.RawVersion
   raws : Array[@core.RawVersion]
   arrivals : Array[Int]
 }
 
 ///|
-struct PlannerLifecycleSnapshot {
-  nodes : Array[PlannerLifecycleNodeSnapshot]
-  order : Array[PlannerLifecycleOrderSnapshot]
-  waiters : Array[PlannerLifecycleWaiterSnapshot]
-  ready : Array[RemoteAdmissionReady]
+struct PendingChangesLifecycleSnapshot {
+  nodes : Array[PendingChangesLifecycleNodeSnapshot]
+  order : Array[PendingChangesLifecycleOrderSnapshot]
+  waiters : Array[PendingChangesLifecycleWaiterSnapshot]
+  ready : Array[ReadyChange]
   next_arrival : Int
   generation : Int
   stale_order_tombstones : Int
@@ -98,7 +98,7 @@ struct PlannerLifecycleSnapshot {
 }
 
 ///|
-fn planner_lifecycle_rand_bounded(
+fn pending_changes_lifecycle_rand_bounded(
   random_state : @splitmix.RandomState,
   bound : Int,
 ) -> Int {
@@ -106,25 +106,28 @@ fn planner_lifecycle_rand_bounded(
 }
 
 ///|
-impl @quickcheck.Arbitrary for PlannerLifecycleTrace with fn arbitrary(
+impl @quickcheck.Arbitrary for PendingChangesLifecycleTrace with fn arbitrary(
   size,
   random_state,
 ) {
   let size_cap = size.max(0)
   let depth_bound = 1 + (size_cap / 4).min(4)
   let depth = 2 +
-    planner_lifecycle_rand_bounded(random_state.split(), depth_bound)
+    pending_changes_lifecycle_rand_bounded(random_state.split(), depth_bound)
   {
     depth,
-    arrival_mode: planner_lifecycle_rand_bounded(random_state.split(), 3),
+    arrival_mode: pending_changes_lifecycle_rand_bounded(
+      random_state.split(),
+      3,
+    ),
     acknowledgement_prefix: 1 +
-    planner_lifecycle_rand_bounded(random_state.split(), depth),
+    pending_changes_lifecycle_rand_bounded(random_state.split(), depth),
   }
 }
 
 ///|
-impl @qc.Shrink for PlannerLifecycleTrace with fn shrink(self) {
-  let results : Array[PlannerLifecycleTrace] = []
+impl @qc.Shrink for PendingChangesLifecycleTrace with fn shrink(self) {
+  let results : Array[PendingChangesLifecycleTrace] = []
   if self.depth > 2 {
     let half = self.depth / 2
     let depth = if half < 2 { 2 } else { half }
@@ -152,9 +155,9 @@ impl @qc.Shrink for PlannerLifecycleTrace with fn shrink(self) {
 }
 
 ///|
-fn PlannerLifecycleTrace::events(
-  _self : PlannerLifecycleTrace,
-) -> Array[PlannerLifecycleEvent] {
+fn PendingChangesLifecycleTrace::events(
+  _self : PendingChangesLifecycleTrace,
+) -> Array[PendingChangesLifecycleEvent] {
   [
     MalformedBegin,
     StaleBegin,
@@ -171,7 +174,9 @@ fn PlannerLifecycleTrace::events(
 }
 
 ///|
-fn planner_lifecycle_has_required_events(trace : PlannerLifecycleTrace) -> Bool {
+fn pending_changes_lifecycle_has_required_events(
+  trace : PendingChangesLifecycleTrace,
+) -> Bool {
   let mut malformed = false
   let mut stale = false
   let mut prepare = false
@@ -212,7 +217,7 @@ fn planner_lifecycle_has_required_events(trace : PlannerLifecycleTrace) -> Bool 
 }
 
 ///|
-fn planner_lifecycle_same_op(left : @core.Op, right : @core.Op) -> Bool {
+fn pending_changes_lifecycle_same_op(left : @core.Op, right : @core.Op) -> Bool {
   left.lv() == right.lv() &&
   left.agent() == right.agent() &&
   left.seq() == right.seq() &&
@@ -226,7 +231,7 @@ fn planner_lifecycle_same_op(left : @core.Op, right : @core.Op) -> Bool {
 }
 
 ///|
-fn planner_lifecycle_same_ops(
+fn pending_changes_lifecycle_same_ops(
   left : ArrayView[@core.Op],
   right : ArrayView[@core.Op],
 ) -> Bool {
@@ -234,7 +239,7 @@ fn planner_lifecycle_same_ops(
     return false
   }
   for i in 0..<left.length() {
-    if !planner_lifecycle_same_op(left[i], right[i]) {
+    if !pending_changes_lifecycle_same_op(left[i], right[i]) {
       return false
     }
   }
@@ -242,7 +247,7 @@ fn planner_lifecycle_same_ops(
 }
 
 ///|
-fn planner_lifecycle_same_raws(
+fn pending_changes_lifecycle_same_raws(
   left : ArrayView[@core.RawVersion],
   right : ArrayView[@core.RawVersion],
 ) -> Bool {
@@ -258,7 +263,7 @@ fn planner_lifecycle_same_raws(
 }
 
 ///|
-fn planner_lifecycle_same_raw_membership(
+fn pending_changes_lifecycle_same_raw_membership(
   left : ArrayView[@core.RawVersion],
   right : ArrayView[@core.RawVersion],
 ) -> Bool {
@@ -275,9 +280,9 @@ fn planner_lifecycle_same_raw_membership(
 }
 
 ///|
-fn planner_lifecycle_fixture(
-  trace : PlannerLifecycleTrace,
-) -> PlannerLifecycleFixture {
+fn pending_changes_lifecycle_fixture(
+  trace : PendingChangesLifecycleTrace,
+) -> PendingChangesLifecycleFixture {
   let malformed_probe = @core.Op::insert(
     -1,
     [],
@@ -296,7 +301,7 @@ fn planner_lifecycle_fixture(
     None,
     None,
   )
-  let external_admission = @core.Op::insert(
+  let external_apply_changes = @core.Op::insert(
     -1,
     [],
     "generated-external-admission",
@@ -359,7 +364,7 @@ fn planner_lifecycle_fixture(
   {
     malformed_probe,
     stale_probe,
-    external_admission,
+    external_apply_changes,
     blocker,
     unrelated_blocker,
     unrelated_waiter,
@@ -369,56 +374,56 @@ fn planner_lifecycle_fixture(
 }
 
 ///|
-fn PlannerLifecycleModel::PlannerLifecycleModel() -> PlannerLifecycleModel {
+fn PendingChangesLifecycleModel::PendingChangesLifecycleModel() -> PendingChangesLifecycleModel {
   {
     pending: [],
-    admitted: @hashset.HashSet([]),
-    admitted_order: [],
+    applied: @hashset.HashSet([]),
+    applied_order: [],
     next_arrival: 0,
     generation: 0,
   }
 }
 
 ///|
-fn PlannerLifecycleModel::is_admitted(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::is_applied(
+  self : PendingChangesLifecycleModel,
   raw : @core.RawVersion,
 ) -> Bool {
-  self.admitted.contains(raw)
+  self.applied.contains(raw)
 }
 
 ///|
-fn PlannerLifecycleModel::has_pending_raw(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::has_pending_raw(
+  self : PendingChangesLifecycleModel,
   raw : @core.RawVersion,
 ) -> Bool {
   self.pending.any(entry => oracle_raw(entry.op) == raw)
 }
 
 ///|
-fn PlannerLifecycleModel::pending_ops(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::pending_ops(
+  self : PendingChangesLifecycleModel,
 ) -> Array[@core.Op] {
   self.pending.map(entry => entry.op)
 }
 
 ///|
-fn PlannerLifecycleModel::pending_raws(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::pending_raws(
+  self : PendingChangesLifecycleModel,
 ) -> Array[@core.RawVersion] {
   self.pending.map(entry => oracle_raw(entry.op))
 }
 
 ///|
-fn PlannerLifecycleModel::prepare(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::prepare(
+  self : PendingChangesLifecycleModel,
   incoming : Array[@core.Op],
-) -> PlannerLifecycleModelPlan raise OpLogError {
+) -> PendingChangesLifecycleModelPlan raise OpLogError {
   let staged : Array[@core.Op] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for op in incoming {
     let raw = oracle_raw(op)
-    if self.is_admitted(raw) || self.has_pending_raw(raw) || seen.contains(raw) {
+    if self.is_applied(raw) || self.has_pending_raw(raw) || seen.contains(raw) {
       continue
     }
     seen.add(raw)
@@ -430,7 +435,7 @@ fn PlannerLifecycleModel::prepare(
   }
   let (planned, remaining) = oracle_plan_remote_candidates(
     candidates,
-    self.admitted_order,
+    self.applied_order,
   )
   {
     staged,
@@ -443,9 +448,9 @@ fn PlannerLifecycleModel::prepare(
 }
 
 ///|
-fn PlannerLifecycleModel::begin(
-  self : PlannerLifecycleModel,
-  plan : PlannerLifecycleModelPlan,
+fn PendingChangesLifecycleModel::begin(
+  self : PendingChangesLifecycleModel,
+  plan : PendingChangesLifecycleModelPlan,
 ) -> Bool {
   if plan.consumed || plan.generation != self.generation {
     return false
@@ -460,19 +465,19 @@ fn PlannerLifecycleModel::begin(
 }
 
 ///|
-fn PlannerLifecycleModel::acknowledge(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::acknowledge(
+  self : PendingChangesLifecycleModel,
   raw : @core.RawVersion,
 ) -> Unit {
-  if self.admitted.add_and_check(raw) {
-    self.admitted_order.push(raw)
+  if self.applied.add_and_check(raw) {
+    self.applied_order.push(raw)
   }
   self.pending = self.pending.filter(entry => oracle_raw(entry.op) != raw)
   self.generation += 1
 }
 
 ///|
-fn planner_lifecycle_depends_on_any(
+fn pending_changes_lifecycle_depends_on_any(
   op : @core.Op,
   rejected : @hashset.HashSet[@core.RawVersion],
 ) -> Bool {
@@ -493,8 +498,8 @@ fn planner_lifecycle_depends_on_any(
 }
 
 ///|
-fn PlannerLifecycleModel::reject(
-  self : PlannerLifecycleModel,
+fn PendingChangesLifecycleModel::reject(
+  self : PendingChangesLifecycleModel,
   roots : Array[@core.RawVersion],
 ) -> Unit {
   let rejected : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet(roots)
@@ -504,7 +509,7 @@ fn PlannerLifecycleModel::reject(
     for entry in self.pending {
       let raw = oracle_raw(entry.op)
       if !rejected.contains(raw) &&
-        planner_lifecycle_depends_on_any(entry.op, rejected) {
+        pending_changes_lifecycle_depends_on_any(entry.op, rejected) {
         rejected.add(raw)
         changed = true
       }
@@ -520,20 +525,22 @@ fn PlannerLifecycleModel::reject(
 }
 
 ///|
-fn PlannerLifecycleModel::compact(self : PlannerLifecycleModel) -> Unit {
+fn PendingChangesLifecycleModel::compact(
+  self : PendingChangesLifecycleModel,
+) -> Unit {
   self.pending = self.pending.filter(entry => {
-    !self.is_admitted(oracle_raw(entry.op))
+    !self.is_applied(oracle_raw(entry.op))
   })
   self.generation += 1
 }
 
 ///|
-fn planner_lifecycle_snapshot(
-  planner : RemoteAdmissionPlanner,
+fn pending_changes_lifecycle_snapshot(
+  pending_changes : PendingChanges,
   plan_consumed : Bool,
-) -> PlannerLifecycleSnapshot {
-  let nodes : Array[PlannerLifecycleNodeSnapshot] = []
-  for raw, node in planner.pending {
+) -> PendingChangesLifecycleSnapshot {
+  let nodes : Array[PendingChangesLifecycleNodeSnapshot] = []
+  for raw, node in pending_changes.pending {
     nodes.push({
       raw,
       op: node.op,
@@ -544,20 +551,20 @@ fn planner_lifecycle_snapshot(
       ready_refs: node.ready_refs,
     })
   }
-  let order = planner.pending_order.map(entry => PlannerLifecycleOrderSnapshot::{
+  let order = pending_changes.pending_order.map(entry => PendingChangesLifecycleOrderSnapshot::{
     raw: entry.raw,
     arrival: entry.arrival,
   })
-  let waiters : Array[PlannerLifecycleWaiterSnapshot] = []
-  for dependency, bucket in planner.waiters {
+  let waiters : Array[PendingChangesLifecycleWaiterSnapshot] = []
+  for dependency, bucket in pending_changes.waiters {
     waiters.push({
       dependency,
       raws: bucket.map(waiter => waiter.raw),
       arrivals: bucket.map(waiter => waiter.arrival),
     })
   }
-  let ready : Array[RemoteAdmissionReady] = []
-  let ready_copy = planner.ready.copy()
+  let ready : Array[ReadyChange] = []
+  let ready_copy = pending_changes.ready.copy()
   while ready_copy.pop() is Some(entry) {
     ready.push(entry)
   }
@@ -566,22 +573,22 @@ fn planner_lifecycle_snapshot(
     order,
     waiters,
     ready,
-    next_arrival: planner.next_arrival,
-    generation: planner.generation,
-    stale_order_tombstones: planner.stale_order_tombstones,
-    stale_waiter_refs: planner.stale_waiter_refs,
-    stale_ready_refs: planner.stale_ready_refs,
+    next_arrival: pending_changes.next_arrival,
+    generation: pending_changes.generation,
+    stale_order_tombstones: pending_changes.stale_order_tombstones,
+    stale_waiter_refs: pending_changes.stale_waiter_refs,
+    stale_ready_refs: pending_changes.stale_ready_refs,
     plan_consumed,
   }
 }
 
 ///|
-fn planner_lifecycle_same_snapshot_node(
-  left : PlannerLifecycleNodeSnapshot,
-  right : PlannerLifecycleNodeSnapshot,
+fn pending_changes_lifecycle_same_snapshot_node(
+  left : PendingChangesLifecycleNodeSnapshot,
+  right : PendingChangesLifecycleNodeSnapshot,
 ) -> Bool {
   left.raw == right.raw &&
-  planner_lifecycle_same_op(left.op, right.op) &&
+  pending_changes_lifecycle_same_op(left.op, right.op) &&
   left.arrival == right.arrival &&
   left.dependencies == right.dependencies &&
   left.waiting_dependencies == right.waiting_dependencies &&
@@ -590,9 +597,9 @@ fn planner_lifecycle_same_snapshot_node(
 }
 
 ///|
-fn planner_lifecycle_same_snapshot(
-  left : PlannerLifecycleSnapshot,
-  right : PlannerLifecycleSnapshot,
+fn pending_changes_lifecycle_same_snapshot(
+  left : PendingChangesLifecycleSnapshot,
+  right : PendingChangesLifecycleSnapshot,
 ) -> Bool {
   if left.nodes.length() != right.nodes.length() ||
     left.order.length() != right.order.length() ||
@@ -601,7 +608,10 @@ fn planner_lifecycle_same_snapshot(
     return false
   }
   for i in 0..<left.nodes.length() {
-    if !planner_lifecycle_same_snapshot_node(left.nodes[i], right.nodes[i]) {
+    if !pending_changes_lifecycle_same_snapshot_node(
+        left.nodes[i],
+        right.nodes[i],
+      ) {
       return false
     }
   }
@@ -632,19 +642,22 @@ fn planner_lifecycle_same_snapshot(
 }
 
 ///|
-fn planner_lifecycle_matches_model(
-  planner : RemoteAdmissionPlanner,
-  model : PlannerLifecycleModel,
+fn pending_changes_lifecycle_matches_model(
+  pending_changes : PendingChanges,
+  model : PendingChangesLifecycleModel,
 ) -> Bool {
-  let actual = planner.pending_operations()
-  if !planner_lifecycle_same_ops(actual, model.pending_ops()) ||
-    !planner_lifecycle_same_raws(planner.pending_raws(), model.pending_raws()) ||
-    planner.generation != model.generation ||
-    planner.next_arrival != model.next_arrival {
+  let actual = pending_changes.pending_operations()
+  if !pending_changes_lifecycle_same_ops(actual, model.pending_ops()) ||
+    !pending_changes_lifecycle_same_raws(
+      pending_changes.pending_raws(),
+      model.pending_raws(),
+    ) ||
+    pending_changes.generation != model.generation ||
+    pending_changes.next_arrival != model.next_arrival {
     return false
   }
   for entry in model.pending {
-    if planner.arrival_of(oracle_raw(entry.op)) != Some(entry.arrival) {
+    if pending_changes.arrival_of(oracle_raw(entry.op)) != Some(entry.arrival) {
       return false
     }
   }
@@ -652,31 +665,33 @@ fn planner_lifecycle_matches_model(
 }
 
 ///|
-fn planner_lifecycle_plan_matches_model(
-  planner : RemoteAdmissionPlanner,
-  actual : PreparedAdmission,
-  expected : PlannerLifecycleModelPlan,
+fn pending_changes_lifecycle_plan_matches_model(
+  pending_changes : PendingChanges,
+  actual : ApplyChanges,
+  expected : PendingChangesLifecycleModelPlan,
 ) -> Bool {
-  planner_lifecycle_same_ops(actual.operations(), expected.planned) &&
-  planner_lifecycle_same_raws(
-    actual.remaining_raws(planner),
+  pending_changes_lifecycle_same_ops(actual.operations(), expected.planned) &&
+  pending_changes_lifecycle_same_raws(
+    actual.remaining_raws(pending_changes),
     oracle_raws(expected.remaining),
   ) &&
   actual.generation() == expected.generation
 }
 
 ///|
-fn planner_lifecycle_prepare_checked(
-  planner : RemoteAdmissionPlanner,
-  model : PlannerLifecycleModel,
+fn pending_changes_lifecycle_prepare_checked(
+  pending_changes : PendingChanges,
+  model : PendingChangesLifecycleModel,
   incoming : Array[@core.Op],
-) -> (PreparedAdmission, PlannerLifecycleModelPlan)? raise OpLogError {
-  let before = planner_lifecycle_snapshot(planner, false)
+) -> (ApplyChanges, PendingChangesLifecycleModelPlan)? raise OpLogError {
+  let before = pending_changes_lifecycle_snapshot(pending_changes, false)
   let expected = model.prepare(incoming)
-  let actual = planner.prepare(incoming, raw => model.is_admitted(raw))
-  let after = planner_lifecycle_snapshot(planner, false)
-  if planner_lifecycle_same_snapshot(before, after) &&
-    planner_lifecycle_plan_matches_model(planner, actual, expected) {
+  let actual = pending_changes.prepare(incoming, raw => model.is_applied(raw))
+  let after = pending_changes_lifecycle_snapshot(pending_changes, false)
+  if pending_changes_lifecycle_same_snapshot(before, after) &&
+    pending_changes_lifecycle_plan_matches_model(
+      pending_changes, actual, expected,
+    ) {
     Some((actual, expected))
   } else {
     None
@@ -684,25 +699,25 @@ fn planner_lifecycle_prepare_checked(
 }
 
 ///|
-fn planner_lifecycle_current_plan_matches_model(
-  planner : RemoteAdmissionPlanner,
-  model : PlannerLifecycleModel,
+fn pending_changes_lifecycle_current_plan_matches_model(
+  pending_changes : PendingChanges,
+  model : PendingChangesLifecycleModel,
 ) -> Bool raise OpLogError {
-  match planner_lifecycle_prepare_checked(planner, model, []) {
+  match pending_changes_lifecycle_prepare_checked(pending_changes, model, []) {
     Some(_) => true
     None => false
   }
 }
 
 ///|
-fn planner_lifecycle_waiter_state_matches_suffix(
-  planner : RemoteAdmissionPlanner,
+fn pending_changes_lifecycle_waiter_state_matches_suffix(
+  pending_changes : PendingChanges,
   planned : Array[@core.Op],
   acknowledged : Int,
 ) -> Bool {
   for i in acknowledged..<planned.length() {
     let raw = oracle_raw(planned[i])
-    guard planner.pending.get(raw) is Some(node) else { return false }
+    guard pending_changes.pending.get(raw) is Some(node) else { return false }
     let expected_unresolved = if i == acknowledged { 0 } else { 1 }
     if node.unresolved_count != expected_unresolved {
       return false
@@ -712,7 +727,9 @@ fn planner_lifecycle_waiter_state_matches_suffix(
 }
 
 ///|
-fn planner_lifecycle_ready_retry_is_safe(trace : PlannerLifecycleTrace) -> Bool {
+fn pending_changes_lifecycle_ready_retry_is_safe(
+  trace : PendingChangesLifecycleTrace,
+) -> Bool {
   let root = @core.Op::insert(
     -1,
     [],
@@ -739,27 +756,33 @@ fn planner_lifecycle_ready_retry_is_safe(trace : PlannerLifecycleTrace) -> Bool 
   } else {
     oracle_zigzag(natural)
   }
-  let planner = RemoteAdmissionPlanner()
-  let model = PlannerLifecycleModel()
-  guard (try! planner_lifecycle_prepare_checked(planner, model, incoming))
+  let pending_changes = PendingChanges()
+  let model = PendingChangesLifecycleModel()
+  guard (try! pending_changes_lifecycle_prepare_checked(
+      pending_changes, model, incoming,
+    ))
     is Some((initial, initial_expected)) else {
     return false
   }
   if !model.begin(initial_expected) {
     return false
   }
-  match planner.begin(initial, raw => model.is_admitted(raw)) {
-    RemoteAdmissionBeginResult::Applied => ()
+  match pending_changes.begin(initial, raw => model.is_applied(raw)) {
+    BeginApplyResult::Started => ()
     _ => return false
   }
   let root_raw = oracle_raw(root)
   model.reject([root_raw])
-  planner.reject_pending_dependents([root_raw])
-  if !planner_lifecycle_matches_model(planner, model) ||
-    planner.stale_count() == 0 {
+  pending_changes.reject_pending_dependents([root_raw])
+  if !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+    pending_changes.stale_count() == 0 {
     return false
   }
-  guard (try! planner_lifecycle_prepare_checked(planner, model, []))
+  guard (try! pending_changes_lifecycle_prepare_checked(
+      pending_changes,
+      model,
+      [],
+    ))
     is Some((stale_only, stale_only_expected)) else {
     return false
   }
@@ -767,80 +790,99 @@ fn planner_lifecycle_ready_retry_is_safe(trace : PlannerLifecycleTrace) -> Bool 
     !stale_only_expected.remaining.is_empty() {
     return false
   }
-  guard (try! planner_lifecycle_prepare_checked(planner, model, incoming))
+  guard (try! pending_changes_lifecycle_prepare_checked(
+      pending_changes, model, incoming,
+    ))
     is Some((retry, retry_expected)) else {
     return false
   }
-  if !planner_lifecycle_same_ops(retry_expected.planned, natural) ||
+  if !pending_changes_lifecycle_same_ops(retry_expected.planned, natural) ||
     !model.begin(retry_expected) {
     return false
   }
-  match planner.begin(retry, raw => model.is_admitted(raw)) {
-    RemoteAdmissionBeginResult::Applied => ()
+  match pending_changes.begin(retry, raw => model.is_applied(raw)) {
+    BeginApplyResult::Started => ()
     _ => return false
   }
-  if !planner_lifecycle_matches_model(planner, model) ||
-    !(try! planner_lifecycle_current_plan_matches_model(planner, model)) {
+  if !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+    !(try! pending_changes_lifecycle_current_plan_matches_model(
+      pending_changes, model,
+    )) {
     return false
   }
   model.acknowledge(root_raw)
-  planner.acknowledge_admitted(root_raw)
-  guard planner.pending.get(oracle_raw(child)) is Some(child_node) else {
+  pending_changes.acknowledge_applied(root_raw)
+  guard pending_changes.pending.get(oracle_raw(child)) is Some(child_node) else {
     return false
   }
   if child_node.unresolved_count != 0 ||
-    !planner_lifecycle_matches_model(planner, model) ||
-    !(try! planner_lifecycle_current_plan_matches_model(planner, model)) {
+    !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+    !(try! pending_changes_lifecycle_current_plan_matches_model(
+      pending_changes, model,
+    )) {
     return false
   }
   let child_raw = oracle_raw(child)
   model.acknowledge(child_raw)
-  planner.acknowledge_admitted(child_raw)
-  planner_lifecycle_matches_model(planner, model) &&
+  pending_changes.acknowledge_applied(child_raw)
+  pending_changes_lifecycle_matches_model(pending_changes, model) &&
   model.pending.is_empty() &&
-  (try! planner_lifecycle_current_plan_matches_model(planner, model))
+  (try! pending_changes_lifecycle_current_plan_matches_model(
+    pending_changes, model,
+  ))
 }
 
 ///|
-fn prop_remote_admission_planner_lifecycle(
-  trace : PlannerLifecycleTrace,
+fn prop_apply_changes_pending_changes_lifecycle(
+  trace : PendingChangesLifecycleTrace,
 ) -> Bool {
-  if !planner_lifecycle_has_required_events(trace) {
+  if !pending_changes_lifecycle_has_required_events(trace) {
     return false
   }
-  let fixture = planner_lifecycle_fixture(trace)
-  let planner = RemoteAdmissionPlanner()
-  let model = PlannerLifecycleModel()
+  let fixture = pending_changes_lifecycle_fixture(trace)
+  let pending_changes = PendingChanges()
+  let model = PendingChangesLifecycleModel()
   let original_arrivals : Map[@core.RawVersion, Int] = Default::default()
-  let mut active_plan : PreparedAdmission? = None
-  let mut active_model_plan : PlannerLifecycleModelPlan? = None
+  let mut active_plan : ApplyChanges? = None
+  let mut active_model_plan : PendingChangesLifecycleModelPlan? = None
   let mut drain_operations : Array[@core.Op] = []
 
   for event in trace.events() {
     match event {
       MalformedBegin => {
-        guard (try! planner_lifecycle_prepare_checked(planner, model, [
-            fixture.malformed_probe,
-          ]))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [fixture.malformed_probe],
+          ))
           is Some((plan, expected)) else {
           return false
         }
         plan.planned.push(fixture.malformed_probe)
-        let before = planner_lifecycle_snapshot(planner, plan.consumed)
-        match planner.begin(plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Conflict => ()
+        let before = pending_changes_lifecycle_snapshot(
+          pending_changes,
+          plan.consumed,
+        )
+        match pending_changes.begin(plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Conflict => ()
           _ => return false
         }
-        let after = planner_lifecycle_snapshot(planner, plan.consumed)
-        if !planner_lifecycle_same_snapshot(before, after) || expected.consumed {
+        let after = pending_changes_lifecycle_snapshot(
+          pending_changes,
+          plan.consumed,
+        )
+        if !pending_changes_lifecycle_same_snapshot(before, after) ||
+          expected.consumed {
           return false
         }
 
         // Exercise the general capability's all-validation-before-registration
         // boundary with a real unresolved dependency from the generated pool.
-        guard (try! planner_lifecycle_prepare_checked(planner, model, [
-            fixture.unrelated_waiter,
-          ]))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [fixture.unrelated_waiter],
+          ))
           is Some((general_plan, general_expected)) else {
           return false
         }
@@ -858,51 +900,63 @@ fn prop_remote_admission_planner_lifecycle(
             }
           }
         }
-        let general_before = planner_lifecycle_snapshot(
-          planner,
+        let general_before = pending_changes_lifecycle_snapshot(
+          pending_changes,
           general_plan.consumed,
         )
-        match planner.begin(general_plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Conflict => ()
+        match
+          pending_changes.begin(general_plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Conflict => ()
           _ => return false
         }
-        let general_after = planner_lifecycle_snapshot(
-          planner,
+        let general_after = pending_changes_lifecycle_snapshot(
+          pending_changes,
           general_plan.consumed,
         )
-        if !planner_lifecycle_same_snapshot(general_before, general_after) ||
+        if !pending_changes_lifecycle_same_snapshot(
+            general_before, general_after,
+          ) ||
           general_expected.consumed {
           return false
         }
       }
       StaleBegin => {
-        guard (try! planner_lifecycle_prepare_checked(planner, model, [
-            fixture.stale_probe,
-          ]))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [fixture.stale_probe],
+          ))
           is Some((plan, expected)) else {
           return false
         }
-        let admitted_raw = oracle_raw(fixture.external_admission)
-        model.acknowledge(admitted_raw)
-        planner.acknowledge_admitted(admitted_raw)
-        if !planner_lifecycle_matches_model(planner, model) {
+        let applied_raw = oracle_raw(fixture.external_apply_changes)
+        model.acknowledge(applied_raw)
+        pending_changes.acknowledge_applied(applied_raw)
+        if !pending_changes_lifecycle_matches_model(pending_changes, model) {
           return false
         }
-        let before = planner_lifecycle_snapshot(planner, plan.consumed)
-        match planner.begin(plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Stale => ()
+        let before = pending_changes_lifecycle_snapshot(
+          pending_changes,
+          plan.consumed,
+        )
+        match pending_changes.begin(plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Stale => ()
           _ => return false
         }
-        let after = planner_lifecycle_snapshot(planner, plan.consumed)
-        if !planner_lifecycle_same_snapshot(before, after) || expected.consumed {
+        let after = pending_changes_lifecycle_snapshot(
+          pending_changes,
+          plan.consumed,
+        )
+        if !pending_changes_lifecycle_same_snapshot(before, after) ||
+          expected.consumed {
           return false
         }
       }
       PrepareUnresolved => {
         let unresolved = fixture.delivered_component.copy()
         unresolved.push(fixture.unrelated_waiter)
-        guard (try! planner_lifecycle_prepare_checked(
-            planner, model, unresolved,
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes, model, unresolved,
           ))
           is Some((plan, expected)) else {
           return false
@@ -917,22 +971,22 @@ fn prop_remote_admission_planner_lifecycle(
         guard active_plan is Some(plan) && active_model_plan is Some(expected) else {
           return false
         }
-        let generation_before = planner.generation
+        let generation_before = pending_changes.generation
         if !model.begin(expected) {
           return false
         }
-        match planner.begin(plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Applied => ()
+        match pending_changes.begin(plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Started => ()
           _ => return false
         }
         if !plan.consumed ||
           !expected.consumed ||
-          planner.generation != generation_before + 1 ||
-          !planner_lifecycle_matches_model(planner, model) {
+          pending_changes.generation != generation_before + 1 ||
+          !pending_changes_lifecycle_matches_model(pending_changes, model) {
           return false
         }
         for op in fixture.component {
-          guard planner.arrival_of(oracle_raw(op)) is Some(arrival) else {
+          guard pending_changes.arrival_of(oracle_raw(op)) is Some(arrival) else {
             return false
           }
           original_arrivals.set(oracle_raw(op), arrival)
@@ -942,46 +996,56 @@ fn prop_remote_admission_planner_lifecycle(
         guard active_plan is Some(plan) && active_model_plan is Some(expected) else {
           return false
         }
-        let before = planner_lifecycle_snapshot(planner, plan.consumed)
+        let before = pending_changes_lifecycle_snapshot(
+          pending_changes,
+          plan.consumed,
+        )
         if model.begin(expected) {
           return false
         }
-        match planner.begin(plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Consumed => ()
+        match pending_changes.begin(plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Consumed => ()
           _ => return false
         }
-        let after = planner_lifecycle_snapshot(planner, plan.consumed)
-        if !planner_lifecycle_same_snapshot(before, after) {
+        let after = pending_changes_lifecycle_snapshot(
+          pending_changes,
+          plan.consumed,
+        )
+        if !pending_changes_lifecycle_same_snapshot(before, after) {
           return false
         }
       }
       RejectAttempt => {
-        if !planner_lifecycle_ready_retry_is_safe(trace) {
+        if !pending_changes_lifecycle_ready_retry_is_safe(trace) {
           return false
         }
         let root = oracle_raw(fixture.component[0])
         model.reject([root])
-        planner.reject_pending_dependents([root])
-        if !planner_lifecycle_matches_model(planner, model) ||
-          !planner_lifecycle_same_ops(model.pending_ops(), [
+        pending_changes.reject_pending_dependents([root])
+        if !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+          !pending_changes_lifecycle_same_ops(model.pending_ops(), [
             fixture.unrelated_waiter,
           ]) {
           return false
         }
-        guard (try! planner_lifecycle_prepare_checked(planner, model, []))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [],
+          ))
           is Some((stale_only, stale_only_expected)) else {
           return false
         }
         if !stale_only.operations().is_empty() ||
-          !planner_lifecycle_same_ops(stale_only_expected.remaining, [
+          !pending_changes_lifecycle_same_ops(stale_only_expected.remaining, [
             fixture.unrelated_waiter,
           ]) {
           return false
         }
       }
       RetrySameIdentity => {
-        guard (try! planner_lifecycle_prepare_checked(
-            planner,
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
             model,
             fixture.delivered_component,
           ))
@@ -991,29 +1055,31 @@ fn prop_remote_admission_planner_lifecycle(
         if !model.begin(expected) {
           return false
         }
-        match planner.begin(plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Applied => ()
+        match pending_changes.begin(plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Started => ()
           _ => return false
         }
-        if !planner_lifecycle_matches_model(planner, model) {
+        if !pending_changes_lifecycle_matches_model(pending_changes, model) {
           return false
         }
         for op in fixture.component {
           let raw = oracle_raw(op)
-          guard planner.pending.get(raw) is Some(node) &&
+          guard pending_changes.pending.get(raw) is Some(node) &&
             original_arrivals.get(raw) is Some(original_arrival) else {
             return false
           }
           if node.arrival <= original_arrival ||
-            !planner_lifecycle_same_op(node.op, op) {
+            !pending_changes_lifecycle_same_op(node.op, op) {
             return false
           }
         }
       }
       AdmitBlocker => {
-        guard (try! planner_lifecycle_prepare_checked(planner, model, [
-            fixture.blocker,
-          ]))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [fixture.blocker],
+          ))
           is Some((plan, expected)) else {
           return false
         }
@@ -1022,15 +1088,15 @@ fn prop_remote_admission_planner_lifecycle(
         for op in fixture.component {
           expected_drain.push(op)
         }
-        if !planner_lifecycle_same_ops(drain_operations, expected_drain) ||
+        if !pending_changes_lifecycle_same_ops(drain_operations, expected_drain) ||
           !model.begin(expected) {
           return false
         }
-        match planner.begin(plan, raw => model.is_admitted(raw)) {
-          RemoteAdmissionBeginResult::Applied => ()
+        match pending_changes.begin(plan, raw => model.is_applied(raw)) {
+          BeginApplyResult::Started => ()
           _ => return false
         }
-        if !planner_lifecycle_matches_model(planner, model) {
+        if !pending_changes_lifecycle_matches_model(pending_changes, model) {
           return false
         }
         active_plan = Some(plan)
@@ -1046,20 +1112,25 @@ fn prop_remote_admission_planner_lifecycle(
         for i in 0..<trace.acknowledgement_prefix {
           let raw = oracle_raw(drain_operations[i])
           model.acknowledge(raw)
-          planner.acknowledge_admitted(raw)
-          if !planner_lifecycle_matches_model(planner, model) ||
-            !planner_lifecycle_waiter_state_matches_suffix(
-              planner,
+          pending_changes.acknowledge_applied(raw)
+          if !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+            !pending_changes_lifecycle_waiter_state_matches_suffix(
+              pending_changes,
               drain_operations,
               i + 1,
             ) ||
-            !(try! planner_lifecycle_current_plan_matches_model(planner, model)) {
+            !(try! pending_changes_lifecycle_current_plan_matches_model(
+              pending_changes, model,
+            )) {
             return false
           }
           let expected_suffix = drain_operations[i + 1:].to_owned()
           let next_plan = try! model.prepare([])
-          if !planner_lifecycle_same_ops(next_plan.planned, expected_suffix) ||
-            !planner_lifecycle_same_ops(next_plan.remaining, [
+          if !pending_changes_lifecycle_same_ops(
+              next_plan.planned,
+              expected_suffix,
+            ) ||
+            !pending_changes_lifecycle_same_ops(next_plan.remaining, [
               fixture.unrelated_waiter,
             ]) {
             return false
@@ -1069,41 +1140,55 @@ fn prop_remote_admission_planner_lifecycle(
           drain_operations[trace.acknowledgement_prefix:].to_owned(),
         )
         expected_suffix_raws.push(oracle_raw(fixture.unrelated_waiter))
-        if !planner_lifecycle_same_raw_membership(
-            planner.pending_raws(),
+        if !pending_changes_lifecycle_same_raw_membership(
+            pending_changes.pending_raws(),
             expected_suffix_raws,
           ) {
           return false
         }
       }
       Compact => {
-        guard (try! planner_lifecycle_prepare_checked(planner, model, []))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [],
+          ))
           is Some((before_plan, before_expected)) else {
           return false
         }
-        let pending_before = planner.pending_raws()
+        let pending_before = pending_changes.pending_raws()
         let planned_before = before_plan.operations().to_owned()
-        let remaining_before = before_plan.remaining_raws(planner)
+        let remaining_before = before_plan.remaining_raws(pending_changes)
         model.compact()
-        planner.compact(raw => model.is_admitted(raw))
-        if !planner_lifecycle_matches_model(planner, model) ||
-          planner.stale_count() != 0 {
+        pending_changes.compact(raw => model.is_applied(raw))
+        if !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+          pending_changes.stale_count() != 0 {
           return false
         }
-        guard (try! planner_lifecycle_prepare_checked(planner, model, []))
+        guard (try! pending_changes_lifecycle_prepare_checked(
+            pending_changes,
+            model,
+            [],
+          ))
           is Some((after_plan, after_expected)) else {
           return false
         }
-        if !planner_lifecycle_same_ops(planned_before, after_plan.operations()) ||
-          !planner_lifecycle_same_raws(
+        if !pending_changes_lifecycle_same_ops(
+            planned_before,
+            after_plan.operations(),
+          ) ||
+          !pending_changes_lifecycle_same_raws(
             oracle_raws(before_expected.remaining),
             oracle_raws(after_expected.remaining),
           ) ||
-          !planner_lifecycle_same_raws(
+          !pending_changes_lifecycle_same_raws(
             remaining_before,
-            after_plan.remaining_raws(planner),
+            after_plan.remaining_raws(pending_changes),
           ) ||
-          !planner_lifecycle_same_raws(pending_before, planner.pending_raws()) {
+          !pending_changes_lifecycle_same_raws(
+            pending_before,
+            pending_changes.pending_raws(),
+          ) {
           return false
         }
       }
@@ -1111,21 +1196,23 @@ fn prop_remote_admission_planner_lifecycle(
         for i in trace.acknowledgement_prefix..<drain_operations.length() {
           let raw = oracle_raw(drain_operations[i])
           model.acknowledge(raw)
-          planner.acknowledge_admitted(raw)
-          if !planner_lifecycle_matches_model(planner, model) ||
-            !(try! planner_lifecycle_current_plan_matches_model(planner, model)) {
+          pending_changes.acknowledge_applied(raw)
+          if !pending_changes_lifecycle_matches_model(pending_changes, model) ||
+            !(try! pending_changes_lifecycle_current_plan_matches_model(
+              pending_changes, model,
+            )) {
             return false
           }
         }
         let final_plan = try! model.prepare([])
-        if !planner_lifecycle_same_ops(model.pending_ops(), [
+        if !pending_changes_lifecycle_same_ops(model.pending_ops(), [
             fixture.unrelated_waiter,
           ]) ||
-          !planner_lifecycle_same_raws(planner.pending_raws(), [
+          !pending_changes_lifecycle_same_raws(pending_changes.pending_raws(), [
             oracle_raw(fixture.unrelated_waiter),
           ]) ||
           !final_plan.planned.is_empty() ||
-          !planner_lifecycle_same_ops(final_plan.remaining, [
+          !pending_changes_lifecycle_same_ops(final_plan.remaining, [
             fixture.unrelated_waiter,
           ]) ||
           fixture.unrelated_waiter.parents() !=
@@ -1139,11 +1226,11 @@ fn prop_remote_admission_planner_lifecycle(
 }
 
 ///|
-test "property generator: planner lifecycle traces are complete and strict" {
-  let traces : Array[PlannerLifecycleTrace] = @quickcheck.samples(32)
+test "property generator: pending-changes owner lifecycle traces are complete and strict" {
+  let traces : Array[PendingChangesLifecycleTrace] = @quickcheck.samples(32)
   assert_true(!traces.is_empty())
   for trace in traces {
-    assert_true(planner_lifecycle_has_required_events(trace))
+    assert_true(pending_changes_lifecycle_has_required_events(trace))
     assert_true(trace.depth >= 2)
     assert_true(trace.acknowledgement_prefix > 0)
     assert_true(trace.acknowledgement_prefix < trace.depth + 1)
@@ -1151,9 +1238,9 @@ test "property generator: planner lifecycle traces are complete and strict" {
 }
 
 ///|
-test "property: generated planner lifecycle traces match the model" {
+test "property: generated pending-changes owner lifecycle traces match the model" {
   @qc.quick_check_fn(
-    prop_remote_admission_planner_lifecycle,
+    prop_apply_changes_pending_changes_lifecycle,
     max_success=100,
     max_size=24,
   )
@@ -1164,9 +1251,9 @@ test "property: generated planner lifecycle traces match the model" {
 ///|
 #deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
-pub extend PlannerLifecycleEvent with @debug.Debug::{to_repr}
+pub extend PendingChangesLifecycleEvent with @debug.Debug::{to_repr}
 
 ///|
 #deprecated("Use `@debug.to_repr` instead", skip_current_package=true)
 #doc(hidden)
-pub extend PlannerLifecycleTrace with @debug.Debug::{to_repr}
+pub extend PendingChangesLifecycleTrace with @debug.Debug::{to_repr}

@@ -286,10 +286,10 @@ test "apply_remote is idempotent: already-applied op is silently skipped" {
 }
 
 ///|
-/// OpLog primary seam: admitted payload conflicts fail before planner/graph mutation.
-test "apply_remote raises admitted ConflictingIdentity atomically" {
+/// OpLog primary seam: recorded payload conflicts fail before pending-changes owner/graph mutation.
+test "apply_remote raises recorded ConflictingIdentity atomically" {
   let oplog = @oplog.OpLog("local")
-  let admitted = @core.Op::insert(
+  let applied = @core.Op::insert(
     -1,
     [],
     "admitted-conflict",
@@ -298,7 +298,7 @@ test "apply_remote raises admitted ConflictingIdentity atomically" {
     None,
     None,
   )
-  ignore(try! oplog.apply_remote(admitted))
+  ignore(try! oplog.apply_remote(applied))
   let conflict = @core.Op::insert(
     99,
     [],
@@ -318,7 +318,7 @@ test "apply_remote raises admitted ConflictingIdentity atomically" {
   match result {
     Err(ConflictingIdentity(raw~)) =>
       assert_eq(raw, @core.RawVersion("admitted-conflict", 0))
-    _ => fail("expected admitted identity conflict")
+    _ => fail("expected recorded identity conflict")
   }
   assert_eq(oplog.op_count(), 1)
   assert_eq(oplog.get_frontier_raw(), before_frontier)
@@ -342,13 +342,13 @@ test "apply_remote raises admitted ConflictingIdentity atomically" {
 }
 
 ///|
-/// OpLog primary seam: a conflict after a ready candidate admits no prefix.
-test "prepare_remote rejects conflict before ready prefix admission" {
+/// OpLog primary seam: a conflict after a ready candidate applies no prefix.
+test "ApplyChanges rejects conflict before ready prefix change application" {
   let oplog = @oplog.OpLog("ready-prefix")
   let ready = @core.Op::insert(-1, [], "ready-prefix-op", 0, "a", None, None)
   let conflict = @core.Op::insert(5, [], "ready-prefix-op", 0, "b", None, None)
-  let result : Result[@oplog.PreparedAdmission, @oplog.OpLogError] = Ok(
-    oplog.prepare_remote([ready, conflict]),
+  let result : Result[@oplog.ApplyChanges, @oplog.OpLogError] = Ok(
+    @oplog.ApplyChanges(oplog, [ready, conflict]),
   ) catch {
     error => Err(error)
   }
@@ -361,7 +361,7 @@ test "prepare_remote rejects conflict before ready prefix admission" {
   assert_eq(oplog.has_pending(), false)
   assert_eq(oplog.get_frontier_raw().length(), 0)
 
-  let admitted = try! oplog.apply_remote(ready)
-  assert_eq(admitted.length(), 1)
+  let applied = try! oplog.apply_remote(ready)
+  assert_eq(applied.length(), 1)
   assert_eq(oplog.op_count(), 1)
 }

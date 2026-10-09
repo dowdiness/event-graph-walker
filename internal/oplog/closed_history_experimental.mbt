@@ -28,7 +28,7 @@ fn closed_history_add_budget(
   limit : Int,
 ) -> Int raise OpLogError {
   if amount < 0 || total > limit || amount > limit - total {
-    raise OpLogError::InvalidAdmission
+    raise OpLogError::InvalidApplyChanges
   }
   total + amount
 }
@@ -41,16 +41,16 @@ pub fn ClosedHistory::prepare_experimental(
   input : Array[@core.Op],
 ) -> ClosedHistory raise OpLogError {
   if input.length() > 100000 {
-    raise OpLogError::InvalidAdmission
+    raise OpLogError::InvalidApplyChanges
   }
   let operations = input.copy()
   let mut edges = 0
   let mut identity_units = 0
   // Complete bounded structural pass before allocating graph authority.
   for op in operations {
-    let raw = remote_admission_raw(op)
+    let raw = apply_changes_raw(op)
     if raw.agent == "" || raw.seq < 0 {
-      raise OpLogError::InvalidAdmission
+      raise OpLogError::InvalidApplyChanges
     }
     identity_units = closed_history_add_budget(
       identity_units,
@@ -59,7 +59,7 @@ pub fn ClosedHistory::prepare_experimental(
     )
     let parents = op.parents()
     if parents.length() > 256 {
-      raise OpLogError::InvalidAdmission
+      raise OpLogError::InvalidApplyChanges
     }
     edges = closed_history_add_budget(edges, parents.length(), 1000000)
     let seen : Map[@core.RawVersion, Bool] = Map([])
@@ -68,7 +68,7 @@ pub fn ClosedHistory::prepare_experimental(
         parent.seq < 0 ||
         parent == raw ||
         seen.contains(parent) {
-        raise OpLogError::InvalidAdmission
+        raise OpLogError::InvalidApplyChanges
       }
       seen[parent] = true
       identity_units = closed_history_add_budget(
@@ -77,12 +77,12 @@ pub fn ClosedHistory::prepare_experimental(
         64 * 1024 * 1024,
       )
     }
-    remote_admission_validate_origin_shape(op)
+    apply_changes_validate_origin_shape(op)
     for origin in [op.origin_left(), op.origin_right()] {
       match origin {
         Some(origin) => {
           if origin.agent == "" || origin.seq < 0 {
-            raise OpLogError::InvalidAdmission
+            raise OpLogError::InvalidApplyChanges
           }
           edges = closed_history_add_budget(edges, 1, 1000000)
           identity_units = closed_history_add_budget(
@@ -97,7 +97,7 @@ pub fn ClosedHistory::prepare_experimental(
     match op.content() {
       @core.Insert(text) =>
         if !closed_history_scalar(text) {
-          raise OpLogError::InvalidAdmission
+          raise OpLogError::InvalidApplyChanges
         }
       @core.Delete | @core.Undelete => ()
     }
@@ -120,7 +120,7 @@ pub fn ClosedHistory::prepare_experimental(
           }
           if !operations[lv].is_insert() {
             raise OpLogError::OriginTargetNotInsert(
-              operation=remote_admission_raw(op),
+              operation=apply_changes_raw(op),
               target=origin,
             )
           }
@@ -137,7 +137,7 @@ pub fn ClosedHistory::version_experimental(
   self : ClosedHistory,
 ) -> @causal_graph.GraphVersion raise OpLogError {
   if self.consumed {
-    raise OpLogError::ConsumedAdmission
+    raise OpLogError::ConsumedApplyChanges
   }
   self.graph.current_graph_version()
 }
@@ -147,7 +147,7 @@ pub fn ClosedHistory::heads_experimental(
   self : ClosedHistory,
 ) -> Array[@core.RawVersion] raise OpLogError {
   if self.consumed {
-    raise OpLogError::ConsumedAdmission
+    raise OpLogError::ConsumedApplyChanges
   }
   self.graph
   .get_frontier()
@@ -164,10 +164,10 @@ pub fn ClosedHistory::consume_experimental(
   writer : String,
 ) -> (OpLog, Array[@core.Op]) raise OpLogError {
   if self.consumed {
-    raise OpLogError::ConsumedAdmission
+    raise OpLogError::ConsumedApplyChanges
   }
   if writer == "" {
-    raise OpLogError::InvalidAdmission
+    raise OpLogError::InvalidApplyChanges
   }
   self.consumed = true
   let local_operations : Array[@core.Op] = Array(
@@ -208,7 +208,7 @@ pub fn ClosedHistory::consume_experimental(
   }
   let log : OpLog = {
     operations: @rle.Rle::from_array(runs),
-    planner: RemoteAdmissionPlanner(),
+    pending_changes: PendingChanges(),
     graph: self.graph,
     agent_id: writer,
   }

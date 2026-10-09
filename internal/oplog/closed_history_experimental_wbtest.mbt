@@ -32,7 +32,10 @@ fn closed_log_chain(size : Int) -> Array[@core.Op] {
 ///|
 fn closed_log_compare(actual : OpLog, reference : OpLog) -> Unit raise {
   assert_true(
-    planner_lifecycle_same_ops(actual.get_all_ops(), reference.get_all_ops()),
+    pending_changes_lifecycle_same_ops(
+      actual.get_all_ops(),
+      reference.get_all_ops(),
+    ),
   )
   assert_eq(actual.get_all_runs(), reference.get_all_runs())
   assert_eq(
@@ -46,21 +49,23 @@ fn closed_log_compare(actual : OpLog, reference : OpLog) -> Unit raise {
 }
 
 ///|
-test "closed history run shapes match scalar admission at cap boundaries" {
+test "closed history run shapes match scalar change application at cap boundaries" {
   for count in [0, 1, 255, 256, 257, 513] {
     let ops = closed_log_chain(count)
     let proof = ClosedHistory::prepare_experimental(ops)
     let saved = proof.version_experimental()
     let (actual, projection) = proof.consume_experimental("fresh")
     let reference = OpLog("fresh")
-    ignore(reference.commit_admission(reference.prepare_remote(ops)))
+    ignore(
+      (try! p1_apply_success(reference, try! ApplyChanges(reference, ops))).committed(),
+    )
     closed_log_compare(actual, reference)
     assert_eq(actual.graph.current_graph_version(), saved)
-    assert_true(actual.planner.pending.is_empty())
-    assert_eq(actual.planner.generation, 0)
+    assert_true(actual.pending_changes.pending.is_empty())
+    assert_eq(actual.pending_changes.generation, 0)
     assert_true(
       try proof.consume_experimental("second") catch {
-        OpLogError::ConsumedAdmission => true
+        OpLogError::ConsumedApplyChanges => true
         _ => false
       } noraise {
         _ => false
@@ -68,7 +73,7 @@ test "closed history run shapes match scalar admission at cap boundaries" {
     )
     assert_true(
       try proof.version_experimental() catch {
-        OpLogError::ConsumedAdmission => true
+        OpLogError::ConsumedApplyChanges => true
         _ => false
       } noraise {
         _ => false
@@ -106,7 +111,7 @@ test "closed history future pending drain stale and consumed capabilities match 
     "fresh",
   )
   let b = OpLog("fresh")
-  ignore(b.commit_admission(b.prepare_remote(ops)))
+  ignore((try! p1_apply_success(b, try! ApplyChanges(b, ops))).committed())
   let waiting = @core.Op::insert(
     -1,
     [@core.RawVersion("dep", 0)],
@@ -116,50 +121,54 @@ test "closed history future pending drain stale and consumed capabilities match 
     Some(@core.RawVersion("dep", 0)),
     None,
   )
-  ignore(a.commit_admission(a.prepare_remote([waiting])))
-  ignore(b.commit_admission(b.prepare_remote([waiting])))
+  ignore(
+    (try! p1_apply_success(a, try! ApplyChanges(a, [waiting]))).committed(),
+  )
+  ignore(
+    (try! p1_apply_success(b, try! ApplyChanges(b, [waiting]))).committed(),
+  )
   assert_eq(a.pending_count(), 1)
-  assert_eq(a.planner.pending_raws(), b.planner.pending_raws())
+  assert_eq(a.pending_changes.pending_raws(), b.pending_changes.pending_raws())
   let dep = @core.Op::insert(-1, [], "dep", 0, "d", None, None)
-  ignore(a.commit_admission(a.prepare_remote([dep])))
-  ignore(b.commit_admission(b.prepare_remote([dep])))
+  ignore((try! p1_apply_success(a, try! ApplyChanges(a, [dep]))).committed())
+  ignore((try! p1_apply_success(b, try! ApplyChanges(b, [dep]))).committed())
   closed_log_compare(a, b)
   let tail = @core.Op::insert(-1, [], "tail", 0, "t", None, None)
-  let ap = a.prepare_remote([tail])
-  let bp = b.prepare_remote([tail])
+  let action_a = try! ApplyChanges(a, [tail])
+  let action_b = try! ApplyChanges(b, [tail])
   ignore(a.insert("l", -1, -1))
   ignore(b.insert("l", -1, -1))
   assert_true(
-    try a.commit_admission(ap) catch {
-      OpLogError::StaleAdmission => true
+    try a.apply_changes(action_a) catch {
+      OpLogError::StaleApplyChanges => true
       _ => false
     } noraise {
       _ => false
     },
   )
   assert_true(
-    try b.commit_admission(bp) catch {
-      OpLogError::StaleAdmission => true
+    try b.apply_changes(action_b) catch {
+      OpLogError::StaleApplyChanges => true
       _ => false
     } noraise {
       _ => false
     },
   )
-  let ap2 = a.prepare_remote([tail])
-  let bp2 = b.prepare_remote([tail])
-  ignore(a.commit_admission(ap2))
-  ignore(b.commit_admission(bp2))
+  let action_a2 = ApplyChanges(a, [tail])
+  let action_b2 = ApplyChanges(b, [tail])
+  ignore(try! a.apply_changes(action_a2))
+  ignore(try! b.apply_changes(action_b2))
   assert_true(
-    try a.commit_admission(ap2) catch {
-      OpLogError::ConsumedAdmission => true
+    try a.apply_changes(action_a2) catch {
+      OpLogError::ConsumedApplyChanges => true
       _ => false
     } noraise {
       _ => false
     },
   )
   assert_true(
-    try b.commit_admission(bp2) catch {
-      OpLogError::ConsumedAdmission => true
+    try b.apply_changes(action_b2) catch {
+      OpLogError::ConsumedApplyChanges => true
       _ => false
     } noraise {
       _ => false

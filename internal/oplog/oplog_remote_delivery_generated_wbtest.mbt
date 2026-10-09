@@ -31,7 +31,7 @@ struct RemoteDeliveryScenario {
 struct RemoteDeliveryModel {
   mut pending : Array[@core.Op]
   known : Array[@core.RawVersion]
-  admitted : @hashset.HashSet[@core.RawVersion]
+  applied : @hashset.HashSet[@core.RawVersion]
 }
 
 ///|
@@ -43,9 +43,9 @@ struct RemoteDeliveryEvidence {
   parent_blocked : Bool
   insert_origin_blocked : Bool
   delete_origin_blocked : Bool
-  duplicate_before_admission : Bool
+  duplicate_before_apply_changes : Bool
   duplicate_while_pending : Bool
-  duplicate_after_admission : Bool
+  duplicate_after_apply_changes : Bool
   final_count : Int
 } derive(Debug)
 
@@ -157,10 +157,10 @@ fn remote_delivery_seed_source(
 ) -> OpLog {
   let source = OpLog(agent)
   for op in known {
-    let admitted = try! source.apply_remote(op)
-    guard admitted.length() == 1 &&
-      oracle_raw(admitted[0]) == oracle_raw(op) &&
-      remote_delivery_snapshot(admitted[0]) == remote_delivery_snapshot(op) else {
+    let applied = try! source.apply_remote(op)
+    guard applied.length() == 1 &&
+      oracle_raw(applied[0]) == oracle_raw(op) &&
+      remote_delivery_snapshot(applied[0]) == remote_delivery_snapshot(op) else {
       abort("closed source prefix did not replay exactly once")
     }
   }
@@ -321,7 +321,7 @@ fn remote_delivery_build_scenario(
 
 ///|
 fn RemoteDeliveryModel::RemoteDeliveryModel() -> RemoteDeliveryModel {
-  { pending: [], known: [], admitted: @hashset.HashSet([]), }
+  { pending: [], known: [], applied: @hashset.HashSet([]), }
 }
 
 ///|
@@ -330,7 +330,7 @@ fn RemoteDeliveryModel::oracle_step(
   incoming : @core.Op,
 ) -> Array[@core.Op] {
   let incoming_raw = oracle_raw(incoming)
-  guard !self.admitted.contains(incoming_raw) &&
+  guard !self.applied.contains(incoming_raw) &&
     !self.pending.iter().any(op => oracle_raw(op) == incoming_raw) else {
     abort("oracle step received a duplicate instead of a new identity")
   }
@@ -343,10 +343,10 @@ fn RemoteDeliveryModel::oracle_step(
   self.pending = remaining
   for op in planned {
     let raw = oracle_raw(op)
-    guard !self.admitted.contains(raw) else {
-      abort("fixed-point oracle admitted one identity twice")
+    guard !self.applied.contains(raw) else {
+      abort("fixed-point oracle recorded one identity twice")
     }
-    self.admitted.add(raw)
+    self.applied.add(raw)
     self.known.push(raw)
   }
   planned
@@ -358,7 +358,7 @@ fn remote_delivery_pending_matches(
   model : RemoteDeliveryModel,
 ) -> Bool {
   remote_delivery_same_raw_sequence(
-    oracle_raws(target.planner.pending_operations()),
+    oracle_raws(target.pending_changes.pending_operations()),
     oracle_raws(model.pending),
   ) &&
   target.has_pending() == !model.pending.is_empty()
@@ -426,18 +426,18 @@ fn remote_delivery_suffix_schedule(
 }
 
 ///|
-fn remote_delivery_duplicate_before_admission(
+fn remote_delivery_duplicate_before_apply_changes(
   scenario : RemoteDeliveryScenario,
 ) -> Bool {
   let root = scenario.roots[0]
   let duplicate_target = OpLog("generated-duplicate-batch")
-  let plan = try! duplicate_target.prepare_remote([root, root])
-  let duplicate_admitted = try! duplicate_target.commit_remote(plan)
+  let action = try! ApplyChanges(duplicate_target, [root, root])
+  let report = try! p1_apply_success(duplicate_target, action)
   let single_target = OpLog("generated-duplicate-single")
-  let single_admitted = try! single_target.apply_remote(root)
-  duplicate_admitted.length() == 1 &&
-  single_admitted.length() == 1 &&
-  remote_delivery_matches_expected(duplicate_admitted[0], scenario.expected) &&
+  let single_applied = try! single_target.apply_remote(root)
+  report.committed().length() == 1 &&
+  single_applied.length() == 1 &&
+  remote_delivery_matches_expected(report.committed()[0], scenario.expected) &&
   duplicate_target.op_count() == 1 &&
   !duplicate_target.has_pending() &&
   remote_delivery_same_raw_sequence(
@@ -462,7 +462,7 @@ fn remote_delivery_final_state_matches(
     target.has_pending() ||
     !model.pending.is_empty() ||
     model.known.length() != scenario.ops.length() ||
-    model.admitted.length() != scenario.ops.length() {
+    model.applied.length() != scenario.ops.length() {
     return false
   }
   let actual_raws = oracle_raws(actual)
@@ -497,19 +497,19 @@ fn remote_delivery_replay(
   let delete_origin_blocked = scenario.delete.is_delete() &&
     remote_delivery_has_missing_origin(scenario.delete, [])
 
-  let (delete_ok, delete_admitted) = remote_delivery_apply_step(
+  let (delete_ok, delete_applied) = remote_delivery_apply_step(
     target,
     model,
     scenario.delete,
     scenario.expected,
   )
-  valid = valid && delete_ok && delete_admitted == 0
+  valid = valid && delete_ok && delete_applied == 0
   let pending = target.has_pending() &&
-    target.planner.pending_operations().length() == 1
+    target.pending_changes.pending_operations().length() == 1
   let count_before_pending_duplicate = target.op_count()
   let frontier_before_pending_duplicate = try! target.get_frontier_raw()
   let pending_before_duplicate = oracle_raws(
-    target.planner.pending_operations(),
+    target.pending_changes.pending_operations(),
   )
   let pending_duplicate = try! target.apply_remote(scenario.delete)
   let duplicate_while_pending = pending_duplicate.is_empty() &&
@@ -519,20 +519,20 @@ fn remote_delivery_replay(
       frontier_before_pending_duplicate,
     ) &&
     remote_delivery_same_raw_sequence(
-      oracle_raws(target.planner.pending_operations()),
+      oracle_raws(target.pending_changes.pending_operations()),
       pending_before_duplicate,
     )
   valid = valid &&
     duplicate_while_pending &&
     remote_delivery_pending_matches(target, model)
 
-  let (merge_ok, merge_admitted) = remote_delivery_apply_step(
+  let (merge_ok, merge_applied) = remote_delivery_apply_step(
     target,
     model,
     scenario.merge,
     scenario.expected,
   )
-  let (undelete_ok, undelete_admitted) = remote_delivery_apply_step(
+  let (undelete_ok, undelete_applied) = remote_delivery_apply_step(
     target,
     model,
     scenario.undelete,
@@ -541,17 +541,17 @@ fn remote_delivery_replay(
   valid = valid &&
     merge_ok &&
     undelete_ok &&
-    merge_admitted == 0 &&
-    undelete_admitted == 0
+    merge_applied == 0 &&
+    undelete_applied == 0
 
   for op in remote_delivery_suffix_schedule(scenario, trace.schedule_seed) {
-    let (step_ok, admitted) = remote_delivery_apply_step(
+    let (step_ok, applied) = remote_delivery_apply_step(
       target,
       model,
       op,
       scenario.expected,
     )
-    valid = valid && step_ok && admitted == 0
+    valid = valid && step_ok && applied == 0
   }
 
   let root_order = if trace.schedule_seed % 2 == 0 {
@@ -559,7 +559,7 @@ fn remote_delivery_replay(
   } else {
     [scenario.roots[1], scenario.roots[0]]
   }
-  let (first_root_ok, first_root_admitted) = remote_delivery_apply_step(
+  let (first_root_ok, first_root_applied) = remote_delivery_apply_step(
     target,
     model,
     root_order[0],
@@ -587,7 +587,7 @@ fn remote_delivery_replay(
     root_order[1],
     scenario.expected,
   )
-  let wakeup_drain = first_root_admitted == 1 &&
+  let wakeup_drain = first_root_applied == 1 &&
     pending_before_wakeup >= 3 &&
     wakeup_count == pending_before_wakeup + 1 &&
     !target.has_pending()
@@ -598,25 +598,25 @@ fn remote_delivery_replay(
     wakeup_drain &&
     remote_delivery_final_state_matches(target, scenario, model)
 
-  let count_before_admitted_duplicates = target.op_count()
-  let ops_before_admitted_duplicates = oracle_raws(target.get_all_ops())
-  let frontier_before_admitted_duplicates = try! target.get_frontier_raw()
+  let count_before_applied_duplicates = target.op_count()
+  let ops_before_applied_duplicates = oracle_raws(target.get_all_ops())
+  let frontier_before_applied_duplicates = try! target.get_frontier_raw()
   let duplicate_delete = try! target.apply_remote(scenario.delete)
   let duplicate_merge = try! target.apply_remote(scenario.merge)
-  let duplicate_after_admission = duplicate_delete.is_empty() &&
+  let duplicate_after_apply_changes = duplicate_delete.is_empty() &&
     duplicate_merge.is_empty() &&
-    target.op_count() == count_before_admitted_duplicates &&
+    target.op_count() == count_before_applied_duplicates &&
     remote_delivery_same_raw_sequence(
       oracle_raws(target.get_all_ops()),
-      ops_before_admitted_duplicates,
+      ops_before_applied_duplicates,
     ) &&
     remote_delivery_same_raw_sequence(
       try! target.get_frontier_raw(),
-      frontier_before_admitted_duplicates,
+      frontier_before_applied_duplicates,
     ) &&
     !target.has_pending()
   valid = valid &&
-    duplicate_after_admission &&
+    duplicate_after_apply_changes &&
     remote_delivery_final_state_matches(target, scenario, model)
 
   {
@@ -627,11 +627,11 @@ fn remote_delivery_replay(
     parent_blocked: parent_blocked_until_final,
     insert_origin_blocked: insert_origin_blocked_until_final,
     delete_origin_blocked: delete_origin_blocked_until_final,
-    duplicate_before_admission: remote_delivery_duplicate_before_admission(
+    duplicate_before_apply_changes: remote_delivery_duplicate_before_apply_changes(
       scenario,
     ),
     duplicate_while_pending,
-    duplicate_after_admission,
+    duplicate_after_apply_changes,
     final_count: target.op_count(),
   }
 }
@@ -652,9 +652,11 @@ fn prop_generated_remote_delivery_complete(trace : RemoteDeliveryTrace) -> Bool 
 test "generated delivery distinguishes identical and conflicting payloads" {
   let root = @core.Op::insert(-1, [], "generated-identity", 0, "a", None, None)
   let identical_target = OpLog("generated-identical")
-  let identical_plan = try! identical_target.prepare_remote([root, root])
-  let identical = try! identical_target.commit_remote(identical_plan)
-  assert_eq(identical.length(), 1)
+  let identical_action = try! ApplyChanges(identical_target, [root, root])
+  let identical_report = try! p1_apply_success(
+    identical_target, identical_action,
+  )
+  assert_eq(identical_report.committed().length(), 1)
   assert_eq(identical_target.op_count(), 1)
 
   let conflicting = @core.Op::insert(
@@ -667,8 +669,8 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
   )
   let conflict_target = OpLog("generated-conflicting")
-  let result : Result[PreparedAdmission, OpLogError] = Ok(
-    conflict_target.prepare_remote([root, conflicting]),
+  let result : Result[ApplyChanges, OpLogError] = Ok(
+    ApplyChanges(conflict_target, [root, conflicting]),
   ) catch {
     error => Err(error)
   }
@@ -706,7 +708,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   )
   assert_eq(try! pending_target.apply_remote(pending_duplicate).length(), 0)
   assert_true(pending_target.has_pending())
-  let retained = pending_target.planner.pending_operations()
+  let retained = pending_target.pending_changes.pending_operations()
   assert_eq(retained.length(), 1)
   assert_eq(retained[0].lv(), 11)
   match retained[0].content() {
@@ -723,8 +725,8 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let pending_result : Result[PreparedAdmission, OpLogError] = Ok(
-    pending_target.prepare_remote([pending_conflict]),
+  let pending_result : Result[ApplyChanges, OpLogError] = Ok(
+    ApplyChanges(pending_target, [pending_conflict]),
   ) catch {
     error => Err(error)
   }
@@ -736,7 +738,7 @@ test "generated delivery distinguishes identical and conflicting payloads" {
   assert_eq(pending_target.op_count(), 0)
   assert_eq(try! pending_target.get_frontier_raw(), pending_frontier)
   assert_true(pending_target.has_pending())
-  let retained_after = pending_target.planner.pending_operations()
+  let retained_after = pending_target.pending_changes.pending_operations()
   match retained_after[0].content() {
     Insert(text) => assert_eq(text, "authoritative")
     Delete | Undelete => fail("pending payload changed kind")
@@ -751,34 +753,34 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let admitted = try! pending_target.apply_remote(parent)
-  assert_eq(admitted.length(), 2)
+  let applied = try! pending_target.apply_remote(parent)
+  assert_eq(applied.length(), 2)
   assert_eq(pending_target.op_count(), 2)
   assert_true(!pending_target.has_pending())
-  let admitted_frontier = try! pending_target.get_frontier_raw()
+  let applied_frontier = try! pending_target.get_frontier_raw()
 
-  let admitted_source = pending_target
+  let applied_source = pending_target
     .get_all_ops()
     .iter()
     .find_first(op => op.agent() == "generated-pending")
     .unwrap()
-  let admitted_text = match admitted_source.content() {
+  let applied_text = match applied_source.content() {
     Insert(text) => text
-    Delete | Undelete => fail("admitted pending operation changed kind")
+    Delete | Undelete => fail("recorded pending operation changed kind")
   }
-  let admitted_duplicate = @core.Op::insert(
+  let applied_duplicate = @core.Op::insert(
     99,
-    admitted_source.parents(),
-    admitted_source.agent(),
-    admitted_source.seq(),
-    admitted_text,
-    admitted_source.origin_left(),
-    admitted_source.origin_right(),
+    applied_source.parents(),
+    applied_source.agent(),
+    applied_source.seq(),
+    applied_text,
+    applied_source.origin_left(),
+    applied_source.origin_right(),
   )
-  assert_eq(try! pending_target.apply_remote(admitted_duplicate).length(), 0)
+  assert_eq(try! pending_target.apply_remote(applied_duplicate).length(), 0)
   assert_eq(pending_target.op_count(), 2)
-  assert_eq(try! pending_target.get_frontier_raw(), admitted_frontier)
-  let admitted_conflict = @core.Op::insert(
+  assert_eq(try! pending_target.get_frontier_raw(), applied_frontier)
+  let applied_conflict = @core.Op::insert(
     100,
     [missing_parent],
     "generated-pending",
@@ -787,18 +789,18 @@ test "generated delivery distinguishes identical and conflicting payloads" {
     None,
     None,
   )
-  let admitted_result : Result[PreparedAdmission, OpLogError] = Ok(
-    pending_target.prepare_remote([admitted_conflict]),
+  let applied_result : Result[ApplyChanges, OpLogError] = Ok(
+    ApplyChanges(pending_target, [applied_conflict]),
   ) catch {
     error => Err(error)
   }
-  match admitted_result {
+  match applied_result {
     Err(OpLogError::ConflictingIdentity(raw~)) =>
       assert_eq(raw, @core.RawVersion("generated-pending", 0))
-    _ => fail("expected admitted identity conflict")
+    _ => fail("expected recorded identity conflict")
   }
   assert_eq(pending_target.op_count(), 2)
-  assert_eq(try! pending_target.get_frontier_raw(), admitted_frontier)
+  assert_eq(try! pending_target.get_frontier_raw(), applied_frontier)
   assert_true(!pending_target.has_pending())
 }
 
@@ -808,9 +810,9 @@ fn prop_generated_remote_delivery_duplicates(
 ) -> Bool {
   let evidence = remote_delivery_replay(trace)
   evidence.valid &&
-  evidence.duplicate_before_admission &&
+  evidence.duplicate_before_apply_changes &&
   evidence.duplicate_while_pending &&
-  evidence.duplicate_after_admission
+  evidence.duplicate_after_apply_changes
 }
 
 ///|
@@ -849,9 +851,9 @@ test "property generator: remote delivery scenarios are closed and non-vacuous" 
     assert_true(evidence.parent_blocked)
     assert_true(evidence.insert_origin_blocked)
     assert_true(evidence.delete_origin_blocked)
-    assert_true(evidence.duplicate_before_admission)
+    assert_true(evidence.duplicate_before_apply_changes)
     assert_true(evidence.duplicate_while_pending)
-    assert_true(evidence.duplicate_after_admission)
+    assert_true(evidence.duplicate_after_apply_changes)
     if trace.suffix_count > 0 {
       saw_suffix = true
     }
@@ -868,7 +870,7 @@ test "property generator: remote delivery scenarios are closed and non-vacuous" 
 }
 
 ///|
-test "property: shuffled remote delivery admits every source operation once" {
+test "property: shuffled remote delivery applies every source operation once" {
   @qc.quick_check_fn(
     prop_generated_remote_delivery_complete,
     max_success=100,

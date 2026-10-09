@@ -1,5 +1,5 @@
 ///|
-/// Observable contract tracer for authority-owned Text admission effects.
+/// Observable contract tracer for authority-owned Text change application effects.
 test "transition exact insert exposes sequential scalar effect and finishes report" {
   let source = try! TextState::new("transition-source")
   try! source.insert(Pos::at(0), "A")
@@ -11,7 +11,7 @@ test "transition exact insert exposes sequential scalar effect and finishes repo
 
   assert_eq(transition.version_before(), before)
   assert_eq(transition.version_after(), receiver.version())
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 1)
       match effects[0] {
@@ -19,13 +19,13 @@ test "transition exact insert exposes sequential scalar effect and finishes repo
           assert_eq(position, Pos::at(0))
           assert_eq(text, "A")
         }
-        Delete(_) => fail("insert admission exposed a delete effect")
+        Delete(_) => fail("insert change application exposed a delete effect")
       }
     }
     SnapshotRequired => fail("warm one-op insert required a snapshot")
     Unavailable => fail("warm one-op insert was unavailable")
   }
-  let report = try! transition.finish()
+  let report = try! transition.report()
   assert_eq(report.applied_operations(), 1)
   assert_eq(report.duplicate_operations(), 0)
   assert_eq(report.pending_operations(), 0)
@@ -42,7 +42,7 @@ test "transition exact batch exposes ordered scalar insert coordinates" {
     .sync()
     .apply_transition(try! source.sync().export_all())
 
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 2)
       assert_eq(effects[0], Insert(Pos::at(0), "A"))
@@ -51,7 +51,7 @@ test "transition exact batch exposes ordered scalar insert coordinates" {
     SnapshotRequired => fail("warm two-op insert required a snapshot")
     Unavailable => fail("warm two-op insert was unavailable")
   }
-  ignore(try! transition.finish())
+  ignore(try! transition.report())
 }
 
 ///|
@@ -68,7 +68,7 @@ test "transition exact delete exposes scalar range" {
     .sync()
     .apply_transition(try! source.sync().export_since(receiver_version))
 
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 1)
       assert_eq(effects[0], Delete(try! Range::from_ints(0, 1)))
@@ -76,7 +76,7 @@ test "transition exact delete exposes scalar range" {
     SnapshotRequired => fail("warm one-op delete required a snapshot")
     Unavailable => fail("warm one-op delete was unavailable")
   }
-  ignore(try! transition.finish())
+  ignore(try! transition.report())
 }
 
 ///|
@@ -98,7 +98,7 @@ test "transition exact remote undelete exposes visible insert effect" {
     .apply_transition(try! source.sync().export_since(receiver_version))
   assert_eq(transition.version_before(), receiver_version)
   assert_eq(transition.version_after(), receiver.version())
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 1)
       assert_eq(effects[0], Insert(Pos::at(0), "A"))
@@ -110,16 +110,16 @@ test "transition exact remote undelete exposes visible insert effect" {
     SnapshotRequired => fail("remote undelete required a snapshot")
     Unavailable => fail("remote undelete was unavailable")
   }
-  let report = try! transition.finish()
+  let report = try! transition.report()
   assert_eq(report.applied_operations(), 1)
   assert_eq(report.duplicate_operations(), 0)
   assert_eq(report.pending_operations(), 0)
 }
 
 ///|
-/// A losing remote LWW delete is admitted, advances the version, and changes
+/// A losing remote LWW delete is recorded, advances the version, and changes
 /// no visible text, so its exact effect sequence is empty.
-test "transition exact losing LWW delete reports admission with empty effects" {
+test "transition exact losing LWW delete reports change application with empty effects" {
   let source = try! TextState::new("transition-losing-delete-source")
   try! source.insert(Pos::at(0), "A")
   let receiver = try! TextState::new("transition-losing-delete-receiver")
@@ -141,7 +141,7 @@ test "transition exact losing LWW delete reports admission with empty effects" {
   assert_eq(transition.version_before(), before_version)
   assert_true(transition.version_after() != before_version)
   assert_eq(transition.version_after(), receiver.version())
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 0)
       assert_eq(
@@ -152,7 +152,7 @@ test "transition exact losing LWW delete reports admission with empty effects" {
     SnapshotRequired => fail("losing LWW delete required a snapshot")
     Unavailable => fail("losing LWW delete was unavailable")
   }
-  let report = try! transition.finish()
+  let report = try! transition.report()
   assert_eq(report.applied_operations(), 1)
   assert_eq(report.duplicate_operations(), 1)
   assert_eq(report.pending_operations(), 0)
@@ -168,22 +168,26 @@ test "transition duplicate-only and pending-only expose exact empty effects" {
   let receiver = try! TextState::new("transition-noop-receiver")
   ignore(try! receiver.sync().apply(message))
   let duplicate = try! receiver.sync().apply_transition(message)
-  match duplicate.availability() {
+  match duplicate.effect_availability() {
     Exact(effects) => assert_eq(effects.length(), 0)
-    _ => fail("duplicate-only admission did not expose exact empty effects")
+    _ =>
+      fail(
+        "duplicate-only change application did not expose exact empty effects",
+      )
   }
-  let duplicate_report = try! duplicate.finish()
+  let duplicate_report = try! duplicate.report()
   assert_eq(duplicate_report.duplicate_operations(), 1)
 
   let pending_message = try! SyncMessage::from_json_string(
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"transition-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-pending\",\"sequence\":1}]}",
   )
   let pending = try! receiver.sync().apply_transition(pending_message)
-  match pending.availability() {
+  match pending.effect_availability() {
     Exact(effects) => assert_eq(effects.length(), 0)
-    _ => fail("pending-only admission did not expose exact empty effects")
+    _ =>
+      fail("pending-only change application did not expose exact empty effects")
   }
-  let pending_report = try! pending.finish()
+  let pending_report = try! pending.report()
   assert_eq(pending_report.applied_operations(), 0)
   assert_eq(pending_report.pending_operations(), 1)
 }
@@ -202,7 +206,7 @@ test "transition dependency drain exposes one sequential effect stream" {
 
   let transition = try! receiver.sync().apply_transition(parent)
 
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 2)
       assert_eq(effects[0], Insert(Pos::at(0), "A"))
@@ -210,7 +214,7 @@ test "transition dependency drain exposes one sequential effect stream" {
     }
     _ => fail("warm dependency drain did not expose exact effects")
   }
-  let report = try! transition.finish()
+  let report = try! transition.report()
   assert_eq(report.applied_operations(), 2)
   assert_eq(report.pending_operations(), 0)
 }
@@ -273,7 +277,7 @@ test "property: exact transition effects reproduce authority text" {
       let transition = try! receiver
         .sync()
         .apply_transition(try! source.sync().export_all())
-      match transition.availability() {
+      match transition.effect_availability() {
         Exact(effects) =>
           assert_eq(
             apply_transition_effects_for_test(before, effects),
@@ -281,11 +285,12 @@ test "property: exact transition effects reproduce authority text" {
           )
         SnapshotRequired =>
           fail(
-            "one-step warm randomized admission unexpectedly required snapshot",
+            "one-step warm randomized change application unexpectedly required snapshot",
           )
-        Unavailable => fail("randomized admission unexpectedly unavailable")
+        Unavailable =>
+          fail("randomized change application unexpectedly unavailable")
       }
-      ignore(try! transition.finish())
+      ignore(try! transition.report())
     }
   }
 }
@@ -299,13 +304,13 @@ test "transition four-operation batch preserves exact effects" {
   let transition = try! receiver
     .sync()
     .apply_transition(try! source.sync().export_all())
-  match transition.availability() {
+  match transition.effect_availability() {
     Exact(effects) => {
       assert_eq(effects.length(), 4)
       assert_eq(apply_transition_effects_for_test("", effects), receiver.text())
     }
     _ => fail("warm four-op batch lost exact effects")
   }
-  let report = try! transition.finish()
+  let report = try! transition.report()
   assert_eq(report.applied_operations(), 4)
 }

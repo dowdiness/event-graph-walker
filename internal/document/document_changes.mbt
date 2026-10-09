@@ -1,4 +1,4 @@
-///| Typed result of one Document-owned remote admission.
+///| Typed result of one Document-owned remote change application.
 
 ///|
 pub enum ProjectionStatus {
@@ -24,23 +24,27 @@ pub(all) enum ProjectionEffectAvailability {
 }
 
 ///|
-pub struct DocumentAdmission {
-  outcome : @oplog.AdmissionOutcome
+pub struct DocumentChanges {
+  outcome : @oplog.ApplyChangesOutcome
   projection : ProjectionStatus
   effects : Array[ProjectionEffect]
   effect_availability : ProjectionEffectAvailability
 }
 
 ///|
-/// Construct admission evidence in one place so callers cannot accidentally
-/// separate the authority outcome from its derived projection status.
-fn DocumentAdmission::DocumentAdmission(
-  outcome : @oplog.AdmissionOutcome,
+fn DocumentChanges::DocumentChanges(
+  outcome : @oplog.ApplyChangesOutcome,
   projection : ProjectionStatus,
   effects : Array[ProjectionEffect],
   effect_availability : ProjectionEffectAvailability,
-) -> DocumentAdmission {
+) -> DocumentChanges {
   { outcome, projection, effects, effect_availability, }
+}
+
+///|
+priv enum ApplyChangesInput {
+  RawOperations(Array[@core.Op])
+  StructuralOperations(ArrayView[@core.StructuralOp])
 }
 
 ///|
@@ -74,7 +78,7 @@ fn merge_projection_recovery_targets(
 }
 
 ///|
-/// Check remote Fugue origins without changing the pending planner or tree.
+/// Check remote Fugue origins without changing the pending-change owner or tree.
 /// Every graph-known origin enters `required`; only tree-missing origins enter
 /// `divergences`.
 fn Document::check_remote_targets(
@@ -143,9 +147,9 @@ fn Document::check_remote_targets(
 
 ///|
 /// Repair a graph-known/tree-missing origin before the prepared transition can
-/// enter the pending planner. The prepared capability remains unchanged across
+/// enter the pending-change owner. The prepared capability remains unchanged across
 /// recovery; only pure target checks are repeated.
-fn Document::ensure_admission_targets(
+fn Document::ensure_apply_changes_targets(
   self : Document,
   prepared : ArrayView[@core.Op],
   incoming : ArrayView[@core.Op],
@@ -178,7 +182,7 @@ fn Document::ensure_admission_targets(
     )
     if remaining_divergences.length() > 0 {
       let error = remaining_divergences[0].error
-      self.mark_admission_recovery_required(
+      self.mark_apply_changes_recovery_required(
         self.get_frontier(),
         error,
         initial_targets,
@@ -205,7 +209,7 @@ fn Document::ensure_admission_targets(
 ///|
 /// Keep the derived projection fail-closed when a successful checkout still
 /// cannot satisfy a graph-known origin check.
-fn Document::mark_admission_recovery_required(
+fn Document::mark_apply_changes_recovery_required(
   self : Document,
   frontier : @core.Frontier,
   error : @branch.BranchError,
@@ -216,7 +220,7 @@ fn Document::mark_admission_recovery_required(
   self.projection_verification = Some(
     ProjectionRecoveryVerification::from_targets(targets),
   )
-  match self.admission_recovery_checkout() {
+  match self.apply_changes_recovery_checkout() {
     Some(checkout) => {
       let recovery_checkout = (_oplog, next_frontier) => checkout(next_frontier)
       self.projection_health = ProjectionHealth::RecoveryRequired(
@@ -239,11 +243,11 @@ fn Document::mark_admission_recovery_required(
 
 ///|
 /// Use the production checkout or the package-local recovery capability.
-fn Document::recover_projection_for_admission(
+fn Document::recover_projection_for_apply_changes(
   self : Document,
   frontier : @core.Frontier,
 ) -> Unit raise DocumentError {
-  match self.admission_recovery_checkout() {
+  match self.apply_changes_recovery_checkout() {
     Some(checkout) =>
       self.recover_projection_with(frontier, (_oplog, frontier) => {
         checkout(frontier)
@@ -254,35 +258,30 @@ fn Document::recover_projection_for_admission(
 
 ///|
 /// Commit through the normal typed transition, or through the package-local
-/// failure capability used by white-box admission tests.
-fn Document::commit_admission_for_document(
+/// failure capability used by white-box change application tests.
+fn Document::apply_changes_for_document(
   self : Document,
-  prepared : @oplog.PreparedAdmission,
-) -> @oplog.AdmissionOutcome raise @oplog.OpLogError {
-  match self.admission_commit_failure() {
-    Some(failure) => self.oplog.commit_admission_with_failure(prepared, failure)
-    None => self.oplog.commit_admission(prepared)
+  action : @oplog.ApplyChanges,
+) -> @oplog.ApplyChangesOutcome raise @oplog.OpLogError {
+  match self.apply_changes_commit_failure() {
+    Some(failure) => self.oplog.apply_changes_with_failure(action, failure)
+    None => self.oplog.apply_changes(action)
   }
 }
 
 ///|
-/// Return the authority frontier carried by either typed outcome variant.
-fn DocumentAdmission::frontier_after(
-  self : DocumentAdmission,
-) -> @core.Frontier {
+fn DocumentChanges::frontier_after(self : DocumentChanges) -> @core.Frontier {
   match self.outcome {
-    @oplog.AdmissionOutcome::Complete(receipt) => receipt.frontier_after()
-    @oplog.AdmissionOutcome::Partial(receipt~, ..) => receipt.frontier_after()
+    @oplog.ApplyChangesOutcome::Succeeded(report) => report.frontier_after()
+    @oplog.ApplyChangesOutcome::Failed(report~, ..) => report.frontier_after()
   }
 }
 
 ///|
-/// Translate typed admission evidence for the legacy Unit-returning wrappers.
-/// Recovery failure takes precedence over a partial authority outcome because
-/// the committed Document is not safe for ordinary derived use until repaired.
-fn DocumentAdmission::raise_legacy_remote_error(
-  self : DocumentAdmission,
-) -> Unit raise DocumentError {
+/// Recovery failure takes precedence: committed changes may not yet be visible.
+pub fn DocumentChanges::report(
+  self : DocumentChanges,
+) -> @oplog.ApplyChangesReport raise DocumentError {
   match self.projection {
     ProjectionStatus::RecoveryRequired(error~) =>
       raise DocumentError::ProjectionRecoveryRequired(
@@ -293,11 +292,11 @@ fn DocumentAdmission::raise_legacy_remote_error(
     | ProjectionStatus::Projected
     | ProjectionStatus::Recovered =>
       match self.outcome {
-        @oplog.AdmissionOutcome::Complete(_) => ()
-        @oplog.AdmissionOutcome::Partial(receipt~, error~) =>
+        @oplog.ApplyChangesOutcome::Succeeded(report) => report
+        @oplog.ApplyChangesOutcome::Failed(report~, error~) =>
           raise DocumentError::OpLog(
-            @oplog.OpLogError::PartialRemoteAdmission(
-              committed=receipt.committed().to_owned(),
+            @oplog.OpLogError::PartialApplyChanges(
+              committed=report.committed().to_owned(),
               error~,
             ),
           )
@@ -306,33 +305,66 @@ fn DocumentAdmission::raise_legacy_remote_error(
 }
 
 ///|
-/// Admit an incomplete remote batch through one typed authority/projection
-/// boundary. Complete-frontier closure belongs to `merge_remote`, not here.
-pub fn Document::admit_remote(
+/// Complete-frontier closure belongs to `merge_remote`, not here.
+pub fn Document::apply_changes(
   self : Document,
   incoming : Array[@core.Op],
   max_pending? : Int,
   max_pending_after_complete? : Int,
-) -> DocumentAdmission raise DocumentError {
-  let entry_recovered = self.ensure_projection_ready_for_admission()
+) -> DocumentChanges raise DocumentError {
+  self.apply_changes_with_input(
+    ApplyChangesInput::RawOperations(incoming),
+    max_pending,
+    max_pending_after_complete,
+  )
+}
+
+///|
+pub fn Document::apply_structural_changes(
+  self : Document,
+  incoming : ArrayView[@core.StructuralOp],
+  max_pending? : Int,
+  max_pending_after_complete? : Int,
+) -> DocumentChanges raise DocumentError {
+  self.apply_changes_with_input(
+    ApplyChangesInput::StructuralOperations(incoming),
+    max_pending,
+    max_pending_after_complete,
+  )
+}
+
+///|
+fn Document::apply_changes_with_input(
+  self : Document,
+  input : ApplyChangesInput,
+  max_pending : Int?,
+  max_pending_after_complete : Int?,
+) -> DocumentChanges raise DocumentError {
+  let entry_recovered = self.ensure_projection_ready_for_apply_changes()
   // Remote ingress ends the local sequential-insert fast path at entry,
   // including pending-only, duplicate-only, and pre-commit rejection paths.
   self.cursor = None
-  validate_remote_ops(incoming[:])
-  self.observe_prepare_remote()
-  let prepared = self.prepare_remote_for_admission(
+  let incoming = match input {
+    RawOperations(operations) => {
+      validate_remote_ops(operations[:])
+      operations
+    }
+    StructuralOperations(operations) => operations.map(op => op.raw())
+  }
+  self.observe_action()
+  let action = self.action_for_apply_changes(
     incoming, max_pending, max_pending_after_complete,
   ) catch {
     error => raise DocumentError::OpLog(error)
   }
-  let preflight_recovered = self.ensure_admission_targets(
-    prepared.operations(),
+  let preflight_recovered = self.ensure_apply_changes_targets(
+    action.operations(),
     incoming[:],
-    frontier => self.recover_projection_for_admission(frontier),
+    frontier => self.recover_projection_for_apply_changes(frontier),
   )
   ProjectionWorkspace::commit_and_project(
     self,
-    prepared,
+    action,
     entry_recovered || preflight_recovered,
   )
 }

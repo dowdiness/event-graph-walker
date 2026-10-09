@@ -50,7 +50,7 @@ fn encode_unchanged() -> VisibilityChange {
 }
 
 ///|
-/// Resolve an operation's raw origin through the admitted causal graph.
+/// Resolve an operation's raw origin through the recorded causal graph.
 #inline
 fn resolve_origin(
   causal_graph : @causal_graph.CausalGraph,
@@ -149,7 +149,7 @@ fn undelete(
 }
 
 ///|
-/// Apply one admitted operation without observing a visibility change.
+/// Apply one recorded operation without observing a visibility change.
 #inline
 pub fn apply(
   tree : @fugue.FugueTree[String],
@@ -215,7 +215,7 @@ pub fn apply_all(
 }
 
 ///|
-/// Apply one admitted operation and translate projection failures at the
+/// Apply one recorded operation and translate projection failures at the
 /// package boundary without a second catching adapter frame.
 pub fn[E : Error] apply_with_visible_change_as(
   tree : @fugue.FugueTree[String],
@@ -229,7 +229,7 @@ pub fn[E : Error] apply_with_visible_change_as(
 }
 
 ///|
-/// Apply one admitted operation and report its semantic visibility outcome.
+/// Apply one recorded operation and report its semantic visibility outcome.
 pub fn apply_with_visible_change(
   tree : @fugue.FugueTree[String],
   op : @core.Op,

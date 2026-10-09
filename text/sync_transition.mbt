@@ -6,7 +6,6 @@ pub(all) enum TextEffect {
 } derive(Debug, Eq)
 
 ///|
-/// Availability of an exact incremental effect for one admission.
 pub(all) enum TextEffectAvailability {
   Exact(ArrayView[TextEffect])
   SnapshotRequired
@@ -14,8 +13,7 @@ pub(all) enum TextEffectAvailability {
 }
 
 ///|
-/// Opaque settlement for one Text authority admission.
-pub struct TextAdmissionTransition {
+pub struct TextSyncTransition {
   priv version_before : Version
   priv version_after : Version
   priv effects : Array[TextEffect]
@@ -24,33 +22,29 @@ pub struct TextAdmissionTransition {
 }
 
 ///|
-fn TextAdmissionTransition::new(
+fn TextSyncTransition::TextSyncTransition(
   version_before : Version,
   version_after : Version,
   effects : Array[TextEffect],
   availability : TextEffectAvailability,
   result : Result[SyncReport, TextError],
-) -> TextAdmissionTransition {
+) -> TextSyncTransition {
   { version_before, version_after, effects, availability, result, }
 }
 
 ///|
-pub fn TextAdmissionTransition::version_before(
-  self : TextAdmissionTransition,
-) -> Version {
+pub fn TextSyncTransition::version_before(self : TextSyncTransition) -> Version {
   self.version_before
 }
 
 ///|
-pub fn TextAdmissionTransition::version_after(
-  self : TextAdmissionTransition,
-) -> Version {
+pub fn TextSyncTransition::version_after(self : TextSyncTransition) -> Version {
   self.version_after
 }
 
 ///|
-pub fn TextAdmissionTransition::availability(
-  self : TextAdmissionTransition,
+pub fn TextSyncTransition::effect_availability(
+  self : TextSyncTransition,
 ) -> TextEffectAvailability {
   // Keep the transition-owned backing storage live for the returned view.
   ignore(self.effects)
@@ -58,9 +52,9 @@ pub fn TextAdmissionTransition::availability(
 }
 
 ///|
-/// Complete settlement after the consumer has reconciled derived state.
-pub fn TextAdmissionTransition::finish(
-  self : TextAdmissionTransition,
+/// Failure can follow committed changes; reconcile effects before propagating it.
+pub fn TextSyncTransition::report(
+  self : TextSyncTransition,
 ) -> SyncReport raise TextError {
   match self.result {
     Ok(report) => report
