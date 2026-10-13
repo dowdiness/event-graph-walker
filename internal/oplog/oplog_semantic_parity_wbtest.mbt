@@ -1,14 +1,14 @@
 ///| Gate P0 semantic parity tests for core-owned legacy change application.
 
 ///|
-fn p0_raw(agent : String, seq : Int) -> @core.RawVersion {
+fn p0_raw(agent : String, seq : Int32) -> @core.RawVersion {
   @core.RawVersion(agent, seq)
 }
 
 ///|
 fn p0_insert(
   agent : String,
-  seq : Int,
+  seq : Int32,
   parents : Array[@core.RawVersion],
   text : String,
   origin_left : @core.RawVersion?,
@@ -19,7 +19,7 @@ fn p0_insert(
 ///|
 fn p0_delete(
   agent : String,
-  seq : Int,
+  seq : Int32,
   parents : Array[@core.RawVersion],
   target : @core.RawVersion,
 ) -> @core.Op {

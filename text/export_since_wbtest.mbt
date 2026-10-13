@@ -51,7 +51,7 @@ fn assert_export_since_matches_oracle(
 ///|
 fn export_root_message(
   agent : String,
-  sequence : Int,
+  sequence : Int32,
   content : String,
 ) -> SyncMessage {
   let raw = @core.RawVersion(agent, sequence)
@@ -203,7 +203,7 @@ test "export_since canonical bytes do not depend on local LV change application 
 
 ///|
 test "property: sparse export matches independent full-scan oracle" {
-  let seeds : Array[Int] = @quickcheck.samples(40)
+  let seeds : Array[Int32] = @quickcheck.samples(40)
   for raw_seed in seeds {
     let reduced_seed = raw_seed % 997
     let seed = if reduced_seed < 0 { -reduced_seed } else { reduced_seed }

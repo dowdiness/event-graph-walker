@@ -1,7 +1,7 @@
 ///| QuickCheck properties for OpRun merge/decompress laws.
 
 ///|
-fn oprun_agent(seed : Int) -> String {
+fn oprun_agent(seed : Int32) -> String {
   if seed % 3 == 0 {
     "alice"
   } else if seed % 3 == 1 {
@@ -12,7 +12,10 @@ fn oprun_agent(seed : Int) -> String {
 }
 
 ///|
-fn random_insert_chars(rs : @splitmix.RandomState, count : Int) -> Array[Char] {
+fn random_insert_chars(
+  rs : @splitmix.RandomState,
+  count : Int32,
+) -> Array[Char] {
   let pool : Array[Char] = ['a', 'b', 'c', 'd', 'e']
   let chars : Array[Char] = []
   for _ in 0..<count {
@@ -25,8 +28,8 @@ fn random_insert_chars(rs : @splitmix.RandomState, count : Int) -> Array[Char] {
 ///|
 fn random_oprun_content(
   rs : @splitmix.RandomState,
-  kind : Int,
-  count : Int,
+  kind : Int32,
+  count : Int32,
 ) -> OpRunContent {
   if kind == 0 {
     Inserts(random_insert_chars(rs, count))
@@ -40,10 +43,10 @@ fn random_oprun_content(
 ///|
 fn make_op_run(
   agent : String,
-  start_lv : Int,
-  start_seq : Int,
-  count : Int,
-  kind : Int,
+  start_lv : Int32,
+  start_seq : Int32,
+  count : Int32,
+  kind : Int32,
   parents : Array[RawVersion],
   origin_left : RawVersion?,
   origin_right : RawVersion?,

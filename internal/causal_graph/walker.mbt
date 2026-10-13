@@ -14,9 +14,9 @@ pub fn CausalGraph::walk_from_frontier(
 /// `membership_buf[lv] == membership_gen` checks subset membership.
 fn topological_sort_subset(
   graph : CausalGraph,
-  reachable_lvs : Array[Int],
-  membership_buf : Array[Int],
-  membership_gen : Int,
+  reachable_lvs : Array[Int32],
+  membership_buf : Array[Int32],
+  membership_gen : Int32,
 ) -> @rle.Rle[@core.LvRange] {
   let int_buf = graph.query_int_buf
   for lv in reachable_lvs {
@@ -29,15 +29,15 @@ fn topological_sort_subset(
       }
     }
   }
-  let queue : Array[Int] = []
+  let queue : Array[Int32] = []
   for lv in reachable_lvs {
     if int_buf[lv] == 0 {
       queue.push(lv)
     }
   }
   queue.sort()
-  let result : Array[Int] = []
-  let ready : Array[Int] = []
+  let result : Array[Int32] = []
+  let ready : Array[Int32] = []
   let mut head = 0
   while head < queue.length() {
     let current = queue[head]
@@ -74,7 +74,7 @@ pub fn CausalGraph::diff_frontiers_lvs(
   let retreat_rle = if retreat_set.length() > 0 {
     let sorted = self.toposort_lv_set(retreat_set)
     let expanded = sorted.iter_units().collect()
-    let reversed : Array[Int] = []
+    let reversed : Array[Int32] = []
     for i = expanded.length() - 1; i >= 0; i = i - 1 {
       reversed.push(expanded[i])
     }

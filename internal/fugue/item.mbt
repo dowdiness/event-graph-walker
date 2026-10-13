@@ -30,7 +30,7 @@
 
 ///|
 /// Logical Version (local sequence number)
-pub(all) struct Lv(Int) derive(Debug, Eq, Compare, Default, Hash)
+pub(all) struct Lv(Int32) derive(Debug, Eq, Compare, Default, Hash)
 
 ///|
 pub impl Show for Lv with fn output(self, logger) {
@@ -48,7 +48,7 @@ pub impl Show for Lv with fn output(self, logger) {
 /// Existing code still uses `Lv` at most call sites. Later refactor slices will
 /// migrate storage and merge logic to use `ItemId` where block-local sequence
 /// identity is the real concern.
-pub(all) struct ItemId(Int) derive(Debug, Eq, Compare, Default, Hash)
+pub(all) struct ItemId(Int32) derive(Debug, Eq, Compare, Default, Hash)
 
 ///|
 pub impl Show for ItemId with fn output(self, logger) {
@@ -57,7 +57,7 @@ pub impl Show for ItemId with fn output(self, logger) {
 
 ///|
 /// Lamport Timestamp for causal ordering
-pub(all) struct Timestamp(Int) derive(Debug, Eq, Compare, Default)
+pub(all) struct Timestamp(Int32) derive(Debug, Eq, Compare, Default)
 
 ///|
 /// Replica identifier
@@ -103,7 +103,7 @@ pub(all) struct Item[T] {
   /// tree so concurrent operations that reference this item remain valid.
   mut deleted : Bool
   /// Lamport timestamp of the winning Delete/Undelete op (0 = initial/no winner).
-  mut deleted_ts : Int
+  mut deleted_ts : Int32
   /// Agent ID of the winning Delete/Undelete op ("" = initial/no winner).
   mut deleted_agent : String
   /// `true` if the winner was an Undelete op, `false` if Delete or initial.
@@ -113,7 +113,7 @@ pub(all) struct Item[T] {
   mut state : ItemState
   /// Number of active delete operations targeting this item (two-count merge).
   /// Managed exclusively by the merge code — FugueTree mutation methods do not touch it.
-  mut delete_count : Int
+  mut delete_count : Int32
   /// Lamport timestamp retained for causal metadata and diagnostics.
   timestamp : Timestamp
   /// Replica that created this item. Same-side siblings are ordered by this
@@ -121,7 +121,7 @@ pub(all) struct Item[T] {
   agent : ReplicaId
   /// Per-replica operation sequence. Together with `agent`, this is the
   /// stable event identity used by the EG-walker reference implementation.
-  sequence : Int
+  sequence : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -140,7 +140,7 @@ pub impl[T : Debug] Show for Item[T] with fn output(self, logger) {
 /// Returns an integer indicating the relative order: negative if `self` comes
 /// before `other`, zero if they are equal, positive if `self` comes after
 /// `other`.
-impl[T : Eq] Compare for Item[T] with fn compare(self, other) -> Int {
+impl[T : Eq] Compare for Item[T] with fn compare(self, other) -> Int32 {
   let agent_cmp = self.agent.0.lexical_compare(other.agent.0)
   if agent_cmp != 0 {
     return agent_cmp
@@ -168,7 +168,7 @@ fn[T] Item::new(
   side : Side,
   timestamp : Timestamp,
   agent : ReplicaId,
-  sequence : Int,
+  sequence : Int32,
 ) -> Item[T] {
   {
     id,

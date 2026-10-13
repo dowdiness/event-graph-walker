@@ -2,14 +2,14 @@
 
 ///|
 struct TypedOwnershipTrace {
-  mode : Int
+  mode : Int32
 } derive(Debug)
 
 ///|
 fn typed_ownership_rand_bounded(
   random_state : @splitmix.RandomState,
-  bound : Int,
-) -> Int {
+  bound : Int32,
+) -> Int32 {
   random_state.next_positive_int() % bound
 }
 

@@ -18,14 +18,14 @@ pub enum OpRunContent {
 /// immediately preceding op in the run, and for inserts the origin_left must
 /// chain sequentially while origin_right stays constant.
 pub struct OpRun {
-  start_lv : Int
+  start_lv : Int32
   agent : String
-  start_seq : Int
+  start_seq : Int32
   content : OpRunContent
   parents : Array[RawVersion]
   origin_left : RawVersion?
   origin_right : RawVersion?
-  count : Int
+  count : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -57,7 +57,7 @@ pub fn OpRun::from_op(op : Op) -> OpRun {
 ///|
 /// Return this run's half-open local-version bounds. OpLog uses these stable
 /// positional bounds for binary search without building RLE span prefixes.
-pub fn OpRun::lv_bounds(self : OpRun) -> (Int, Int) {
+pub fn OpRun::lv_bounds(self : OpRun) -> (Int32, Int32) {
   (self.start_lv, self.start_lv + self.count)
 }
 
@@ -65,7 +65,7 @@ pub fn OpRun::lv_bounds(self : OpRun) -> (Int, Int) {
 /// Decompress a single Op at the given offset within this run.
 ///
 /// `offset` must be in `[0, self.count)`. Returns None if out of bounds.
-pub fn OpRun::decompress(self : OpRun, offset : Int) -> Op? {
+pub fn OpRun::decompress(self : OpRun, offset : Int32) -> Op? {
   if offset < 0 || offset >= self.count {
     return None
   }
@@ -207,17 +207,17 @@ pub impl @rle.Mergeable for OpRun with fn merge(a : OpRun, b : OpRun) -> OpRun {
 }
 
 ///|
-pub impl @rle.HasLength for OpRun with fn length(self : OpRun) -> Int {
+pub impl @rle.HasLength for OpRun with fn length(self : OpRun) -> Int32 {
   self.count
 }
 
 ///|
-pub impl @rle.Spanning for OpRun with fn span(self : OpRun) -> Int {
+pub impl @rle.Spanning for OpRun with fn span(self : OpRun) -> Int32 {
   self.count
 }
 
 ///|
-pub impl @rle.Spanning for OpRun with fn logical_length(self : OpRun) -> Int {
+pub impl @rle.Spanning for OpRun with fn logical_length(self : OpRun) -> Int32 {
   self.count
 }
 

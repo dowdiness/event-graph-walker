@@ -8,7 +8,7 @@
 
 ///|
 /// Local Version - monotonic counter for operations
-pub type LV = Int
+pub type LV = Int32
 
 ///|
 /// Agent ID - identifies a replica
@@ -21,7 +21,7 @@ pub type AgentId = String
 /// uniqueness remains a deployment and protocol responsibility.
 pub struct RawVersion {
   agent : String
-  seq : Int
+  seq : Int32
 } derive(Eq, Compare, Debug, ToJson)
 
 ///|
@@ -34,7 +34,7 @@ pub impl @json.FromJson for RawVersion with fn from_json(json, path) {
         m.get("agent").unwrap_or(Json::null()),
         path=agent_path,
       )
-      let seq : Int = @json.from_json(
+      let seq : Int32 = @json.from_json(
         m.get("seq").unwrap_or(Json::null()),
         path=seq_path,
       )
@@ -61,7 +61,7 @@ pub impl Show for RawVersion with fn output(self, logger) {
 
 ///|
 /// Construct a RawVersion value.
-pub fn RawVersion::RawVersion(agent : String, seq : Int) -> RawVersion {
+pub fn RawVersion::RawVersion(agent : String, seq : Int32) -> RawVersion {
   { agent, seq, }
 }
 

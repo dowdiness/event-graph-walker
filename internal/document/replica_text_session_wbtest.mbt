@@ -78,7 +78,7 @@ test "prototype: concurrent authority advance merges by raw identity" {
 priv struct ReplicaTextSession {
   authority : Document
   session : Document
-  replayed_operations : Int
+  replayed_operations : Int32
 }
 
 ///|
@@ -100,14 +100,14 @@ fn ReplicaTextSession::text(self : ReplicaTextSession) -> String {
 }
 
 ///|
-fn ReplicaTextSession::replayed_operations(self : ReplicaTextSession) -> Int {
+fn ReplicaTextSession::replayed_operations(self : ReplicaTextSession) -> Int32 {
   self.replayed_operations
 }
 
 ///|
 fn ReplicaTextSession::insert(
   self : ReplicaTextSession,
-  position : Int,
+  position : Int32,
   text : String,
 ) -> @core.Op raise DocumentError {
   self.session.insert(position, text)
@@ -116,7 +116,7 @@ fn ReplicaTextSession::insert(
 ///|
 fn ReplicaTextSession::publish(
   self : ReplicaTextSession,
-) -> Int raise DocumentError {
+) -> Int32 raise DocumentError {
   let operations = replica_text_unapplied_operations(
     self.authority,
     self.session.get_all_ops(),
@@ -131,7 +131,7 @@ fn ReplicaTextSession::publish(
 ///|
 fn ReplicaTextSession::pull(
   self : ReplicaTextSession,
-) -> Int raise DocumentError {
+) -> Int32 raise DocumentError {
   let operations = replica_text_unapplied_operations(
     self.session,
     self.authority.get_all_ops(),

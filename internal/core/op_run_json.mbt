@@ -56,7 +56,7 @@ pub impl ToJson for OpRun with fn to_json(self) {
 pub impl @json.FromJson for OpRun with fn from_json(json, path) {
   match json {
     Json::Object(m) => {
-      let start_lv : Int = @json.from_json(
+      let start_lv : Int32 = @json.from_json(
         m.get("start_lv").unwrap_or(Json::null()),
         path=path.add_key("start_lv"),
       )
@@ -64,7 +64,7 @@ pub impl @json.FromJson for OpRun with fn from_json(json, path) {
         m.get("agent").unwrap_or(Json::null()),
         path=path.add_key("agent"),
       )
-      let start_seq : Int = @json.from_json(
+      let start_seq : Int32 = @json.from_json(
         m.get("start_seq").unwrap_or(Json::null()),
         path=path.add_key("start_seq"),
       )
@@ -84,7 +84,7 @@ pub impl @json.FromJson for OpRun with fn from_json(json, path) {
         m.get("origin_right").unwrap_or(Json::null()),
         path=path.add_key("origin_right"),
       )
-      let count : Int = @json.from_json(
+      let count : Int32 = @json.from_json(
         m.get("count").unwrap_or(Json::null()),
         path=path.add_key("count"),
       )

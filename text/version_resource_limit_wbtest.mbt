@@ -13,7 +13,7 @@ fn version_json_unchecked(version : Version) -> String {
 fn assert_version_limit(
   encoded : String,
   expected_kind : @sync.LimitKind,
-  expected_limit : Int,
+  expected_limit : Int32,
 ) -> Unit raise {
   ignore(Version::from_json_string(encoded)) catch {
     TextError::SyncFailed(@sync.Failure::LimitExceeded(kind~, limit~, actual=_)) => {
@@ -30,7 +30,7 @@ fn assert_version_limit(
 fn assert_version_encode_limit(
   version : Version,
   expected_kind : @sync.LimitKind,
-  expected_limit : Int,
+  expected_limit : Int32,
 ) -> Unit raise {
   try {
     ignore(version.to_json_string())
@@ -71,7 +71,7 @@ test "Version encoder rejects more than 4096 frontier entries" {
 
 ///|
 test "Version encoder rejects more than 4096 agent entries" {
-  let ranges : Array[(String, Array[(UInt, UInt)])] = []
+  let ranges : Array[(String, Array[(UInt32, UInt32)])] = []
   for agent_index in 0..<=4096 {
     ranges.push((version_resource_agent_name(agent_index), [(0U, 1U)]))
   }
@@ -137,13 +137,13 @@ test "Version rejects more than 4096 agent entries" {
   for agent in 0..<=4096 {
     entries.push(
       Json::object({
-        "replica_id": Json(("agent-" + agent.to_string())),
+        "replica_id": Json("agent-" + agent.to_string()),
         "ranges": Json::array([]),
       }),
     )
   }
   let encoded = Json::object({
-    "schema": Json((2)),
+    "schema": Json(2),
     "format": Json("event-graph-walker/text-version"),
     "frontier": Json::array([]),
     "ranges": Json::array(entries),

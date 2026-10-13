@@ -6,7 +6,7 @@
 /// Unique identifier for a tree node, composed of an agent name and a counter.
 pub(all) struct TreeNodeId {
   agent : String
-  counter : Int
+  counter : Int32
 } derive(Eq, Hash, Debug, Compare)
 
 ///|
@@ -29,7 +29,7 @@ pub let trash_id : TreeNodeId = { agent: "__TRASH__", counter: -2, }
 /// A timestamped move operation that relocates a node to a new parent
 /// at a specific position among its siblings.
 pub(all) struct TreeMoveOp {
-  timestamp : Int
+  timestamp : Int32
   target : TreeNodeId
   new_parent : TreeNodeId
   position : @fi.FractionalIndex
@@ -39,7 +39,7 @@ pub(all) struct TreeMoveOp {
 ///|
 /// A timestamped property mutation on a tree node.
 pub(all) struct TreePropertyOp {
-  timestamp : Int
+  timestamp : Int32
   target : TreeNodeId
   key : String
   value : String

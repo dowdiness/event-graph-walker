@@ -110,9 +110,9 @@ fn ProjectionWorkspace::project_all(
 
 ///|
 priv struct ProjectionInsertRun {
-  position : Int
-  start_lv : Int
-  mut count : Int
+  position : Int32
+  start_lv : Int32
+  mut count : Int32
   text : StringBuilder
 }
 

@@ -2,8 +2,8 @@
 
 ///|
 /// Reference implementation used to expose the cost of quadratic deduplication.
-fn frontier_from_array_linear_for_benchmark(values : Array[Int]) -> Frontier {
-  let deduped : Array[Int] = []
+fn frontier_from_array_linear_for_benchmark(values : Array[Int32]) -> Frontier {
+  let deduped : Array[Int32] = []
   for value in values {
     if !deduped.contains(value) {
       deduped.push(value)

@@ -5,8 +5,8 @@
 /// walk_from_frontier, diff_frontiers_lvs) where consecutive LVs
 /// are common in linear editing sessions.
 pub(all) struct LvRange {
-  start : Int
-  count : Int
+  start : Int32
+  count : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -50,13 +50,13 @@ pub impl @rle.Addressable for LvRange with fn address(
 
 ///|
 /// Check if a given LV falls within this range.
-pub fn LvRange::contains(self : LvRange, lv : Int) -> Bool {
+pub fn LvRange::contains(self : LvRange, lv : Int32) -> Bool {
   lv >= self.start && lv < self.end()
 }
 
 ///|
 /// Get the end (exclusive) of this range.
-pub fn LvRange::end(self : LvRange) -> Int {
+pub fn LvRange::end(self : LvRange) -> Int32 {
   self.start + self.count
 }
 

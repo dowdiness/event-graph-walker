@@ -6,20 +6,20 @@
 struct TraceSnapshot {
   frontier : @core.Frontier
   text : String
-  visible_count : Int
+  visible_count : Int32
 } derive(Debug)
 
 ///|
 struct BranchTrace {
   ops : Array[@core.Op]
   snapshots : Array[TraceSnapshot]
-  from_index : Int
-  to_index : Int
-  merge_split : Int
+  from_index : Int32
+  to_index : Int32
+  merge_split : Int32
 } derive(Debug)
 
 ///|
-fn rand_bounded(rs : @splitmix.RandomState, bound : Int) -> Int {
+fn rand_bounded(rs : @splitmix.RandomState, bound : Int32) -> Int32 {
   if bound <= 0 {
     0
   } else {
@@ -28,7 +28,7 @@ fn rand_bounded(rs : @splitmix.RandomState, bound : Int) -> Int {
 }
 
 ///|
-fn trace_agent(index : Int) -> String {
+fn trace_agent(index : Int32) -> String {
   "branch-agent-\{index}"
 }
 
@@ -40,9 +40,9 @@ fn trace_char(rs : @splitmix.RandomState) -> String {
 
 ///|
 fn random_insert_origin(
-  inserted_lvs : Array[Int],
+  inserted_lvs : Array[Int32],
   rs : @splitmix.RandomState,
-) -> Int {
+) -> Int32 {
   if inserted_lvs.is_empty() || rand_bounded(rs, 4) == 0 {
     -1
   } else {
@@ -52,20 +52,20 @@ fn random_insert_origin(
 
 ///|
 fn random_existing_lv(
-  inserted_lvs : Array[Int],
+  inserted_lvs : Array[Int32],
   rs : @splitmix.RandomState,
-) -> Int {
+) -> Int32 {
   inserted_lvs[rand_bounded(rs, inserted_lvs.length())]
 }
 
 ///|
 fn generate_agent_ops(
   agent : String,
-  op_count : Int,
+  op_count : Int32,
   rs : @splitmix.RandomState,
 ) -> Array[@core.Op] {
   let oplog = @oplog.OpLog(agent)
-  let inserted_lvs : Array[Int] = []
+  let inserted_lvs : Array[Int32] = []
   let ops : Array[@core.Op] = []
   for i in 0..<op_count {
     if i == 0 {
@@ -111,7 +111,7 @@ fn interleave_agent_ops(
   }
   let result : Array[@core.Op] = []
   while remaining > 0 {
-    let available_agents : Array[Int] = []
+    let available_agents : Array[Int32] = []
     for agent_index, ops in agent_ops {
       if next_indices[agent_index] < ops.length() {
         available_agents.push(agent_index)
@@ -165,7 +165,7 @@ fn add_version_vector_snapshot(
 ///|
 fn add_extra_snapshots(
   oplog : @oplog.OpLog,
-  agent_counts : Array[Int],
+  agent_counts : Array[Int32],
   snapshots : Array[TraceSnapshot],
   rs : @splitmix.RandomState,
 ) -> Unit {
@@ -215,9 +215,9 @@ fn replay_with_snapshots(
 fn normalize_trace(
   ops : Array[@core.Op],
   snapshots : Array[TraceSnapshot],
-  from_index : Int,
-  to_index : Int,
-  merge_split : Int,
+  from_index : Int32,
+  to_index : Int32,
+  merge_split : Int32,
 ) -> BranchTrace {
   let snapshot_count = snapshots.length()
   let normalized_from = from_index % snapshot_count
@@ -246,10 +246,10 @@ fn normalize_trace(
 ///|
 fn build_trace(
   ops : Array[@core.Op],
-  agent_counts : Array[Int],
-  from_index : Int,
-  to_index : Int,
-  merge_split : Int,
+  agent_counts : Array[Int32],
+  from_index : Int32,
+  to_index : Int32,
+  merge_split : Int32,
   rs : @splitmix.RandomState,
 ) -> BranchTrace {
   let (oplog, snapshots) = replay_with_snapshots(ops)
@@ -260,9 +260,9 @@ fn build_trace(
 ///|
 fn build_trace_without_extra_snapshots(
   ops : Array[@core.Op],
-  from_index : Int,
-  to_index : Int,
-  merge_split : Int,
+  from_index : Int32,
+  to_index : Int32,
+  merge_split : Int32,
 ) -> BranchTrace {
   let (_, snapshots) = replay_with_snapshots(ops)
   normalize_trace(ops, snapshots, from_index, to_index, merge_split)
@@ -281,7 +281,7 @@ impl @quickcheck.Arbitrary for BranchTrace with fn arbitrary(size, random_state)
     2 + size_cap / 4
   }
   let agent_ops : Array[Array[@core.Op]] = []
-  let agent_counts : Array[Int] = []
+  let agent_counts : Array[Int32] = []
   for agent_index in 0..<agent_count {
     let count = 2 + rand_bounded(rs, max_ops_per_agent - 1)
     let ops = generate_agent_ops(trace_agent(agent_index), count, rs)

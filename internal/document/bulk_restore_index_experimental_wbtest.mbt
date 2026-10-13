@@ -25,8 +25,8 @@ fn bulk_tie_locator() -> LvLocator {
 fn bulk_assert_siblings(
   locator : LvLocator,
   tree : LocatorSiblings,
-  output : Array[Int],
-) -> Int raise {
+  output : Array[Int32],
+) -> Int32 raise {
   match tree {
     Empty => 0
     Branch(left~, lv~, right~, height~) => {
@@ -51,8 +51,8 @@ fn bulk_assert_same_index(doc : Document) -> Unit raise {
   let r = reference.locator.unwrap()
   splice_assert_rank_nodes_equal(a, r)
   for (at, rt) in [(a.root_left, r.root_left), (a.root_right, r.root_right)] {
-    let aa : Array[Int] = []
-    let rr : Array[Int] = []
+    let aa : Array[Int32] = []
+    let rr : Array[Int32] = []
     ignore(bulk_assert_siblings(a, at, aa))
     ignore(bulk_assert_siblings(r, rt, rr))
     assert_eq(aa, rr)
@@ -68,8 +68,8 @@ fn bulk_assert_same_index(doc : Document) -> Unit raise {
         (ai.left_children, ri.left_children),
         (ai.right_children, ri.right_children),
       ] {
-      let aa : Array[Int] = []
-      let rr : Array[Int] = []
+      let aa : Array[Int32] = []
+      let rr : Array[Int32] = []
       ignore(bulk_assert_siblings(a, at, aa))
       ignore(bulk_assert_siblings(r, rt, rr))
       assert_eq(aa, rr)
@@ -92,7 +92,7 @@ test "bulk derived indexes equal old builder across edits tombstones and legacy 
   bulk_assert_same_index(doc)
   ignore(doc.undelete(1))
   bulk_assert_same_index(doc)
-  let deleted : Array[Int] = []
+  let deleted : Array[Int32] = []
   let mut state = 17
   for step = 0; step < 200; step = step + 1 {
     state = (state * 37 + 17) % 997
@@ -133,7 +133,7 @@ test "bulk derived indexes equal old builder across edits tombstones and legacy 
 test "bulk Cartesian build preserves deterministic equal-priority left winner" {
   let actual = bulk_tie_locator()
   let reference = bulk_tie_locator()
-  let order : Array[Int] = []
+  let order : Array[Int32] = []
   for index = 19; index >= 0; index = index - 1 {
     order.push(index)
     reference.rank_root = reference.merge_rank(reference.rank_root, index)

@@ -250,7 +250,7 @@ fn apply_transition_effects_for_test(
 /// Exact effects remain a complete sequential description across randomized
 /// concurrent insert/delete histories and Unicode scalar content.
 test "property: exact transition effects reproduce authority text" {
-  let seeds : Array[Int] = @quickcheck.samples(20)
+  let seeds : Array[Int32] = @quickcheck.samples(20)
   for raw_seed in seeds {
     let alice = try! TextState::new("transition-property-alice")
     let bob = try! TextState::new("transition-property-bob")

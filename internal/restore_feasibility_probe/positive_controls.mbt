@@ -3,22 +3,22 @@
 /// detector. Counter families not exercised by the named query stay zero.
 struct PositiveControlObservation {
   case_id : String
-  logical_queries : Int
-  physical_reads : Int
-  provider_operations : Int
-  provider_bytes : Int
-  in_memory_scans : Int
-  metadata_records : Int
-  metadata_bytes : Int
-  proof_bytes : Int
-  requested_identities : Int
-  payload_events : Int
-  payload_bytes : Int
-  scan_records_visited : Int
-  full_history_events : Int
-  full_history_bytes : Int
-  utf16_code_units : Int
-  unicode_scalars : Int
+  logical_queries : Int32
+  physical_reads : Int32
+  provider_operations : Int32
+  provider_bytes : Int32
+  in_memory_scans : Int32
+  metadata_records : Int32
+  metadata_bytes : Int32
+  proof_bytes : Int32
+  requested_identities : Int32
+  payload_events : Int32
+  payload_bytes : Int32
+  scan_records_visited : Int32
+  full_history_events : Int32
+  full_history_bytes : Int32
+  utf16_code_units : Int32
+  unicode_scalars : Int32
   rejected : Bool
 }
 
@@ -27,9 +27,9 @@ struct PositiveControlObservation {
 /// history provider operation used by candidate evidence.
 fn EvidenceDetector::read_metadata_with_proof_control(
   self : EvidenceDetector,
-  records~ : Int,
-  metadata_bytes~ : Int,
-  proof_bytes~ : Int,
+  records~ : Int32,
+  metadata_bytes~ : Int32,
+  proof_bytes~ : Int32,
 ) -> Unit {
   self.control_logical_queries = self.control_logical_queries + 1
   ignore(self.fetch_canonical_history())
@@ -43,9 +43,9 @@ fn EvidenceDetector::read_metadata_with_proof_control(
 /// history provider operation used by candidate evidence.
 fn EvidenceDetector::read_payload_batch_control(
   self : EvidenceDetector,
-  requested_identities~ : Int,
-  payload_events~ : Int,
-  payload_bytes~ : Int,
+  requested_identities~ : Int32,
+  payload_events~ : Int32,
+  payload_bytes~ : Int32,
 ) -> Unit {
   self.control_logical_queries = self.control_logical_queries + 1
   ignore(self.fetch_canonical_history())
@@ -61,7 +61,7 @@ fn EvidenceDetector::read_payload_batch_control(
 fn EvidenceDetector::scan_cold_records_noncompliantly_control(
   self : EvidenceDetector,
   text : String,
-  records~ : Int,
+  records~ : Int32,
 ) -> Bool {
   self.control_logical_queries = self.control_logical_queries + 1
   self.scan_resident_value(text)
@@ -74,8 +74,8 @@ fn EvidenceDetector::scan_cold_records_noncompliantly_control(
 /// canonical-history provider operation used by candidate evidence.
 fn EvidenceDetector::read_full_history_control(
   self : EvidenceDetector,
-  events~ : Int,
-  bytes~ : Int,
+  events~ : Int32,
+  bytes~ : Int32,
 ) -> Unit {
   self.control_logical_queries = self.control_logical_queries + 1
   ignore(self.fetch_canonical_history())
@@ -102,7 +102,7 @@ fn EvidenceDetector::observe_positive_control(
   self : EvidenceDetector,
   case_id : String,
   before : EvidenceSnapshot,
-  rejected? : Bool = false,
+  rejected~ : Bool = false,
 ) -> PositiveControlObservation {
   {
     case_id,
@@ -135,11 +135,11 @@ fn EvidenceDetector::observe_positive_control(
 fn positive_control_observations(
   detector : EvidenceDetector,
   text : String,
-  history_events~ : Int,
-  history_bytes~ : Int,
-  metadata_bytes~ : Int,
-  proof_bytes~ : Int,
-  payload_bytes~ : Int,
+  history_events~ : Int32,
+  history_bytes~ : Int32,
+  metadata_bytes~ : Int32,
+  proof_bytes~ : Int32,
+  payload_bytes~ : Int32,
 ) -> Array[PositiveControlObservation] {
   let x01_before = detector.snapshot()
   detector.read_metadata_with_proof_control(

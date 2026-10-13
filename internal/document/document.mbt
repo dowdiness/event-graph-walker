@@ -9,8 +9,8 @@
 /// after the last insert and the LV of that op, to skip position_to_lv()
 /// on the next sequential insert.
 struct InsertCursor {
-  next_position : Int // position right after the last-inserted item
-  lv : Int // LV of last inserted item
+  next_position : Int32 // position right after the last-inserted item
+  lv : Int32 // LV of last inserted item
   at_end : Bool // whether origin_right was None (end of document)
 } derive(Debug)
 
@@ -87,7 +87,7 @@ pub fn Document::resolve_graph_version(
 
 ///|
 /// Return live core-owned remote pending membership without reading projection state.
-pub fn Document::pending_count(self : Document) -> Int {
+pub fn Document::pending_count(self : Document) -> Int32 {
   self.oplog.pending_count()
 }
 
@@ -129,7 +129,7 @@ pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
 
 ///|
 /// Get the current frontier as an array of LVs
-pub fn Document::get_frontier_array(self : Document) -> Array[Int] {
+pub fn Document::get_frontier_array(self : Document) -> Array[Int32] {
   self.oplog.get_frontier().to_array()
 }
 
@@ -146,7 +146,7 @@ pub fn Document::get_frontier_raw(
 ///|
 /// Get the LV at a specific 0-based visible position.
 /// Uses O(log n) lookup via IndexedState's OrderTree projection.
-fn Document::lv_at_position(self : Document, position : Int) -> Int? {
+fn Document::lv_at_position(self : Document, position : Int32) -> Int32? {
   self.ensure_projection_ready_for_read()
   self.indexed_state.lv_at_position(self.tree, position)
 }
@@ -162,7 +162,7 @@ fn Document::invalidate_cache(self : Document) -> Unit {
 ///
 /// Returns the LV of the item before the cursor position,
 /// or -1 if at the start of the document.
-fn Document::position_to_lv(self : Document, position : Int) -> Int {
+fn Document::position_to_lv(self : Document, position : Int32) -> Int32 {
   self.ensure_projection_ready_for_read()
   self.indexed_state.position_to_lv(self.tree, position)
 }
@@ -182,7 +182,7 @@ fn Document::position_to_lv(self : Document, position : Int) -> Int {
 /// two splittable surrogate-half ops. See issue #31.
 pub fn Document::insert(
   self : Document,
-  position : Int,
+  position : Int32,
   text : String,
 ) -> @core.Op raise DocumentError {
   self.ensure_projection_ready()
@@ -338,7 +338,7 @@ fn validate_remote_ops(ops : ArrayView[@core.Op]) -> Unit raise DocumentError {
 /// Raises `InvalidPosition` if the position is negative or beyond the last character.
 pub fn Document::delete(
   self : Document,
-  position : Int,
+  position : Int32,
 ) -> @core.Op raise DocumentError {
   self.ensure_projection_ready()
   self.cursor = None
@@ -382,8 +382,8 @@ pub fn Document::delete(
 /// Delete the half-open range `[start, end)`.
 pub fn Document::delete_range(
   self : Document,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> Unit raise DocumentError {
   self.ensure_projection_ready()
   self.cursor = None
@@ -403,7 +403,7 @@ pub fn Document::delete_range(
   }
 
   // Collect all target LVs before mutating; position input is prevalidated.
-  let target_lvs : Array[Int] = []
+  let target_lvs : Array[Int32] = []
   for i = start; i < end; i = i + 1 {
     match self.lv_at_position(i) {
       Some(lv) => target_lvs.push(lv)
@@ -429,8 +429,8 @@ pub fn Document::delete_range(
 /// Replace the half-open range `[start, end)` with `text`.
 pub fn Document::replace_range(
   self : Document,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
   text : String,
 ) -> Unit raise DocumentError {
   self.ensure_projection_ready()
@@ -445,7 +445,7 @@ pub fn Document::replace_range(
 /// Validate that a local CRDT target exists before allocating a new op.
 fn Document::validate_target_lv(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> Unit raise DocumentError {
   match self.tree.get(@fugue.Lv(target_lv)) {
     Some(_) => ()
@@ -496,7 +496,7 @@ pub enum TargetEditResult {
 /// Commit an undelete operation after target preflight.
 fn Document::commit_undelete_by_lv(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> @core.Op raise DocumentError {
   self.cursor = None
   let op = self.oplog.undelete(target_lv) catch {
@@ -510,7 +510,7 @@ fn Document::commit_undelete_by_lv(
 /// Commit a delete operation after target preflight.
 fn Document::commit_delete_by_lv(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> @core.Op raise DocumentError {
   self.cursor = None
   let op = self.oplog.delete(target_lv) catch {
@@ -524,7 +524,7 @@ fn Document::commit_delete_by_lv(
 /// Create and apply an undelete operation for a specific LV.
 pub fn Document::undelete(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> @core.Op raise DocumentError {
   self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
@@ -535,7 +535,7 @@ pub fn Document::undelete(
 /// Create and apply a delete operation for a specific LV.
 pub fn Document::delete_by_lv(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> @core.Op raise DocumentError {
   self.ensure_projection_ready()
   self.validate_target_lv(target_lv)
@@ -546,7 +546,7 @@ pub fn Document::delete_by_lv(
 /// Delete a visible target, or return Stale when it is already deleted.
 pub fn Document::delete_if_visible(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> TargetEditResult raise DocumentError {
   self.ensure_projection_ready()
   if self.target_is_visible(target_lv) {
@@ -561,7 +561,7 @@ pub fn Document::delete_if_visible(
 /// Undelete a deleted target, or return Stale when it is already visible.
 pub fn Document::undelete_if_deleted(
   self : Document,
-  target_lv : Int,
+  target_lv : Int32,
 ) -> TargetEditResult raise DocumentError {
   self.ensure_projection_ready()
   if self.target_is_visible(target_lv) {
@@ -622,7 +622,7 @@ pub fn Document::merge_remote(
 
 ///|
 /// Get the number of visible characters in the document.
-pub fn Document::visible_count(self : Document) -> Int {
+pub fn Document::visible_count(self : Document) -> Int32 {
   self.ensure_projection_ready_for_read()
   self.tree.visible_count()
 }
@@ -685,7 +685,7 @@ pub fn Document::get_visible_items(
 
 ///|
 /// Map a local version to its visible position in the document.
-pub fn Document::lv_to_position(self : Document, lv : Int) -> Int? {
+pub fn Document::lv_to_position(self : Document, lv : Int32) -> Int32? {
   self.ensure_projection_ready_for_read()
   self.indexed_state.lv_to_position(self.tree, lv)
 }
@@ -702,7 +702,7 @@ pub extend InsertCursor with @debug.Debug::{to_repr}
 /// identity remains an invariant failure; only an existing hidden item is stale.
 fn Document::target_is_visible(
   self : Document,
-  lv : Int,
+  lv : Int32,
 ) -> Bool raise DocumentError {
   match self.tree.get(@fugue.Lv(lv)) {
     Some(item) => item.state.is_visible(delete_count=item.delete_count)
@@ -758,7 +758,10 @@ fn Document::project_local_target(
 
 ///|
 /// Read one visible character through the position index without a root scan.
-pub fn Document::visible_content_at(self : Document, position : Int) -> String? {
+pub fn Document::visible_content_at(
+  self : Document,
+  position : Int32,
+) -> String? {
   match self.lv_at_position(position) {
     Some(lv) => self.tree.get(@fugue.Lv(lv)).map(item => item.content)
     None => None
@@ -769,16 +772,16 @@ pub fn Document::visible_content_at(self : Document, position : Int) -> String? 
 /// Capture just a validated visible interval for local undo recording.
 pub fn Document::visible_entries_between(
   self : Document,
-  start : Int,
-  end : Int,
-) -> Array[(Int, String)] raise DocumentError {
+  start : Int32,
+  end : Int32,
+) -> Array[(Int32, String)] raise DocumentError {
   self.ensure_projection_ready()
   if start < 0 ||
     end < start ||
     end > self.indexed_state.visible_span(self.tree) {
     raise DocumentError::InvalidPosition(pos=end)
   }
-  let entries : Array[(Int, String)] = Array(capacity=end - start)
+  let entries : Array[(Int32, String)] = Array(capacity=end - start)
   for position = start; position < end; position = position + 1 {
     match self.lv_at_position(position) {
       Some(lv) =>

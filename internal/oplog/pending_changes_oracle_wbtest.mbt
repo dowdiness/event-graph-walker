@@ -153,7 +153,7 @@ fn oracle_compare_plan(
 }
 
 ///|
-fn oracle_chain(size : Int) -> Array[@core.Op] {
+fn oracle_chain(size : Int32) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<size {
     let parents = if i == 0 { [] } else { [@core.RawVersion("chain", i - 1)] }
@@ -170,7 +170,7 @@ fn oracle_reverse(ops : Array[@core.Op]) -> Array[@core.Op] {
 }
 
 ///|
-fn oracle_four_branches(depth : Int) -> Array[@core.Op] {
+fn oracle_four_branches(depth : Int32) -> Array[@core.Op] {
   let agents = ["branch-a", "branch-b", "branch-c", "branch-d"]
   let ops : Array[@core.Op] = []
   for level in 0..<depth {
@@ -207,7 +207,10 @@ fn oracle_zigzag(ops : Array[@core.Op]) -> Array[@core.Op] {
 
 ///|
 /// Generate two parent-linked insert chains, an origin-only node, and a join.
-fn oracle_generated_insert_dag(size : Int, prefix : String) -> Array[@core.Op] {
+fn oracle_generated_insert_dag(
+  size : Int32,
+  prefix : String,
+) -> Array[@core.Op] {
   let left_agent = "\{prefix}-left"
   let right_agent = "\{prefix}-right"
   let ops : Array[@core.Op] = []

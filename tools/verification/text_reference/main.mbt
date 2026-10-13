@@ -2,21 +2,21 @@
 /// PROTOTYPE: replay one command trace through the public text façade.
 struct Driver {
   documents : Array[@text.TextState]
-  indexes : Map[String, Int]
-  mut step : Int
+  indexes : Map[String, Int32]
+  mut step : Int32
 }
 
 ///|
 fn Driver::Driver() -> Driver {
-  { documents: [], indexes: Map([]), step: 0 }
+  { documents: [], indexes: Map([]), step: 0, }
 }
 
 ///|
 fn Driver::required_index(
   self : Driver,
   name : String,
-  line_number : Int,
-) -> Int raise Failure {
+  line_number : Int32,
+) -> Int32 raise Failure {
   match self.indexes.get(name) {
     Some(index) => index
     None =>
@@ -37,7 +37,7 @@ fn Driver::emit(self : Driver) -> Unit {
 fn Driver::apply_line(
   self : Driver,
   line : StringView,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit raise {
   let parts : Array[String] = line
     .split(" ")
@@ -54,12 +54,12 @@ fn Driver::apply_line(
     }
     ["insert", name, raw_position, content] => {
       let index = self.required_index(name, line_number)
-      let position : Int = @string.parse_int(raw_position)
+      let position : Int32 = @string.parse_int(raw_position)
       self.documents[index].insert(@text.Pos::at(position), content)
     }
     ["delete", name, raw_position] => {
       let index = self.required_index(name, line_number)
-      let position : Int = @string.parse_int(raw_position)
+      let position : Int32 = @string.parse_int(raw_position)
       self.documents[index].delete(@text.Pos::at(position))
     }
     ["sync", from, to] | ["sync-duplicate", from, to] => {
@@ -115,7 +115,9 @@ fn validate_corpus_checkpoint(
   let decoded = @text.Version::from_json_string(version.to_json_string())
   let view = document.checkout(decoded)
   if decoded != version || view.version() != version || view.text() != expected {
-    raise Failure::Failure("\{context}: Version round-trip or checkout diverged")
+    raise Failure::Failure(
+      "\{context}: Version round-trip or checkout diverged",
+    )
   }
 }
 
@@ -143,11 +145,7 @@ fn replay_corpus(encoded : String) -> Unit raise {
         "got \{@debug.to_string(actual)}",
       )
     }
-    validate_corpus_checkpoint(
-      document,
-      case.expected,
-      "corpus run \{index}",
-    )
+    validate_corpus_checkpoint(document, case.expected, "corpus run \{index}")
   }
   println(
     "PASS: \{cases.length()} official conformance runs matched (full batch)",
@@ -163,7 +161,7 @@ struct CorpusMessage {
 ///|
 fn single_operation_message(operation : Json, heads : Array[Json]) -> String {
   Json::object({
-    "schema": Json((2)),
+    "schema": Json(2),
     "format": Json("event-graph-walker/text-sync"),
     "operations": Json([operation]),
     "heads": Json(heads),

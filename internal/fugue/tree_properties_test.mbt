@@ -4,9 +4,9 @@
 ///|
 /// Generated concurrent insert operations for determinism property test
 pub(all) struct QcInsertOp {
-  id : Int
+  id : Int32
   content : String
-  ts : Int
+  ts : Int32
   agent : String
 } derive(Debug)
 
@@ -69,7 +69,7 @@ pub impl @shrink.Shrink for QcInsertOpSet with fn shrink(self) {
 ///|
 /// Compare insert ops using reference RawVersion `(agent, sequence)` order.
 /// Test IDs serve as the per-replica sequence for direct Fugue insertion.
-fn compare_ops(a : QcInsertOp, b : QcInsertOp) -> Int {
+fn compare_ops(a : QcInsertOp, b : QcInsertOp) -> Int32 {
   let agent_cmp = a.agent.lexical_compare(b.agent)
   if agent_cmp != 0 {
     return agent_cmp
@@ -111,8 +111,8 @@ fn shuffle_ops(ops : Array[QcInsertOp], seed : UInt64) -> Array[QcInsertOp] {
 /// Helper to create InsertOp from QcInsertOp with fixed origins
 fn qc_to_insert_op(
   op : QcInsertOp,
-  origin_left : Int,
-  origin_right : Int,
+  origin_left : Int32,
+  origin_right : Int32,
 ) -> @fugue.InsertOp[String] {
   {
     id: @fugue.Lv(op.id),
@@ -196,7 +196,7 @@ test "property: fugue insertion determinism (order independence)" {
 ///|
 /// Generated chain length for ancestor properties
 pub(all) struct ChainLen {
-  len : Int
+  len : Int32
 } derive(Debug)
 
 ///|
@@ -363,7 +363,7 @@ test "property: fugue ancestor transitivity (chain)" {
 /// Generated inserts for strong list and delete properties
 pub(all) struct InsertSetWithDeletes {
   inserts : Array[QcInsertOp]
-  delete_count : Int
+  delete_count : Int32
 } derive(Debug)
 
 ///|
@@ -524,10 +524,10 @@ test "property: fugue delete removes from visible list" {
 ///|
 /// Generated concurrent insert sizes for non-interleaving property test
 pub(all) struct ConcurrentInsertSeq {
-  len_a : Int
-  len_b : Int
-  ts_a : Int
-  ts_b : Int
+  len_a : Int32
+  len_b : Int32
+  ts_a : Int32
+  ts_b : Int32
 } derive(Debug)
 
 ///|
@@ -653,13 +653,13 @@ fn prop_fugue_non_interleaving(seq : ConcurrentInsertSeq) -> Bool {
   })
 
   // Collect all ops from both users
-  let ops_a : Array[(Int, Int, Int, String)] = []
+  let ops_a : Array[(Int32, Int32, Int32, String)] = []
   for i = 0; i < seq.len_a; i = i + 1 {
     let id = 10 + i
     let origin_left = if i == 0 { 0 } else { id - 1 }
     ops_a.push((id, origin_left, seq.ts_a + i, "userA"))
   }
-  let ops_b : Array[(Int, Int, Int, String)] = []
+  let ops_b : Array[(Int32, Int32, Int32, String)] = []
   for i = 0; i < seq.len_b; i = i + 1 {
     let id = 1000 + i
     let origin_left = if i == 0 { 0 } else { id - 1 }
@@ -730,8 +730,8 @@ test "property: fugue non-interleaving (concurrent sequences)" {
 pub(all) struct TieBreakCase {
   agent_a : String
   agent_b : String
-  id_a : Int
-  id_b : Int
+  id_a : Int32
+  id_b : Int32
 } derive(Debug)
 
 ///|
@@ -822,7 +822,7 @@ test "property: fugue RawVersion ordering (agent then sequence)" {
 ///|
 /// Generated branching tree size for binary lifting property tests
 pub(all) struct BranchingTree {
-  len : Int
+  len : Int32
 } derive(Debug)
 
 ///|
@@ -847,7 +847,7 @@ pub impl @shrink.Shrink for BranchingTree with fn shrink(self) {
 /// Uses modular parent assignment to create diverse tree topologies.
 fn prop_jump_matches_naive_branching(bt : BranchingTree) -> Bool {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  let parents : Array[Int] = []
+  let parents : Array[Int32] = []
   insert_with_test_sequence(tree, {
     id: @fugue.Lv(0),
     content: "A",
@@ -1024,7 +1024,7 @@ fn ancestry_matches_naive(
 /// Reuse the existing sequential insertion shape to create a deep right chain.
 fn append_right_chain(
   tree : @fugue.FugueTree[String],
-  length : Int,
+  length : Int32,
 ) -> Array[@fugue.Lv] {
   let ids : Array[@fugue.Lv] = []
   insert_with_test_sequence(

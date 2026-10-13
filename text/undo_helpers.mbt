@@ -6,7 +6,7 @@ fn TextState::commit_insert_plan_and_record(
   self : TextState,
   plan : InsertPlan,
   mgr : @undo.UndoManager,
-  timestamp_ms~ : Int,
+  timestamp_ms~ : Int32,
 ) -> Unit raise TextError {
   let mut offset = 0
   for ch in plan.text {
@@ -26,7 +26,7 @@ pub fn TextState::insert_and_record(
   pos : Pos,
   text : String,
   mgr : @undo.UndoManager,
-  timestamp_ms~ : Int,
+  timestamp_ms~ : Int32,
 ) -> Unit raise TextError {
   self.prepare_for_mutation()
   let plan = plan_insert(pos.value(), text, self.len())
@@ -39,7 +39,7 @@ pub fn TextState::delete_and_record(
   self : TextState,
   pos : Pos,
   mgr : @undo.UndoManager,
-  timestamp_ms~ : Int,
+  timestamp_ms~ : Int32,
 ) -> Unit raise TextError {
   self.prepare_for_mutation()
   let doc_len = self.len()
@@ -67,7 +67,7 @@ pub fn TextState::delete_range_and_record(
   self : TextState,
   range : Range,
   mgr : @undo.UndoManager,
-  timestamp_ms~ : Int,
+  timestamp_ms~ : Int32,
 ) -> Unit raise TextError {
   self.prepare_for_mutation()
   let doc_len = self.len()
@@ -94,7 +94,7 @@ pub fn TextState::replace_range_and_record(
   range : Range,
   text : String,
   mgr : @undo.UndoManager,
-  timestamp_ms~ : Int,
+  timestamp_ms~ : Int32,
 ) -> Unit raise TextError {
   self.prepare_for_mutation()
   let doc_len = self.len()

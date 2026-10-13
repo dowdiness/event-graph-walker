@@ -1,11 +1,11 @@
 ///|
 /// Helper to build an InsertOp[String] concisely for tests
 fn ins(
-  id : Int,
+  id : Int32,
   content : String,
-  origin_left : Int,
-  origin_right : Int,
-  timestamp : Int,
+  origin_left : Int32,
+  origin_right : Int32,
+  timestamp : Int32,
   agent : String,
 ) -> @fugue.InsertOp[String] {
   {

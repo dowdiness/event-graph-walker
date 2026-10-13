@@ -4,9 +4,9 @@
 ///|
 /// Construct mixed ready state only through production pending-changes owner transitions.
 fn benchmark_ready_matrix_pending_changes(
-  stale_ready : Int,
-  live_ready : Int,
-  live_unresolved : Int,
+  stale_ready : Int32,
+  live_ready : Int32,
+  live_unresolved : Int32,
 ) -> PendingChanges raise OpLogError {
   let pending_changes = PendingChanges()
   let missing = @core.RawVersion("ready-matrix-missing", 0)
@@ -81,9 +81,9 @@ fn benchmark_ready_matrix_order(
 /// Assert identical output and time 100 snapshots of one prebuilt state.
 fn benchmark_ready_matrix_run(
   b : @bench.T,
-  stale_ready : Int,
-  live_ready : Int,
-  live_unresolved : Int,
+  stale_ready : Int32,
+  live_ready : Int32,
+  live_unresolved : Int32,
   rebuild : Bool,
 ) -> Unit raise {
   let pending_changes = try! benchmark_ready_matrix_pending_changes(

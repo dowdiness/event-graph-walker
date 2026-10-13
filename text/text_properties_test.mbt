@@ -6,8 +6,8 @@
 ///|
 /// A single text edit captured during generation (position-based).
 enum TextEdit {
-  Insert(Int, String)
-  Delete(Int)
+  Insert(Int32, String)
+  Delete(Int32)
 } derive(Debug)
 
 ///|
@@ -167,7 +167,7 @@ test "property: version changes after edit" {
 
 ///|
 /// Property: Insert increases length by 1
-fn prop_insert_increases_length(pos : Int) -> Bool {
+fn prop_insert_increases_length(pos : Int32) -> Bool {
   let doc = try! @text.TextState::new("alice")
   // Pre-populate with some content
   try! doc.insert(@text.Pos::at(0), "hello")
@@ -190,7 +190,7 @@ test "property: insert increases length" {
 
 ///|
 /// Property: Delete decreases length by 1 (when doc not empty)
-fn prop_delete_decreases_length(pos : Int) -> Bool {
+fn prop_delete_decreases_length(pos : Int32) -> Bool {
   let doc = try! @text.TextState::new("alice")
   // Pre-populate
   try! doc.insert(@text.Pos::at(0), "hello")
@@ -257,7 +257,7 @@ test "property: empty document has length zero" {
 
 ///|
 /// Property: Pos::at clamps negative values to 0
-fn prop_pos_clamps_negative(n : Int) -> Bool {
+fn prop_pos_clamps_negative(n : Int32) -> Bool {
   let pos = @text.Pos::at(n)
   pos.value() >= 0
 }
@@ -341,13 +341,13 @@ test "property: export_since current version is empty" {
 ///|
 /// Property: Undo-redo roundtrip preserves text.
 /// For any sequence of inserts, undo then redo should restore the original text.
-fn prop_undo_redo_roundtrip_insert(size : Int) -> Bool {
+fn prop_undo_redo_roundtrip_insert(size : Int32) -> Bool {
   let clamped = if size < 0 { 0 } else if size > 20 { 20 } else { size }
   let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
   // Insert characters one by one
   for i = 0; i < clamped; i = i + 1 {
-    let ch = Int::unsafe_to_char('a'.to_int() + i % 26).to_string()
+    let ch = Int32::unsafe_to_char('a'.to_int() + i % 26).to_string()
     try! doc.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000)
   }
   let text_before = doc.text()
@@ -379,7 +379,7 @@ test "property: undo-redo roundtrip preserves text (insert)" {
 ///|
 /// Property: Undo-redo roundtrip for mixed insert/delete operations.
 /// After undo followed by redo, the document state should be restored.
-fn prop_undo_redo_roundtrip_mixed(size : Int) -> Bool {
+fn prop_undo_redo_roundtrip_mixed(size : Int32) -> Bool {
   let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
   let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")
@@ -419,14 +419,14 @@ test "property: undo-redo roundtrip preserves text (mixed)" {
 ///|
 /// Property: Undo operations can be synced to a peer and produce convergent state.
 /// This verifies that undo-generated ops (Delete/Undelete) are valid sync ops.
-fn prop_undo_ops_sync_to_peer(size : Int) -> Bool {
+fn prop_undo_ops_sync_to_peer(size : Int32) -> Bool {
   let clamped = if size < 0 { 1 } else if size > 10 { 10 } else { size }
   let doc_a = try! @text.TextState::new("alice")
   let doc_b = try! @text.TextState::new("bob")
   let mgr = @undo.UndoManager::new("alice")
   // Alice inserts text with recording
   for i = 0; i < clamped; i = i + 1 {
-    let ch = Int::unsafe_to_char('a'.to_int() + i % 26).to_string()
+    let ch = Int32::unsafe_to_char('a'.to_int() + i % 26).to_string()
     try! doc_a.insert_and_record(
       @text.Pos::at(i),
       ch,

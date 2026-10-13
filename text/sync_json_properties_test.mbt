@@ -103,7 +103,7 @@ test "property: export_since(current) stays empty after JSON round-trip" {
 }
 
 ///|
-fn prop_invalid_version_json_fails(seed : Int) -> Bool {
+fn prop_invalid_version_json_fails(seed : Int32) -> Bool {
   let invalid = if seed % 2 == 0 { "" } else { "{not_json" }
   let result : Result[@text.Version, @text.TextError] = Ok(
     @text.Version::from_json_string(invalid),
@@ -159,7 +159,7 @@ test "checkout rejects a range summary missing a frontier ancestor" {
 }
 
 ///|
-fn prop_invalid_sync_message_json_fails(seed : Int) -> Bool {
+fn prop_invalid_sync_message_json_fails(seed : Int32) -> Bool {
   let invalid = if seed % 2 == 0 { "" } else { "{" }
   let result : Result[@text.SyncMessage, @text.TextError] = Ok(
     @text.SyncMessage::from_json_string(invalid),
@@ -197,10 +197,10 @@ test "property: SyncMessage::from_json_string fails safely on malformed JSON" {
 }
 
 ///|
-fn prop_malformed_sync_content_rejected(seed : Int) -> Bool {
+fn prop_malformed_sync_content_rejected(seed : Int32) -> Bool {
   // Build a schema-2 sync payload that includes a malformed insert op.
   // A lone surrogate should be rejected as malformed UTF-16.
-  let malformed_char = Int::unsafe_to_char(0xD800).to_string()
+  let malformed_char = Int32::unsafe_to_char(0xD800).to_string()
   let bad_op = @core.Op::insert(
     seed,
     [],

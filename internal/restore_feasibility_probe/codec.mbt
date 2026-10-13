@@ -9,19 +9,19 @@ suberror R0CodecError {
 /// Stable identity used by the R0 sidecar and fixture catalog.
 struct RawIdentity {
   agent : String
-  sequence : Int
+  sequence : Int32
 } derive(Eq, Debug)
 
 ///|
-fn RawIdentity::RawIdentity(agent~ : String, sequence~ : Int) -> RawIdentity {
+fn RawIdentity::RawIdentity(agent~ : String, sequence~ : Int32) -> RawIdentity {
   { agent, sequence, }
 }
 
 ///|
 /// One canonical positional text event body.
 enum CanonicalBody {
-  InsertScalar(Int, String)
-  DeleteScalar(Int)
+  InsertScalar(Int32, String)
+  DeleteScalar(Int32)
   Undelete(RawIdentity)
 } derive(Eq, Debug)
 
@@ -54,7 +54,7 @@ fn strict_utf8(value : String) -> Bytes raise R0CodecError {
 }
 
 ///|
-fn unicode_scalar_length(value : String) -> Int raise R0CodecError {
+fn unicode_scalar_length(value : String) -> Int32 raise R0CodecError {
   validate_utf16(value)
   let mut count = 0
   let mut index = 0
@@ -68,7 +68,7 @@ fn unicode_scalar_length(value : String) -> Int raise R0CodecError {
 }
 
 ///|
-fn encode_uvarint(value : Int) -> Bytes raise R0CodecError {
+fn encode_uvarint(value : Int32) -> Bytes raise R0CodecError {
   if value < 0 {
     raise R0CodecError::InvalidValue(detail="negative uvarint")
   }
@@ -83,7 +83,7 @@ fn encode_uvarint(value : Int) -> Bytes raise R0CodecError {
 }
 
 ///|
-fn write_uvarint(buffer : Buffer, value : Int) -> Unit raise R0CodecError {
+fn write_uvarint(buffer : Buffer, value : Int32) -> Unit raise R0CodecError {
   buffer.write_bytes(encode_uvarint(value))
 }
 
@@ -132,7 +132,7 @@ fn encode_raw_identity(identity : RawIdentity) -> Bytes raise R0CodecError {
 }
 
 ///|
-fn compare_utf8_bytes(left : String, right : String) -> Int {
+fn compare_utf8_bytes(left : String, right : String) -> Int32 {
   let left_bytes = @utf8.encode(left)
   let right_bytes = @utf8.encode(right)
   let shared = left_bytes.length().min(right_bytes.length())
@@ -148,7 +148,7 @@ fn compare_utf8_bytes(left : String, right : String) -> Int {
 }
 
 ///|
-fn compare_raw_identity(left : RawIdentity, right : RawIdentity) -> Int {
+fn compare_raw_identity(left : RawIdentity, right : RawIdentity) -> Int32 {
   match compare_utf8_bytes(left.agent, right.agent) {
     0 => left.sequence.compare(right.sequence)
     other => other
@@ -215,7 +215,7 @@ fn bytes_hex(value : Bytes) -> String {
 /// Strict cursor decoder used by native and fresh JS targets.
 struct R0Decoder {
   bytes : Bytes
-  mut position : Int
+  mut position : Int32
 }
 
 ///|
@@ -234,7 +234,7 @@ fn R0Decoder::read_byte(self : R0Decoder) -> Byte raise R0CodecError {
 }
 
 ///|
-fn R0Decoder::_read_uvarint(self : R0Decoder) -> Int raise R0CodecError {
+fn R0Decoder::_read_uvarint(self : R0Decoder) -> Int32 raise R0CodecError {
   let start = self.position
   let mut value = 0
   let mut shift = 0

@@ -65,7 +65,11 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
 
 ///|
 /// Helper: Insert string character-by-character like Document module
-fn insert_string(oplog : @oplog.OpLog, text : String, start_lv : Int) -> Int {
+fn insert_string(
+  oplog : @oplog.OpLog,
+  text : String,
+  start_lv : Int32,
+) -> Int32 {
   let mut last_lv = start_lv
   for i = 0; i < text.length(); i = i + 1 {
     let ch = text[i:i + 1].to_owned()

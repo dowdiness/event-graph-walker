@@ -8,25 +8,25 @@ let text_version_format : String = "event-graph-walker/text-version"
 let text_sync_format : String = "event-graph-walker/text-sync"
 
 ///|
-let text_schema : Int = 2
+let text_schema : Int32 = 2
 
 ///|
 let text_sync_canonical_domain : Bytes = b"event-graph-walker:text-sync:v2"
 
 ///|
-let text_version_max_encoded_bytes : Int = 512 * 1024
+let text_version_max_encoded_bytes : Int32 = 512 * 1024
 
 ///|
-let text_version_max_frontier_entries : Int = 4096
+let text_version_max_frontier_entries : Int32 = 4096
 
 ///|
-let text_version_max_agents : Int = 4096
+let text_version_max_agents : Int32 = 4096
 
 ///|
-let text_version_max_total_ranges : Int = 4096
+let text_version_max_total_ranges : Int32 = 4096
 
 ///|
-fn stable_id_key(replica_id : String, sequence : Int) -> String {
+fn stable_id_key(replica_id : String, sequence : Int32) -> String {
   replica_id.length().to_string() +
   ":" +
   replica_id +
@@ -40,7 +40,7 @@ fn raw_key(raw : @core.RawVersion) -> String {
 }
 
 ///|
-fn compare_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
+fn compare_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
   match a.agent.compare(b.agent) {
     0 => a.seq.compare(b.seq)
     other => other
@@ -232,7 +232,7 @@ fn canonical_order(
 /// Dependency-indexed Kahn ordering with a deterministic comparison count.
 fn canonical_order_counted(
   ops : Array[@core.Op],
-) -> (Array[@core.Op], Int) raise @sync.Failure {
+) -> (Array[@core.Op], Int32) raise @sync.Failure {
   let candidates : Map[@core.RawVersion, @core.Op] = Map([])
   for op in ops {
     let key = op_identity(op)
@@ -248,7 +248,7 @@ fn canonical_order_counted(
       None => candidates[key] = op
     }
   }
-  let missing_counts : Map[@core.RawVersion, Int] = Map([])
+  let missing_counts : Map[@core.RawVersion, Int32] = Map([])
   let dependency_waiters : Map[@core.RawVersion, Array[@core.RawVersion]] = Map([],
   )
   candidates.each(fn(key, op) {
@@ -319,15 +319,15 @@ pub(all) struct SyncMessage {
   priv operations : Array[@core.Op]
   priv structural_operations : Array[@core.StructuralOp]
   priv heads : Array[@core.RawVersion]
-  priv encoded_size : Int?
-  priv decoded_operation_count : Int
+  priv encoded_size : Int32?
+  priv decoded_operation_count : Int32
 }
 
 ///|
 fn SyncMessage::SyncMessage(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
-  encoded_size : Int?,
+  encoded_size : Int32?,
 ) -> SyncMessage raise @sync.Failure {
   let structural_by_key : Map[@core.RawVersion, @core.StructuralOp] = Map([])
   for op in operations {
@@ -363,30 +363,30 @@ pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
 }
 
 ///|
-pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
+pub fn SyncMessage::op_count(self : SyncMessage) -> Int32 {
   self.operations.length()
 }
 
 ///|
 /// Result of applying a text synchronization message.
 pub(all) struct SyncReport {
-  priv applied_operations : Int
-  priv duplicate_operations : Int
-  priv pending_operations : Int
+  priv applied_operations : Int32
+  priv duplicate_operations : Int32
+  priv pending_operations : Int32
 } derive(Debug, Eq)
 
 ///|
-pub fn SyncReport::applied_operations(self : SyncReport) -> Int {
+pub fn SyncReport::applied_operations(self : SyncReport) -> Int32 {
   self.applied_operations
 }
 
 ///|
-pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int {
+pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int32 {
   self.duplicate_operations
 }
 
 ///|
-pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
+pub fn SyncReport::pending_operations(self : SyncReport) -> Int32 {
   self.pending_operations
 }
 
@@ -400,7 +400,7 @@ pub(all) struct SyncSession {
   priv apply_changes_override : ((
     @document.Document,
     ArrayView[@core.StructuralOp],
-    Int,
+    Int32,
   ) -> @document.DocumentChanges raise @document.DocumentError)?
 }
 
@@ -414,16 +414,16 @@ fn version_frontier_json(frontier : Array[@core.RawVersion]) -> Json {
 }
 
 ///|
-fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
+fn version_ranges_json(
+  ranges : Array[(String, Array[(UInt32, UInt32)])],
+) -> Json {
   let values : Array[Json] = []
   for entry in ranges {
     let agent = entry.0
     let entry_ranges = entry.1
     let parts : Array[Json] = []
     for range in entry_ranges {
-      parts.push(
-        Json::object({ "start": Json(range.0), "end": Json(range.1) }),
-      )
+      parts.push(Json::object({ "start": Json(range.0), "end": Json(range.1) }))
     }
     values.push(
       Json::object({ "replica_id": Json(agent), "ranges": Json(parts) }),
@@ -435,8 +435,8 @@ fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
 ///|
 fn ensure_text_version_limit(
   kind : @sync.LimitKind,
-  limit : Int,
-  actual : Int,
+  limit : Int32,
+  actual : Int32,
 ) -> Unit raise TextError {
   if actual > limit {
     raise TextError::SyncFailed(
@@ -516,12 +516,12 @@ fn exact_object_fields(
 /// and enforcing protocol semantics and resource limits.
 priv struct WireIdentity {
   replica_id : String
-  sequence : Int
+  sequence : Int32
 } derive(FromJson)
 
 ///|
 priv struct WireVersionEnvelope {
-  schema : Int
+  schema : Int32
   format : String
   frontier : Array[Json]
   ranges : Array[Json]
@@ -539,7 +539,7 @@ priv struct WireOperation {
 
 ///|
 priv struct WireSyncEnvelope {
-  schema : Int
+  schema : Int32
   format : String
   operations : Array[Json]
   heads : Array[Json]
@@ -603,7 +603,7 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
       text_version_max_agents,
       envelope.ranges.length(),
     )
-    let ranges : Array[(String, Array[(UInt, UInt)])] = []
+    let ranges : Array[(String, Array[(UInt32, UInt32)])] = []
     let mut total_ranges = 0
     for value in envelope.ranges {
       let obj = match value {
@@ -621,7 +621,7 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
         text_version_max_total_ranges,
         total_ranges,
       )
-      let agent_ranges : Array[(UInt, UInt)] = []
+      let agent_ranges : Array[(UInt32, UInt32)] = []
       for value in encoded_ranges {
         let fields = match value {
           Json::Object(fields) => fields
@@ -630,8 +630,8 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
         guard exact_object_fields(fields, ["start", "end"]) else {
           fail("range contains missing or unknown fields")
         }
-        let start : UInt = @json.from_json(fields["start"])
-        let end : UInt = @json.from_json(fields["end"])
+        let start : UInt32 = @json.from_json(fields["start"])
+        let end : UInt32 = @json.from_json(fields["end"])
         agent_ranges.push((start, end))
       }
       ranges.push((agent, agent_ranges))
@@ -655,10 +655,7 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
 
 ///|
 fn identity_json(raw : @core.RawVersion) -> Json {
-  Json::object({
-    "replica_id": Json(raw.agent),
-    "sequence": Json(raw.seq),
-  })
+  Json::object({ "replica_id": Json(raw.agent), "sequence": Json(raw.seq) })
 }
 
 ///|
@@ -971,7 +968,7 @@ fn SyncSession::prepare_for_apply_changes(
 fn SyncSession::apply_changes(
   self : SyncSession,
   operations : ArrayView[@core.StructuralOp],
-  max_pending_after_complete : Int,
+  max_pending_after_complete : Int32,
 ) -> @document.DocumentChanges raise @document.DocumentError {
   match self.apply_changes_override {
     Some(apply) => apply(self.doc.inner, operations, max_pending_after_complete)
@@ -1085,7 +1082,7 @@ pub fn SyncSession::current_version(self : SyncSession) -> Version {
 }
 
 ///|
-pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
+pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int32 {
   self.doc.inner.pending_count()
 }
 
@@ -1096,7 +1093,7 @@ pub fn SyncSession::clear_pending_sync(self : SyncSession) -> Unit {
 
 ///|
 /// Private canonical byte helpers.
-fn write_uvarint(buf : Buffer, value : Int) -> Unit {
+fn write_uvarint(buf : Buffer, value : Int32) -> Unit {
   let mut remaining = value
   while remaining >= 0x80 {
     buf.write_byte(((remaining & 0x7F) | 0x80).to_byte())

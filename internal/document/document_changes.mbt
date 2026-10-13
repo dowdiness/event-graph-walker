@@ -11,8 +11,8 @@ pub enum ProjectionStatus {
 ///|
 /// Package-internal scalar effect produced by Document projection.
 pub(all) enum ProjectionEffect {
-  Insert(position~ : Int, text~ : String)
-  Delete(start~ : Int, end~ : Int)
+  Insert(position~ : Int32, text~ : String)
+  Delete(start~ : Int32, end~ : Int32)
 }
 
 ///|
@@ -309,8 +309,8 @@ pub fn DocumentChanges::report(
 pub fn Document::apply_changes(
   self : Document,
   incoming : Array[@core.Op],
-  max_pending? : Int,
-  max_pending_after_complete? : Int,
+  max_pending? : Int32,
+  max_pending_after_complete? : Int32,
 ) -> DocumentChanges raise DocumentError {
   self.apply_changes_with_input(
     ApplyChangesInput::RawOperations(incoming),
@@ -323,8 +323,8 @@ pub fn Document::apply_changes(
 pub fn Document::apply_structural_changes(
   self : Document,
   incoming : ArrayView[@core.StructuralOp],
-  max_pending? : Int,
-  max_pending_after_complete? : Int,
+  max_pending? : Int32,
+  max_pending_after_complete? : Int32,
 ) -> DocumentChanges raise DocumentError {
   self.apply_changes_with_input(
     ApplyChangesInput::StructuralOperations(incoming),
@@ -337,8 +337,8 @@ pub fn Document::apply_structural_changes(
 fn Document::apply_changes_with_input(
   self : Document,
   input : ApplyChangesInput,
-  max_pending : Int?,
-  max_pending_after_complete : Int?,
+  max_pending : Int32?,
+  max_pending_after_complete : Int32?,
 ) -> DocumentChanges raise DocumentError {
   let entry_recovered = self.ensure_projection_ready_for_apply_changes()
   // Remote ingress ends the local sequential-insert fast path at entry,

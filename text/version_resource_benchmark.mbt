@@ -1,5 +1,5 @@
 ///|
-fn version_resource_agent_name(index : Int) -> String {
+fn version_resource_agent_name(index : Int32) -> String {
   let digits = index.to_string()
   "agent-" + "0".repeat(5 - digits.length()) + digits
 }
@@ -8,14 +8,14 @@ fn version_resource_agent_name(index : Int) -> String {
 /// Construct a canonical Version DTO with independent per-agent frontiers and
 /// non-adjacent even sequence numbers. Mutation is confined to fixture building.
 fn version_resource_fixture(
-  agent_count : Int,
-  ranges_per_agent : Int,
+  agent_count : Int32,
+  ranges_per_agent : Int32,
 ) -> Version {
   let frontier : Array[@core.RawVersion] = []
-  let ranges : Array[(String, Array[(UInt, UInt)])] = []
+  let ranges : Array[(String, Array[(UInt32, UInt32)])] = []
   for agent_index in 0..<agent_count {
     let agent = version_resource_agent_name(agent_index)
-    let agent_ranges : Array[(UInt, UInt)] = []
+    let agent_ranges : Array[(UInt32, UInt32)] = []
     for range_index in 0..<ranges_per_agent {
       let start = (range_index * 2).reinterpret_as_uint()
       agent_ranges.push((start, start + 1U))
@@ -31,8 +31,8 @@ fn version_resource_fixture(
 ///|
 fn version_resource_json(
   label : String,
-  agent_count : Int,
-  ranges_per_agent : Int,
+  agent_count : Int32,
+  ranges_per_agent : Int32,
 ) -> String raise Failure {
   let encoded = try! version_resource_fixture(agent_count, ranges_per_agent).to_json_string()
   let encoded_bytes = @utf8.encode(encoded).length()
@@ -48,8 +48,8 @@ fn version_resource_json(
 ///|
 fn version_resource_unchecked_json(
   label : String,
-  agent_count : Int,
-  ranges_per_agent : Int,
+  agent_count : Int32,
+  ranges_per_agent : Int32,
 ) -> String raise Failure {
   let version = version_resource_fixture(agent_count, ranges_per_agent)
   let graph_version = version.graph()
@@ -93,8 +93,8 @@ fn version_resource_encoding_is_rejected(version : Version) -> Bool {
 
 ///|
 fn version_resource_text_state(
-  agent_count : Int,
-  ranges_per_agent : Int,
+  agent_count : Int32,
+  ranges_per_agent : Int32,
 ) -> TextState raise @document.DocumentError {
   let document = @document.Document::new("resource-receiver")
   let operations : Array[@core.Op] = []

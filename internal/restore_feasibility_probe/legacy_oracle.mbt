@@ -6,7 +6,7 @@ fn legacy_raw(identity : RawIdentity) -> @core.RawVersion {
 
 ///|
 /// Stable ordering and equality for raw frontiers.
-fn legacy_compare_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
+fn legacy_compare_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
   let by_agent = a.agent.compare(b.agent)
   if by_agent != 0 {
     by_agent
@@ -41,10 +41,10 @@ fn legacy_frontier(
   admitted : Array[@core.RawVersion],
   parents : Array[RawIdentity],
 ) -> @core.Frontier {
-  let local_versions : Array[Int] = []
+  let local_versions : Array[Int32] = []
   for parent in parents {
     let raw = legacy_raw(parent)
-    let mut found : Int? = None
+    let mut found : Int32? = None
     for index = 0; index < admitted.length(); index = index + 1 {
       if admitted[index] == raw {
         found = Some(index)
@@ -203,10 +203,7 @@ fn legacy_advance_visible(
 
 ///|
 fn legacy_identity_json(raw : @core.RawVersion) -> Json {
-  Json::object({
-    "replica_id": Json(raw.agent),
-    "sequence": Json(raw.seq),
-  })
+  Json::object({ "replica_id": Json(raw.agent), "sequence": Json(raw.seq) })
 }
 
 ///|
@@ -305,7 +302,7 @@ fn generate_legacy_oracle_history(case_id : String) -> String {
     heads.push(legacy_identity_json(head))
   }
   Json::object({
-    "schema": Json((1)),
+    "schema": Json(1),
     "format": Json("event-graph-walker/text-sync"),
     "operations": Json(operations),
     "heads": Json(heads),

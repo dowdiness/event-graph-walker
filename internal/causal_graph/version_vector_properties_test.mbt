@@ -479,10 +479,11 @@ test "version vector core Shrink preserves the exposed shrink method" {
   let via_trait = @shrink.Shrink::shrink(vv).to_array()
   let via_method = vv.shrink().to_array()
   assert_eq(via_trait, via_method)
-  assert_eq(
-    via_trait.map(fn(candidate) { candidate.sequence_for("alice") }),
-    [Some(3), Some(2), Some(0)],
-  )
+  assert_eq(via_trait.map(fn(candidate) { candidate.sequence_for("alice") }), [
+    Some(3),
+    Some(2),
+    Some(0),
+  ])
   assert_eq(vv.sequence_for("alice"), Some(4))
   assert_eq(@causal_graph.VersionVector::new().shrink().count(), 0)
 }

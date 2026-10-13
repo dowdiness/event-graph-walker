@@ -3,10 +3,10 @@
 ///|
 fn apply_insert(
   block : TextBlock,
-  pos : Int,
-  lv : Int,
+  pos : Int32,
+  lv : Int32,
   content : String,
-  timestamp : Int,
+  timestamp : Int32,
   agent : String,
 ) -> Unit raise DocumentError {
   let op = block.make_insert_op_at(
@@ -22,8 +22,8 @@ fn apply_insert(
 ///|
 fn apply_delete(
   block : TextBlock,
-  pos : Int,
-  timestamp : Int,
+  pos : Int32,
+  timestamp : Int32,
   agent : String,
 ) -> Unit raise DocumentError {
   let op = block.make_delete_op_at(pos, timestamp, agent)

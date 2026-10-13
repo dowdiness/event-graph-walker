@@ -23,10 +23,10 @@ fn closed_history_scalar(text : String) -> Bool {
 
 ///|
 fn closed_history_add_budget(
-  total : Int,
-  amount : Int,
-  limit : Int,
-) -> Int raise OpLogError {
+  total : Int32,
+  amount : Int32,
+  limit : Int32,
+) -> Int32 raise OpLogError {
   if amount < 0 || total > limit || amount > limit - total {
     raise OpLogError::InvalidApplyChanges
   }

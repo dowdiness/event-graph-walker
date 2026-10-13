@@ -6,12 +6,12 @@ pub(all) suberror CausalGraphError {
   InvalidIdentity(raw~ : @core.RawVersion)
   /// A parent LV was not found in the graph.
   /// Parents must be added before their children.
-  MissingParent(lv~ : Int)
+  MissingParent(lv~ : Int32)
   /// An operation identity was already assigned to another local version.
   DuplicateVersion(raw~ : @core.RawVersion)
   /// A graph entry was not found for the given LV.
   /// Indicates a consistency bug — LV was referenced but never registered.
-  MissingEntry(lv~ : Int)
+  MissingEntry(lv~ : Int32)
 } derive(Debug)
 
 // ---------------------------------------------------------------------------

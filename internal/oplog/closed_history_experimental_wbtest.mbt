@@ -1,5 +1,5 @@
 ///|
-fn closed_log_chain(size : Int) -> Array[@core.Op] {
+fn closed_log_chain(size : Int32) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i = 0; i < size; i = i + 1 {
     ops.push(

@@ -40,7 +40,7 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
   let empty_hash = sha256_hex(empty)
   println(
     Json::object({
-      "schema_version": Json((1)),
+      "schema_version": Json(1),
       "run_id": Json(run_id),
       "producer": Json("egw_authority_native"),
       "case_id": Json(case_id),
@@ -58,13 +58,15 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
         "provider_fixture_bytes_base64": Json(base64_encode(provider)),
         "provider_fixture_bytes_length": Json(provider.length()),
         "provider_fixture_bytes_sha256": Json(sha256_hex(provider)),
-        "expected_replay_order": Json(fixture.replay_order
-        .map(identity => identity.agent + ":" + identity.sequence.to_string())
+        "expected_replay_order": Json(
+          fixture.replay_order.map(identity => {
+            identity.agent + ":" + identity.sequence.to_string()
+          }),
         ),
         "expected_final_text": Json(fixture.final_text),
-        "adapter_observation_sha256": Json(sha256_hex(
-          try! strict_utf8(fixture.final_text),
-        )),
+        "adapter_observation_sha256": Json(
+          sha256_hex(try! strict_utf8(fixture.final_text)),
+        ),
       }),
     }).stringify(),
   )
@@ -112,7 +114,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   let provider_sha256 : String = @json.from_json(
     object_field(payload, "provider_fixture_bytes_sha256"),
   )
-  let provider_length : Int = @json.from_json(
+  let provider_length : Int32 = @json.from_json(
     object_field(payload, "provider_fixture_bytes_length"),
   )
   let provider = try! base64_decode(provider_base64)
@@ -151,7 +153,7 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   }
   println(
     Json::object({
-      "schema_version": Json((1)),
+      "schema_version": Json(1),
       "run_id": Json(run_id),
       "producer": Json("egw_candidate_js"),
       "case_id": Json(case_id),

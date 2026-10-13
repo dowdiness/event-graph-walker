@@ -1,7 +1,10 @@
 ///|
 /// Focused export benchmarks. Fixture construction and peer Version capture
 /// happen outside b.bench; timed work is export/difference/message construction.
-fn export_benchmark_fixture(history : Int, delta : Int) -> (TextState, Version) {
+fn export_benchmark_fixture(
+  history : Int32,
+  delta : Int32,
+) -> (TextState, Version) {
   let document = try! TextState::new("benchmark")
   let shared = history - delta
   for index in 0..<shared {
@@ -25,8 +28,8 @@ fn export_benchmark_oracle(document : TextState, peer : Version) -> SyncMessage 
 ///|
 fn benchmark_sparse_export(
   b : @bench.T,
-  history : Int,
-  delta : Int,
+  history : Int32,
+  delta : Int32,
   oracle : Bool,
 ) -> Unit {
   let (document, peer) = export_benchmark_fixture(history, delta)
@@ -40,7 +43,11 @@ fn benchmark_sparse_export(
 ///|
 /// Measure first observation without warming the source summary. Each sample's
 /// fixture and peer DTO are built before the timer starts.
-fn benchmark_cold_export_once(b : @bench.T, history : Int, delta : Int) -> Unit {
+fn benchmark_cold_export_once(
+  b : @bench.T,
+  history : Int32,
+  delta : Int32,
+) -> Unit {
   let timings : Array[Double] = []
   for _ in 0..<3 {
     let document = try! TextState::new("cold-benchmark")

@@ -12,7 +12,7 @@
 /// - Version Vector: {"alice": 4, "bob": 8}
 ///
 /// This provides O(1) comparison for common operations and reduces memory usage.
-pub struct VersionVector(Map[String, Int]) derive (
+pub struct VersionVector(Map[String, Int32]) derive (
   Debug,
   Eq,
   Default,
@@ -238,7 +238,7 @@ pub fn VersionVector::new() -> VersionVector {
 pub fn VersionVector::set(
   self : VersionVector,
   agent : String,
-  seq : Int,
+  seq : Int32,
 ) -> VersionVector {
   self.0.set(agent, seq)
   self
@@ -295,7 +295,7 @@ pub fn VersionVector::agents(self : VersionVector) -> Array[String] {
 pub fn VersionVector::sequence_for(
   self : VersionVector,
   agent : String,
-) -> Int? {
+) -> Int32? {
   self.0.get(agent)
 }
 
@@ -477,7 +477,7 @@ pub fn VersionVector::to_frontier(
 pub fn VersionVector::includes(
   self : VersionVector,
   agent : String,
-  seq : Int,
+  seq : Int32,
 ) -> Bool {
   match self.0.get(agent) {
     Some(max_seq) => seq <= max_seq

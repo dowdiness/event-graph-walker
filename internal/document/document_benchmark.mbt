@@ -3,7 +3,7 @@
 // Run with: cd event-graph-walker && moon bench --release
 
 ///|
-fn build_doc(n : Int) -> Document {
+fn build_doc(n : Int32) -> Document {
   let doc = Document::new("bench")
   if n > 0 {
     let _ = doc.insert(0, "x".repeat(n)) catch { _ => abort("unreachable") }
@@ -12,7 +12,7 @@ fn build_doc(n : Int) -> Document {
 }
 
 ///|
-fn build_remote_chain(n : Int) -> Array[@core.Op] {
+fn build_remote_chain(n : Int32) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<n {
     let parents = if i == 0 { [] } else { [@core.RawVersion("remote", i - 1)] }
@@ -38,7 +38,7 @@ fn merge_remote_chain(doc : Document, ops : Array[@core.Op]) -> Unit {
 }
 
 ///|
-fn build_remote_branches(depth : Int) -> Array[@core.Op] {
+fn build_remote_branches(depth : Int32) -> Array[@core.Op] {
   let agents = ["remote-a", "remote-b", "remote-c", "remote-d"]
   let ops : Array[@core.Op] = []
   for level in 0..<depth {
@@ -232,7 +232,7 @@ fn benchmark_remote_projection(
   base_ops : Array[@core.Op],
   setup_ops : Array[@core.Op],
   incoming : @core.Op,
-  expected_count : Int,
+  expected_count : Int32,
 ) -> Unit raise {
   let timings : Array[Double] = []
   for _ in 0..<5 {

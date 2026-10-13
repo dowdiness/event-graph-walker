@@ -2,9 +2,9 @@
 
 ///|
 enum CompressionLocalEdit {
-  Append(Int)
-  Delete(Int)
-  Undelete(Int)
+  Append(Int32)
+  Delete(Int32)
+  Undelete(Int32)
 } derive(Debug)
 
 ///|
@@ -14,10 +14,10 @@ struct CompressionTrace {
 
 ///|
 struct CompressionExpectedOp {
-  lv : Int
+  lv : Int32
   parents : Array[@core.RawVersion]
   agent : String
-  seq : Int
+  seq : Int32
   content : @core.OpContent
   origin_left : @core.RawVersion?
   origin_right : @core.RawVersion?
@@ -86,17 +86,17 @@ fn CompressionTrace::edits(
 }
 
 ///|
-fn CompressionTrace::operation_count(self : CompressionTrace) -> Int {
+fn CompressionTrace::operation_count(self : CompressionTrace) -> Int32 {
   4 + self.suffix.length()
 }
 
 ///|
-fn CompressionTrace::selected_lvs(self : CompressionTrace) -> Array[Int] {
+fn CompressionTrace::selected_lvs(self : CompressionTrace) -> Array[Int32] {
   [0, 1, self.operation_count() - 1]
 }
 
 ///|
-fn compression_insert_text(seed : Int) -> String {
+fn compression_insert_text(seed : Int32) -> String {
   let alphabet : Array[Char] = ['a', 'b', 'c', 'd', 'e']
   alphabet[seed % alphabet.length()].to_string()
 }
@@ -123,7 +123,7 @@ fn compression_snapshots(ops : Array[@core.Op]) -> Array[CompressionExpectedOp] 
 fn CompressionTrace::replay(self : CompressionTrace) -> CompressionReplay {
   let oplog = OpLog("generated-local")
   let expected : Array[CompressionExpectedOp] = []
-  let inserted_lvs : Array[Int] = []
+  let inserted_lvs : Array[Int32] = []
   for edit in self.edits() {
     let op = match edit {
       Append(seed) => {

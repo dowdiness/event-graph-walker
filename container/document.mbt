@@ -13,7 +13,7 @@ pub(all) struct TreeNodeId {
 /// Construct a validated non-sentinel node identifier.
 pub fn TreeNodeId::TreeNodeId(
   replica_id : String,
-  sequence : Int,
+  sequence : Int32,
 ) -> TreeNodeId raise DocumentError {
   if replica_id == "" || sequence < 0 {
     raise DocumentError::Internal(detail="invalid tree node identity")
@@ -37,7 +37,7 @@ pub fn TreeNodeId::replica_id(self : TreeNodeId) -> String {
 }
 
 ///|
-pub fn TreeNodeId::sequence(self : TreeNodeId) -> Int {
+pub fn TreeNodeId::sequence(self : TreeNodeId) -> Int32 {
   self.inner.counter
 }
 
@@ -96,9 +96,9 @@ pub(all) struct SyncMessage {
   // proof-carrying representation used by preparation and pending queues.
   priv tree_ops : Array[VersionedTreeOp]
   priv text_ops : Array[VersionedBlockTextOp]
-  priv encoded_size : Int?
+  priv encoded_size : Int32?
   priv structural_records : Array[StructuralSyncRecord]?
-  priv decoded_operation_count : Int
+  priv decoded_operation_count : Int32
 }
 
 ///|
@@ -106,8 +106,8 @@ pub(all) struct SyncMessage {
 fn SyncMessage::SyncMessage(
   tree_ops : Array[VersionedTreeOp],
   text_ops : Array[VersionedBlockTextOp],
-  encoded_size : Int?,
-  decoded_operation_count : Int,
+  encoded_size : Int32?,
+  decoded_operation_count : Int32,
 ) -> SyncMessage raise @sync.Failure {
   let records : Array[StructuralSyncRecord] = []
   for op in tree_ops {
@@ -228,7 +228,7 @@ fn SyncCandidate::observe_message(
 priv struct PreparedSync {
   applicable : Array[ApplicableSyncOp]
   pending : Array[StructuralSyncRecord]
-  duplicate_operations : Int
+  duplicate_operations : Int32
 }
 
 ///|
@@ -243,34 +243,34 @@ priv struct PreparedSync {
 /// after the call, waiting for causal dependencies that have not yet arrived.
 /// Inspect it via `SyncSession::pending_sync_count`.
 pub(all) struct SyncReport {
-  priv applied_tree_ops : Int
-  priv applied_text_ops : Int
-  priv duplicate_ops : Int
-  priv pending_ops : Int
+  priv applied_tree_ops : Int32
+  priv applied_text_ops : Int32
+  priv duplicate_ops : Int32
+  priv pending_ops : Int32
 }
 
 ///|
-pub fn SyncReport::applied_tree_operations(self : SyncReport) -> Int {
+pub fn SyncReport::applied_tree_operations(self : SyncReport) -> Int32 {
   self.applied_tree_ops
 }
 
 ///|
-pub fn SyncReport::applied_text_operations(self : SyncReport) -> Int {
+pub fn SyncReport::applied_text_operations(self : SyncReport) -> Int32 {
   self.applied_text_ops
 }
 
 ///|
-pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int {
+pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int32 {
   self.duplicate_ops
 }
 
 ///|
-pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
+pub fn SyncReport::pending_operations(self : SyncReport) -> Int32 {
   self.pending_ops
 }
 
 ///|
-fn text_op_timestamp(op : TextOp) -> Int {
+fn text_op_timestamp(op : TextOp) -> Int32 {
   match op {
     Insert(insert_op) => insert_op.timestamp
     Delete(delete_op) => delete_op.timestamp
@@ -290,7 +290,7 @@ fn text_op_agent(op : TextOp) -> String {
 ///|
 // Kind priority Insert < Delete < Undelete: forces stable ordering when
 // timestamp, agent, and block tie across different kinds.
-fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
+fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int32 {
   let ts_cmp = text_op_timestamp(a.op).compare(text_op_timestamp(b.op))
   if ts_cmp != 0 {
     return ts_cmp
@@ -320,7 +320,7 @@ fn compare_text_ops(a : BlockTextOp, b : BlockTextOp) -> Int {
 
 ///|
 /// Compare two replicated tree ops by Lamport timestamp, agent, and payload.
-fn compare_ops(a : @mt.TreeOp, b : @mt.TreeOp) -> Int {
+fn compare_ops(a : @mt.TreeOp, b : @mt.TreeOp) -> Int32 {
   let (a_timestamp, a_agent) = match a {
     @mt.Move(op) => (op.timestamp, op.agent)
     @mt.SetProperty(op) => (op.timestamp, op.agent)
@@ -453,7 +453,10 @@ fn raw_version_key(version : @core.RawVersion) -> String {
 
 ///|
 /// Compare two property ops using the document's total op ordering.
-fn compare_property_ops(a : @mt.TreePropertyOp, b : @mt.TreePropertyOp) -> Int {
+fn compare_property_ops(
+  a : @mt.TreePropertyOp,
+  b : @mt.TreePropertyOp,
+) -> Int32 {
   compare_ops(@mt.SetProperty(a), @mt.SetProperty(b))
 }
 
@@ -463,8 +466,8 @@ pub struct Document {
   priv log : @mt.TreeOpLog
   priv graph : @cg.CausalGraph
   priv agent_id : String
-  priv mut next_counter : Int
-  priv mut lamport_clock : Int
+  priv mut next_counter : Int32
+  priv mut lamport_clock : Int32
   priv ops : Array[@mt.TreeOp]
   priv seen_ops : Map[String, Bool]
   priv text_ops : Array[BlockTextOp]
@@ -477,7 +480,7 @@ pub struct Document {
   priv blocks : Map[@mt.TreeNodeId, TextBlock]
   priv undo_stack : Array[UndoGroup]
   priv redo_stack : Array[UndoGroup]
-  priv mut txn_depth : Int
+  priv mut txn_depth : Int32
   priv txn_buffer : Array[UndoItem]
   priv mut tracking_enabled : Bool
   priv mut undo_execution_mode : Bool
@@ -572,7 +575,9 @@ fn Document::alloc_id(self : Document) -> @mt.TreeNodeId {
 
 ///|
 /// Allocate a new causal version. Returns (lv, timestamp).
-fn Document::next_version(self : Document) -> (Int, Int) raise DocumentError {
+fn Document::next_version(
+  self : Document,
+) -> (Int32, Int32) raise DocumentError {
   let frontier = self.graph.get_frontier()
   let parents = frontier.to_array()
   let lv = self.graph.add_version(parents, self.agent_id) catch {
@@ -590,7 +595,7 @@ fn Document::next_version(self : Document) -> (Int, Int) raise DocumentError {
 ///|
 fn Document::raw_version_for_lv(
   self : Document,
-  lv : Int,
+  lv : Int32,
 ) -> @core.RawVersion raise DocumentError {
   match self.graph.lv_to_raw(lv) {
     Some(version) => version
@@ -601,7 +606,7 @@ fn Document::raw_version_for_lv(
 ///|
 fn Document::next_version_with_raw(
   self : Document,
-) -> (Int, Int, @core.RawVersion) raise DocumentError {
+) -> (Int32, Int32, @core.RawVersion) raise DocumentError {
   let (lv, timestamp) = self.next_version()
   let version = self.raw_version_for_lv(lv)
   (lv, timestamp, version)
@@ -610,7 +615,7 @@ fn Document::next_version_with_raw(
 ///|
 fn Document::raw_parents_for_lv(
   self : Document,
-  lv : Int,
+  lv : Int32,
 ) -> Array[@core.RawVersion] raise DocumentError {
   let entry = match self.graph.get_entry(lv) {
     Some(entry) => entry
@@ -713,8 +718,8 @@ fn Document::record_sync_text_op(
 fn Document::resolve_parent_lvs(
   self : Document,
   parents : Array[@core.RawVersion],
-) -> Array[Int]? {
-  let resolved : Array[Int] = []
+) -> Array[Int32]? {
+  let resolved : Array[Int32] = []
   for parent in parents {
     match self.graph.raw_to_lv(parent) {
       Some(lv) => resolved.push(lv)
@@ -725,7 +730,10 @@ fn Document::resolve_parent_lvs(
 }
 
 ///|
-fn Document::observe_remote_timestamp(self : Document, timestamp : Int) -> Unit {
+fn Document::observe_remote_timestamp(
+  self : Document,
+  timestamp : Int32,
+) -> Unit {
   if timestamp > self.lamport_clock {
     self.lamport_clock = timestamp
   }
@@ -1564,7 +1572,7 @@ pub fn SyncSession::apply(
 }
 
 ///|
-pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
+pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int32 {
   self.document.pending_sync_ops.length()
 }
 

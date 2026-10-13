@@ -7,7 +7,7 @@
 
 ///|
 fn p1_pending_benchmark_fixture(
-  count : Int,
+  count : Int32,
 ) -> (OpLog, Array[@core.Op]) raise OpLogError {
   let target = OpLog("p1-pending-benchmark")
   if count == 0 {
@@ -34,8 +34,8 @@ fn p1_pending_benchmark_fixture(
 ///|
 fn p1_pending_benchmark_prepare(
   b : @bench.T,
-  count : Int,
-  max_pending : Int?,
+  count : Int32,
+  max_pending : Int32?,
   expect_pending_limit_rejection : Bool,
 ) -> Unit raise OpLogError {
   let (target, incoming) = p1_pending_benchmark_fixture(count)
@@ -75,8 +75,8 @@ fn p1_pending_benchmark_prepare(
 ///|
 fn p1_pending_benchmark_prepare_and_commit(
   b : @bench.T,
-  count : Int,
-  max_pending : Int?,
+  count : Int32,
+  max_pending : Int32?,
   expect_pending_limit_rejection : Bool,
 ) -> Unit raise OpLogError {
   let (target, incoming) = p1_pending_benchmark_fixture(count)
@@ -140,8 +140,8 @@ fn p1_pending_benchmark_prepare_and_commit(
 /// rejection leaves the current operation and predecessor state unchanged.
 fn p1_pending_benchmark_prepare_and_admit(
   b : @bench.T,
-  count : Int,
-  max_pending : Int?,
+  count : Int32,
+  max_pending : Int32?,
   expect_pending_limit_rejection : Bool,
 ) -> Unit raise OpLogError {
   let (target, _) = p1_pending_benchmark_fixture(count)
