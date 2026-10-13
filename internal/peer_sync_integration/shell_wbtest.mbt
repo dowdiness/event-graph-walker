@@ -8,7 +8,7 @@
 priv struct PeerMetadata {
   policy : @peer_sync.State
   connected : Bool
-  retry_count : Int
+  retry_count : Int32
   shell_exhausted : Bool
   recovering : Bool
   terminal : Bool
@@ -53,7 +53,7 @@ priv enum Decision {
 
 ///|
 /// Timeout retries belong to the shell, not the one-peer policy.
-let recovery_retry_limit : Int = 2
+let recovery_retry_limit : Int32 = 2
 
 ///|
 fn emit_policy_decisions(
@@ -61,9 +61,9 @@ fn emit_policy_decisions(
   policy_decisions : Array[@peer_sync.Decision],
   decisions : Array[Decision],
   recovering : Bool,
-  retry_count : Int,
+  retry_count : Int32,
   terminal : Bool,
-) -> (Bool, Int, Bool) {
+) -> (Bool, Int32, Bool) {
   let mut next_recovering = recovering
   let mut next_retry_count = retry_count
   let mut next_terminal = terminal

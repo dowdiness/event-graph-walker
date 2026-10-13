@@ -1,7 +1,7 @@
 ///|
 /// Fixture construction and Version creation are outside the timed boundary.
 fn missing_ops_contiguous_fixture(
-  history : Int,
+  history : Int32,
 ) -> (OpLog, @causal_graph.GraphVersion) {
   let log = OpLog("agent")
   let mut previous = -1
@@ -18,10 +18,10 @@ fn missing_ops_contiguous_fixture(
 
 ///|
 fn missing_ops_fragmented_fixture(
-  range_count : Int,
+  range_count : Int32,
 ) -> (OpLog, @causal_graph.GraphVersion) {
   let log = OpLog("local")
-  let peer_ranges : Array[(UInt, UInt)] = []
+  let peer_ranges : Array[(UInt32, UInt32)] = []
   for index in 0..<range_count {
     let sequence = index * 2
     let parents = if index == 0 {
@@ -57,7 +57,7 @@ fn missing_ops_fragmented_fixture(
 /// Fixture construction, graph-summary warming, and append stay outside timing.
 fn benchmark_post_mutation_export_once(
   b : @bench.T,
-  history : Int,
+  history : Int32,
 ) -> Unit raise {
   let timings : Array[Double] = []
   let samples : Array[(OpLog, @causal_graph.GraphVersion)] = []
@@ -92,7 +92,7 @@ fn benchmark_post_mutation_export_once(
 ///|
 /// Build one contiguous identity range backed by singleton operation runs.
 fn missing_ops_many_runs_fixture(
-  history : Int,
+  history : Int32,
 ) -> (OpLog, @causal_graph.GraphVersion) {
   let log = OpLog("local")
   for sequence in 0..<history {

@@ -10,7 +10,7 @@ pub(all) struct TreeNodeId {
 /// Construct a validated non-sentinel node identifier.
 pub fn TreeNodeId::TreeNodeId(
   replica_id : String,
-  sequence : Int,
+  sequence : Int32,
 ) -> TreeNodeId raise TreeError {
   { inner: @container.TreeNodeId::TreeNodeId(replica_id, sequence), } catch {
     _ => raise TreeError::Internal(detail="invalid tree node identity")
@@ -33,7 +33,7 @@ pub fn TreeNodeId::replica_id(self : TreeNodeId) -> String {
 }
 
 ///|
-pub fn TreeNodeId::sequence(self : TreeNodeId) -> Int {
+pub fn TreeNodeId::sequence(self : TreeNodeId) -> Int32 {
   self.inner.sequence()
 }
 
@@ -71,13 +71,13 @@ pub fn Version::empty() -> Version {
 /// Opaque tree sync message.
 pub(all) struct SyncMessage {
   priv inner : @container.SyncMessage
-  priv encoded_size : Int?
+  priv encoded_size : Int32?
 }
 
 ///|
 fn SyncMessage::SyncMessage(
   inner : @container.SyncMessage,
-  encoded_size : Int?,
+  encoded_size : Int32?,
 ) -> SyncMessage {
   { inner, encoded_size, }
 }
@@ -89,17 +89,17 @@ pub(all) struct SyncReport {
 }
 
 ///|
-pub fn SyncReport::applied_operations(self : SyncReport) -> Int {
+pub fn SyncReport::applied_operations(self : SyncReport) -> Int32 {
   self.inner.applied_tree_operations()
 }
 
 ///|
-pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int {
+pub fn SyncReport::duplicate_operations(self : SyncReport) -> Int32 {
   self.inner.duplicate_operations()
 }
 
 ///|
-pub fn SyncReport::pending_operations(self : SyncReport) -> Int {
+pub fn SyncReport::pending_operations(self : SyncReport) -> Int32 {
   self.inner.pending_operations()
 }
 
@@ -303,7 +303,7 @@ pub fn SyncSession::apply(
 }
 
 ///|
-pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int {
+pub fn SyncSession::pending_sync_count(self : SyncSession) -> Int32 {
   self.state.document.sync().pending_sync_count()
 }
 

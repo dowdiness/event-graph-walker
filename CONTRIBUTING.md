@@ -8,12 +8,16 @@ Thank you for your interest in contributing to Event Graph Walker! This document
 
 To build, test, and verify the project locally, ensure you have the following tools installed:
 
-- **[MoonBit CLI](https://www.moonbitlang.com/)** (`moon`): The core language toolchain.
+- **[MoonBit CLI](https://www.moonbitlang.com/)** (`moon`): Use `0.10.15+943464bfa`, matching `.agents/setup` and CI.
 - **[just](https://github.com/casey/just)**: The command runner used for project recipes.
 - **[Nushell](https://www.nushell.sh/)** (`nu`): Required by the verification and pipeline scripts.
 - **Python 3**: Required for benchmark verification tooling tests.
 
 ---
+
+QuickCheck is pinned to `0.15.0`. Custom shrinking implementations use
+`moonbitlang/core/quickcheck/shrink`; the removed external QuickCheck `Shrink`
+trait and older toolchains are no longer supported.
 
 ## Development Workflow
 

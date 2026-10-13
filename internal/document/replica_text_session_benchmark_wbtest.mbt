@@ -1,7 +1,7 @@
 ///| Benchmarks for the test-only text materializer boundary.
 
 ///|
-fn build_replica_text_authority(count : Int) -> Document {
+fn build_replica_text_authority(count : Int32) -> Document {
   let document = Document::new("materializer-benchmark")
   for position in 0..<count {
     ignore(

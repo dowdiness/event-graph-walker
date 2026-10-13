@@ -29,7 +29,7 @@ pub fn TextView::version(self : TextView) -> Version {
 
 ///|
 /// Get the number of visible characters at this version
-pub fn TextView::len(self : TextView) -> Int {
+pub fn TextView::len(self : TextView) -> Int32 {
   self.branch.visible_count()
 }
 

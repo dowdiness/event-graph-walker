@@ -5,8 +5,8 @@
 ///|
 fn LvLocator::splice_reference_insert_marker_before(
   self : LvLocator,
-  anchor : Int,
-  marker : Int,
+  anchor : Int32,
+  marker : Int32,
 ) -> Unit {
   let position = self.marker_rank(anchor)
   let (left, right) = self.split_rank(self.rank_root, position)
@@ -85,11 +85,11 @@ fn splice_assert_siblings_equal(
 /// Check parent links, heap order, cached sizes and spans independently.
 fn splice_validate_rank_subtree(
   locator : LvLocator,
-  node : Int,
-  parent : Int,
+  node : Int32,
+  parent : Int32,
   seen : Array[Bool],
-  in_order : Array[Int],
-) -> (Int, Int) raise {
+  in_order : Array[Int32],
+) -> (Int32, Int32) raise {
   if node == -1 {
     return (0, 0)
   }
@@ -147,7 +147,7 @@ fn splice_assert_rank_nodes_equal(
     assert_eq(a.visible_span, r.visible_span)
   }
   let seen = Array::make(actual.nodes.length(), false)
-  let in_order : Array[Int] = []
+  let in_order : Array[Int32] = []
   let (size, span) = splice_validate_rank_subtree(
     actual,
     actual.rank_root,
@@ -177,7 +177,7 @@ fn splice_assert_rank_nodes_equal(
 fn splice_assert_locators_equal(
   actual : LvLocator,
   reference : LvLocator,
-  lvs : Array[Int],
+  lvs : Array[Int32],
 ) -> Unit raise {
   splice_assert_rank_nodes_equal(actual, reference)
   splice_assert_siblings_equal(actual.root_left, reference.root_left)
@@ -218,7 +218,7 @@ fn splice_collect_fixture_side(
   items : Array[@fugue.Item[String]],
   parent : @fugue.Lv?,
   left_side : Bool,
-  output : Array[Int],
+  output : Array[Int32],
 ) -> Unit {
   let children = items.filter(item => {
     let matches_side = match item.side {
@@ -249,10 +249,10 @@ fn splice_assert_fixture_positions(
   locator : LvLocator,
   items : Array[@fugue.Item[String]],
 ) -> Unit raise {
-  let order : Array[Int] = []
+  let order : Array[Int32] = []
   splice_collect_fixture_side(items, None, true, order)
   splice_collect_fixture_side(items, None, false, order)
-  let positions : Map[Int, Int] = Map([])
+  let positions : Map[Int32, Int32] = Map([])
   for index in 0..<order.length() {
     positions.set(order[index], index)
   }
@@ -295,11 +295,11 @@ fn splice_fixture_sides() -> (@fugue.Side, @fugue.Side) {
 
 ///|
 fn splice_fixture_item(
-  lv : Int,
-  parent : Int,
+  lv : Int32,
+  parent : Int32,
   side : @fugue.Side,
   agent : String,
-  sequence : Int,
+  sequence : Int32,
   content : String,
   deleted : Bool,
 ) -> @fugue.Item[String] {
@@ -334,7 +334,7 @@ test "LV locator triplet splice preserves exact state across Fugue structural fi
   let (left_side, right_side) = splice_fixture_sides()
   let actual = LvLocator::new()
   let reference = LvLocator::new()
-  let lvs : Array[Int] = []
+  let lvs : Array[Int32] = []
   let added : Array[@fugue.Item[String]] = []
   let fixture = [
     splice_fixture_item(0, -1, right_side, "z", 9, "😀", false),
@@ -438,7 +438,7 @@ fn splice_push_tied_node(
   locator : LvLocator,
   priority : UInt64,
   visible : Bool,
-) -> Int {
+) -> Int32 {
   let index = locator.nodes.length()
   locator.nodes.push({
     priority,

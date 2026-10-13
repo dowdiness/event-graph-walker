@@ -7,9 +7,9 @@
 ///|
 /// A single tree action: create a node, move it, or delete it.
 enum TreeAction {
-  Create(Int)
-  Move(Int, Int)
-  Delete(Int)
+  Create(Int32)
+  Move(Int32, Int32)
+  Delete(Int32)
 } derive(Debug)
 
 ///|
@@ -57,7 +57,7 @@ impl @quickcheck.Arbitrary for TreeScenario with fn arbitrary(size, rs) {
 
 ///|
 /// Shrink instance for TreeScenario — try smaller prefixes.
-impl @qc.Shrink for TreeScenario with fn shrink(self) {
+impl @shrink.Shrink for TreeScenario with fn shrink(self) {
   let results : Array[TreeScenario] = []
   let len = self.actions.length()
   if len > 0 {
@@ -139,7 +139,7 @@ fn build_ops(
 /// The snapshot is a sorted array of "nodeId -> parentId" strings.
 fn apply_in_order(
   ops : Array[@movable_tree.TreeMoveOp],
-  order : Array[Int],
+  order : Array[Int32],
   node_ids : Array[@movable_tree.TreeNodeId],
 ) -> Array[String] {
   let tree = @movable_tree.MovableTree::new()
@@ -163,17 +163,17 @@ test "property: all orderings converge and produce acyclic trees" {
       return true
     }
     // Forward order: 0, 1, 2, ...
-    let forward : Array[Int] = []
+    let forward : Array[Int32] = []
     for i = 0; i < ops.length(); i = i + 1 {
       forward.push(i)
     }
     // Reverse order: n-1, n-2, ..., 0
-    let reverse : Array[Int] = []
+    let reverse : Array[Int32] = []
     for i = ops.length() - 1; i >= 0; i = i - 1 {
       reverse.push(i)
     }
     // Interleaved: evens first, then odds
-    let interleaved : Array[Int] = []
+    let interleaved : Array[Int32] = []
     for i = 0; i < ops.length(); i = i + 2 {
       interleaved.push(i)
     }

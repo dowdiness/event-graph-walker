@@ -2,9 +2,9 @@
 
 ///|
 fn LvLocator::bulk_siblings_experimental(
-  ordered : Array[Int],
-  low : Int,
-  high : Int,
+  ordered : Array[Int32],
+  low : Int32,
+  high : Int32,
 ) -> LocatorSiblings {
   if low >= high {
     Empty
@@ -26,7 +26,7 @@ fn LvLocator::bulk_siblings_experimental(
 /// Strict < popping retains the existing left-winning >= tie policy.
 fn LvLocator::bulk_rank_experimental(
   self : LvLocator,
-  ordered : Array[Int],
+  ordered : Array[Int32],
 ) -> Unit {
   for node in self.nodes {
     node.left = -1
@@ -36,7 +36,7 @@ fn LvLocator::bulk_rank_experimental(
     node.visible_span = if node.visible { 1 } else { 0 }
   }
   self.rank_root = -1
-  let stack : Array[Int] = []
+  let stack : Array[Int32] = []
   for current in ordered {
     let mut previous = -1
     while !stack.is_empty() &&
@@ -53,7 +53,7 @@ fn LvLocator::bulk_rank_experimental(
     stack.push(current)
   }
   // Iterative postorder avoids call-stack growth on adversarial marker shape.
-  let reverse_postorder : Array[Int] = []
+  let reverse_postorder : Array[Int32] = []
   stack.clear()
   if self.rank_root != -1 {
     stack.push(self.rank_root)
@@ -83,8 +83,8 @@ fn LvLocator::from_tree_bulk_experimental(
   let locator = LvLocator::new()
   let causal_items = canonical_items.copy()
   causal_items.sort_by((a, b) => a.0.0.compare(b.0.0))
-  let left_children : Map[Int, Array[Int]] = Map([])
-  let right_children : Map[Int, Array[Int]] = Map([])
+  let left_children : Map[Int32, Array[Int32]] = Map([])
+  let right_children : Map[Int32, Array[Int32]] = Map([])
   // Same divider/close then LV-sorted open/content/close handles as the old builder.
   for (lv, item) in causal_items {
     if locator.items.contains(lv.0) {
@@ -148,8 +148,8 @@ fn LvLocator::from_tree_bulk_experimental(
       locator.items.get(parent).unwrap().right_children = siblings
     }
   }
-  let ordered : Array[Int] = []
-  let stack : Array[(Int, Int)] = [(-1, 0)]
+  let ordered : Array[Int32] = []
+  let stack : Array[(Int32, Int32)] = [(-1, 0)]
   let mut content_index = 0
   let mut entered = 0
   while !stack.is_empty() {

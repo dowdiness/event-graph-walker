@@ -6,20 +6,20 @@
 
 ///|
 struct GraphScenario {
-  parents_by_lv : Array[Array[Int]]
-  frontier_a : Array[Int]
-  frontier_b : Array[Int]
+  parents_by_lv : Array[Array[Int32]]
+  frontier_a : Array[Int32]
+  frontier_b : Array[Int32]
 } derive(Debug)
 
 ///|
-fn graph_property_agent(lv : Int) -> String {
+fn graph_property_agent(lv : Int32) -> String {
   let agents : Array[String] = ["alice", "bob", "carol", "dave"]
   agents[lv % agents.length()]
 }
 
 ///|
-fn random_lv_subset(count : Int, rs : @splitmix.RandomState) -> Array[Int] {
-  let result : Array[Int] = []
+fn random_lv_subset(count : Int32, rs : @splitmix.RandomState) -> Array[Int32] {
+  let result : Array[Int32] = []
   for lv in 0..<count {
     if rs.split().next_uint64() % 2 == 0 {
       result.push(lv)
@@ -29,12 +29,12 @@ fn random_lv_subset(count : Int, rs : @splitmix.RandomState) -> Array[Int] {
 }
 
 ///|
-fn trim_lvs(values : Array[Int], count : Int) -> Array[Int] {
+fn trim_lvs(values : Array[Int32], count : Int32) -> Array[Int32] {
   values.filter(fn(lv) { lv < count })
 }
 
 ///|
-fn GraphScenario::trim(self : GraphScenario, count : Int) -> GraphScenario {
+fn GraphScenario::trim(self : GraphScenario, count : Int32) -> GraphScenario {
   let parents_by_lv = self.parents_by_lv[:count].to_owned()
   {
     parents_by_lv,
@@ -54,7 +54,7 @@ impl @quickcheck.Arbitrary for GraphScenario with fn arbitrary(size, rs) {
     size_cap
   }
   let count = rs.split().next_uint64().to_int().abs() % (max_count + 1)
-  let parents_by_lv : Array[Array[Int]] = []
+  let parents_by_lv : Array[Array[Int32]] = []
   for lv in 0..<count {
     let max_parents = if lv < 3 { lv } else { 3 }
     let parent_count = if max_parents == 0 {
@@ -62,7 +62,7 @@ impl @quickcheck.Arbitrary for GraphScenario with fn arbitrary(size, rs) {
     } else {
       rs.split().next_uint64().to_int().abs() % (max_parents + 1)
     }
-    let parents : Array[Int] = []
+    let parents : Array[Int32] = []
     for candidate in 0..<lv {
       let needed = parent_count - parents.length()
       if needed > 0 {
@@ -82,7 +82,7 @@ impl @quickcheck.Arbitrary for GraphScenario with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for GraphScenario with fn shrink(self) {
+impl @shrink.Shrink for GraphScenario with fn shrink(self) {
   let results : Array[GraphScenario] = []
   let count = self.parents_by_lv.length()
   if count > 0 {
@@ -108,8 +108,8 @@ fn GraphScenario::to_graph(
 }
 
 ///|
-fn model_timestamps(parents_by_lv : Array[Array[Int]]) -> Array[Int] {
-  let timestamps : Array[Int] = []
+fn model_timestamps(parents_by_lv : Array[Array[Int32]]) -> Array[Int32] {
+  let timestamps : Array[Int32] = []
   for parents in parents_by_lv {
     let timestamp = if parents is [] {
       0
@@ -128,12 +128,12 @@ fn model_timestamps(parents_by_lv : Array[Array[Int]]) -> Array[Int] {
 
 ///|
 fn model_closure(
-  parents_by_lv : Array[Array[Int]],
-  frontier : Array[Int],
+  parents_by_lv : Array[Array[Int32]],
+  frontier : Array[Int32],
 ) -> Array[Bool] {
   let count = parents_by_lv.length()
   let seen = Array::make(count, false)
-  let queue : Array[Int] = []
+  let queue : Array[Int32] = []
   for lv in frontier {
     if lv >= 0 && lv < count {
       queue.push(lv)
@@ -157,7 +157,7 @@ fn model_closure(
 }
 
 ///|
-fn membership_from_lvs(count : Int, lvs : Array[Int]) -> Array[Bool]? {
+fn membership_from_lvs(count : Int32, lvs : Array[Int32]) -> Array[Bool]? {
   let seen = Array::make(count, false)
   for lv in lvs {
     if lv < 0 || lv >= count || seen[lv] {
@@ -212,11 +212,11 @@ fn transformed_frontier_matches(
 
 ///|
 fn diff_matches_model(
-  parents_by_lv : Array[Array[Int]],
-  from_frontier : Array[Int],
-  to_frontier : Array[Int],
-  retreat : Array[Int],
-  advance : Array[Int],
+  parents_by_lv : Array[Array[Int32]],
+  from_frontier : Array[Int32],
+  to_frontier : Array[Int32],
+  retreat : Array[Int32],
+  advance : Array[Int32],
 ) -> Bool {
   let count = parents_by_lv.length()
   let from_seen = model_closure(parents_by_lv, from_frontier)
@@ -234,7 +234,7 @@ fn diff_matches_model(
 }
 
 ///|
-fn positions_from_lvs(count : Int, lvs : Array[Int]) -> Array[Int]? {
+fn positions_from_lvs(count : Int32, lvs : Array[Int32]) -> Array[Int32]? {
   let positions = Array::make(count, -1)
   for position, lv in lvs {
     if lv < 0 || lv >= count || positions[lv] != -1 {
@@ -247,8 +247,8 @@ fn positions_from_lvs(count : Int, lvs : Array[Int]) -> Array[Int]? {
 
 ///|
 fn respects_parent_order(
-  parents_by_lv : Array[Array[Int]],
-  lvs : Array[Int],
+  parents_by_lv : Array[Array[Int32]],
+  lvs : Array[Int32],
   reverse~ : Bool,
 ) -> Bool {
   let count = parents_by_lv.length()

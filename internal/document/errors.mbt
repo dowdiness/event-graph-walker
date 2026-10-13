@@ -3,7 +3,7 @@
 ///|
 pub(all) suberror DocumentError {
   /// Invalid cursor position for operation
-  InvalidPosition(pos~ : Int)
+  InvalidPosition(pos~ : Int32)
   /// RawVersion could not be resolved to local version
   MissingOrigin(raw~ : @core.RawVersion)
   /// Wrapped error from oplog operations

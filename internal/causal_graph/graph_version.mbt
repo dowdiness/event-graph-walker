@@ -1,8 +1,8 @@
 ///|
 /// One canonical half-open sequence range in peer knowledge.
 priv struct SequenceRange {
-  start : UInt
-  end : UInt
+  start : UInt32
+  end : UInt32
 } derive(Debug, Eq, Hash)
 
 ///|
@@ -46,7 +46,7 @@ priv enum GraphVersionCache {
 }
 
 ///|
-fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
+fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
   match a.agent.compare(b.agent) {
     0 => a.seq.compare(b.seq)
     other => other
@@ -157,7 +157,7 @@ fn HaveSummary::subtract(
 fn HaveSummary::subtract_counted(
   self : HaveSummary,
   other : HaveSummary,
-) -> (HaveSummary, Int, Int) {
+) -> (HaveSummary, Int32, Int32) {
   let result = HaveSummary::empty()
   let mut other_entry_index = 0
   let mut agent_steps = 0
@@ -231,7 +231,7 @@ fn HaveSummary::from_graph(self : CausalGraph) -> HaveSummary {
 ///|
 fn HaveSummary::from_reachable(
   graph : CausalGraph,
-  reachable : Array[Int],
+  reachable : Array[Int32],
 ) -> HaveSummary? {
   let summary = HaveSummary::empty()
   for lv in reachable {
@@ -289,7 +289,7 @@ fn validate_graph_version(
 /// `CausalGraph::resolve_graph_version`.
 pub fn GraphVersion::from_parts(
   frontier : Array[@core.RawVersion],
-  ranges : Array[(String, Array[(UInt, UInt)])],
+  ranges : Array[(String, Array[(UInt32, UInt32)])],
 ) -> GraphVersion raise GraphVersionError {
   let checkpoint_values = frontier.copy()
   checkpoint_values.sort_by(compare_graph_raw)
@@ -316,7 +316,7 @@ pub fn GraphVersion::frontier(self : GraphVersion) -> Array[@core.RawVersion] {
 /// Return a defensive sparse-membership DTO for a wire adapter.
 pub fn GraphVersion::ranges(
   self : GraphVersion,
-) -> Array[(String, Array[(UInt, UInt)])] {
+) -> Array[(String, Array[(UInt32, UInt32)])] {
   self.have.entries.map(entry => {
     (entry.agent, entry.ranges.map(range => (range.start, range.end)))
   })
@@ -338,7 +338,7 @@ pub fn GraphVersion::contains(
 pub fn GraphVersion::subtract_ranges(
   self : GraphVersion,
   other : GraphVersion,
-) -> Array[(String, Array[(UInt, UInt)])] {
+) -> Array[(String, Array[(UInt32, UInt32)])] {
   self.have.subtract(other.have).entries.map(entry => {
     (entry.agent, entry.ranges.map(range => (range.start, range.end)))
   })
@@ -373,7 +373,7 @@ pub fn CausalGraph::resolve_graph_version(
   self : CausalGraph,
   version : GraphVersion,
 ) -> @core.Frontier? {
-  let frontier : Array[Int] = []
+  let frontier : Array[Int32] = []
   for raw in version.checkpoint.frontier {
     match self.raw_to_lv(raw) {
       Some(lv) => frontier.push(lv)

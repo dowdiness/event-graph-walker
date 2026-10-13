@@ -17,9 +17,9 @@ enum PendingChangesLifecycleEvent {
 
 ///|
 struct PendingChangesLifecycleTrace {
-  depth : Int
-  arrival_mode : Int
-  acknowledgement_prefix : Int
+  depth : Int32
+  arrival_mode : Int32
+  acknowledgement_prefix : Int32
 } derive(Debug)
 
 ///|
@@ -37,7 +37,7 @@ struct PendingChangesLifecycleFixture {
 ///|
 struct PendingChangesLifecyclePending {
   op : @core.Op
-  arrival : Int
+  arrival : Int32
 }
 
 ///|
@@ -45,8 +45,8 @@ struct PendingChangesLifecycleModel {
   mut pending : Array[PendingChangesLifecyclePending]
   applied : @hashset.HashSet[@core.RawVersion]
   applied_order : Array[@core.RawVersion]
-  mut next_arrival : Int
-  mut generation : Int
+  mut next_arrival : Int32
+  mut generation : Int32
 }
 
 ///|
@@ -54,8 +54,8 @@ struct PendingChangesLifecycleModelPlan {
   staged : Array[@core.Op]
   planned : Array[@core.Op]
   remaining : Array[@core.Op]
-  next_arrival : Int
-  generation : Int
+  next_arrival : Int32
+  generation : Int32
   mut consumed : Bool
 }
 
@@ -63,24 +63,24 @@ struct PendingChangesLifecycleModelPlan {
 struct PendingChangesLifecycleNodeSnapshot {
   raw : @core.RawVersion
   op : @core.Op
-  arrival : Int
+  arrival : Int32
   dependencies : Array[@core.RawVersion]
   waiting_dependencies : Array[@core.RawVersion]
-  unresolved_count : Int
-  ready_refs : Int
+  unresolved_count : Int32
+  ready_refs : Int32
 }
 
 ///|
 struct PendingChangesLifecycleOrderSnapshot {
   raw : @core.RawVersion
-  arrival : Int
+  arrival : Int32
 }
 
 ///|
 struct PendingChangesLifecycleWaiterSnapshot {
   dependency : @core.RawVersion
   raws : Array[@core.RawVersion]
-  arrivals : Array[Int]
+  arrivals : Array[Int32]
 }
 
 ///|
@@ -89,19 +89,19 @@ struct PendingChangesLifecycleSnapshot {
   order : Array[PendingChangesLifecycleOrderSnapshot]
   waiters : Array[PendingChangesLifecycleWaiterSnapshot]
   ready : Array[ReadyChange]
-  next_arrival : Int
-  generation : Int
-  stale_order_tombstones : Int
-  stale_waiter_refs : Int
-  stale_ready_refs : Int
+  next_arrival : Int32
+  generation : Int32
+  stale_order_tombstones : Int32
+  stale_waiter_refs : Int32
+  stale_ready_refs : Int32
   plan_consumed : Bool
 }
 
 ///|
 fn pending_changes_lifecycle_rand_bounded(
   random_state : @splitmix.RandomState,
-  bound : Int,
-) -> Int {
+  bound : Int32,
+) -> Int32 {
   random_state.next_positive_int() % bound
 }
 
@@ -126,7 +126,7 @@ impl @quickcheck.Arbitrary for PendingChangesLifecycleTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for PendingChangesLifecycleTrace with fn shrink(self) {
+impl @shrink.Shrink for PendingChangesLifecycleTrace with fn shrink(self) {
   let results : Array[PendingChangesLifecycleTrace] = []
   if self.depth > 2 {
     let half = self.depth / 2
@@ -713,7 +713,7 @@ fn pending_changes_lifecycle_current_plan_matches_model(
 fn pending_changes_lifecycle_waiter_state_matches_suffix(
   pending_changes : PendingChanges,
   planned : Array[@core.Op],
-  acknowledged : Int,
+  acknowledged : Int32,
 ) -> Bool {
   for i in acknowledged..<planned.length() {
     let raw = oracle_raw(planned[i])
@@ -842,7 +842,7 @@ fn prop_apply_changes_pending_changes_lifecycle(
   let fixture = pending_changes_lifecycle_fixture(trace)
   let pending_changes = PendingChanges()
   let model = PendingChangesLifecycleModel()
-  let original_arrivals : Map[@core.RawVersion, Int] = Default::default()
+  let original_arrivals : Map[@core.RawVersion, Int32] = Default::default()
   let mut active_plan : ApplyChanges? = None
   let mut active_model_plan : PendingChangesLifecycleModelPlan? = None
   let mut drain_operations : Array[@core.Op] = []

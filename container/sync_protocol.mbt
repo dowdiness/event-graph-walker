@@ -12,7 +12,7 @@ fn sync_raw_key(raw : @core.RawVersion) -> String {
 }
 
 ///|
-fn compare_sync_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
+fn compare_sync_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
   match a.agent.compare(b.agent) {
     0 => a.seq.compare(b.seq)
     other => other
@@ -43,7 +43,7 @@ fn sync_record_parents(record : SyncOpRecord) -> Array[@core.RawVersion] {
 }
 
 ///|
-fn sync_record_timestamp(record : SyncOpRecord) -> Int {
+fn sync_record_timestamp(record : SyncOpRecord) -> Int32 {
   match record {
     Tree(versioned) =>
       match versioned.op {
@@ -454,7 +454,7 @@ fn advance_sync_tree_snapshot(
 }
 
 ///|
-fn sync_record_compare(a : SyncOpRecord, b : SyncOpRecord) -> Int {
+fn sync_record_compare(a : SyncOpRecord, b : SyncOpRecord) -> Int32 {
   compare_sync_raw(sync_record_version(a), sync_record_version(b))
 }
 
@@ -470,7 +470,7 @@ fn canonical_sync_order(
 fn canonical_sync_order_with_block_creates(
   records : Array[SyncOpRecord],
   block_create_versions : Map[String, @core.RawVersion],
-) -> (Array[SyncOpRecord], Int) raise @sync.Failure {
+) -> (Array[SyncOpRecord], Int32) raise @sync.Failure {
   let candidates : Map[String, SyncOpRecord] = Map([])
   for record in records {
     let id = sync_record_version(record)
@@ -486,7 +486,7 @@ fn canonical_sync_order_with_block_creates(
       None => candidates[key] = record
     }
   }
-  let missing_counts : Map[String, Int] = Map([])
+  let missing_counts : Map[String, Int32] = Map([])
   let dependency_waiters : Map[String, Array[String]] = Map([])
   candidates.each(fn(key, record) {
     let mut count = 0
@@ -733,10 +733,7 @@ fn exact_container_fields(
 
 ///|
 fn container_identity_json(raw : @core.RawVersion) -> Json {
-  Json::object({
-    "replica_id": raw.agent.to_json(),
-    "sequence": raw.seq.to_json(),
-  })
+  Json::object({ "replica_id": Json(raw.agent), "sequence": Json(raw.seq) })
 }
 
 ///|
@@ -751,7 +748,7 @@ fn decode_container_identity(json : Json) -> @core.RawVersion raise {
   let replica_id : String = @json.from_json(
     object.get("replica_id").unwrap_or(Json::null()),
   )
-  let sequence : Int = @json.from_json(
+  let sequence : Int32 = @json.from_json(
     object.get("sequence").unwrap_or(Json::null()),
   )
   guard replica_id != "" && sequence >= 0 else { fail("invalid identity") }
@@ -777,14 +774,14 @@ fn decode_optional_container_identity(json : Json) -> @core.RawVersion? raise {
 ///|
 fn container_node_json(node : @mt.TreeNodeId) -> Json {
   if node == @mt.root_id {
-    Json::object({ "kind": "root".to_json() })
+    Json::object({ "kind": Json("root") })
   } else if node == @mt.trash_id {
-    Json::object({ "kind": "trash".to_json() })
+    Json::object({ "kind": Json("trash") })
   } else {
     Json::object({
-      "kind": "node".to_json(),
-      "replica_id": node.agent.to_json(),
-      "sequence": node.counter.to_json(),
+      "kind": Json("node"),
+      "replica_id": Json(node.agent),
+      "sequence": Json(node.counter),
     })
   }
 }
@@ -818,7 +815,7 @@ fn decode_container_node(json : Json) -> @mt.TreeNodeId raise {
       let replica_id : String = @json.from_json(
         object.get("replica_id").unwrap_or(Json::null()),
       )
-      let sequence : Int = @json.from_json(
+      let sequence : Int32 = @json.from_json(
         object.get("sequence").unwrap_or(Json::null()),
       )
       guard replica_id != "" && sequence >= 0 else {
@@ -836,7 +833,7 @@ fn container_parents_json(parents : Array[@core.RawVersion]) -> Json {
   for parent in sorted_sync_raw(parents) {
     values.push(container_identity_json(parent))
   }
-  values.to_json()
+  Json(values)
 }
 
 ///|
@@ -844,21 +841,21 @@ fn container_tree_payload_json(op : @mt.TreeOp) -> Json {
   match op {
     @mt.Move(value) =>
       Json::object({
-        "kind": "move".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("move"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "target": container_node_json(value.target),
         "parent": container_node_json(value.new_parent),
-        "position": value.position.elements().to_json(),
+        "position": Json(value.position.elements()),
       })
     @mt.SetProperty(value) =>
       Json::object({
-        "kind": "property".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("property"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "target": container_node_json(value.target),
-        "key": value.key.to_json(),
-        "value": value.value.to_json(),
+        "key": Json(value.key),
+        "value": Json(value.value),
       })
   }
 }
@@ -868,28 +865,28 @@ fn container_text_payload_json(block : @mt.TreeNodeId, op : TextOp) -> Json {
   match op {
     Insert(value) =>
       Json::object({
-        "kind": "insert".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("insert"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "block": container_node_json(block),
         "item": container_identity_json(value.id),
-        "content": value.content.to_json(),
+        "content": Json(value.content),
         "origin_left": optional_container_identity_json(value.origin_left),
         "origin_right": optional_container_identity_json(value.origin_right),
       })
     Delete(value) =>
       Json::object({
-        "kind": "delete".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("delete"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "block": container_node_json(block),
         "target": container_identity_json(value.target),
       })
     Undelete(value) =>
       Json::object({
-        "kind": "undelete".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("undelete"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "block": container_node_json(block),
         "target": container_identity_json(value.target),
       })
@@ -905,7 +902,7 @@ fn container_record_json(record : SyncOpRecord) -> Json {
   Json::object({
     "id": container_identity_json(sync_record_version(record)),
     "parents": container_parents_json(sync_record_parents(record)),
-    "domain": domain.to_json(),
+    "domain": Json(domain),
     "payload": payload,
   })
 }
@@ -934,7 +931,7 @@ fn decode_container_tree_payload(json : Json) -> @mt.TreeOp raise {
   let kind : String = @json.from_json(
     object.get("kind").unwrap_or(Json::null()),
   )
-  let timestamp : Int = @json.from_json(
+  let timestamp : Int32 = @json.from_json(
     object.get("timestamp").unwrap_or(Json::null()),
   )
   let agent : String = @json.from_json(
@@ -947,7 +944,7 @@ fn decode_container_tree_payload(json : Json) -> @mt.TreeOp raise {
       ]) else {
         fail("move payload contains missing or unknown fields")
       }
-      let elements : Array[Int] = @json.from_json(
+      let elements : Array[Int32] = @json.from_json(
         object.get("position").unwrap_or(Json::null()),
       )
       for element in elements {
@@ -996,7 +993,7 @@ fn decode_container_text_payload(json : Json) -> (@mt.TreeNodeId, TextOp) raise 
   let kind : String = @json.from_json(
     object.get("kind").unwrap_or(Json::null()),
   )
-  let timestamp : Int = @json.from_json(
+  let timestamp : Int32 = @json.from_json(
     object.get("timestamp").unwrap_or(Json::null()),
   )
   let agent : String = @json.from_json(
@@ -1120,8 +1117,8 @@ fn structural_message_records(
 ///|
 fn container_message_from_records(
   records : Array[SyncOpRecord],
-  encoded_size : Int?,
-  decoded_operation_count : Int,
+  encoded_size : Int32?,
+  decoded_operation_count : Int32,
 ) -> SyncMessage raise @sync.Failure {
   let tree_ops : Array[VersionedTreeOp] = []
   let text_ops : Array[VersionedBlockTextOp] = []
@@ -1318,7 +1315,7 @@ pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
 }
 
 ///|
-pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
+pub fn SyncMessage::op_count(self : SyncMessage) -> Int32 {
   self.tree_ops.length() + self.text_ops.length()
 }
 
@@ -1337,9 +1334,9 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
     operations.push(container_record_json(record))
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": container_sync_format.to_json(),
-    "operations": operations.to_json(),
+    "schema": Json(1),
+    "format": Json(container_sync_format),
+    "operations": Json(operations),
   }).stringify()
 }
 
@@ -1347,7 +1344,7 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
 fn container_encoded_size(
   json_string : String,
   limits : @sync.Limits,
-) -> Int raise @sync.Failure {
+) -> Int32 raise @sync.Failure {
   if !is_container_well_formed_utf16(json_string) {
     raise @sync.Failure::MalformedMessage(detail="invalid sync JSON")
   }
@@ -1363,7 +1360,9 @@ fn container_encoded_size(
 }
 
 ///|
-fn container_sync_encoded_size(json_string : String) -> Int raise @sync.Failure {
+fn container_sync_encoded_size(
+  json_string : String,
+) -> Int32 raise @sync.Failure {
   if !is_container_well_formed_utf16(json_string) {
     raise @sync.Failure::MalformedMessage(detail="invalid sync JSON")
   }
@@ -1410,7 +1409,7 @@ fn decode_container_sync_json(
     guard exact_container_fields(object, ["schema", "format", "operations"]) else {
       fail("sync envelope contains missing or unknown fields")
     }
-    let schema : Int = @json.from_json(
+    let schema : Int32 = @json.from_json(
       object.get("schema").unwrap_or(Json::null()),
     )
     let format : String = @json.from_json(
@@ -1485,15 +1484,15 @@ pub fn Version::to_json_string(self : Version) -> String {
   for agent in agents {
     entries.push(
       Json::object({
-        "replica_id": agent.to_json(),
-        "sequence": self.inner.sequence_for(agent).unwrap().to_json(),
+        "replica_id": Json(agent),
+        "sequence": Json(self.inner.sequence_for(agent).unwrap()),
       }),
     )
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": container_version_format.to_json(),
-    "entries": entries.to_json(),
+    "schema": Json(1),
+    "format": Json(container_version_format),
+    "entries": Json(entries),
   }).stringify()
 }
 
@@ -1514,7 +1513,7 @@ pub fn Version::from_json_string(
     guard exact_container_fields(object, ["schema", "format", "entries"]) else {
       fail("version envelope contains missing or unknown fields")
     }
-    let schema : Int = @json.from_json(
+    let schema : Int32 = @json.from_json(
       object.get("schema").unwrap_or(Json::null()),
     )
     let format : String = @json.from_json(
@@ -1546,7 +1545,7 @@ pub fn Version::from_json_string(
 }
 
 ///|
-fn write_container_uvarint(buffer : Buffer, value : Int) -> Unit {
+fn write_container_uvarint(buffer : Buffer, value : Int32) -> Unit {
   let mut remaining = value
   while remaining >= 0x80 {
     buffer.write_byte(((remaining & 0x7F) | 0x80).to_byte())

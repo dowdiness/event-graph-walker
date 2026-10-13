@@ -93,8 +93,8 @@ fn Document::apply_changes_recovery_checkout(
 fn Document::action_for_apply_changes(
   self : Document,
   incoming : Array[@core.Op],
-  max_pending : Int?,
-  max_pending_after_complete : Int?,
+  max_pending : Int32?,
+  max_pending_after_complete : Int32?,
 ) -> @oplog.ApplyChanges raise @oplog.OpLogError {
   match self.apply_changes_action_override() {
     Some(replacement) => replacement(incoming)

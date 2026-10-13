@@ -18,9 +18,9 @@ fn container_observation(
 ///|
 fn assert_text_observation(
   report : @egw_text.SyncReport,
-  applied : Int,
-  duplicates : Int,
-  pending : Int,
+  applied : Int32,
+  duplicates : Int32,
+  pending : Int32,
 ) -> Unit raise {
   @debug.assert_eq(report.applied_operations(), applied)
   @debug.assert_eq(report.duplicate_operations(), duplicates)
@@ -30,9 +30,9 @@ fn assert_text_observation(
 ///|
 fn assert_container_observation(
   report : @egw_container.SyncReport,
-  applied : Int,
-  duplicates : Int,
-  pending : Int,
+  applied : Int32,
+  duplicates : Int32,
+  pending : Int32,
 ) -> Unit raise {
   @debug.assert_eq(
     report.applied_tree_operations() + report.applied_text_operations(),

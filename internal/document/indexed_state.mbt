@@ -103,7 +103,7 @@ fn IndexedState::restore_cache(
 /// available, matching the old cache-validity fallback in Document.
 fn IndexedState::insert_at(
   self : IndexedState,
-  position : Int,
+  position : Int32,
   run : VisibleRun,
   item : @fugue.Item[String],
 ) -> Bool {
@@ -131,9 +131,9 @@ fn IndexedState::insert_at(
 fn IndexedState::insert_visible(
   self : IndexedState,
   tree : @fugue.FugueTree[String],
-  lv : Int,
+  lv : Int32,
   run : VisibleRun,
-) -> Int? {
+) -> Int32? {
   match (self.cache, self.locate_visible(tree, lv)) {
     (Some(cache), Some(position)) => {
       cache.insert_at(position, run)
@@ -149,8 +149,8 @@ fn IndexedState::insert_visible(
 fn IndexedState::locate_visible(
   self : IndexedState,
   tree : @fugue.FugueTree[String],
-  lv : Int,
-) -> Int? {
+  lv : Int32,
+) -> Int32? {
   match (self.cache, self.locator, tree.get(@fugue.Lv(lv))) {
     (Some(_), Some(locator), Some(item)) => {
       let located = if locator.contains(lv) {
@@ -171,7 +171,7 @@ fn IndexedState::locate_visible(
 ///|
 /// Incrementally remove one visible item. Returns false when the warm index
 /// could not remove the requested position.
-fn IndexedState::delete_at(self : IndexedState, position : Int) -> Bool {
+fn IndexedState::delete_at(self : IndexedState, position : Int32) -> Bool {
   match self.cache {
     Some(cache) =>
       match cache.delete_at(position) {
@@ -191,8 +191,8 @@ fn IndexedState::delete_at(self : IndexedState, position : Int) -> Bool {
 fn IndexedState::lv_at_position(
   self : IndexedState,
   tree : @fugue.FugueTree[String],
-  position : Int,
-) -> Int? {
+  position : Int32,
+) -> Int32? {
   let cache = self.ensure(tree)
   match cache.find(position) {
     Some(fr) => Some(fr.elem.start_lv + fr.offset)
@@ -205,8 +205,8 @@ fn IndexedState::lv_at_position(
 fn IndexedState::position_to_lv(
   self : IndexedState,
   tree : @fugue.FugueTree[String],
-  position : Int,
-) -> Int {
+  position : Int32,
+) -> Int32 {
   if position == 0 {
     return -1
   }
@@ -226,7 +226,7 @@ fn IndexedState::position_to_lv(
 fn IndexedState::visible_span(
   self : IndexedState,
   tree : @fugue.FugueTree[String],
-) -> Int {
+) -> Int32 {
   @rle.Spanning::span(self.ensure(tree))
 }
 
@@ -249,8 +249,8 @@ fn IndexedState::text(
 fn IndexedState::lv_to_position(
   self : IndexedState,
   tree : @fugue.FugueTree[String],
-  lv : Int,
-) -> Int? {
+  lv : Int32,
+) -> Int32? {
   ignore(self.ensure(tree))
   match self.locator {
     Some(locator) => locator.position(lv)
@@ -263,9 +263,9 @@ fn IndexedState::lv_to_position(
 /// Topology identities remain present and only their visible weights change.
 fn IndexedState::delete_range_known(
   self : IndexedState,
-  start : Int,
-  end : Int,
-  targets : Array[Int],
+  start : Int32,
+  end : Int32,
+  targets : Array[Int32],
 ) -> Bool {
   match (self.cache, self.locator) {
     (Some(cache), Some(locator)) => {

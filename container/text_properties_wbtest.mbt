@@ -5,10 +5,10 @@
 
 ///|
 enum BlockEdit {
-  Insert(Int, Int, String)
-  Delete(Int, Int)
-  Replace(Int, String)
-  DeleteNode(Int)
+  Insert(Int32, Int32, String)
+  Delete(Int32, Int32)
+  Replace(Int32, String)
+  DeleteNode(Int32)
 } derive(Debug)
 
 ///|
@@ -27,12 +27,12 @@ pub impl Show for BlockScenario with fn output(self, logger) {
 }
 
 ///|
-fn insert_string(text : String, pos : Int, chunk : String) -> String {
+fn insert_string(text : String, pos : Int32, chunk : String) -> String {
   text[:pos].to_owned() + chunk + text[pos:].to_owned()
 }
 
 ///|
-fn delete_string_at(text : String, pos : Int) -> String {
+fn delete_string_at(text : String, pos : Int32) -> String {
   text[:pos].to_owned() + text[pos + 1:].to_owned()
 }
 
@@ -45,7 +45,7 @@ impl @quickcheck.Arbitrary for BlockScenario with fn arbitrary(size, rs) {
   let texts = ["", ""]
   let alive = [true, true]
   for _i = 0; _i < count; _i = _i + 1 {
-    let live_blocks : Array[Int] = []
+    let live_blocks : Array[Int32] = []
     for block = 0; block < 2; block = block + 1 {
       if alive[block] {
         live_blocks.push(block)
@@ -98,7 +98,7 @@ impl @quickcheck.Arbitrary for BlockScenario with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for BlockScenario with fn shrink(self) {
+impl @shrink.Shrink for BlockScenario with fn shrink(self) {
   let results : Array[BlockScenario] = []
   let len = self.edits.length()
   if len > 0 {

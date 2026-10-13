@@ -4,9 +4,9 @@
 /// User-facing error type for the text facade
 pub(all) suberror TextError {
   EmptyReplicaId
-  InvalidPosition(pos~ : Int, len~ : Int)
+  InvalidPosition(pos~ : Int32, len~ : Int32)
   InvalidText(detail~ : String)
-  InvalidRange(start~ : Int, end~ : Int)
+  InvalidRange(start~ : Int32, end~ : Int32)
   SyncFailed(@sync.Failure)
   VersionNotFound
   ProjectionRecoveryRequired
@@ -104,7 +104,7 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
 /// Convert from DocumentError to TextError
 fn TextError::from_document_error(
   err : @document.DocumentError,
-  doc_len : () -> Int,
+  doc_len : () -> Int32,
 ) -> TextError {
   match err {
     InvalidPosition(pos~) => TextError::InvalidPosition(pos~, len=doc_len())

@@ -21,7 +21,7 @@ fn pending_changes_assert_raws(
 ///|
 fn pending_changes_compare(
   candidates : Array[@core.Op],
-  pending_count : Int,
+  pending_count : Int32,
   known : Array[@core.RawVersion],
 ) -> Unit raise {
   let known_set : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet(known)
@@ -56,7 +56,7 @@ fn pending_changes_compare(
 }
 
 ///|
-fn pending_changes_chain(size : Int) -> Array[@core.Op] {
+fn pending_changes_chain(size : Int32) -> Array[@core.Op] {
   oracle_chain(size)
 }
 

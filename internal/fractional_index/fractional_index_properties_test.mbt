@@ -11,7 +11,7 @@ pub(all) struct OrderedPair {
 pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
   // Generate 1-4 elements in [0, 65535]
   let len_a = rs.next_uint64().to_int().abs() % 4 + 1
-  let elems_a : Array[Int] = []
+  let elems_a : Array[Int32] = []
   for i = 0; i < len_a; i = i + 1 {
     let _ = i
     elems_a.push(rs.next_uint64().to_int().abs() % 65536)
@@ -19,7 +19,7 @@ pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
   let a = @fractional_index.FractionalIndex::new(elems_a)
   // Generate b by taking a and adding a positive offset at some position
   let len_b = rs.next_uint64().to_int().abs() % 4 + 1
-  let elems_b : Array[Int] = []
+  let elems_b : Array[Int32] = []
   for i = 0; i < len_b; i = i + 1 {
     let _ = i
     elems_b.push(rs.next_uint64().to_int().abs() % 65536)
@@ -33,7 +33,7 @@ pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
     { left: b, right: a, }
   } else {
     // Equal — offset b by appending 1
-    let elems_b2 : Array[Int] = a.elements()
+    let elems_b2 : Array[Int32] = a.elements()
     elems_b2.push(1)
     { left: a, right: @fractional_index.FractionalIndex::new(elems_b2), }
   }
@@ -41,7 +41,7 @@ pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
 
 ///|
 /// Shrink instance for OrderedPair — try smaller element values.
-pub impl @qc.Shrink for OrderedPair with fn shrink(self) {
+pub impl @shrink.Shrink for OrderedPair with fn shrink(self) {
   let results : Array[OrderedPair] = []
   // Try reducing elements of left
   let left_elems = self.left.elements()
@@ -72,7 +72,7 @@ pub(all) struct SingleKey {
 
 ///|
 /// Shrink instance for SingleKey — try shorter element lists.
-pub impl @qc.Shrink for SingleKey with fn shrink(self) {
+pub impl @shrink.Shrink for SingleKey with fn shrink(self) {
   let results : Array[SingleKey] = []
   let elems = self.key.elements()
   if elems.length() > 1 {
@@ -85,7 +85,7 @@ pub impl @qc.Shrink for SingleKey with fn shrink(self) {
 ///|
 pub impl @quickcheck.Arbitrary for SingleKey with fn arbitrary(size, rs) {
   let len = rs.next_uint64().to_int().abs() % 4 + 1
-  let elems : Array[Int] = []
+  let elems : Array[Int32] = []
   let _ = size
   for i = 0; i < len; i = i + 1 {
     let _ = i

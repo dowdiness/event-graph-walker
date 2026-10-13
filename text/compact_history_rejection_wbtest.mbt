@@ -9,7 +9,7 @@ fn compact_public_archive_for_test(
   ",\"heads\":" +
   heads +
   ",\"version\":" +
-  version.to_json().stringify() +
+  Json(version).stringify() +
   "}"
 }
 
@@ -57,7 +57,7 @@ test "public compact archive rejects malformed mutations before returning a docu
       "[[\"i\",0,2147483647,[],null,null,\"xy\"]]", // Checked run overflow.
       "[[\"i\",0,0,[],null,null,\"\"]]",
       "[[\"i\",0,0,[],null,null," +
-      String::make(100001, 'x').to_json().stringify() +
+      Json(String::make(100001, 'x')).stringify() +
       "]]",
     ] {
     compact_public_reject_for_test(

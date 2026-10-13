@@ -9,9 +9,9 @@ pub struct ApplyChangesReport {
   priv pending_staged : Array[@core.RawVersion]
   priv discarded_pending : Array[@core.RawVersion]
   priv discarded_staged : Array[@core.RawVersion]
-  priv redelivery_count : Int
-  priv pending_before_count : Int
-  priv pending_after_count : Int
+  priv redelivery_count : Int32
+  priv pending_before_count : Int32
+  priv pending_after_count : Int32
   priv frontier_before : @core.Frontier
   priv frontier_after : @core.Frontier
 }
@@ -31,9 +31,9 @@ fn ApplyChangesReport::from_parts(
   pending_staged : Array[@core.RawVersion],
   discarded_pending : Array[@core.RawVersion],
   discarded_staged : Array[@core.RawVersion],
-  redelivery_count : Int,
-  pending_before_count : Int,
-  pending_after_count : Int,
+  redelivery_count : Int32,
+  pending_before_count : Int32,
+  pending_after_count : Int32,
   frontier_before : @core.Frontier,
   frontier_after : @core.Frontier,
 ) -> ApplyChangesReport {
@@ -103,21 +103,21 @@ pub fn ApplyChangesReport::discarded_staged(
 }
 
 ///|
-pub fn ApplyChangesReport::redelivery_count(self : ApplyChangesReport) -> Int {
+pub fn ApplyChangesReport::redelivery_count(self : ApplyChangesReport) -> Int32 {
   self.redelivery_count
 }
 
 ///|
 pub fn ApplyChangesReport::pending_before_count(
   self : ApplyChangesReport,
-) -> Int {
+) -> Int32 {
   self.pending_before_count
 }
 
 ///|
 pub fn ApplyChangesReport::pending_after_count(
   self : ApplyChangesReport,
-) -> Int {
+) -> Int32 {
   self.pending_after_count
 }
 

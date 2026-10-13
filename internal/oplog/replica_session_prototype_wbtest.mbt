@@ -77,7 +77,7 @@ fn ReplicaSession::insert(
 ///|
 fn replica_session_raw_versions(
   authority : OpLog,
-  lvs : Array[Int],
+  lvs : Array[Int32],
 ) -> Array[@core.RawVersion] raise OpLogError {
   let result : Array[@core.RawVersion] = []
   for lv in lvs {
@@ -119,7 +119,7 @@ fn replica_session_apply_insert(
   origin_left : @core.RawVersion?,
   origin_right : @core.RawVersion?,
 ) -> @core.Op raise OpLogError {
-  let parent_lvs : Array[Int] = []
+  let parent_lvs : Array[Int32] = []
   for parent in parents {
     match authority.graph.raw_to_lv(parent) {
       Some(lv) => parent_lvs.push(lv)

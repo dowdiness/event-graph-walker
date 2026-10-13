@@ -18,7 +18,7 @@ fn find_insert_id(doc : Document, content : String) -> @core.RawVersion {
 }
 
 ///|
-fn find_delete_target_ts(doc : Document, target : @core.RawVersion) -> Int {
+fn find_delete_target_ts(doc : Document, target : @core.RawVersion) -> Int32 {
   for op in doc.text_ops.copy() {
     match op.op {
       Delete(d) => if d.target == target { return d.timestamp }

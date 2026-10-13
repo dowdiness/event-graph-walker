@@ -2,22 +2,22 @@
 
 ///|
 enum ContainerModelAction {
-  Create(Int)
-  MoveToRoot(Int, Int)
-  DeleteNode(Int, Int)
-  SetProperty(Int, Int, String)
-  InsertText(Int, Int, String)
-  DeleteText(Int, Int)
-  TransactionEdit(Int, Int, String)
-  Undo(Int)
-  Redo(Int)
-  Sync(Int, Int)
-  DuplicateSync(Int, Int)
+  Create(Int32)
+  MoveToRoot(Int32, Int32)
+  DeleteNode(Int32, Int32)
+  SetProperty(Int32, Int32, String)
+  InsertText(Int32, Int32, String)
+  DeleteText(Int32, Int32)
+  TransactionEdit(Int32, Int32, String)
+  Undo(Int32)
+  Redo(Int32)
+  Sync(Int32, Int32)
+  DuplicateSync(Int32, Int32)
 } derive(Debug)
 
 ///|
 struct ContainerModelTrace {
-  replica_count : Int
+  replica_count : Int32
   actions : Array[ContainerModelAction]
 } derive(Debug)
 
@@ -68,7 +68,7 @@ impl @quickcheck.Arbitrary for ContainerModelTrace with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for ContainerModelTrace with fn shrink(self) {
+impl @shrink.Shrink for ContainerModelTrace with fn shrink(self) {
   let results : Array[ContainerModelTrace] = []
   if self.actions.length() > 11 {
     results.push({

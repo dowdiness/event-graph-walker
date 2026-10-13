@@ -10,17 +10,17 @@
 ///|
 /// Actions an agent can take during a fuzz trace.
 enum AgentAction {
-  FuzzInsert(Int, Int, String) // (agent_idx, pos, char)
-  FuzzDelete(Int, Int) // (agent_idx, pos)
-  FuzzUndo(Int) // (agent_idx)
-  FuzzRedo(Int) // (agent_idx)
-  FuzzSync(Int, Int) // (from_idx, to_idx)
+  FuzzInsert(Int32, Int32, String) // (agent_idx, pos, char)
+  FuzzDelete(Int32, Int32) // (agent_idx, pos)
+  FuzzUndo(Int32) // (agent_idx)
+  FuzzRedo(Int32) // (agent_idx)
+  FuzzSync(Int32, Int32) // (from_idx, to_idx)
 } derive(Debug)
 
 ///|
 /// A generated trace of multi-agent actions.
 struct MultiAgentTrace {
-  num_agents : Int
+  num_agents : Int32
   actions : Array[AgentAction]
 } derive(Debug)
 
@@ -85,7 +85,7 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for MultiAgentTrace with fn shrink(self) {
+impl @shrink.Shrink for MultiAgentTrace with fn shrink(self) {
   let results : Array[MultiAgentTrace] = []
   let len = self.actions.length()
   if len > 1 {

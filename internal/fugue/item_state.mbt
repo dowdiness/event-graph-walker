@@ -48,7 +48,7 @@ pub fn ItemState::advance_insert(self : ItemState) -> ItemState {
 /// - Retreated and NotInserted are unaffected by delete operations
 pub fn ItemState::update_from_delete_count(
   self : ItemState,
-  delete_count : Int,
+  delete_count : Int32,
 ) -> ItemState {
   match self {
     Inserted => if delete_count > 0 { Deleted } else { Inserted }
@@ -63,7 +63,7 @@ pub fn ItemState::update_from_delete_count(
 ///
 /// An item is visible only when it is in the Inserted state AND has
 /// no active delete operations (delete_count == 0).
-pub fn ItemState::is_visible(self : ItemState, delete_count~ : Int) -> Bool {
+pub fn ItemState::is_visible(self : ItemState, delete_count~ : Int32) -> Bool {
   self == Inserted && delete_count == 0
 }
 

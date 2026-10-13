@@ -3,21 +3,21 @@
 ///|
 /// A validated local insert request ready for the imperative CRDT shell.
 priv struct InsertPlan {
-  position : Int
+  position : Int32
   text : String
 }
 
 ///|
-fn InsertPlan::InsertPlan(position : Int, text : String) -> InsertPlan {
+fn InsertPlan::InsertPlan(position : Int32, text : String) -> InsertPlan {
   { position, text, }
 }
 
 ///|
 /// Validate a local insert without touching document state.
 fn plan_insert(
-  position : Int,
+  position : Int32,
   text : String,
-  doc_len : Int,
+  doc_len : Int32,
 ) -> InsertPlan raise TextError {
   guard position <= doc_len else {
     raise TextError::InvalidPosition(pos=position, len=doc_len)
@@ -81,7 +81,7 @@ pub fn TextState::text(self : TextState) -> String {
 ///|
 /// Get the current text length (number of visible characters).
 /// This is O(1) as it uses cached count, not string reconstruction.
-pub fn TextState::len(self : TextState) -> Int {
+pub fn TextState::len(self : TextState) -> Int32 {
   self.inner.visible_count()
 }
 
@@ -217,8 +217,8 @@ pub impl Show for TextState with fn output(self, logger) {
 ///|
 fn checked_range_bounds(
   range : Range,
-  doc_len : Int,
-) -> (Int, Int) raise TextError {
+  doc_len : Int32,
+) -> (Int32, Int32) raise TextError {
   let start = range.start().value()
   let end = range.end().value()
   if end > doc_len {

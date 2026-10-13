@@ -6,26 +6,26 @@ suberror R0ProofError {
 
 ///|
 struct MmrPeak {
-  height : Int
-  start : Int
+  height : Int32
+  start : Int32
   digest : Bytes
 } derive(Eq, Debug)
 
 ///|
 /// Direction is the sibling's side: 0 left, 1 right.
 struct MmrSibling {
-  direction : Int
+  direction : Int32
   digest : Bytes
 } derive(Eq, Debug)
 
 ///|
 struct R0MmrProof {
-  leaf_position : Int
-  containing_peak_height : Int
+  leaf_position : Int32
+  containing_peak_height : Int32
   siblings : Array[MmrSibling]
   other_peaks : Array[MmrPeak]
-  declared_sibling_count : Int
-  declared_other_peak_count : Int
+  declared_sibling_count : Int32
+  declared_other_peak_count : Int32
   trailing_byte : Bool
 } derive(Eq, Debug)
 
@@ -42,7 +42,7 @@ fn validate_digest(digest : Bytes) -> Unit raise R0ProofError {
 }
 
 ///|
-fn meta_node_hash(height : Int, left : Bytes, right : Bytes) -> Bytes {
+fn meta_node_hash(height : Int32, left : Bytes, right : Bytes) -> Bytes {
   let buffer = Buffer()
   try! write_domain(buffer, "loomark-r0-meta-node:v2")
   try! write_uvarint(buffer, height)
@@ -52,7 +52,7 @@ fn meta_node_hash(height : Int, left : Bytes, right : Bytes) -> Bytes {
 }
 
 ///|
-fn subtree_hash(leaves : Array[Bytes], start : Int, height : Int) -> Bytes {
+fn subtree_hash(leaves : Array[Bytes], start : Int32, height : Int32) -> Bytes {
   if height == 0 {
     leaves[start]
   } else {
@@ -67,8 +67,8 @@ fn subtree_hash(leaves : Array[Bytes], start : Int, height : Int) -> Bytes {
 
 ///|
 /// Binary decomposition in the MMR's strictly descending peak-height order.
-fn peak_layout(leaf_count : Int) -> Array[(Int, Int)] {
-  let result : Array[(Int, Int)] = []
+fn peak_layout(leaf_count : Int32) -> Array[(Int32, Int32)] {
+  let result : Array[(Int32, Int32)] = []
   let mut remaining = leaf_count
   let mut start = 0
   while remaining > 0 {
@@ -109,7 +109,7 @@ fn R0Mmr::_from_leaf_hashes(leaves : ArrayView[Bytes]) -> R0Mmr {
 ///|
 fn writer_root_from_peaks(
   agent : String,
-  leaf_count : Int,
+  leaf_count : Int32,
   peaks : Array[MmrPeak],
 ) -> Bytes {
   let buffer = Buffer()
@@ -133,9 +133,9 @@ fn R0Mmr::_writer_root(self : R0Mmr, agent : String) -> Bytes {
 ///|
 fn collect_siblings(
   leaves : Array[Bytes],
-  start : Int,
-  height : Int,
-  position : Int,
+  start : Int32,
+  height : Int32,
+  position : Int32,
   siblings : Array[MmrSibling],
 ) -> Unit {
   if height == 0 {
@@ -161,7 +161,7 @@ fn collect_siblings(
 ///|
 fn R0Mmr::_inclusion_proof(
   self : R0Mmr,
-  position : Int,
+  position : Int32,
 ) -> R0MmrProof raise R0ProofError {
   if position < 0 || position >= self.leaf_hashes.length() {
     raise R0ProofError::InvalidProof(detail="leaf position outside writer")
@@ -206,12 +206,12 @@ fn R0Mmr::_inclusion_proof(
 ///|
 fn R0MmrProof::copy_with(
   self : R0MmrProof,
-  leaf_position? : Int,
-  containing_peak_height? : Int,
+  leaf_position? : Int32,
+  containing_peak_height? : Int32,
   siblings? : Array[MmrSibling],
   other_peaks? : Array[MmrPeak],
-  declared_sibling_count? : Int,
-  declared_other_peak_count? : Int,
+  declared_sibling_count? : Int32,
+  declared_other_peak_count? : Int32,
   trailing_byte? : Bool,
 ) -> R0MmrProof {
   {
@@ -234,7 +234,7 @@ fn R0MmrProof::copy_with(
 ///|
 fn R0MmrProof::_with_leaf_position(
   self : R0MmrProof,
-  value : Int,
+  value : Int32,
 ) -> R0MmrProof {
   self.copy_with(leaf_position=value)
 }
@@ -242,7 +242,7 @@ fn R0MmrProof::_with_leaf_position(
 ///|
 fn R0MmrProof::_with_containing_peak_height(
   self : R0MmrProof,
-  value : Int,
+  value : Int32,
 ) -> R0MmrProof {
   self.copy_with(containing_peak_height=value)
 }
@@ -250,7 +250,7 @@ fn R0MmrProof::_with_containing_peak_height(
 ///|
 fn R0MmrProof::_with_sibling_count(
   self : R0MmrProof,
-  value : Int,
+  value : Int32,
 ) -> R0MmrProof {
   self.copy_with(declared_sibling_count=value)
 }
@@ -258,7 +258,7 @@ fn R0MmrProof::_with_sibling_count(
 ///|
 fn R0MmrProof::_with_other_peak_count(
   self : R0MmrProof,
-  value : Int,
+  value : Int32,
 ) -> R0MmrProof {
   self.copy_with(declared_other_peak_count=value)
 }
@@ -295,7 +295,7 @@ fn R0MmrProof::_with_trailing_byte(self : R0MmrProof) -> R0MmrProof {
 ///|
 fn _verify_mmr_inclusion(
   agent~ : String,
-  leaf_count~ : Int,
+  leaf_count~ : Int32,
   leaf_hash~ : Bytes,
   expected_root~ : Bytes,
   proof~ : R0MmrProof,

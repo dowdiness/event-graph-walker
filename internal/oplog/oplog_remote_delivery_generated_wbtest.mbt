@@ -2,9 +2,9 @@
 
 ///|
 struct RemoteDeliveryTrace {
-  suffix_count : Int
-  source_seed : Int
-  schedule_seed : Int
+  suffix_count : Int32
+  source_seed : Int32
+  schedule_seed : Int32
 } derive(Debug)
 
 ///|
@@ -46,7 +46,7 @@ struct RemoteDeliveryEvidence {
   duplicate_before_apply_changes : Bool
   duplicate_while_pending : Bool
   duplicate_after_apply_changes : Bool
-  final_count : Int
+  final_count : Int32
 } derive(Debug)
 
 ///|
@@ -63,7 +63,7 @@ impl @quickcheck.Arbitrary for RemoteDeliveryTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for RemoteDeliveryTrace with fn shrink(self) {
+impl @shrink.Shrink for RemoteDeliveryTrace with fn shrink(self) {
   let results : Array[RemoteDeliveryTrace] = []
   if self.suffix_count > 0 {
     results.push({ ..self, suffix_count: 0, })
@@ -171,7 +171,7 @@ fn remote_delivery_seed_source(
 }
 
 ///|
-fn remote_delivery_lv(source : OpLog, raw : @core.RawVersion) -> Int {
+fn remote_delivery_lv(source : OpLog, raw : @core.RawVersion) -> Int32 {
   match source.get_all_ops().iter().find_first(op => oracle_raw(op) == raw) {
     Some(op) => op.lv()
     None => abort("source operation identity has no local LV")
@@ -184,14 +184,14 @@ fn remote_delivery_insert_ops(source : OpLog) -> Array[@core.Op] {
 }
 
 ///|
-fn remote_delivery_text(seed : Int, offset : Int) -> String {
+fn remote_delivery_text(seed : Int32, offset : Int32) -> String {
   let alphabet = ["a", "b", "c", "d", "e"]
   alphabet[(seed % alphabet.length() + offset % alphabet.length()) %
   alphabet.length()]
 }
 
 ///|
-fn remote_delivery_extra_agent(seed : Int, offset : Int) -> String {
+fn remote_delivery_extra_agent(seed : Int32, offset : Int32) -> String {
   let agents = ["generated-extra-a", "generated-extra-b", "generated-extra-c"]
   agents[(seed % agents.length() + offset % agents.length()) % agents.length()]
 }
@@ -370,7 +370,7 @@ fn remote_delivery_apply_step(
   model : RemoteDeliveryModel,
   incoming : @core.Op,
   expected : Map[@core.RawVersion, RemoteDeliverySnapshot],
-) -> (Bool, Int) {
+) -> (Bool, Int32) {
   let planned = model.oracle_step(incoming)
   let actual = try! target.apply_remote(incoming)
   (
@@ -406,7 +406,7 @@ fn remote_delivery_has_missing_origin(
 ///|
 fn remote_delivery_suffix_schedule(
   scenario : RemoteDeliveryScenario,
-  seed : Int,
+  seed : Int32,
 ) -> Array[@core.Op] {
   let result : Array[@core.Op] = []
   let suffix_count = scenario.ops.length() - 5
@@ -857,7 +857,7 @@ test "property generator: remote delivery scenarios are closed and non-vacuous" 
     if trace.suffix_count > 0 {
       saw_suffix = true
     }
-    for shrunk in @qc.Shrink::shrink(trace) {
+    for shrunk in @shrink.Shrink::shrink(trace) {
       let shrunk_scenario = remote_delivery_build_scenario(shrunk)
       let (_, shrunk_remaining) = try! oracle_plan_remote_candidates(
         shrunk_scenario.ops.copy(),

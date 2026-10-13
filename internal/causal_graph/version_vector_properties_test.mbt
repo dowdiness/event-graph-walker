@@ -18,7 +18,7 @@ impl @quickcheck.Arbitrary for VersionVectorPair with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for VersionVectorPair
+impl @shrink.Shrink for VersionVectorPair
 
 ///|
 struct VersionVectorTriple {
@@ -37,7 +37,7 @@ impl @quickcheck.Arbitrary for VersionVectorTriple with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for VersionVectorTriple
+impl @shrink.Shrink for VersionVectorTriple
 
 ///|
 /// Property: Reflexivity - a version vector is always <= itself
@@ -471,4 +471,19 @@ fn prop_increment_target_only(vv : @causal_graph.VersionVector) -> Bool {
 ///|
 test "property: increment only changes the target agent" {
   @qc.quick_check_fn(prop_increment_target_only)
+}
+
+///|
+test "version vector core Shrink preserves the exposed shrink method" {
+  let vv = @causal_graph.VersionVector::new().set("alice", 4)
+  let via_trait = @shrink.Shrink::shrink(vv).to_array()
+  let via_method = vv.shrink().to_array()
+  assert_eq(via_trait, via_method)
+  assert_eq(via_trait.map(fn(candidate) { candidate.sequence_for("alice") }), [
+    Some(3),
+    Some(2),
+    Some(0),
+  ])
+  assert_eq(vv.sequence_for("alice"), Some(4))
+  assert_eq(@causal_graph.VersionVector::new().shrink().count(), 0)
 }

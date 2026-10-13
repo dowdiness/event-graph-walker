@@ -1,5 +1,5 @@
 ///|
-fn sparse_root_message(sequence : Int) -> SyncMessage {
+fn sparse_root_message(sequence : Int32) -> SyncMessage {
   let raw = @core.RawVersion("shared-agent", sequence)
   let operation = @core.Op::insert(-1, [], raw.agent, raw.seq, "x", None, None)
   try! SyncMessage::SyncMessage([operation], [raw], None)
@@ -31,7 +31,7 @@ test "delete and undelete versions round-trip checkout and delta" {
 
 ///|
 test "property: sparse same-agent disconnect reconnect converges" {
-  let seeds : Array[Int] = @quickcheck.samples(40)
+  let seeds : Array[Int32] = @quickcheck.samples(40)
   for raw_seed in seeds {
     let mut seed = raw_seed % 997
     if seed < 0 {

@@ -30,7 +30,7 @@ fn exact_tree_fields(
 
 ///|
 fn check_tree_encoded_size(
-  size : Int,
+  size : Int32,
   limits : @sync.Limits,
 ) -> Unit raise TreeError {
   let limit = limits.max_encoded_bytes()
@@ -49,7 +49,7 @@ fn check_tree_encoded_size(
 fn tree_json_size(
   json_string : String,
   limits : @sync.Limits,
-) -> Int raise TreeError {
+) -> Int32 raise TreeError {
   let mut index = 0
   let mut size = 0
   while index < json_string.length() {
@@ -93,7 +93,7 @@ pub fn SyncMessage::is_empty(self : SyncMessage) -> Bool {
 }
 
 ///|
-pub fn SyncMessage::op_count(self : SyncMessage) -> Int {
+pub fn SyncMessage::op_count(self : SyncMessage) -> Int32 {
   self.inner.op_count()
 }
 
@@ -103,8 +103,8 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
     _ => abort("container SyncMessage produced invalid JSON")
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": tree_sync_format.to_json(),
+    "schema": Json(1),
+    "format": Json(tree_sync_format),
     "payload": payload,
   }).stringify()
 }
@@ -125,7 +125,7 @@ fn decode_tree_sync_json(
     guard exact_tree_fields(object, ["schema", "format", "payload"]) else {
       fail("tree sync envelope contains missing or unknown fields")
     }
-    let schema : Int = @json.from_json(
+    let schema : Int32 = @json.from_json(
       object.get("schema").unwrap_or(Json::null()),
     )
     let format : String = @json.from_json(
@@ -189,8 +189,8 @@ pub fn Version::to_json_string(self : Version) -> String {
     _ => abort("container Version produced invalid JSON")
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": tree_version_format.to_json(),
+    "schema": Json(1),
+    "format": Json(tree_version_format),
     "payload": payload,
   }).stringify()
 }
@@ -209,7 +209,7 @@ pub fn Version::from_json_string(
     guard exact_tree_fields(object, ["schema", "format", "payload"]) else {
       fail("tree version envelope contains missing or unknown fields")
     }
-    let schema : Int = @json.from_json(
+    let schema : Int32 = @json.from_json(
       object.get("schema").unwrap_or(Json::null()),
     )
     let format : String = @json.from_json(
@@ -240,7 +240,7 @@ pub fn Version::from_json_string(
 }
 
 ///|
-fn write_tree_uvarint(buffer : Buffer, value : Int) -> Unit {
+fn write_tree_uvarint(buffer : Buffer, value : Int32) -> Unit {
   let mut remaining = value
   while remaining >= 0x80 {
     buffer.write_byte(((remaining & 0x7F) | 0x80).to_byte())

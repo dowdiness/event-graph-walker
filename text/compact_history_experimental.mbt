@@ -5,22 +5,22 @@
 let compact_format : String = "event-graph-walker/experimental-accepted-history"
 
 ///|
-let compact_max_bytes : Int = 16 * 1024 * 1024
+let compact_max_bytes : Int32 = 16 * 1024 * 1024
 
 ///|
-let compact_max_ops : Int = 100000
+let compact_max_ops : Int32 = 100000
 
 ///|
-let compact_max_edges : Int = 1000000
+let compact_max_edges : Int32 = 1000000
 
 ///|
-let compact_max_expanded_identity_bytes : Int = 64 * 1024 * 1024
+let compact_max_expanded_identity_bytes : Int32 = 64 * 1024 * 1024
 
 ///|
 priv struct CompactRecord {
   kind : String
-  actor : Int
-  sequence : Int
+  actor : Int32
+  sequence : Int32
   parents : Array[@core.RawVersion]
   left : @core.RawVersion?
   right : @core.RawVersion?
@@ -28,7 +28,11 @@ priv struct CompactRecord {
 }
 
 ///|
-fn compact_add_budget(total : Int, amount : Int, limit : Int) -> Int raise {
+fn compact_add_budget(
+  total : Int32,
+  amount : Int32,
+  limit : Int32,
+) -> Int32 raise {
   guard amount >= 0 && total <= limit && amount <= limit - total else {
     fail("compact archive resource budget exceeded")
   }
@@ -36,7 +40,11 @@ fn compact_add_budget(total : Int, amount : Int, limit : Int) -> Int raise {
 }
 
 ///|
-fn compact_mul_budget(value : Int, count : Int, limit : Int) -> Int raise {
+fn compact_mul_budget(
+  value : Int32,
+  count : Int32,
+  limit : Int32,
+) -> Int32 raise {
   guard value >= 0 && count >= 0 && (count == 0 || value <= limit / count) else {
     fail("compact archive expansion budget exceeded")
   }
@@ -45,7 +53,7 @@ fn compact_mul_budget(value : Int, count : Int, limit : Int) -> Int raise {
 
 ///|
 /// Bound input and nesting before allocating a JSON tree. Strings/escapes do not count.
-fn compact_preparse(source : String) -> Int raise {
+fn compact_preparse(source : String) -> Int32 raise {
   guard source.length() <= compact_max_bytes && is_well_formed_utf16(source) else {
     fail("compact archive input size or UTF-16 invalid")
   }
@@ -80,7 +88,7 @@ fn compact_preparse(source : String) -> Int raise {
 }
 
 ///|
-fn compact_integer(value : Json) -> Int raise {
+fn compact_integer(value : Json) -> Int32 raise {
   match value {
     Json::Number(number, ..) => {
       guard number >= 0.0 && number <= 2147483647.0 else {
@@ -126,15 +134,15 @@ fn compact_optional_identity(
 ///|
 fn compact_pack_identity(
   id : @core.RawVersion,
-  actors : Map[String, Int],
+  actors : Map[String, Int32],
 ) -> Json {
-  [actors.get(id.agent).unwrap(), id.seq].to_json()
+  Json([actors.get(id.agent).unwrap(), id.seq])
 }
 
 ///|
 fn compact_pack_optional(
   id : @core.RawVersion?,
-  actors : Map[String, Int],
+  actors : Map[String, Int32],
 ) -> Json {
   match id {
     None => Json::null()
@@ -152,8 +160,8 @@ fn compact_preflight(
   Array[CompactRecord],
   Array[@core.RawVersion],
   Version,
-  Int,
-  Int,
+  Int32,
+  Int32,
 ) raise {
   let encoded_size = compact_preparse(source)
   let root = @json.parse(source)
@@ -173,7 +181,7 @@ fn compact_preflight(
   }
   let actors : Array[String] = @json.from_json(object["actors"])
   guard actors.length() <= 4096 else { fail("compact actor count limit") }
-  let actor_bytes : Map[String, Int] = Map([])
+  let actor_bytes : Map[String, Int32] = Map([])
   let mut total_actor_bytes = 0
   for actor in actors {
     guard actor != "" &&
@@ -338,7 +346,7 @@ fn compact_decode(
   source : String,
   expected_external : String,
   writer : String,
-  chain? : Bool = false,
+  chain~ : Bool = false,
 ) -> (SyncMessage, Version) raise {
   let (actors, records, heads, expected, encoded_size, total_ops) = compact_preflight(
     source,
@@ -409,7 +417,7 @@ pub fn TextState::export_compact_experimental(
 ) -> String raise TextError {
   let message = self.sync().export_all()
   let actors : Array[String] = []
-  let actor_map : Map[String, Int] = Map([])
+  let actor_map : Map[String, Int32] = Map([])
   for op in message.operations {
     let agent = op.agent()
     if actor_map.get(agent) is None {
@@ -450,15 +458,15 @@ pub fn TextState::export_compact_experimental(
           }
         }
         records.push(
-          [
-            "i".to_json(),
-            actor_map.get(first.agent()).unwrap().to_json(),
-            first.seq().to_json(),
-            parents.to_json(),
+          Json([
+            Json("i"),
+            Json(actor_map.get(first.agent()).unwrap()),
+            Json(first.seq()),
+            Json(parents),
             compact_pack_optional(first.origin_left(), actor_map),
             compact_pack_optional(first.origin_right(), actor_map),
-            builder.to_string().to_json(),
-          ].to_json(),
+            Json(builder.to_string()),
+          ]),
         )
         i = j
       }
@@ -468,13 +476,13 @@ pub fn TextState::export_compact_experimental(
           _ => "u"
         }
         records.push(
-          [
-            kind.to_json(),
-            actor_map.get(first.agent()).unwrap().to_json(),
-            first.seq().to_json(),
-            parents.to_json(),
+          Json([
+            Json(kind),
+            Json(actor_map.get(first.agent()).unwrap()),
+            Json(first.seq()),
+            Json(parents),
             compact_pack_optional(first.origin_left(), actor_map),
-          ].to_json(),
+          ]),
         )
         i = i + 1
       }
@@ -482,14 +490,14 @@ pub fn TextState::export_compact_experimental(
   }
   let source = (
     {
-      "format": compact_format.to_json(),
-      "schema": (1).to_json(),
-      "actors": actors.to_json(),
-      "records": records.to_json(),
-      "heads": message.heads
-      .map(head => compact_pack_identity(head, actor_map))
-      .to_json(),
-      "version": self.version().to_json_string().to_json(),
+      "format": Json(compact_format),
+      "schema": Json(1),
+      "actors": Json(actors),
+      "records": Json(records),
+      "heads": Json(
+        message.heads.map(head => compact_pack_identity(head, actor_map)),
+      ),
+      "version": Json(self.version().to_json_string()),
     } : Json).stringify()
   ignore(compact_preflight(source, self.version().to_json_string(), None)) catch {
     error =>
@@ -546,7 +554,7 @@ fn compact_is_single_chain(
 fn compact_chain_message(
   operations : Array[@core.Op],
   heads : Array[@core.RawVersion],
-  encoded_size : Int,
+  encoded_size : Int32,
 ) -> SyncMessage raise @sync.Failure {
   if !compact_is_single_chain(operations, heads) {
     return SyncMessage::SyncMessage(operations, heads, Some(encoded_size))

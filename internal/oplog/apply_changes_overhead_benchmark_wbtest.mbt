@@ -5,7 +5,7 @@
 /// change application cost.
 
 ///|
-fn benchmark_linear_operations(count : Int) -> Array[@core.Op] {
+fn benchmark_linear_operations(count : Int32) -> Array[@core.Op] {
   let source = OpLog("admission-source")
   let mut previous = -1
   for _ in 0..<count {
@@ -27,7 +27,7 @@ fn benchmark_reverse_operations(
 }
 
 ///|
-fn benchmark_local_apply_changes(b : @bench.T, count : Int) -> Unit {
+fn benchmark_local_apply_changes(b : @bench.T, count : Int32) -> Unit {
   b.bench(fn() {
     let target = OpLog("local-admission")
     let mut previous = -1

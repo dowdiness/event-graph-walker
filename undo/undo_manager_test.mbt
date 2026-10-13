@@ -4,14 +4,14 @@
 /// Test document for characterizing unrecoverable internal failures.
 struct FailureProbeDoc {
   mut applied : Array[String]
-  mut fail_target : Int
-  stale_target : Int?
+  mut fail_target : Int32
+  stale_target : Int32?
 }
 
 ///|
 fn FailureProbeDoc::FailureProbeDoc(
-  fail_target : Int,
-  stale_target : Int?,
+  fail_target : Int32,
+  stale_target : Int32?,
 ) -> FailureProbeDoc {
   { applied: [], fail_target, stale_target, }
 }

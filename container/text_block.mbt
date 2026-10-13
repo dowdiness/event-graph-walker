@@ -11,21 +11,21 @@ priv struct TextInsertOp {
   content : String
   origin_left : @core.RawVersion?
   origin_right : @core.RawVersion?
-  timestamp : Int
+  timestamp : Int32
   agent : String
 }
 
 ///|
 priv struct TextDeleteOp {
   target : @core.RawVersion
-  timestamp : Int
+  timestamp : Int32
   agent : String
 }
 
 ///|
 priv struct TextUndeleteOp {
   target : @core.RawVersion
-  timestamp : Int
+  timestamp : Int32
   agent : String
 }
 
@@ -39,9 +39,9 @@ priv enum TextOp {
 ///|
 priv struct TextBlock {
   tree : @fugue.FugueTree[String]
-  stable_to_local : Map[@core.RawVersion, Int]
-  local_to_stable : Map[Int, @core.RawVersion]
-  mut next_local_id : Int
+  stable_to_local : Map[@core.RawVersion, Int32]
+  local_to_stable : Map[Int32, @core.RawVersion]
+  mut next_local_id : Int32
   mut text_cache : String?
 }
 
@@ -59,7 +59,7 @@ fn TextBlock::new() -> TextBlock {
 ///|
 fn TextBlock::stable_for_local(
   self : TextBlock,
-  local_id : Int,
+  local_id : Int32,
 ) -> @core.RawVersion raise DocumentError {
   match self.local_to_stable.get(local_id) {
     Some(id) => id
@@ -74,7 +74,7 @@ fn TextBlock::stable_for_local(
 fn TextBlock::local_for_stable(
   self : TextBlock,
   stable_id : @core.RawVersion,
-) -> Int raise DocumentError {
+) -> Int32 raise DocumentError {
   match self.stable_to_local.get(stable_id) {
     Some(id) => id
     None =>
@@ -90,10 +90,10 @@ fn TextBlock::local_for_stable(
 /// current visible items at `pos`.
 fn TextBlock::make_insert_op_at(
   self : TextBlock,
-  pos : Int,
+  pos : Int32,
   id : @core.RawVersion,
   content : String,
-  timestamp : Int,
+  timestamp : Int32,
   agent : String,
 ) -> TextOp raise DocumentError {
   let len = self.tree.visible_count()
@@ -124,8 +124,8 @@ fn TextBlock::make_insert_op_at(
 /// Build a replayable delete operation for the currently visible item at `pos`.
 fn TextBlock::make_delete_op_at(
   self : TextBlock,
-  pos : Int,
-  del_timestamp : Int,
+  pos : Int32,
+  del_timestamp : Int32,
   del_agent : String,
 ) -> TextOp raise DocumentError {
   let items = self.tree.get_visible_items()
@@ -221,6 +221,6 @@ fn TextBlock::text(self : TextBlock) -> String {
 }
 
 ///|
-fn TextBlock::len(self : TextBlock) -> Int {
+fn TextBlock::len(self : TextBlock) -> Int32 {
   self.tree.visible_count()
 }

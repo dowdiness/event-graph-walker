@@ -6,19 +6,19 @@ struct ItfTrace {
 ///|
 struct WireIdentity {
   replica_id : String
-  sequence : Int
+  sequence : Int32
 } derive(FromJson)
 
 ///|
 struct ObservedIdentity {
   agent : String
-  sequence : Int
+  sequence : Int32
 } derive(Eq, Hash, @debug.Debug)
 
 ///|
 struct WireRange {
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
 } derive(FromJson)
 
 ///|
@@ -45,7 +45,7 @@ struct WireOperation {
 
 ///|
 struct WireSync {
-  schema : Int
+  schema : Int32
   format : String
   operations : Array[WireOperation]
   heads : Array[WireIdentity]
@@ -82,25 +82,25 @@ fn string_field(value : Json, name : String) -> String raise Failure {
 }
 
 ///|
-fn int_field(value : Json, name : String) -> Int raise Failure {
+fn int_field(value : Json, name : String) -> Int32 raise Failure {
   decode_itf_int(field(value, name))
 }
 
 ///|
-fn decode_itf_int(value : Json) -> Int raise Failure {
+fn decode_itf_int(value : Json) -> Int32 raise Failure {
   let encoded = string_field(value, "#bigint")
-  @strconv.from_str(encoded) catch {
+  @string.parse_int(encoded) catch {
     _ => raise Failure::Failure("invalid ITF integer \{encoded}")
   }
 }
 
 ///|
-fn decode_itf_set(value : Json) -> Set[Int] raise Failure {
+fn decode_itf_set(value : Json) -> Set[Int32] raise Failure {
   let entries = match field(value, "#set") {
     Array(entries) => entries
     _ => raise Failure::Failure("ITF set payload must be an array")
   }
-  let result : Set[Int] = Set([])
+  let result : Set[Int32] = Set([])
   for entry in entries {
     result.add(decode_itf_int(entry))
   }
@@ -131,8 +131,8 @@ fn decode_itf_identity_set(value : Json) -> Set[ObservedIdentity] raise Failure 
 ///|
 fn observed_identity_json(identity : ObservedIdentity) -> Json {
   Json::object({
-    "replica_id": identity.agent.to_json(),
-    "sequence": identity.sequence.to_json(),
+    "replica_id": Json(identity.agent),
+    "sequence": Json(identity.sequence),
   })
 }
 
@@ -164,7 +164,7 @@ fn exact_operation_json(value : Json) -> Json raise Failure {
     _ => raise Failure::Failure("operation hasContent must be boolean")
   }
   let content = if has_content {
-    string_field(value, "content").to_json()
+    Json(string_field(value, "content"))
   } else {
     Json::null()
   }
@@ -174,8 +174,8 @@ fn exact_operation_json(value : Json) -> Json raise Failure {
   }
   Json::object({
     "id": id,
-    "parents": parents.to_json(),
-    "kind": kind.to_json(),
+    "parents": Json(parents),
+    "kind": Json(kind),
     "content": content,
     "origin_left": optional_identity_json(field(value, "originLeft")),
     "origin_right": optional_identity_json(field(value, "originRight")),
@@ -201,10 +201,10 @@ fn exact_fixture_json(event : Json) -> String raise Failure {
     heads.push(observed_identity_json(decode_itf_identity(head)))
   }
   Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-sync".to_json(),
-    "operations": operations.to_json(),
-    "heads": heads.to_json(),
+    "schema": Json(2),
+    "format": Json("event-graph-walker/text-sync"),
+    "operations": Json(operations),
+    "heads": Json(heads),
   }).stringify()
 }
 
@@ -219,13 +219,13 @@ fn exact_version_observation(
   for agent in wire.ranges {
     for range in agent.ranges {
       for sequence in range.start..<range.end {
-        knowledge.add({ agent: agent.replica_id, sequence })
+        knowledge.add({ agent: agent.replica_id, sequence, })
       }
     }
   }
   let frontier : Set[ObservedIdentity] = Set([])
   for identity in wire.frontier {
-    frontier.add({ agent: identity.replica_id, sequence: identity.sequence })
+    frontier.add({ agent: identity.replica_id, sequence: identity.sequence, })
   }
   (knowledge, frontier)
 }
@@ -244,7 +244,7 @@ fn optional_wire_identity_key(value : Json) -> Json raise {
     Null => Json::null()
     _ => {
       let identity : WireIdentity = @json.from_json(value)
-      identity_key(identity).to_json()
+      Json(identity_key(identity))
     }
   }
 }
@@ -254,9 +254,9 @@ fn normalized_wire_operation(operation : WireOperation) -> String raise {
   let parents = operation.parents.map(identity_key)
   parents.sort()
   Json::object({
-    "id": identity_key(operation.id).to_json(),
-    "parents": parents.to_json(),
-    "kind": operation.kind.to_json(),
+    "id": Json(identity_key(operation.id)),
+    "parents": Json(parents),
+    "kind": Json(operation.kind),
     "content": operation.content,
     "origin_left": optional_wire_identity_key(operation.origin_left),
     "origin_right": optional_wire_identity_key(operation.origin_right),
@@ -310,7 +310,7 @@ fn message_observation(message : @text.SyncMessage) -> ObservedMessage raise {
   }
   let heads : Set[ObservedIdentity] = Set([])
   for head in wire.heads {
-    heads.add({ agent: head.replica_id, sequence: head.sequence })
+    heads.add({ agent: head.replica_id, sequence: head.sequence, })
   }
   let canonical = message.to_canonical_bytes()
   let roundtrip = @text.SyncMessage::from_json_string(message.to_json_string())
@@ -319,20 +319,20 @@ fn message_observation(message : @text.SyncMessage) -> ObservedMessage raise {
       "exported message canonical bytes changed on round-trip",
     )
   }
-  { operations, heads }
+  { operations, heads, }
 }
 
 ///|
 fn assert_message_observation(
   message : @text.SyncMessage,
   event : Json,
-  step : Int,
+  step : Int32,
   broken_head : Bool,
 ) -> Unit raise {
   let expected_operations = expected_exact_operations(event)
   let expected_heads = expected_exact_heads(event)
   if broken_head && string_field(event, "name") == "RequestDelta" {
-    expected_heads.remove({ agent: "erin", sequence: 0 })
+    expected_heads.remove({ agent: "erin", sequence: 0, })
   }
   let actual = message_observation(message)
   if !actual.operations.equal(expected_operations) {
@@ -347,7 +347,7 @@ fn assert_message_observation(
 fn version_claim_json(event : Json) -> String raise Failure {
   let knowledge = decode_itf_identity_set(field(event, "claimKnowledge"))
   let frontier = decode_itf_identity_set(field(event, "claimFrontier"))
-  let sequences : Map[String, Int] = Map([])
+  let sequences : Map[String, Int32] = Map([])
   for identity in knowledge {
     if sequences.contains(identity.agent) {
       raise Failure::Failure(
@@ -363,13 +363,10 @@ fn version_claim_json(event : Json) -> String raise Failure {
     let sequence = sequences[agent]
     ranges.push(
       Json::object({
-        "replica_id": agent.to_json(),
-        "ranges": [
-          Json::object({
-            "start": sequence.to_json(),
-            "end": (sequence + 1).to_json(),
-          }),
-        ].to_json(),
+        "replica_id": Json(agent),
+        "ranges": Json([
+          Json::object({ "start": Json(sequence), "end": Json(sequence + 1) }),
+        ]),
       }),
     )
   }
@@ -384,10 +381,10 @@ fn version_claim_json(event : Json) -> String raise Failure {
   })
   let frontier_json = frontier_values.map(observed_identity_json)
   Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-version".to_json(),
-    "frontier": frontier_json.to_json(),
-    "ranges": ranges.to_json(),
+    "schema": Json(2),
+    "format": Json("event-graph-walker/text-version"),
+    "frontier": Json(frontier_json),
+    "ranges": Json(ranges),
   }).stringify()
 }
 
@@ -448,7 +445,7 @@ fn Driver::checkpoint(
 }
 
 ///|
-fn Driver::apply_event(self : Driver, event : Json, step : Int) -> Unit raise {
+fn Driver::apply_event(self : Driver, event : Json, step : Int32) -> Unit raise {
   let name = string_field(event, "name")
   let message_id = string_field(event, "messageId")
   match name {
@@ -567,7 +564,7 @@ fn Driver::assert_replica(
   self : Driver,
   event : Json,
   replica : String,
-  step : Int,
+  step : Int32,
 ) -> Unit raise {
   let knowledge_field = if replica == "source" {
     "sourceKnowledge"
@@ -587,7 +584,7 @@ fn Driver::assert_replica(
   let expected = decode_itf_identity_set(field(event, knowledge_field))
   let expected_frontier = decode_itf_identity_set(field(event, frontier_field))
   if self.broken && replica == "source" {
-    expected.remove({ agent: "erin", sequence: 0 })
+    expected.remove({ agent: "erin", sequence: 0, })
   }
   let document = self.document(replica)
   let (knowledge, frontier) = exact_version_observation(document.version())
@@ -619,7 +616,9 @@ fn Driver::replay(self : Driver, trace : ItfTrace) -> Unit raise {
 }
 
 ///|
-fn trace_schedule_metadata(trace : ItfTrace) -> (Int, Set[Int])? raise Failure {
+fn trace_schedule_metadata(
+  trace : ItfTrace,
+) -> (Int32, Set[Int32])? raise Failure {
   guard trace.states is [first, ..] else { return None }
   let state = field(first, "s")
   match
@@ -641,7 +640,7 @@ fn trace_schedule_metadata(trace : ItfTrace) -> (Int, Set[Int])? raise Failure {
 }
 
 ///|
-fn describe_schedule_set(values : Set[Int]) -> String {
+fn describe_schedule_set(values : Set[Int32]) -> String {
   let sorted = values.to_array()
   sorted.sort()
   @debug.to_string(sorted)
@@ -661,8 +660,8 @@ async fn main {
   if trace_paths.is_empty() {
     raise Failure::Failure("usage: replay TRACE... [--broken]")
   }
-  let observed_schedule_ids : Set[Int] = Set([])
-  let required_schedule_ids : Set[Int] = Set([])
+  let observed_schedule_ids : Set[Int32] = Set([])
+  let required_schedule_ids : Set[Int32] = Set([])
   let mut total_states = 0
   for trace_path in trace_paths {
     let trace : ItfTrace = @json.from_json(

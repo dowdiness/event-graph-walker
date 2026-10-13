@@ -194,7 +194,7 @@ pub fn State::failed(
 /// Normalize an EGW pending-operation count at a façade edge.
 /// Non-positive counts classify as causally complete.
 pub fn ApplyDisposition::ApplyDisposition(
-  pending_operations : Int,
+  pending_operations : Int32,
 ) -> ApplyDisposition {
   if pending_operations > 0 {
     PendingDependencies

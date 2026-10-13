@@ -1,7 +1,7 @@
 ///| Internal prototype benchmarks for causal-cut maintenance and comparison.
 
 ///|
-fn benchmark_causal_cut_operations(count : Int) -> Array[@core.Op] {
+fn benchmark_causal_cut_operations(count : Int32) -> Array[@core.Op] {
   let log = OpLog("causal-cut-benchmark")
   let mut previous = -1
   for _ in 0..<count {

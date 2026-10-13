@@ -130,7 +130,7 @@ pub fn Branch::get_frontier(self : Branch) -> @core.Frontier {
 
 ///|
 /// Count visible characters in this branch
-pub fn Branch::visible_count(self : Branch) -> Int {
+pub fn Branch::visible_count(self : Branch) -> Int32 {
   self.tree.visible_count()
 }
 
