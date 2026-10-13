@@ -85,7 +85,7 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for MultiAgentTrace with fn shrink(self) {
+impl @shrink.Shrink for MultiAgentTrace with fn shrink(self) {
   let results : Array[MultiAgentTrace] = []
   let len = self.actions.length()
   if len > 1 {

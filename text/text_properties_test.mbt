@@ -57,7 +57,7 @@ impl @quickcheck.Arbitrary for RealOps with fn arbitrary(size, random_state) {
 
 ///|
 /// Shrink instance for RealOps
-impl @qc.Shrink for RealOps with fn shrink(self) {
+impl @shrink.Shrink for RealOps with fn shrink(self) {
   let results : Array[RealOps] = []
   let edits = self.edits
   let len = edits.length()
@@ -81,7 +81,7 @@ impl @quickcheck.Arbitrary for RealOpsPair with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for RealOpsPair
+impl @shrink.Shrink for RealOpsPair
 
 ///|
 /// Apply a single TextEdit to a document, returning success.

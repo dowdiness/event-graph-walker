@@ -734,8 +734,8 @@ fn exact_container_fields(
 ///|
 fn container_identity_json(raw : @core.RawVersion) -> Json {
   Json::object({
-    "replica_id": raw.agent.to_json(),
-    "sequence": raw.seq.to_json(),
+    "replica_id": Json(raw.agent),
+    "sequence": Json(raw.seq),
   })
 }
 
@@ -777,14 +777,14 @@ fn decode_optional_container_identity(json : Json) -> @core.RawVersion? raise {
 ///|
 fn container_node_json(node : @mt.TreeNodeId) -> Json {
   if node == @mt.root_id {
-    Json::object({ "kind": "root".to_json() })
+    Json::object({ "kind": Json("root") })
   } else if node == @mt.trash_id {
-    Json::object({ "kind": "trash".to_json() })
+    Json::object({ "kind": Json("trash") })
   } else {
     Json::object({
-      "kind": "node".to_json(),
-      "replica_id": node.agent.to_json(),
-      "sequence": node.counter.to_json(),
+      "kind": Json("node"),
+      "replica_id": Json(node.agent),
+      "sequence": Json(node.counter),
     })
   }
 }
@@ -836,7 +836,7 @@ fn container_parents_json(parents : Array[@core.RawVersion]) -> Json {
   for parent in sorted_sync_raw(parents) {
     values.push(container_identity_json(parent))
   }
-  values.to_json()
+  Json(values)
 }
 
 ///|
@@ -844,21 +844,21 @@ fn container_tree_payload_json(op : @mt.TreeOp) -> Json {
   match op {
     @mt.Move(value) =>
       Json::object({
-        "kind": "move".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("move"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "target": container_node_json(value.target),
         "parent": container_node_json(value.new_parent),
-        "position": value.position.elements().to_json(),
+        "position": Json(value.position.elements()),
       })
     @mt.SetProperty(value) =>
       Json::object({
-        "kind": "property".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("property"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "target": container_node_json(value.target),
-        "key": value.key.to_json(),
-        "value": value.value.to_json(),
+        "key": Json(value.key),
+        "value": Json(value.value),
       })
   }
 }
@@ -868,28 +868,28 @@ fn container_text_payload_json(block : @mt.TreeNodeId, op : TextOp) -> Json {
   match op {
     Insert(value) =>
       Json::object({
-        "kind": "insert".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("insert"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "block": container_node_json(block),
         "item": container_identity_json(value.id),
-        "content": value.content.to_json(),
+        "content": Json(value.content),
         "origin_left": optional_container_identity_json(value.origin_left),
         "origin_right": optional_container_identity_json(value.origin_right),
       })
     Delete(value) =>
       Json::object({
-        "kind": "delete".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("delete"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "block": container_node_json(block),
         "target": container_identity_json(value.target),
       })
     Undelete(value) =>
       Json::object({
-        "kind": "undelete".to_json(),
-        "timestamp": value.timestamp.to_json(),
-        "agent": value.agent.to_json(),
+        "kind": Json("undelete"),
+        "timestamp": Json(value.timestamp),
+        "agent": Json(value.agent),
         "block": container_node_json(block),
         "target": container_identity_json(value.target),
       })
@@ -905,7 +905,7 @@ fn container_record_json(record : SyncOpRecord) -> Json {
   Json::object({
     "id": container_identity_json(sync_record_version(record)),
     "parents": container_parents_json(sync_record_parents(record)),
-    "domain": domain.to_json(),
+    "domain": Json(domain),
     "payload": payload,
   })
 }
@@ -1337,9 +1337,9 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
     operations.push(container_record_json(record))
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": container_sync_format.to_json(),
-    "operations": operations.to_json(),
+    "schema": Json((1)),
+    "format": Json(container_sync_format),
+    "operations": Json(operations),
   }).stringify()
 }
 
@@ -1485,15 +1485,15 @@ pub fn Version::to_json_string(self : Version) -> String {
   for agent in agents {
     entries.push(
       Json::object({
-        "replica_id": agent.to_json(),
-        "sequence": self.inner.sequence_for(agent).unwrap().to_json(),
+        "replica_id": Json(agent),
+        "sequence": Json(self.inner.sequence_for(agent).unwrap()),
       }),
     )
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": container_version_format.to_json(),
-    "entries": entries.to_json(),
+    "schema": Json((1)),
+    "format": Json(container_version_format),
+    "entries": Json(entries),
   }).stringify()
 }
 

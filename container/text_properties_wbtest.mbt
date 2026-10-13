@@ -98,7 +98,7 @@ impl @quickcheck.Arbitrary for BlockScenario with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for BlockScenario with fn shrink(self) {
+impl @shrink.Shrink for BlockScenario with fn shrink(self) {
   let results : Array[BlockScenario] = []
   let len = self.edits.length()
   if len > 0 {

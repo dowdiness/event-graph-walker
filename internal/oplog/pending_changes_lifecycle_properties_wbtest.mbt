@@ -126,7 +126,7 @@ impl @quickcheck.Arbitrary for PendingChangesLifecycleTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for PendingChangesLifecycleTrace with fn shrink(self) {
+impl @shrink.Shrink for PendingChangesLifecycleTrace with fn shrink(self) {
   let results : Array[PendingChangesLifecycleTrace] = []
   if self.depth > 2 {
     let half = self.depth / 2

@@ -2,8 +2,8 @@
 fn version_json_unchecked(version : Version) -> String {
   let graph_version = version.graph()
   Json::object({
-    "schema": text_schema.to_json(),
-    "format": text_version_format.to_json(),
+    "schema": Json(text_schema),
+    "format": Json(text_version_format),
     "frontier": version_frontier_json(graph_version.frontier()),
     "ranges": version_ranges_json(graph_version.ranges()),
   }).stringify()
@@ -137,14 +137,14 @@ test "Version rejects more than 4096 agent entries" {
   for agent in 0..<=4096 {
     entries.push(
       Json::object({
-        "replica_id": ("agent-" + agent.to_string()).to_json(),
+        "replica_id": Json(("agent-" + agent.to_string())),
         "ranges": Json::array([]),
       }),
     )
   }
   let encoded = Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-version".to_json(),
+    "schema": Json((2)),
+    "format": Json("event-graph-walker/text-version"),
     "frontier": Json::array([]),
     "ranges": Json::array(entries),
   }).stringify()

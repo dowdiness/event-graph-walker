@@ -54,8 +54,8 @@ fn version_resource_unchecked_json(
   let version = version_resource_fixture(agent_count, ranges_per_agent)
   let graph_version = version.graph()
   let encoded = Json::object({
-    "schema": text_schema.to_json(),
-    "format": text_version_format.to_json(),
+    "schema": Json(text_schema),
+    "format": Json(text_version_format),
     "frontier": version_frontier_json(graph_version.frontier()),
     "ranges": version_ranges_json(graph_version.ranges()),
   }).stringify()

@@ -3,12 +3,12 @@ name = "dowdiness/event-graph-walker"
 version = "0.8.0"
 
 import {
-  "moonbitlang/quickcheck@0.14.0",
+  "moonbitlang/quickcheck@0.15.0",
   "dowdiness/btree@0.2.0",
   "dowdiness/rle@0.2.3",
   "dowdiness/order-tree@0.1.2",
   "dowdiness/alga@0.4.0",
-  "moonbitlang/x@0.4.43",
+  "moonbitlang/x@0.5.5",
 }
 
 readme = "README.md"

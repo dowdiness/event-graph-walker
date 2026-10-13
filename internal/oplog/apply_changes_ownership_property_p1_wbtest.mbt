@@ -22,7 +22,7 @@ impl @quickcheck.Arbitrary for TypedOwnershipTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for TypedOwnershipTrace with fn shrink(self) {
+impl @shrink.Shrink for TypedOwnershipTrace with fn shrink(self) {
   if self.mode == 0 {
     [].iter()
   } else {

@@ -50,21 +50,21 @@ fn FixtureCatalog::_to_json_string(self : FixtureCatalog) -> String {
   for fixture in self.fixtures {
     fixtures.push(
       Json::object({
-        "fixture_id": fixture.fixture_id.to_json(),
-        "document_id": fixture.document_id.to_json(),
-        "event_count": fixture.event_count.to_json(),
-        "canonical_sha256": fixture.canonical_sha256.to_json(),
-        "replay_order": fixture.replay_order
+        "fixture_id": Json(fixture.fixture_id),
+        "document_id": Json(fixture.document_id),
+        "event_count": Json(fixture.event_count),
+        "canonical_sha256": Json(fixture.canonical_sha256),
+        "replay_order": Json(fixture.replay_order
         .map(identity => identity.agent + ":" + identity.sequence.to_string())
-        .to_json(),
-        "final_text": fixture.final_text.to_json(),
+        ),
+        "final_text": Json(fixture.final_text),
       }),
     )
   }
   Json::object({
-    "schema_version": self.schema_version.to_json(),
-    "fixture_seed": self.fixture_seed.to_json(),
-    "fixtures": fixtures.to_json(),
+    "schema_version": Json(self.schema_version),
+    "fixture_seed": Json(self.fixture_seed),
+    "fixtures": Json(fixtures),
   }).stringify()
 }
 
@@ -98,61 +98,61 @@ fn GeneratedFixture::to_full_json_string(
     for parent in event.parents {
       parents.push(
         Json::object({
-          "agent": parent.agent.to_json(),
-          "sequence": parent.sequence.to_json(),
+          "agent": Json(parent.agent),
+          "sequence": Json(parent.sequence),
         }),
       )
     }
     let body = match event.body {
       InsertScalar(position, scalar) =>
         Json::object({
-          "kind": "insert".to_json(),
-          "position": position.to_json(),
-          "scalar": scalar.to_json(),
+          "kind": Json("insert"),
+          "position": Json(position),
+          "scalar": Json(scalar),
         })
       DeleteScalar(position) =>
         Json::object({
-          "kind": "delete".to_json(),
-          "position": position.to_json(),
+          "kind": Json("delete"),
+          "position": Json(position),
         })
       Undelete(target) =>
         Json::object({
-          "kind": "undelete".to_json(),
+          "kind": Json("undelete"),
           "target": Json::object({
-            "agent": target.agent.to_json(),
-            "sequence": target.sequence.to_json(),
+            "agent": Json(target.agent),
+            "sequence": Json(target.sequence),
           }),
         })
     }
     events.push(
       Json::object({
-        "ordinal": event.ordinal.to_json(),
+        "ordinal": Json(event.ordinal),
         "identity": Json::object({
-          "agent": event.identity.agent.to_json(),
-          "sequence": event.identity.sequence.to_json(),
+          "agent": Json(event.identity.agent),
+          "sequence": Json(event.identity.sequence),
         }),
-        "parents": parents.to_json(),
+        "parents": Json(parents),
         "body": body,
-        "canonical_body_bytes_hex": bytes_hex(event.canonical_body_bytes).to_json(),
-        "canonical_event_bytes_hex": bytes_hex(canonical_event_bytes(event)).to_json(),
+        "canonical_body_bytes_hex": Json(bytes_hex(event.canonical_body_bytes)),
+        "canonical_event_bytes_hex": Json(bytes_hex(canonical_event_bytes(event))),
       }),
     )
   }
   Json::object({
-    "fixture_id": self.fixture_id.to_json(),
-    "document_id": self.document_id.to_json(),
-    "event_count": self.events.length().to_json(),
-    "canonical_sha256": sha256_hex(canonical_fixture_bytes(self)).to_json(),
-    "events": events.to_json(),
-    "replay_order": self.replay_order
+    "fixture_id": Json(self.fixture_id),
+    "document_id": Json(self.document_id),
+    "event_count": Json(self.events.length()),
+    "canonical_sha256": Json(sha256_hex(canonical_fixture_bytes(self))),
+    "events": Json(events),
+    "replay_order": Json(self.replay_order
     .map(identity => identity.agent + ":" + identity.sequence.to_string())
-    .to_json(),
-    "final_text": self.final_text.to_json(),
-    "adapter_observation_sha256": sha256_hex(
+    ),
+    "final_text": Json(self.final_text),
+    "adapter_observation_sha256": Json(sha256_hex(
       strict_utf8(self.final_text) catch {
         _ => raise FixtureError::Invalid(detail="final text encoding failure")
       },
-    ).to_json(),
+    )),
   }).stringify()
 }
 

@@ -82,7 +82,7 @@ impl @quickcheck.Arbitrary for GraphScenario with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for GraphScenario with fn shrink(self) {
+impl @shrink.Shrink for GraphScenario with fn shrink(self) {
   let results : Array[GraphScenario] = []
   let count = self.parents_by_lv.length()
   if count > 0 {

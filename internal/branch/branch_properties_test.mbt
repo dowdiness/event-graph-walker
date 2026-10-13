@@ -297,7 +297,7 @@ impl @quickcheck.Arbitrary for BranchTrace with fn arbitrary(size, random_state)
 }
 
 ///|
-impl @qc.Shrink for BranchTrace with fn shrink(self) {
+impl @shrink.Shrink for BranchTrace with fn shrink(self) {
   let results : Array[BranchTrace] = []
   let len = self.ops.length()
   if len > 0 {

@@ -63,7 +63,7 @@ impl @quickcheck.Arbitrary for RemoteDeliveryTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for RemoteDeliveryTrace with fn shrink(self) {
+impl @shrink.Shrink for RemoteDeliveryTrace with fn shrink(self) {
   let results : Array[RemoteDeliveryTrace] = []
   if self.suffix_count > 0 {
     results.push({ ..self, suffix_count: 0, })
@@ -857,7 +857,7 @@ test "property generator: remote delivery scenarios are closed and non-vacuous" 
     if trace.suffix_count > 0 {
       saw_suffix = true
     }
-    for shrunk in @qc.Shrink::shrink(trace) {
+    for shrunk in @shrink.Shrink::shrink(trace) {
       let shrunk_scenario = remote_delivery_build_scenario(shrunk)
       let (_, shrunk_remaining) = try! oracle_plan_remote_candidates(
         shrunk_scenario.ops.copy(),

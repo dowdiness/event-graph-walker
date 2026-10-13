@@ -12,16 +12,16 @@ fn compact_sparse_version_source_for_test(
     let actor = "sparse-" + actor_index.to_string()
     for index in 0..<range_count {
       let id = Json::object({
-        "replica_id": actor.to_json(),
-        "sequence": (index * 2).to_json(),
+        "replica_id": Json(actor),
+        "sequence": Json((index * 2)),
       })
       let parents = if total == 0 { [] } else { [previous] }
       operations.push(
         Json::object({
           "id": id,
-          "parents": parents.to_json(),
-          "kind": "insert".to_json(),
-          "content": "x".to_json(),
+          "parents": Json(parents),
+          "kind": Json("insert"),
+          "content": Json("x"),
           "origin_left": previous,
           "origin_right": Json::null(),
         }),
@@ -31,10 +31,10 @@ fn compact_sparse_version_source_for_test(
     }
   }
   let encoded = Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-sync".to_json(),
-    "operations": operations.to_json(),
-    "heads": [previous].to_json(),
+    "schema": Json((2)),
+    "format": Json("event-graph-walker/text-sync"),
+    "operations": Json(operations),
+    "heads": Json([previous]),
   }).stringify()
   let source = TextState::new("sparse-receiver")
   let report = source.sync().apply(SyncMessage::from_json_string(encoded))

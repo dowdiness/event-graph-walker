@@ -54,12 +54,12 @@ fn Driver::apply_line(
     }
     ["insert", name, raw_position, content] => {
       let index = self.required_index(name, line_number)
-      let position : Int = @strconv.from_str(raw_position)
+      let position : Int = @string.parse_int(raw_position)
       self.documents[index].insert(@text.Pos::at(position), content)
     }
     ["delete", name, raw_position] => {
       let index = self.required_index(name, line_number)
-      let position : Int = @strconv.from_str(raw_position)
+      let position : Int = @string.parse_int(raw_position)
       self.documents[index].delete(@text.Pos::at(position))
     }
     ["sync", from, to] | ["sync-duplicate", from, to] => {
@@ -163,10 +163,10 @@ struct CorpusMessage {
 ///|
 fn single_operation_message(operation : Json, heads : Array[Json]) -> String {
   Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-sync".to_json(),
-    "operations": [operation].to_json(),
-    "heads": heads.to_json(),
+    "schema": Json((2)),
+    "format": Json("event-graph-walker/text-sync"),
+    "operations": Json([operation]),
+    "heads": Json(heads),
   }).stringify()
 }
 

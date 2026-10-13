@@ -8,7 +8,7 @@ pub impl ToJson for OpRunContent with fn to_json(self) {
   match self {
     Inserts(chars) => {
       let text = String::from_array(chars)
-      Json::object({ "Inserts": text.to_json() })
+      Json::object({ "Inserts": Json(text) })
     }
     Deletes => Json::string("Deletes")
     Undeletes => Json::string("Undeletes")
@@ -41,14 +41,14 @@ pub impl @json.FromJson for OpRunContent with fn from_json(json, path) {
 ///|
 pub impl ToJson for OpRun with fn to_json(self) {
   Json::object({
-    "start_lv": self.start_lv.to_json(),
-    "agent": self.agent.to_json(),
-    "start_seq": self.start_seq.to_json(),
+    "start_lv": Json(self.start_lv),
+    "agent": Json(self.agent),
+    "start_seq": Json(self.start_seq),
     "content": self.content.to_json(),
-    "parents": self.parents.to_json(),
-    "origin_left": self.origin_left.to_json(),
-    "origin_right": self.origin_right.to_json(),
-    "count": self.count.to_json(),
+    "parents": Json(self.parents),
+    "origin_left": Json(self.origin_left),
+    "origin_right": Json(self.origin_right),
+    "count": Json(self.count),
   })
 }
 

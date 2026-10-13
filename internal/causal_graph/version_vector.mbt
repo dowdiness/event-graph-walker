@@ -133,7 +133,7 @@ pub impl @quickcheck.Arbitrary for VersionVector with fn arbitrary(
 /// 1. Remove agents (fewer agents = simpler)
 /// 2. Decrease sequence numbers for each agent (smaller numbers = simpler)
 /// 3. Combination of both
-pub impl @qc.Shrink for VersionVector with fn shrink(vv) {
+pub impl @shrink.Shrink for VersionVector with fn shrink(vv) {
   let agents = vv.agents()
 
   // Strategy 1: Shrink by removing agents
@@ -506,7 +506,7 @@ pub extend VersionVector with @quickcheck.Arbitrary::{arbitrary}
 
 ///|
 #doc(hidden)
-pub extend VersionVector with @qc.Shrink::{shrink}
+pub extend VersionVector with @shrink.Shrink::{shrink}
 
 ///|
 #doc(hidden)

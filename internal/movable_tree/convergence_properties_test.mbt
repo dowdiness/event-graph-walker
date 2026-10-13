@@ -57,7 +57,7 @@ impl @quickcheck.Arbitrary for TreeScenario with fn arbitrary(size, rs) {
 
 ///|
 /// Shrink instance for TreeScenario — try smaller prefixes.
-impl @qc.Shrink for TreeScenario with fn shrink(self) {
+impl @shrink.Shrink for TreeScenario with fn shrink(self) {
   let results : Array[TreeScenario] = []
   let len = self.actions.length()
   if len > 0 {

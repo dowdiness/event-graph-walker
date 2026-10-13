@@ -18,7 +18,7 @@ pub impl Show for Frontier with fn output(self, logger) {
 
 ///|
 pub impl ToJson for Frontier with fn to_json(self) {
-  self.values.to_json()
+  Json(self.values)
 }
 
 ///|

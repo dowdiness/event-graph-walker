@@ -103,8 +103,8 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
     _ => abort("container SyncMessage produced invalid JSON")
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": tree_sync_format.to_json(),
+    "schema": Json((1)),
+    "format": Json(tree_sync_format),
     "payload": payload,
   }).stringify()
 }
@@ -189,8 +189,8 @@ pub fn Version::to_json_string(self : Version) -> String {
     _ => abort("container Version produced invalid JSON")
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": tree_version_format.to_json(),
+    "schema": Json((1)),
+    "format": Json(tree_version_format),
     "payload": payload,
   }).stringify()
 }

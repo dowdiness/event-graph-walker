@@ -45,7 +45,7 @@ pub impl @quickcheck.Arbitrary for QcInsertOpSet with fn arbitrary(
 
 ///|
 /// Shrink instance for QcInsertOpSet
-pub impl @qc.Shrink for QcInsertOpSet with fn shrink(self) {
+pub impl @shrink.Shrink for QcInsertOpSet with fn shrink(self) {
   let results : Array[QcInsertOpSet] = []
   let ops = self.ops
   let len = ops.length()
@@ -210,7 +210,7 @@ pub impl @quickcheck.Arbitrary for ChainLen with fn arbitrary(
 }
 
 ///|
-pub impl @qc.Shrink for ChainLen with fn shrink(self) {
+pub impl @shrink.Shrink for ChainLen with fn shrink(self) {
   let results : Array[ChainLen] = []
   if self.len > 3 {
     results.push({ len: 3, })
@@ -396,7 +396,7 @@ pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with fn arbitrary(
 }
 
 ///|
-pub impl @qc.Shrink for InsertSetWithDeletes with fn shrink(self) {
+pub impl @shrink.Shrink for InsertSetWithDeletes with fn shrink(self) {
   let results : Array[InsertSetWithDeletes] = []
   let len = self.inserts.length()
   if len > 0 {
@@ -548,7 +548,7 @@ pub impl @quickcheck.Arbitrary for ConcurrentInsertSeq with fn arbitrary(
 
 ///|
 /// Shrink instance for ConcurrentInsertSeq
-pub impl @qc.Shrink for ConcurrentInsertSeq with fn shrink(self) {
+pub impl @shrink.Shrink for ConcurrentInsertSeq with fn shrink(self) {
   let results : Array[ConcurrentInsertSeq] = []
   if self.len_a > 0 || self.len_b > 0 || self.ts_a > 0 || self.ts_b > 0 {
     results.push({ len_a: 0, len_b: 0, ts_a: 0, ts_b: 0, })
@@ -756,7 +756,7 @@ pub impl @quickcheck.Arbitrary for TieBreakCase with fn arbitrary(
 }
 
 ///|
-pub impl @qc.Shrink for TieBreakCase with fn shrink(_self) {
+pub impl @shrink.Shrink for TieBreakCase with fn shrink(_self) {
   let results : Array[TieBreakCase] = []
   results.push({ agent_a: "agent-0", agent_b: "agent-1", id_a: 10, id_b: 11, })
   results.iter()
@@ -832,7 +832,7 @@ pub impl @quickcheck.Arbitrary for BranchingTree with fn arbitrary(size, rs) {
 }
 
 ///|
-pub impl @qc.Shrink for BranchingTree with fn shrink(self) {
+pub impl @shrink.Shrink for BranchingTree with fn shrink(self) {
   let results : Array[BranchingTree] = []
   if self.len > 3 {
     results.push({ len: 3, })

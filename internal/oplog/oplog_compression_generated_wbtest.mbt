@@ -53,7 +53,7 @@ impl @quickcheck.Arbitrary for CompressionTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for CompressionTrace with fn shrink(self) {
+impl @shrink.Shrink for CompressionTrace with fn shrink(self) {
   let results : Array[CompressionTrace] = []
   let suffix_count = self.suffix.length()
   if suffix_count > 0 {

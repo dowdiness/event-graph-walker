@@ -410,7 +410,7 @@ fn version_frontier_json(frontier : Array[@core.RawVersion]) -> Json {
   for raw in frontier {
     values.push(identity_json(raw))
   }
-  values.to_json()
+  Json(values)
 }
 
 ///|
@@ -422,14 +422,14 @@ fn version_ranges_json(ranges : Array[(String, Array[(UInt, UInt)])]) -> Json {
     let parts : Array[Json] = []
     for range in entry_ranges {
       parts.push(
-        Json::object({ "start": range.0.to_json(), "end": range.1.to_json() }),
+        Json::object({ "start": Json(range.0), "end": Json(range.1) }),
       )
     }
     values.push(
-      Json::object({ "replica_id": agent.to_json(), "ranges": parts.to_json() }),
+      Json::object({ "replica_id": Json(agent), "ranges": Json(parts) }),
     )
   }
-  values.to_json()
+  Json(values)
 }
 
 ///|
@@ -473,8 +473,8 @@ pub fn Version::to_json_string(self : Version) -> String raise TextError {
     )
   }
   let encoded = Json::object({
-    "schema": text_schema.to_json(),
-    "format": text_version_format.to_json(),
+    "schema": Json(text_schema),
+    "format": Json(text_version_format),
     "frontier": version_frontier_json(frontier),
     "ranges": version_ranges_json(ranges),
   }).stringify()
@@ -656,8 +656,8 @@ pub fn Version::from_json_string(json_str : String) -> Version raise TextError {
 ///|
 fn identity_json(raw : @core.RawVersion) -> Json {
   Json::object({
-    "replica_id": raw.agent.to_json(),
-    "sequence": raw.seq.to_json(),
+    "replica_id": Json(raw.agent),
+    "sequence": Json(raw.seq),
   })
 }
 
@@ -678,7 +678,7 @@ fn SyncJsonWriter::identity(
   let quoted = match self.quoted_agents.get(raw.agent) {
     Some(quoted) => quoted
     None => {
-      let quoted = raw.agent.to_json().stringify()
+      let quoted = Json(raw.agent).stringify()
       self.quoted_agents[raw.agent] = quoted
       quoted
     }
@@ -715,7 +715,7 @@ fn SyncJsonWriter::operation(self : SyncJsonWriter, op : @core.Op) -> Unit {
   match op.content() {
     @core.Insert(text) => {
       self.output.write_string("\"insert\",\"content\":")
-      self.output.write_string(text.to_json().stringify())
+      self.output.write_string(Json(text).stringify())
     }
     @core.Delete => self.output.write_string("\"delete\",\"content\":null")
     @core.Undelete => self.output.write_string("\"undelete\",\"content\":null")
@@ -736,7 +736,7 @@ pub fn SyncMessage::to_json_string(self : SyncMessage) -> String {
   writer.output.write_string("{\"schema\":")
   writer.output.write_string(text_schema.to_string())
   writer.output.write_string(",\"format\":")
-  writer.output.write_string(text_sync_format.to_json().stringify())
+  writer.output.write_string(Json(text_sync_format).stringify())
   writer.output.write_string(",\"operations\":[")
   for i, op in self.structural_operations {
     if i > 0 {

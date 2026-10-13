@@ -89,7 +89,7 @@ fn int_field(value : Json, name : String) -> Int raise Failure {
 ///|
 fn decode_itf_int(value : Json) -> Int raise Failure {
   let encoded = string_field(value, "#bigint")
-  @strconv.from_str(encoded) catch {
+  @string.parse_int(encoded) catch {
     _ => raise Failure::Failure("invalid ITF integer \{encoded}")
   }
 }
@@ -131,8 +131,8 @@ fn decode_itf_identity_set(value : Json) -> Set[ObservedIdentity] raise Failure 
 ///|
 fn observed_identity_json(identity : ObservedIdentity) -> Json {
   Json::object({
-    "replica_id": identity.agent.to_json(),
-    "sequence": identity.sequence.to_json(),
+    "replica_id": Json(identity.agent),
+    "sequence": Json(identity.sequence),
   })
 }
 
@@ -164,7 +164,7 @@ fn exact_operation_json(value : Json) -> Json raise Failure {
     _ => raise Failure::Failure("operation hasContent must be boolean")
   }
   let content = if has_content {
-    string_field(value, "content").to_json()
+    Json(string_field(value, "content"))
   } else {
     Json::null()
   }
@@ -174,8 +174,8 @@ fn exact_operation_json(value : Json) -> Json raise Failure {
   }
   Json::object({
     "id": id,
-    "parents": parents.to_json(),
-    "kind": kind.to_json(),
+    "parents": Json(parents),
+    "kind": Json(kind),
     "content": content,
     "origin_left": optional_identity_json(field(value, "originLeft")),
     "origin_right": optional_identity_json(field(value, "originRight")),
@@ -201,10 +201,10 @@ fn exact_fixture_json(event : Json) -> String raise Failure {
     heads.push(observed_identity_json(decode_itf_identity(head)))
   }
   Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-sync".to_json(),
-    "operations": operations.to_json(),
-    "heads": heads.to_json(),
+    "schema": Json((2)),
+    "format": Json("event-graph-walker/text-sync"),
+    "operations": Json(operations),
+    "heads": Json(heads),
   }).stringify()
 }
 
@@ -244,7 +244,7 @@ fn optional_wire_identity_key(value : Json) -> Json raise {
     Null => Json::null()
     _ => {
       let identity : WireIdentity = @json.from_json(value)
-      identity_key(identity).to_json()
+      Json(identity_key(identity))
     }
   }
 }
@@ -254,9 +254,9 @@ fn normalized_wire_operation(operation : WireOperation) -> String raise {
   let parents = operation.parents.map(identity_key)
   parents.sort()
   Json::object({
-    "id": identity_key(operation.id).to_json(),
-    "parents": parents.to_json(),
-    "kind": operation.kind.to_json(),
+    "id": Json(identity_key(operation.id)),
+    "parents": Json(parents),
+    "kind": Json(operation.kind),
     "content": operation.content,
     "origin_left": optional_wire_identity_key(operation.origin_left),
     "origin_right": optional_wire_identity_key(operation.origin_right),
@@ -363,13 +363,13 @@ fn version_claim_json(event : Json) -> String raise Failure {
     let sequence = sequences[agent]
     ranges.push(
       Json::object({
-        "replica_id": agent.to_json(),
-        "ranges": [
+        "replica_id": Json(agent),
+        "ranges": Json([
           Json::object({
-            "start": sequence.to_json(),
-            "end": (sequence + 1).to_json(),
+            "start": Json(sequence),
+            "end": Json((sequence + 1)),
           }),
-        ].to_json(),
+        ]),
       }),
     )
   }
@@ -384,10 +384,10 @@ fn version_claim_json(event : Json) -> String raise Failure {
   })
   let frontier_json = frontier_values.map(observed_identity_json)
   Json::object({
-    "schema": (2).to_json(),
-    "format": "event-graph-walker/text-version".to_json(),
-    "frontier": frontier_json.to_json(),
-    "ranges": ranges.to_json(),
+    "schema": Json((2)),
+    "format": Json("event-graph-walker/text-version"),
+    "frontier": Json(frontier_json),
+    "ranges": Json(ranges),
   }).stringify()
 }
 

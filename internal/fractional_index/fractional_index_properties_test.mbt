@@ -41,7 +41,7 @@ pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
 
 ///|
 /// Shrink instance for OrderedPair — try smaller element values.
-pub impl @qc.Shrink for OrderedPair with fn shrink(self) {
+pub impl @shrink.Shrink for OrderedPair with fn shrink(self) {
   let results : Array[OrderedPair] = []
   // Try reducing elements of left
   let left_elems = self.left.elements()
@@ -72,7 +72,7 @@ pub(all) struct SingleKey {
 
 ///|
 /// Shrink instance for SingleKey — try shorter element lists.
-pub impl @qc.Shrink for SingleKey with fn shrink(self) {
+pub impl @shrink.Shrink for SingleKey with fn shrink(self) {
   let results : Array[SingleKey] = []
   let elems = self.key.elements()
   if elems.length() > 1 {

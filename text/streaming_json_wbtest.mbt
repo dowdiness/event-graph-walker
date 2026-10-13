@@ -13,14 +13,14 @@ fn op_json(op : @core.Op) -> Json {
     parents.push(identity_json(parent))
   }
   let (kind, content) = match op.content() {
-    @core.Insert(text) => ("insert", text.to_json())
+    @core.Insert(text) => ("insert", Json(text))
     @core.Delete => ("delete", Json::null())
     @core.Undelete => ("undelete", Json::null())
   }
   Json::object({
     "id": identity_json(op_identity(op)),
-    "parents": parents.to_json(),
-    "kind": kind.to_json(),
+    "parents": Json(parents),
+    "kind": Json(kind),
     "content": content,
     "origin_left": optional_identity_json(op.origin_left()),
     "origin_right": optional_identity_json(op.origin_right()),
@@ -38,10 +38,10 @@ fn SyncMessage::original_sync_json_for_test(self : SyncMessage) -> String {
     heads.push(identity_json(head))
   }
   Json::object({
-    "schema": text_schema.to_json(),
-    "format": text_sync_format.to_json(),
-    "operations": operations.to_json(),
-    "heads": heads.to_json(),
+    "schema": Json(text_schema),
+    "format": Json(text_sync_format),
+    "operations": Json(operations),
+    "heads": Json(heads),
   }).stringify()
 }
 

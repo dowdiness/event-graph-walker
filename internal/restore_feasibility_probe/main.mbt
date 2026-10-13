@@ -3,9 +3,9 @@
 fn emit_vector(name : String, expected_hex : String) -> Unit {
   println(
     "{\"schema_version\":1,\"record\":\"vector\",\"name\":" +
-    name.to_json().stringify() +
+    Json(name).stringify() +
     ",\"expected_hex\":" +
-    expected_hex.to_json().stringify() +
+    Json(expected_hex).stringify() +
     "}",
   )
 }
@@ -40,31 +40,31 @@ fn native_produce(case_id : String, run_id : String) -> Unit {
   let empty_hash = sha256_hex(empty)
   println(
     Json::object({
-      "schema_version": (1).to_json(),
-      "run_id": run_id.to_json(),
-      "producer": "egw_authority_native".to_json(),
-      "case_id": case_id.to_json(),
-      "status": "pass".to_json(),
+      "schema_version": Json((1)),
+      "run_id": Json(run_id),
+      "producer": Json("egw_authority_native"),
+      "case_id": Json(case_id),
+      "status": Json("pass"),
       "payload": Json::object({
-        "record": "candidate_capture".to_json(),
-        "candidate": "A".to_json(),
-        "phase": "capture".to_json(),
-        "outcome": "not_applicable".to_json(),
-        "reason": "candidate implementation is owned by #1291".to_json(),
-        "candidate_bytes_base64": base64_encode(empty).to_json(),
-        "candidate_bytes_length": empty.length().to_json(),
-        "candidate_bytes_sha256": empty_hash.to_json(),
-        "snapshot_commit_id": empty_hash.to_json(),
-        "provider_fixture_bytes_base64": base64_encode(provider).to_json(),
-        "provider_fixture_bytes_length": provider.length().to_json(),
-        "provider_fixture_bytes_sha256": sha256_hex(provider).to_json(),
-        "expected_replay_order": fixture.replay_order
+        "record": Json("candidate_capture"),
+        "candidate": Json("A"),
+        "phase": Json("capture"),
+        "outcome": Json("not_applicable"),
+        "reason": Json("candidate implementation is owned by #1291"),
+        "candidate_bytes_base64": Json(base64_encode(empty)),
+        "candidate_bytes_length": Json(empty.length()),
+        "candidate_bytes_sha256": Json(empty_hash),
+        "snapshot_commit_id": Json(empty_hash),
+        "provider_fixture_bytes_base64": Json(base64_encode(provider)),
+        "provider_fixture_bytes_length": Json(provider.length()),
+        "provider_fixture_bytes_sha256": Json(sha256_hex(provider)),
+        "expected_replay_order": Json(fixture.replay_order
         .map(identity => identity.agent + ":" + identity.sequence.to_string())
-        .to_json(),
-        "expected_final_text": fixture.final_text.to_json(),
-        "adapter_observation_sha256": sha256_hex(
+        ),
+        "expected_final_text": Json(fixture.final_text),
+        "adapter_observation_sha256": Json(sha256_hex(
           try! strict_utf8(fixture.final_text),
-        ).to_json(),
+        )),
       }),
     }).stringify(),
   )
@@ -151,19 +151,19 @@ fn js_consume(capture_path : String, catalog_path : String) -> Unit raise {
   }
   println(
     Json::object({
-      "schema_version": (1).to_json(),
-      "run_id": run_id.to_json(),
-      "producer": "egw_candidate_js".to_json(),
-      "case_id": case_id.to_json(),
-      "status": "pass".to_json(),
+      "schema_version": Json((1)),
+      "run_id": Json(run_id),
+      "producer": Json("egw_candidate_js"),
+      "case_id": Json(case_id),
+      "status": Json("pass"),
       "payload": Json::object({
-        "record": "candidate_result".to_json(),
-        "candidate": "A".to_json(),
-        "phase": "consume".to_json(),
-        "outcome": "not_applicable".to_json(),
-        "reason": "candidate implementation is owned by #1291".to_json(),
-        "provider_fixture_bytes_sha256": provider_sha256.to_json(),
-        "independent_process_validation": "base64+length+sha256+catalog".to_json(),
+        "record": Json("candidate_result"),
+        "candidate": Json("A"),
+        "phase": Json("consume"),
+        "outcome": Json("not_applicable"),
+        "reason": Json("candidate implementation is owned by #1291"),
+        "provider_fixture_bytes_sha256": Json(provider_sha256),
+        "independent_process_validation": Json("base64+length+sha256+catalog"),
       }),
     }).stringify(),
   )

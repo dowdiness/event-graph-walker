@@ -18,6 +18,7 @@ import {
   "moonbitlang/core/quickcheck",
   "moonbitlang/core/quickcheck/splitmix",
   "moonbitlang/quickcheck" @qc,
+  "moonbitlang/core/quickcheck/shrink",
 } for "wbtest"
 
 options(

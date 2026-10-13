@@ -68,7 +68,7 @@ impl @quickcheck.Arbitrary for ContainerModelTrace with fn arbitrary(size, rs) {
 }
 
 ///|
-impl @qc.Shrink for ContainerModelTrace with fn shrink(self) {
+impl @shrink.Shrink for ContainerModelTrace with fn shrink(self) {
   let results : Array[ContainerModelTrace] = []
   if self.actions.length() > 11 {
     results.push({

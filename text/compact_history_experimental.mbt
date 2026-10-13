@@ -128,7 +128,7 @@ fn compact_pack_identity(
   id : @core.RawVersion,
   actors : Map[String, Int],
 ) -> Json {
-  [actors.get(id.agent).unwrap(), id.seq].to_json()
+  Json([actors.get(id.agent).unwrap(), id.seq])
 }
 
 ///|
@@ -450,15 +450,15 @@ pub fn TextState::export_compact_experimental(
           }
         }
         records.push(
-          [
-            "i".to_json(),
-            actor_map.get(first.agent()).unwrap().to_json(),
-            first.seq().to_json(),
-            parents.to_json(),
+          Json([
+            Json("i"),
+            Json(actor_map.get(first.agent()).unwrap()),
+            Json(first.seq()),
+            Json(parents),
             compact_pack_optional(first.origin_left(), actor_map),
             compact_pack_optional(first.origin_right(), actor_map),
-            builder.to_string().to_json(),
-          ].to_json(),
+            Json(builder.to_string()),
+          ]),
         )
         i = j
       }
@@ -468,13 +468,13 @@ pub fn TextState::export_compact_experimental(
           _ => "u"
         }
         records.push(
-          [
-            kind.to_json(),
-            actor_map.get(first.agent()).unwrap().to_json(),
-            first.seq().to_json(),
-            parents.to_json(),
+          Json([
+            Json(kind),
+            Json(actor_map.get(first.agent()).unwrap()),
+            Json(first.seq()),
+            Json(parents),
             compact_pack_optional(first.origin_left(), actor_map),
-          ].to_json(),
+          ]),
         )
         i = i + 1
       }
@@ -482,14 +482,14 @@ pub fn TextState::export_compact_experimental(
   }
   let source = (
     {
-      "format": compact_format.to_json(),
-      "schema": (1).to_json(),
-      "actors": actors.to_json(),
-      "records": records.to_json(),
-      "heads": message.heads
+      "format": Json(compact_format),
+      "schema": Json((1)),
+      "actors": Json(actors),
+      "records": Json(records),
+      "heads": Json(message.heads
       .map(head => compact_pack_identity(head, actor_map))
-      .to_json(),
-      "version": self.version().to_json_string().to_json(),
+      ),
+      "version": Json(self.version().to_json_string()),
     } : Json).stringify()
   ignore(compact_preflight(source, self.version().to_json_string(), None)) catch {
     error =>
