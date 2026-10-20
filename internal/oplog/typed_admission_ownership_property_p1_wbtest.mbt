@@ -22,15 +22,6 @@ impl @quickcheck.Arbitrary for TypedOwnershipTrace with fn arbitrary(
 }
 
 ///|
-impl @qc.Shrink for TypedOwnershipTrace with fn shrink(self) {
-  if self.mode == 0 {
-    [].iter()
-  } else {
-    [{ mode: 0, }].iter()
-  }
-}
-
-///|
 fn typed_ownership_unique_raws(
   operations : ArrayView[@core.Op],
 ) -> Array[@core.RawVersion] {
@@ -214,7 +205,7 @@ fn typed_ownership_property(trace : TypedOwnershipTrace) -> Bool {
 }
 
 ///|
-test "property generator: typed ownership traces are valid" {
+test "typed ownership traces are valid and all eight partitions are disjoint" {
   let traces : Array[TypedOwnershipTrace] = @quickcheck.samples(32)
   assert_true(!traces.is_empty())
   for trace in traces {
@@ -223,11 +214,6 @@ test "property generator: typed ownership traces are valid" {
   for mode in 0..<8 {
     assert_true(typed_ownership_property({ mode, }))
   }
-}
-
-///|
-test "property: typed admission ownership partition is disjoint" {
-  @qc.quick_check_fn(typed_ownership_property, max_success=100, max_size=24)
 }
 
 // --- Explicit trait-method promotions (E0079) ---
