@@ -4,6 +4,7 @@ import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/priority_queue",
+  "moonbitlang/core/sorted_map",
   "moonbitlang/core/quickcheck",
   "moonbitlang/core/quickcheck/shrink",
 }

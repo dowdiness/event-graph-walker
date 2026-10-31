@@ -1,6 +1,7 @@
 ///|
 test "graph version canonicalizes sparse identities with one union algorithm" {
   let graph = @causal_graph.CausalGraph::new()
+  ignore(graph.current_graph_version())
   ignore(try! graph.add_version_with_seq([], "agent", 4))
   ignore(try! graph.add_version_with_seq([], "agent", 0))
   ignore(try! graph.add_version_with_seq([], "agent", 2))
@@ -10,6 +11,71 @@ test "graph version canonicalizes sparse identities with one union algorithm" {
   @debug.debug_inspect(version.ranges(), content="[(\"agent\", [(0, 5)])]")
   for sequence in 0..<5 {
     assert_true(version.contains(@core.RawVersion("agent", sequence)))
+  }
+}
+
+///|
+test "warm interval unions match membership through arbitrary insert order" {
+  for warm_at in [0, 100] {
+    let graph = @causal_graph.CausalGraph::new()
+    let agents = ["a", "m", "z"]
+    let seen = [
+      Array::make(257, false),
+      Array::make(257, false),
+      Array::make(257, false),
+    ]
+    for i in 0..<771 {
+      if i == warm_at {
+        ignore(graph.current_graph_version())
+      }
+      let agent_index = 2 - i % 3
+      let seq = i / 3 * 73 % 257
+      ignore(
+        try! graph.add_version_with_seq(
+          if i == 0 {
+            []
+          } else {
+            [i - 1]
+          },
+          agents[agent_index],
+          seq,
+        ),
+      )
+      seen[agent_index][seq] = true
+      if i >= warm_at && (i % 17 == 0 || i == 770) {
+        let expected : Array[(String, Array[(UInt, UInt)])] = []
+        for a in 0..<3 {
+          let ranges : Array[(UInt, UInt)] = []
+          let mut s = 0
+          while s < 257 {
+            if !seen[a][s] {
+              s += 1
+              continue
+            }
+            let start = s
+            while s < 257 && seen[a][s] {
+              s += 1
+            }
+            ranges.push((start.reinterpret_as_uint(), s.reinterpret_as_uint()))
+          }
+          if !ranges.is_empty() {
+            expected.push((agents[a], ranges))
+          }
+        }
+        assert_eq(graph.current_graph_version().ranges(), expected)
+      }
+    }
+    ignore(try! graph.add_version_with_seq([770], "max", 2147483647))
+    let before = graph.current_graph_version()
+    ignore(try! graph.add_version_with_seq([771], "max", 2147483645))
+    ignore(try! graph.add_version_with_seq([772], "max", 2147483646))
+    assert_eq(
+      graph.current_graph_version().ranges().filter(entry => entry.0 == "max"),
+      [("max", [(2147483645U, 2147483648U)])],
+    )
+    assert_eq(before.ranges().filter(entry => entry.0 == "max"), [
+      ("max", [(2147483647U, 2147483648U)]),
+    ])
   }
 }
 

@@ -42,7 +42,12 @@ pub suberror GraphVersionError {
 /// summary-maintenance cost until its version is first observed.
 priv enum GraphVersionCache {
   Cold
-  Hot(HaveSummary)
+  Hot(HaveIndex)
+}
+
+///|
+priv struct HaveIndex {
+  agents : @sorted_map.SortedMap[String, SequenceIndex]
 }
 
 ///|
@@ -59,67 +64,31 @@ fn HaveSummary::empty() -> HaveSummary {
 }
 
 ///|
-fn HaveSummary::copy(self : HaveSummary) -> HaveSummary {
-  {
-    entries: self.entries.map(entry => {
-      agent: entry.agent,
-      ranges: entry.ranges.map(range => { start: range.start, end: range.end, }),
-    }),
+fn HaveIndex::from_summary(summary : HaveSummary) -> HaveIndex {
+  let agents : @sorted_map.SortedMap[String, SequenceIndex] = @sorted_map.SortedMap([],
+  )
+  for entry in summary.entries {
+    agents[entry.agent] = SequenceIndex::from_ranges(entry.ranges)
   }
+  { agents, }
 }
 
 ///|
-/// Insert one identity into canonical sparse membership. This is the only
-/// interval union algorithm used by reconstruction and incremental change application.
-fn HaveSummary::insert(self : HaveSummary, raw : @core.RawVersion) -> Unit {
-  let sequence = raw.seq.reinterpret_as_uint()
-  let entry_index = match
-    self.entries.binary_search_by(entry => entry.agent.compare(raw.agent)) {
-    Ok(index) => index
-    Err(index) => {
-      self.entries.insert(index, {
-        agent: raw.agent,
-        ranges: [{ start: sequence, end: sequence + 1U, }],
-      })
-      return
-    }
-  }
-  let entry = self.entries[entry_index]
-  let range_index = match
-    entry.ranges.binary_search_by(range => {
-      if sequence < range.start {
-        1
-      } else if sequence >= range.end {
-        -1
-      } else {
-        0
-      }
-    }) {
-    Ok(_) => return
-    Err(index) => index
-  }
-  let joins_left = range_index > 0 &&
-    entry.ranges[range_index - 1].end == sequence
-  let joins_right = range_index < entry.ranges.length() &&
-    sequence + 1U == entry.ranges[range_index].start
-  match (joins_left, joins_right) {
-    (true, true) => {
-      let left = entry.ranges[range_index - 1]
-      let right = entry.ranges[range_index]
-      entry.ranges[range_index - 1] = { start: left.start, end: right.end, }
-      ignore(entry.ranges.remove(range_index))
-    }
-    (true, false) => {
-      let left = entry.ranges[range_index - 1]
-      entry.ranges[range_index - 1] = { start: left.start, end: sequence + 1U, }
-    }
-    (false, true) => {
-      let right = entry.ranges[range_index]
-      entry.ranges[range_index] = { start: sequence, end: right.end, }
-    }
-    (false, false) =>
-      entry.ranges.insert(range_index, { start: sequence, end: sequence + 1U, })
-  }
+/// Admission has proved this identity absent. Insert into its canonical interval
+/// tree, independently of arrival order.
+fn HaveIndex::insert(self : HaveIndex, raw : @core.RawVersion) -> Unit {
+  let entry = self.agents.get_or_init(raw.agent, () => { root: None, })
+  entry.insert(raw.seq.reinterpret_as_uint())
+}
+
+///|
+/// Materialize a canonical, owning version value in agent/sequence order.
+fn HaveIndex::snapshot(self : HaveIndex) -> HaveSummary {
+  let entries : Array[HaveEntry] = []
+  self.agents.each((agent, index) => {
+    entries.push({ agent, ranges: index.snapshot(), })
+  })
+  { entries, }
 }
 
 ///|
@@ -381,10 +350,10 @@ pub fn CausalGraph::current_graph_version(self : CausalGraph) -> GraphVersion {
   let have = match self.version_cache {
     Cold => {
       let built = HaveSummary::from_graph(self)
-      self.version_cache = Hot(built)
-      built.copy()
+      self.version_cache = Hot(HaveIndex::from_summary(built))
+      built
     }
-    Hot(summary) => summary.copy()
+    Hot(index) => index.snapshot()
   }
   let frontier : Array[@core.RawVersion] = []
   for lv in self.frontier.iter() {

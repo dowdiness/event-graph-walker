@@ -61,13 +61,14 @@ test "perf: graph version cold reconstruction (100000 ops)" (b : @bench.T) {
 }
 
 ///|
-test "perf: sparse summary insert (32 agents)" (b : @bench.T) {
-  let source = HaveSummary::empty()
+test "perf: sparse index reconstruction and insert (32 agents)" (b : @bench.T) {
+  let source = HaveIndex::from_summary(HaveSummary::empty())
   for i in 0..<32 {
     source.insert(@core.RawVersion("agent-" + i.to_string(), 100))
   }
+  let snapshot = source.snapshot()
   b.bench(fn() {
-    let summary = source.copy()
+    let summary = HaveIndex::from_summary(snapshot)
     summary.insert(@core.RawVersion("agent-31", 101))
     b.keep(summary)
   })

@@ -613,6 +613,24 @@ selection API. The old method names and per-LV diagnostic callback are removed
 without compatibility aliases. `causal_view()` exposes live diagnostics; its
 callbacks return owning values, without another copy at the view boundary.
 
+The warm graph-version cache stores canonical sequence intervals in `HaveIndex`,
+not in mutable snapshot arrays. Agents use an ordered map; each agent's sequence
+intervals reside directly in one AVL tree, without a second endpoint index.
+Admission has already proved the ID absent. Insertion extends an adjacent
+interval or creates a new one, absorbing the other neighbor when a gap closes.
+The same rule and balancing operations apply to every insertion order; no
+direction-specific representation or fallback exists. With A agents and S
+intervals for the affected agent, update work is O(log(A + 1) + log(S + 1)).
+Resident cache storage remains O(agents + intervals). Public `GraphVersion`
+values retain owning, canonical arrays for equality, hashing, membership and
+linear subtraction. Immutable interval values are shared with tree nodes;
+an update replaces an interval value rather than mutating it, so snapshots do
+not need another interval object per entry and never expose mutable tree nodes.
+Materializing their membership takes O(agents + intervals). Initial construction
+builds each interval tree by median partition of the canonical array in O(S),
+without incremental insertions or rotations. Building the agent map takes
+O(A log(A + 1)). Subsequent edits never mutate old versions.
+
 This compression does not impose a memory bound on arbitrarily fragmented
 history, discard causal events, or make `Editor` operation storage and an
 application recovery journal bounded. Their lifetime is a separate concern.
