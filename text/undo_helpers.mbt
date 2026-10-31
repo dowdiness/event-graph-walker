@@ -103,3 +103,35 @@ pub fn TextState::replace_range_and_record(
   self.delete_range_and_record(range, mgr, timestamp_ms~)
   self.commit_insert_plan_and_record(plan, mgr, timestamp_ms~)
 }
+
+///|
+/// Editor-only application of prevalidated scalar ranges. Collect actual target
+/// identities in application order, without touching UndoManager or timestamps.
+fn TextState::replace_range_collect(
+  self : TextState,
+  start : Int,
+  end : Int,
+  text : String,
+  items : Array[@undo.UndoItem],
+) -> Unit raise TextError {
+  if start != end {
+    let deleted = self.inner.visible_entries_between(start, end) catch {
+      error => raise TextError::from_document_error(error, () => self.len())
+    }
+    self.inner.delete_range(start, end) catch {
+      error => raise TextError::from_document_error(error, () => self.len())
+    }
+    for (lv, content) in deleted {
+      items.push(@undo.UndoItem::delete(lv, content))
+    }
+  }
+  let mut position = start
+  for ch in text {
+    let content = ch.to_string()
+    let op = self.inner.insert(position, content) catch {
+      error => raise TextError::from_document_error(error, () => self.len())
+    }
+    items.push(@undo.UndoItem::insert(op.lv(), content))
+    position += 1
+  }
+}

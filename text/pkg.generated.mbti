@@ -20,6 +20,16 @@ pub(all) suberror ChangeError {
 pub fn ChangeError::equal(Self, Self) -> Bool
 pub fn ChangeError::not_equal(Self, Self) -> Bool
 
+pub(all) suberror EditError {
+  ReversedRange
+  InvalidText
+  InvalidChange(ChangeError)
+  StaleVersion
+  Unavailable
+  Engine(TextError)
+  Undo(@undo.UndoError)
+}
+
 pub(all) suberror TextError {
   EmptyReplicaId
   InvalidPosition(pos~ : Int, len~ : Int)
@@ -55,6 +65,27 @@ pub fn ChangeSet::new_length(Self) -> Int
 pub fn ChangeSet::not_equal(Self, Self) -> Bool
 pub fn ChangeSet::sections(Self) -> ArrayView[ChangeSection]
 pub fn ChangeSet::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Edit {
+  Applied(TextUpdate)
+  Rejected(EditError)
+  Invalidated(EditError)
+}
+
+pub struct Editor {
+  // private fields
+}
+pub fn Editor::can_redo(Self) -> Bool
+pub fn Editor::can_undo(Self) -> Bool
+pub fn Editor::edit(Self, Version, Utf16Edit, undo? : UndoPolicy, label? : String) -> Edit
+pub fn Editor::edit_many(Self, Version, ChangeSet, undo? : UndoPolicy, label? : String) -> Edit
+pub fn Editor::export_since(Self, Version) -> SyncMessage raise TextError
+pub fn Editor::new(String) -> Self raise TextError
+pub fn Editor::receive(Self, SyncMessage) -> Edit
+pub fn Editor::redo(Self) -> Edit
+pub fn Editor::snapshot(Self) -> TextSnapshot raise EditError
+pub fn Editor::undo(Self) -> Edit
+pub fn Editor::version(Self) -> Version
 
 pub(all) struct Pos {
   // private fields
@@ -111,6 +142,11 @@ pub(all) enum TextEffectAvailability {
   Unavailable
 }
 
+pub struct TextSnapshot {
+  version : Version
+  text : String
+}
+
 pub(all) struct TextState {
   // private fields
 }
@@ -145,6 +181,17 @@ pub fn TextSyncTransition::report(Self) -> SyncReport raise TextError
 pub fn TextSyncTransition::version_after(Self) -> Version
 pub fn TextSyncTransition::version_before(Self) -> Version
 
+pub struct TextUpdate {
+  before : Version
+  after : Version
+  before_len : Int
+  origin : UpdateOrigin
+  sync_report : SyncReport?
+  // private fields
+}
+pub fn TextUpdate::change_set(Self) -> ChangeSet
+pub fn TextUpdate::edits(Self) -> ArrayView[Utf16Edit]
+
 pub(all) struct TextView {
   // private fields
 }
@@ -153,6 +200,31 @@ pub fn TextView::runs(Self) -> Iter[String]
 pub fn TextView::text(Self) -> String
 pub fn TextView::version(Self) -> Version
 pub impl Show for TextView
+
+pub(all) enum UndoPolicy {
+  NewGroup
+  JoinPrevious
+  NoHistory
+} derive(Eq, @debug.Debug)
+pub fn UndoPolicy::equal(Self, Self) -> Bool
+pub fn UndoPolicy::not_equal(Self, Self) -> Bool
+pub fn UndoPolicy::to_repr(Self) -> @debug.Repr
+
+pub(all) enum UpdateOrigin {
+  Local(String?)
+  Remote
+  Undo
+  Redo
+} derive(Eq, @debug.Debug)
+pub fn UpdateOrigin::equal(Self, Self) -> Bool
+pub fn UpdateOrigin::not_equal(Self, Self) -> Bool
+pub fn UpdateOrigin::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Utf16Edit {
+  start : Int
+  end : Int
+  text : String
+}
 
 pub(all) struct Version {
   // private fields

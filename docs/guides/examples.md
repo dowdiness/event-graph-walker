@@ -6,6 +6,7 @@ These examples demonstrate common tasks using only public façade APIs. Equivale
 
 ## Contents
 
+- [Editor change stream](#editor-change-stream)
 - [Text operations and error handling](#text-operations-and-error-handling)
 - [Text synchronization](#text-synchronization)
 - [Accepted text history persistence](#accepted-text-history-persistence)
@@ -15,6 +16,159 @@ These examples demonstrate common tasks using only public façade APIs. Equivale
 - [Historical checkout](#historical-checkout)
 
 ---
+
+## Editor change stream
+
+Use `@text.Editor` when the application needs text changes for a textarea,
+parser, or another derived view. It owns the CRDT and local Undo history;
+`edit`, `undo`, `redo`, and `receive` all return `Edit`.
+The contract is exercised in `text/editor_test.mbt`.
+
+```moonbit
+let editor = @text.Editor::new("alice-laptop")
+let initial = editor.snapshot()
+let result = editor.edit(initial.version, {
+  start: 0, end: 0, text: "日本語🙂",
+})
+match result {
+  Applied(update) => {
+    // Apply each edit to the view at update.before, in order.
+    // start/end are half-open UTF-16 offsets in the progressively updated text.
+    for edit in update.edits() {
+      println("replace \{edit.start}..\{edit.end} with \{edit.text}")
+    }
+    // Only then advance the view's version to update.after.
+  }
+  Rejected(_) => () // The visible document and causal version are unchanged.
+  Invalidated(_) => abort("Editor invalidated; reopen explicitly before rendering")
+}
+```
+
+Unlike `TextState`'s scalar-coordinate primitives, `Editor` accepts UTF-16 ranges
+directly. It rejects negative/out-of-bounds offsets, surrogate splits, malformed
+text, and edits addressed to a stale version. It does not clamp positions or
+silently rebase a stale request. Conversion uses the document's existing rank
+tree with scalar and UTF-16 subtree totals, not an application-owned index.
+
+By default each nonempty request is one Undo group. `edit_many` accepts a
+normalized `ChangeSet` in the base document's UTF-16 coordinates. `Keep(n)`
+retains `n` code units; `Replace(n, text)` replaces the next `n` code units.
+The sections cover the entire base document, including the trailing keep.
+
+```moonbit
+let editor = @text.Editor::new("batch-writer")
+let seed = editor.edit(editor.version(), {
+  start: 0, end: 0, text: "hello world",
+}, undo=NoHistory)
+guard seed is Applied(_) else { abort("seed rejected") }
+let bold = @text.ChangeSet::new([
+  Replace(0, "**"), Keep(5), Replace(0, "**"), Keep(6),
+])
+let result = editor.edit_many(editor.version(), bold, label="mark.add")
+// One undo removes both delimiters, restoring "hello world".
+```
+
+`ChangeSet::new` copies and normalizes its input: adjacent keeps and adjacent
+replacements merge; zero-length keeps and empty replacements disappear. It
+rejects negative/overflowing lengths and malformed inserted UTF-16 before a
+request reaches the editor. `edit_many` checks the version first, then base
+length, then all replacement boundaries against the document. Length mismatch
+is `InvalidChange(LengthMismatch)`, not `StaleVersion`. All replacements are
+validated before applying any, then applied right-to-left inside one publication
+boundary. It never invokes the public single-edit method in a loop.
+
+`undo=NewGroup` is the default. `JoinPrevious` joins only if the preceding local
+history group is still eligible. Receive with nonempty `edits()`,
+Undo/Redo, and nonempty `NoHistory` edits end that eligibility. With no eligible
+group, joining creates a new one. Rejected and empty local requests leave it
+unchanged, as do empty receives (including duplicates and pending-only packets).
+Nonempty recorded requests clear redo; `NoHistory` and empty requests
+preserve redo. `NoHistory` does not create undo items. The editor does not use
+time-based UndoManager capture; lower-level `TextState::*_and_record` retains
+that compatibility behavior.
+
+The host decides when an IME composition becomes a request and when adjacent
+typing should join a group. This API does not supply browser event handling or
+time-based typing decisions. Remote changes never enter the local Undo history.
+Version equality establishes the document state, not user identity; do not reuse
+a version across unrelated documents.
+
+Normal updates contain authority-produced edits, coalesced for adjacent changes.
+They never request a full-text diff, including Undo/Redo. `snapshot()` is an
+explicit initialization/read operation, not a fallback for missing effects.
+No-op or dependency-blocked receives can return an empty update.
+
+`TextUpdate.edits()` remains the sole applied-edit record, in sequential UTF-16
+coordinates. `before_len` records the old UTF-16 length from the projection index
+without materializing text. `change_set()` lazily derives and caches a normalized
+base-coordinate change set; it does not retain the Editor or a text snapshot.
+Nonoverlapping descending edits already use base coordinates: after checking
+that each edit's end is at most the preceding edit's start, derivation constructs
+sections in one reverse pass. This applies to actual edits from any origin,
+including qualifying receives. Other sequences use the general composition fold.
+The direct path visits O(k) sections; concatenating inserted strings still has
+its backend-dependent cost. It never substitutes the original command input
+for the applied-edit record.
+`ChangeSet::compose(next)` composes A→B with B→C and rejects incompatible lengths.
+It can check boundaries within inserted text; only the editor can validate
+boundaries in an otherwise unknown base document. Composition scans sections,
+not unchanged document text. Repeated folding can revisit earlier sections;
+this API does not promise linear total cost for arbitrarily many sequential edits.
+
+The isolated first-derivation benchmark is
+`moon bench text/change_set_benchmark_wbtest.mbt --target js --release`.
+In this orb, removing repeated validation of already-validated composition
+output reduced a 1,048,576-unit ASCII insertion followed by 1,000 appends from
+3.16s to 2.32ms (ten benchmark samples, mean). The 1,000-appends-only control
+changed from 1.82ms to 0.307ms. These exclude CRDT setup, transport, parsing and
+rendering, and are not cross-backend or end-to-end claims. JavaScript may retain
+concatenated strings without eagerly flattening them.
+The separate 1,000-disjoint-descending-replacements case took 63.23ms after that
+fix (69.52ms in the later comparison), then 0.102ms with direct descending
+derivation. Actual Editor outputs on a 2,000-unit document reproduce the cost:
+1,000 replacements through edit_many took 117.30 → 0.101ms to derive;
+the corresponding receive output took 107.57 → 0.118ms. One/four-replacement
+edit_many outputs took 0.645 → 0.180µs / 3.34 → 0.496µs. All exclude edit/receive
+execution and reset the derived cache on each sample. Each actual-output case
+checks normalized equality with its independently constructed input ChangeSet.
+Node CPU sampling of the synthetic descending case before specialization
+attributed non-idle self time to compose (27%), change_set (16.2%), array push
+(13.9%), normalization (13.8%), and GC (11.9%). This includes runtime/warmup
+and is sampling attribution, not exclusive phase timing of a single 63ms call.
+No balanced composition structure is implemented; arbitrary-order folds retain
+their existing worst-case complexity.
+
+Every update identifies its cause as `Local(label)`, `Remote`, `Undo`, or `Redo`.
+`sync_report` is `Some(SyncReport)` for every successful receive and `None` for
+local edits, Undo and Redo. Its applied, duplicate and pending operation counts
+remain available even when `edits()` is empty.
+The optional `label` is application metadata, not a grouping rule or a network
+field. Consumers can suppress automatic correction for `Remote` without tracing
+the call site. Transport and causal authority remain `SyncMessage`, not ChangeSet.
+
+`Invalidated` is terminal for that editor instance. An internal failure may have
+committed some operations, or rebuilt the projection without an exact change
+sequence. Neither case is reported as a rejected/rolled-back edit. Reads and
+further mutations are refused; `version()` and `export_since()` remain available
+for inspecting/recovering accepted history. Reopening and replacing a view are
+explicit application actions. Rejected conflicting packets preserve previously
+accepted pending operations; they do not replace those operations. A newly
+rejected packet leaving new pending operations has only been demonstrated at
+the lower-level commit-failure injection seam, not with healthy-state wire
+inputs. This API does not promise rollback of internal commit failures.
+
+`SnapshotRequired` at the lower-level transition is not itself an Editor result.
+Editor warms projection indexes before collecting edits. Losing exact indexes
+during projection or rebuilding the projection during collection invalidates
+the collector, so Editor returns `Invalidated` rather than publishing incomplete
+edits. An error obtaining `before_len` also returns `Invalidated` before invoking
+the action. Fault-injection tests cover recovery paths; they do not prove that
+every possible valid packet is incapable of exposing an indexing defect.
+
+`TextState`, `SyncSession`, and generic `UndoManager` remain lower-level APIs for
+callers that own their mutation/Undo policy. Do not combine them with an `Editor`
+or maintain a second mutable authority behind its back: the editor deliberately
+does not expose its mutable state or Undo manager.
 
 ## Text operations and error handling
 
