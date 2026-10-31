@@ -11,11 +11,20 @@ import {
 // Values
 
 // Errors
+pub(all) suberror ChangeError {
+  LengthMismatch
+  InvalidLength
+  InvalidBoundary(offset~ : Int)
+  InvalidText
+} derive(Eq)
+pub fn ChangeError::equal(Self, Self) -> Bool
+pub fn ChangeError::not_equal(Self, Self) -> Bool
+
 pub(all) suberror TextError {
   EmptyReplicaId
-  InvalidPosition(pos~ : Int32, len~ : Int32)
+  InvalidPosition(pos~ : Int, len~ : Int)
   InvalidText(detail~ : String)
-  InvalidRange(start~ : Int32, end~ : Int32)
+  InvalidRange(start~ : Int, end~ : Int)
   SyncFailed(@sync.Failure)
   VersionNotFound
   ProjectionRecoveryRequired
@@ -27,19 +36,37 @@ pub fn TextError::is_retryable(Self) -> Bool
 pub fn TextError::message(Self) -> String
 
 // Types and methods
-#derive(Eq, @debug.Debug)
+pub(all) enum ChangeSection {
+  Keep(Int)
+  Replace(Int, String)
+} derive(Eq, @debug.Debug)
+pub fn ChangeSection::equal(Self, Self) -> Bool
+pub fn ChangeSection::not_equal(Self, Self) -> Bool
+pub fn ChangeSection::to_repr(Self) -> @debug.Repr
+
+pub struct ChangeSet {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn ChangeSet::compose(Self, Self) -> Self raise ChangeError
+pub fn ChangeSet::equal(Self, Self) -> Bool
+pub fn ChangeSet::length(Self) -> Int
+pub fn ChangeSet::new(ArrayView[ChangeSection]) -> Self raise ChangeError
+pub fn ChangeSet::new_length(Self) -> Int
+pub fn ChangeSet::not_equal(Self, Self) -> Bool
+pub fn ChangeSet::sections(Self) -> ArrayView[ChangeSection]
+pub fn ChangeSet::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Pos {
   // private fields
-}
-pub fn Pos::at(Int32) -> Self
-pub fn Pos::value(Self) -> Int32
+} derive(Eq, @debug.Debug)
+pub fn Pos::at(Int) -> Self
+pub fn Pos::value(Self) -> Int
 
-#derive(Eq, @debug.Debug)
 pub struct Range {
   // private fields
-}
+} derive(Eq, @debug.Debug)
 pub fn Range::end(Self) -> Pos
-pub fn Range::from_ints(Int32, Int32) -> Self raise TextError
+pub fn Range::from_ints(Int, Int) -> Self raise TextError
 pub fn Range::new(Pos, Pos) -> Self raise TextError
 pub fn Range::start(Self) -> Pos
 
@@ -48,17 +75,16 @@ pub(all) struct SyncMessage {
 }
 pub fn SyncMessage::from_json_string(String) -> Self raise TextError
 pub fn SyncMessage::is_empty(Self) -> Bool
-pub fn SyncMessage::op_count(Self) -> Int32
+pub fn SyncMessage::op_count(Self) -> Int
 pub fn SyncMessage::to_canonical_bytes(Self) -> Bytes
 pub fn SyncMessage::to_json_string(Self) -> String
 
-#derive(Eq, @debug.Debug)
 pub(all) struct SyncReport {
   // private fields
-}
-pub fn SyncReport::applied_operations(Self) -> Int32
-pub fn SyncReport::duplicate_operations(Self) -> Int32
-pub fn SyncReport::pending_operations(Self) -> Int32
+} derive(Eq, @debug.Debug)
+pub fn SyncReport::applied_operations(Self) -> Int
+pub fn SyncReport::duplicate_operations(Self) -> Int
+pub fn SyncReport::pending_operations(Self) -> Int
 
 pub(all) struct SyncSession {
   // private fields
@@ -72,13 +98,12 @@ pub fn SyncSession::current_version(Self) -> Version
 pub fn SyncSession::decode_json(Self, String) -> SyncMessage raise TextError
 pub fn SyncSession::export_all(Self) -> SyncMessage raise TextError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TextError
-pub fn SyncSession::pending_sync_count(Self) -> Int32
+pub fn SyncSession::pending_sync_count(Self) -> Int
 
-#derive(Eq, @debug.Debug)
 pub(all) enum TextEffect {
   Insert(Pos, String)
   Delete(Range)
-}
+} derive(Eq, @debug.Debug)
 
 pub(all) enum TextEffectAvailability {
   Exact(ArrayView[TextEffect])
@@ -92,18 +117,18 @@ pub(all) struct TextState {
 pub fn TextState::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn TextState::checkout(Self, Version) -> TextView raise TextError
 pub fn TextState::delete(Self, Pos) -> Unit raise TextError
-pub fn TextState::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int32) -> Unit raise TextError
+pub fn TextState::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::delete_range(Self, Range) -> Unit raise TextError
-pub fn TextState::delete_range_and_record(Self, Range, @undo.UndoManager, timestamp_ms~ : Int32) -> Unit raise TextError
+pub fn TextState::delete_range_and_record(Self, Range, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::export_compact_experimental(Self) -> String raise TextError
 pub fn TextState::insert(Self, Pos, String) -> Unit raise TextError
-pub fn TextState::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int32) -> Unit raise TextError
+pub fn TextState::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::is_empty(Self) -> Bool
-pub fn TextState::len(Self) -> Int32
+pub fn TextState::len(Self) -> Int
 pub fn TextState::new(String) -> Self raise TextError
 pub fn TextState::new_with_sync_limits(String, @sync.Limits) -> Self raise TextError
 pub fn TextState::replace_range(Self, Range, String) -> Unit raise TextError
-pub fn TextState::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int32) -> Unit raise TextError
+pub fn TextState::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError
 pub fn TextState::restore_compact_direct_experimental(String, String, String) -> Self raise TextError
 pub fn TextState::sync(Self) -> SyncSession
 pub fn TextState::text(Self) -> String
@@ -123,16 +148,15 @@ pub fn TextSyncTransition::version_before(Self) -> Version
 pub(all) struct TextView {
   // private fields
 }
-pub fn TextView::len(Self) -> Int32
+pub fn TextView::len(Self) -> Int
 pub fn TextView::runs(Self) -> Iter[String]
 pub fn TextView::text(Self) -> String
 pub fn TextView::version(Self) -> Version
 pub impl Show for TextView
 
-#derive(Eq, Hash, @debug.Debug)
 pub(all) struct Version {
   // private fields
-}
+} derive(Eq, Hash, @debug.Debug)
 pub fn Version::empty() -> Self
 pub fn Version::from_json_string(String) -> Self raise TextError
 pub fn Version::to_json_string(Self) -> String raise TextError
