@@ -24,7 +24,7 @@ priv struct LocatorItem {
 
 ///|
 /// One stable implicit-treap node. Marker nodes have zero visible weight;
-/// content nodes toggle between zero and one without changing their handle.
+/// content nodes toggle their scalar and UTF-16 weights without changing handles.
 priv struct LocatorRankNode {
   priority : UInt64
   mut left : Int32
@@ -33,10 +33,12 @@ priv struct LocatorRankNode {
   mut size : Int32
   mut visible : Bool
   mut visible_span : Int32
+  utf16_width : Int32
+  mut utf16_span : Int32
 }
 
 ///|
-/// Same-generation inverse index for visible LV scalar positions.
+/// Same-generation index for visible LV ranks and scalar/UTF-16 boundaries.
 ///
 /// Every Fugue subtree is represented by stable open/content/close Euler
 /// markers in an implicit order-statistic treap. Balanced sibling indexes find
@@ -65,7 +67,11 @@ fn locator_priority(seed : Int32) -> UInt64 {
 }
 
 ///|
-fn LvLocator::push_rank_node(self : LvLocator, visible : Bool) -> Int32 {
+fn LvLocator::push_rank_node(
+  self : LvLocator,
+  visible : Bool,
+  utf16_width? : Int32 = 0,
+) -> Int32 {
   let index = self.nodes.length()
   self.nodes.push({
     priority: locator_priority(index),
@@ -74,6 +80,12 @@ fn LvLocator::push_rank_node(self : LvLocator, visible : Bool) -> Int32 {
     parent: -1,
     size: 1,
     visible,
+    utf16_width,
+    utf16_span: if visible {
+      utf16_width
+    } else {
+      0
+    },
     visible_span: if visible {
       1
     } else {
@@ -141,6 +153,9 @@ fn LvLocator::refresh_rank_node(self : LvLocator, node : Int32) -> Unit {
   rank.visible_span = self.rank_visible_span(rank.left) +
     (if rank.visible { 1 } else { 0 }) +
     self.rank_visible_span(rank.right)
+  rank.utf16_span = self.rank_utf16_span(rank.left) +
+    (if rank.visible { rank.utf16_width } else { 0 }) +
+    self.rank_utf16_span(rank.right)
   self.set_rank_parent(rank.left, node)
   self.set_rank_parent(rank.right, node)
 }
@@ -418,6 +433,31 @@ fn LvLocator::set_children(
 }
 
 ///|
+/// Allocate stable handles without splicing them into the resident treap.
+fn LvLocator::register_item(
+  self : LvLocator,
+  item : @fugue.Item[String],
+) -> LocatorItem {
+  let open_node = self.push_rank_node(false)
+  let content_node = self.push_rank_node(
+    !item.deleted,
+    utf16_width=item.content.length(),
+  )
+  let close_node = self.push_rank_node(false)
+  let entry : LocatorItem = {
+    agent: item.agent,
+    sequence: item.sequence,
+    open_node,
+    content_node,
+    close_node,
+    left_children: Empty,
+    right_children: Empty,
+  }
+  self.items.set(item.id.0, entry)
+  entry
+}
+
+///|
 /// Add one Fugue subtree interval at its canonical sibling boundary.
 fn LvLocator::add_item(self : LvLocator, item : @fugue.Item[String]) -> Bool {
   if self.items.contains(item.id.0) {
@@ -427,18 +467,10 @@ fn LvLocator::add_item(self : LvLocator, item : @fugue.Item[String]) -> Bool {
     Some(parent) => parent.0
     None => -1
   }
-  let open_node = self.push_rank_node(false)
-  let content_node = self.push_rank_node(!item.deleted)
-  let close_node = self.push_rank_node(false)
-  self.items.set(item.id.0, {
-    agent: item.agent,
-    sequence: item.sequence,
-    open_node,
-    content_node,
-    close_node,
-    left_children: Empty,
-    right_children: Empty,
-  })
+  let entry = self.register_item(item)
+  let open_node = entry.open_node
+  let content_node = entry.content_node
+  let close_node = entry.close_node
   let siblings = self.children(parent, item.side)
   let anchor = match self.next_sibling(siblings, item.id.0) {
     Some(next) => self.items.get(next).unwrap().open_node
@@ -467,6 +499,35 @@ fn LvLocator::add_item(self : LvLocator, item : @fugue.Item[String]) -> Bool {
   self.rank_root = self.merge_rank(self.merge_rank(left, markers), right)
   self.set_children(parent, item.side, self.insert_sibling(siblings, item.id.0))
   true
+}
+
+///|
+/// A chain of new right children of a freshly inserted leaf. The workspace
+/// establishes these topology conditions before buffering each item.
+fn LvLocator::add_right_chain(
+  self : LvLocator,
+  items : Array[@fugue.Item[String]],
+) -> Unit {
+  if items.is_empty() {
+    return
+  }
+  let owner = self.items.get(items[0].parent.unwrap().0).unwrap()
+  let position = self.marker_rank(owner.close_node)
+  let mut markers = -1
+  let closes : Array[Int] = []
+  for item in items {
+    let entry = self.register_item(item)
+    let parent = self.items.get(item.parent.unwrap().0).unwrap()
+    parent.right_children = self.insert_sibling(Empty, item.id.0)
+    markers = self.merge_rank(markers, entry.open_node)
+    markers = self.merge_rank(markers, entry.content_node)
+    closes.push(entry.close_node)
+  }
+  for i = closes.length() - 1; i >= 0; i = i - 1 {
+    markers = self.merge_rank(markers, closes[i])
+  }
+  let (left, right) = self.split_rank(self.rank_root, position)
+  self.rank_root = self.merge_rank(self.merge_rank(left, markers), right)
 }
 
 ///|

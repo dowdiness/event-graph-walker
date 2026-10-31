@@ -29,6 +29,7 @@ fn Document::from_closed_history_internal(
     projection_health: ProjectionHealth::Ready,
     projection_verification: None,
     apply_changes_hooks: None,
+    text_changes: None,
   }
 }
 

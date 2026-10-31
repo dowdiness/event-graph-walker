@@ -10,6 +10,12 @@ fn bulk_tie_locator() -> LvLocator {
       parent: -1,
       size: 1,
       visible: index % 2 == 0,
+      utf16_width: 1,
+      utf16_span: if index % 2 == 0 {
+        1
+      } else {
+        0
+      },
       visible_span: if index % 2 == 0 {
         1
       } else {

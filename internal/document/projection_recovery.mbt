@@ -51,6 +51,7 @@ fn Document::recover_projection_with(
   frontier : @core.Frontier,
   checkout : (@oplog.OpLog, @core.Frontier) -> @branch.Branch raise @branch.BranchError,
 ) -> Unit raise DocumentError {
+  self.invalidate_text_change()
   self.indexed_state.invalidate()
   self.cursor = None
   self.projection_health = ProjectionHealth::RecoveryRequired(

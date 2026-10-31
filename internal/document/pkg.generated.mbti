@@ -17,7 +17,7 @@ import {
 
 // Errors
 pub(all) suberror DocumentError {
-  InvalidPosition(pos~ : Int32)
+  InvalidPosition(pos~ : Int)
   MissingOrigin(raw~ : @core.RawVersion)
   OpLog(@oplog.OpLogError)
   Fugue(@fugue.FugueError)
@@ -27,11 +27,10 @@ pub(all) suberror DocumentError {
 }
 
 // Types and methods
-#derive(Eq, @debug.Debug)
 pub(all) enum ContentErrorReason {
   MalformedUtf16
   MultipleCodepoints
-}
+} derive(Eq, @debug.Debug)
 pub impl Show for ContentErrorReason
 
 pub struct Document {
@@ -39,40 +38,44 @@ pub struct Document {
   // private fields
 }
 pub fn Document::agent_id(Self) -> String
-pub fn Document::apply_changes(Self, Array[@core.Op], max_pending? : Int32, max_pending_after_complete? : Int32) -> DocumentChanges raise DocumentError
+pub fn Document::apply_changes(Self, Array[@core.Op], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentChanges raise DocumentError
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
-pub fn Document::apply_structural_changes(Self, ArrayView[@core.StructuralOp], max_pending? : Int32, max_pending_after_complete? : Int32) -> DocumentChanges raise DocumentError
+pub fn Document::apply_structural_changes(Self, ArrayView[@core.StructuralOp], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentChanges raise DocumentError
+pub fn Document::begin_text_change(Self) -> Unit raise DocumentError
 pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::clear_pending(Self) -> Unit
 pub fn Document::collect_missing_ops(Self, @causal_graph.GraphVersion) -> Array[@core.Op] raise DocumentError
 pub fn Document::current_graph_version(Self) -> @causal_graph.GraphVersion
-pub fn Document::delete(Self, Int32) -> @core.Op raise DocumentError
-pub fn Document::delete_by_lv(Self, Int32) -> @core.Op raise DocumentError
-pub fn Document::delete_if_visible(Self, Int32) -> TargetEditResult raise DocumentError
-pub fn Document::delete_range(Self, Int32, Int32) -> Unit raise DocumentError
+pub fn Document::delete(Self, Int) -> @core.Op raise DocumentError
+pub fn Document::delete_by_lv(Self, Int) -> @core.Op raise DocumentError
+pub fn Document::delete_if_visible(Self, Int) -> TargetEditResult raise DocumentError
+pub fn Document::delete_range(Self, Int, Int) -> Unit raise DocumentError
 pub fn Document::diff_and_collect(Self, @core.Frontier, @core.Frontier) -> (Array[@core.Op], Array[@core.Op])
+pub fn Document::finish_text_change(Self) -> Array[VisibleTextEdit]?
 pub fn Document::from_closed_history_experimental(String, @oplog.ClosedHistory) -> Self raise DocumentError
 pub fn Document::get_all_ops(Self) -> Array[@core.Op]
 pub fn Document::get_all_runs(Self) -> Array[@core.OpRun]
 pub fn Document::get_frontier(Self) -> @core.Frontier
-pub fn Document::get_frontier_array(Self) -> Array[Int32]
+pub fn Document::get_frontier_array(Self) -> Array[Int]
 pub fn Document::get_frontier_raw(Self) -> Array[@core.RawVersion] raise DocumentError
 pub fn Document::get_visible_items(Self) -> Array[(@fugue.Lv, @fugue.Item[String])]
-pub fn Document::insert(Self, Int32, String) -> @core.Op raise DocumentError
-pub fn Document::lv_to_position(Self, Int32) -> Int32?
+pub fn Document::insert(Self, Int, String) -> @core.Op raise DocumentError
+pub fn Document::lv_to_position(Self, Int) -> Int?
 pub fn Document::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self
-pub fn Document::pending_count(Self) -> Int32
+pub fn Document::pending_count(Self) -> Int
 pub fn Document::prepare_for_mutation(Self) -> Unit raise DocumentError
-pub fn Document::replace_range(Self, Int32, Int32, String) -> Unit raise DocumentError
+pub fn Document::replace_range(Self, Int, Int, String) -> Unit raise DocumentError
 pub fn Document::resolve_graph_version(Self, @causal_graph.GraphVersion) -> @core.Frontier?
+pub fn Document::scalar_at_utf16(Self, Int) -> Int? raise DocumentError
 pub fn Document::to_text(Self) -> String
-pub fn Document::undelete(Self, Int32) -> @core.Op raise DocumentError
-pub fn Document::undelete_if_deleted(Self, Int32) -> TargetEditResult raise DocumentError
-pub fn Document::visible_content_at(Self, Int32) -> String?
-pub fn Document::visible_count(Self) -> Int32
-pub fn Document::visible_entries_between(Self, Int32, Int32) -> Array[(Int32, String)] raise DocumentError
+pub fn Document::undelete(Self, Int) -> @core.Op raise DocumentError
+pub fn Document::undelete_if_deleted(Self, Int) -> TargetEditResult raise DocumentError
+pub fn Document::utf16_len(Self) -> Int raise DocumentError
+pub fn Document::visible_content_at(Self, Int) -> String?
+pub fn Document::visible_count(Self) -> Int
+pub fn Document::visible_entries_between(Self, Int, Int) -> Array[(Int, String)] raise DocumentError
 pub impl @core.RawToLv for Document
 
 pub struct DocumentChanges {
@@ -85,21 +88,20 @@ pub fn DocumentChanges::report(Self) -> @oplog.ApplyChangesReport raise Document
 
 type IndexedState
 
-#derive(@debug.Debug)
-type InsertCursor
+type InsertCursor derive(@debug.Debug)
 
 pub struct MergeCache {
   cache : @order-tree.OrderTree[VisibleRun]?
   mut dirty : Bool
 }
-pub fn MergeCache::insert_at(Self, Int32, VisibleRun) -> Unit
-pub fn MergeCache::new(@order-tree.OrderTree[VisibleRun]?, Int32, Int32) -> Self
-pub fn MergeCache::remove_at(Self, Int32) -> Unit
+pub fn MergeCache::insert_at(Self, Int, VisibleRun) -> Unit
+pub fn MergeCache::new(@order-tree.OrderTree[VisibleRun]?, Int, Int) -> Self
+pub fn MergeCache::remove_at(Self, Int) -> Unit
 pub fn MergeCache::take(Self) -> @order-tree.OrderTree[VisibleRun]?
 
 pub(all) enum ProjectionEffect {
-  Insert(position~ : Int32, text~ : String)
-  Delete(start~ : Int32, end~ : Int32)
+  Insert(position~ : Int, text~ : String)
+  Delete(start~ : Int, end~ : Int)
 }
 
 pub(all) enum ProjectionEffectAvailability {
@@ -120,12 +122,17 @@ pub enum TargetEditResult {
   Stale
 }
 
-#derive(Eq, @debug.Debug)
-type VisibleRun
+type VisibleRun derive(Eq, @debug.Debug)
 pub impl @rle.HasLength for VisibleRun
 pub impl @rle.Mergeable for VisibleRun
 pub impl @rle.Sliceable for VisibleRun
 pub impl @rle.Spanning for VisibleRun
+
+pub(all) struct VisibleTextEdit {
+  start : Int
+  end : Int
+  text : String
+}
 
 // Type aliases
 

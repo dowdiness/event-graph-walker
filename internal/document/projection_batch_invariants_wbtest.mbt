@@ -286,15 +286,113 @@ test "batch projection drops buffered effects after locator invariant failure" {
   // The missing identity is not needed while buffering x/y, but the following
   // delete cannot prove its rank. All earlier effects and the detached cache
   // must be discarded, while z must still reach the authoritative tree.
+  try! doc.begin_text_change()
   doc.indexed_state.locator.unwrap().items.remove(0)
   let operations = source.get_all_ops()
   let change = try! doc.apply_changes(operations[baseline_count:].to_owned())
   assert_true(change.projection is Projected)
   assert_true(change.effect_availability is SnapshotRequired)
   assert_eq(change.effects.length(), 0)
+  assert_true(doc.finish_text_change() is None)
   assert_true(!doc.indexed_state.is_ready())
   assert_eq(doc.tree.to_text(), "Bxyz")
   batch_assert_canonical(doc, "Bxyz")
   assert_true(doc.indexed_state.is_ready())
   batch_assert_later_edits(doc)
+}
+
+///|
+test "text publication replays Unicode chains deletions and visibility changes" {
+  for remote in [false, true] {
+    for backward in [false, true] {
+      let source = Document::new("publication-writer")
+      ignore(source.insert(0, "A🙂漢z"))
+      let receiver = Document::new("publication-reader")
+      ignore(receiver.apply_changes(source.get_all_ops()))
+      let observed = if remote { receiver } else { source }
+      let mut mirror = "A🙂漢z"
+      for phase in 0..<4 {
+        let before_count = source.get_all_ops().length()
+        observed.begin_text_change()
+        match phase {
+          0 => ignore(source.insert(2, "🚀é🦀"))
+          1 =>
+            if backward {
+              for position in [4, 3, 2] {
+                ignore(source.delete(position))
+              }
+            } else {
+              for _ in 0..<3 {
+                ignore(source.delete(2))
+              }
+            }
+          2 => ignore(source.delete_by_lv(1))
+          _ => ignore(source.undelete(1))
+        }
+        if remote {
+          ignore(
+            receiver.apply_changes(
+              source.get_all_ops()[before_count:].to_owned(),
+            ),
+          )
+        }
+        guard observed.finish_text_change() is Some(edits) else {
+          fail("expected exact publication")
+        }
+        assert_true(!edits.is_empty())
+        for edit in edits {
+          assert_true(edit.start >= 0 && edit.start <= edit.end)
+          assert_true(edit.end <= mirror.length())
+          mirror = mirror[:edit.start].to_owned() +
+            edit.text +
+            mirror[edit.end:].to_owned()
+        }
+        let expected = match phase {
+          0 => "A🙂🚀é🦀漢z"
+          2 => "A漢z"
+          _ => "A🙂漢z"
+        }
+        assert_eq(mirror, expected)
+        assert_eq(observed.to_text(), expected)
+        assert_eq(source.to_text(), expected)
+      }
+    }
+  }
+}
+
+///|
+test "text publication distinguishes cold entry from index loss and recovery during collection" {
+  for scenario in ["cold", "lost-index", "recovered"] {
+    let source = Document::new("publication-source")
+    ignore(try! source.insert(0, "🙂"))
+    let doc = Document::new("publication-target")
+    ignore(try! doc.apply_changes(source.get_all_ops()))
+    let count = source.get_all_ops().length()
+    doc.indexed_state.invalidate()
+    try! doc.begin_text_change()
+    match scenario {
+      "lost-index" => doc.indexed_state.invalidate()
+      "recovered" =>
+        try! doc.recover_projection_with(
+          doc.get_frontier(),
+          @branch.Branch::checkout,
+        )
+      _ => ()
+    }
+    ignore(try! source.insert(1, "x"))
+    ignore(try! doc.apply_changes(source.get_all_ops()[count:].to_owned()))
+    let changes = doc.finish_text_change()
+    if scenario == "cold" {
+      guard changes is Some(edits) else {
+        fail("cold indexes are warmed at entry")
+      }
+      assert_eq(edits.length(), 1)
+      assert_eq(edits[0].start, 2)
+      assert_eq(edits[0].end, 2)
+      assert_eq(edits[0].text, "x")
+    } else {
+      assert_true(changes is None)
+    }
+    assert_eq(doc.to_text(), "🙂x")
+  }
 }

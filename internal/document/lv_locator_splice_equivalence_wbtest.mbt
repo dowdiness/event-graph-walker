@@ -26,7 +26,10 @@ fn LvLocator::splice_reference_add_item(
     None => -1
   }
   let open_node = self.push_rank_node(false)
-  let content_node = self.push_rank_node(!item.deleted)
+  let content_node = self.push_rank_node(
+    !item.deleted,
+    utf16_width=item.content.length(),
+  )
   let close_node = self.push_rank_node(false)
   self.items.set(item.id.0, {
     agent: item.agent,
@@ -447,6 +450,12 @@ fn splice_push_tied_node(
     parent: -1,
     size: 1,
     visible,
+    utf16_width: 1,
+    utf16_span: if visible {
+      1
+    } else {
+      0
+    },
     visible_span: if visible {
       1
     } else {

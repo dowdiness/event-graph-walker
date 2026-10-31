@@ -34,6 +34,7 @@ fn LvLocator::bulk_rank_experimental(
     node.parent = -1
     node.size = 1
     node.visible_span = if node.visible { 1 } else { 0 }
+    node.utf16_span = if node.visible { node.utf16_width } else { 0 }
   }
   self.rank_root = -1
   let stack : Array[Int32] = []
@@ -91,7 +92,10 @@ fn LvLocator::from_tree_bulk_experimental(
       return None
     }
     let open_node = locator.push_rank_node(false)
-    let content_node = locator.push_rank_node(!item.deleted)
+    let content_node = locator.push_rank_node(
+      !item.deleted,
+      utf16_width=item.content.length(),
+    )
     let close_node = locator.push_rank_node(false)
     locator.items[lv.0] = {
       agent: item.agent,

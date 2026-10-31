@@ -32,6 +32,7 @@ pub struct Document {
   priv mut projection_verification : ProjectionRecoveryVerification?
   // Package-local change application hooks used only by white-box boundary tests.
   priv mut apply_changes_hooks : ApplyChangesBoundaryHooks?
+  priv mut text_changes : TextChangeCollector?
 }
 
 ///|
@@ -48,6 +49,7 @@ pub fn Document::new(agent_id : String) -> Document {
     projection_health: ProjectionHealth::Ready,
     projection_verification: None,
     apply_changes_hooks: None,
+    text_changes: None,
   }
 }
 
@@ -237,6 +239,11 @@ pub fn Document::insert(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
     }
+    let utf16_position = match self.text_changes {
+      Some(changes) if changes.valid =>
+        Some(self.indexed_state.utf16_at(current_pos))
+      _ => None
+    }
     self.tree.insert(
       {
         id: @fugue.Lv(op.lv()),
@@ -262,6 +269,13 @@ pub fn Document::insert(
         { start_lv: op.lv(), text: ch_str, count: 1, },
         self.tree.get(@fugue.Lv(op.lv())).unwrap(),
       )
+    }
+    if !cache_valid {
+      self.invalidate_text_change()
+    }
+    match (self.text_changes, utf16_position) {
+      (Some(changes), Some(position)) => changes.insert(position, ch_str)
+      _ => ()
     }
     last_op = Some(op)
     current_pos = current_pos + 1
@@ -372,8 +386,17 @@ pub fn Document::delete(
     e => raise DocumentError::Fugue(e)
   }
 
+  match self.text_changes {
+    Some(changes) =>
+      changes.delete(
+        self.indexed_state.utf16_at(position),
+        self.indexed_state.utf16_at(position + 1),
+      )
+    None => ()
+  }
   // Incremental index update: delete at known position
   if self.indexed_state.is_ready() && !self.indexed_state.delete_at(position) {
+    self.invalidate_text_change()
     self.invalidate_cache()
   }
   op
@@ -415,14 +438,28 @@ pub fn Document::delete_range(
   // Invalidate before the first mutation so exception paths cannot leave a
   // stale cache behind.
   let indexed = IndexedState::from_snapshot(self.indexed_state.take_cache())
+  let utf16_start = match self.text_changes {
+    Some(changes) if changes.valid => indexed.utf16_at(start)
+    _ => 0
+  }
   for lv in target_lvs {
     let op = self.oplog.delete(lv) catch { e => raise DocumentError::OpLog(e) }
     // The canonical cache stays detached throughout the range. Reuse target
     // projection so a post-commit failure repairs or fails closed at authority.
-    self.project_local_target(op)
+    self.project_local_target(op, record=false)
+    match self.text_changes {
+      Some(changes) if changes.valid =>
+        changes.delete(
+          utf16_start,
+          utf16_start + self.tree.get(@fugue.Lv(lv)).unwrap().content.length(),
+        )
+      _ => ()
+    }
   }
   if indexed.delete_range_known(start, end, target_lvs) {
     self.indexed_state.restore_cache(indexed.take_cache())
+  } else {
+    self.invalidate_text_change()
   }
 }
 
@@ -593,7 +630,7 @@ fn Document::project_remote_ops(
     None => ()
   }
   let cg = self.oplog.causal_graph()
-  workspace.project_all(self.tree, applied_ops, cg)
+  workspace.project_all(self.tree, applied_ops, cg, self.text_changes)
 }
 
 ///|
@@ -718,6 +755,7 @@ fn Document::target_is_visible(
 fn Document::project_local_target(
   self : Document,
   op : @core.Op,
+  record? : Bool = true,
 ) -> Unit raise DocumentError {
   let indexed = IndexedState::from_snapshot(self.indexed_state.take_cache())
   let change = {
@@ -729,24 +767,47 @@ fn Document::project_local_target(
     )
   }
   if !indexed.is_ready() {
+    if record {
+      self.invalidate_text_change()
+    }
     return
   }
   let valid = if @fugue_projection.is_became_hidden(change) {
     let lv = @fugue_projection.visibility_identity(change)
     match indexed.lv_to_position(self.tree, lv.0) {
-      Some(position) => indexed.delete_at(position)
+      Some(position) => {
+        if record {
+          match self.text_changes {
+            Some(changes) =>
+              changes.delete(
+                indexed.utf16_at(position),
+                indexed.utf16_at(position + 1),
+              )
+            None => ()
+          }
+        }
+        indexed.delete_at(position)
+      }
       None => false
     }
   } else if @fugue_projection.is_became_visible(change) {
     let lv = @fugue_projection.visibility_identity(change)
     match self.tree.get(lv) {
-      Some(item) =>
-        indexed.insert_visible(self.tree, lv.0, {
+      Some(item) => {
+        let position = indexed.insert_visible(self.tree, lv.0, {
           start_lv: lv.0,
           text: item.content,
           count: 1,
         })
-        is Some(_)
+        if record {
+          match (self.text_changes, position) {
+            (Some(changes), Some(position)) =>
+              changes.insert(indexed.utf16_at(position), item.content)
+            _ => ()
+          }
+        }
+        position is Some(_)
+      }
       None => false
     }
   } else {
@@ -754,6 +815,8 @@ fn Document::project_local_target(
   }
   if valid {
     self.indexed_state.restore_cache(indexed.take_cache())
+  } else if record {
+    self.invalidate_text_change()
   }
 }
 
