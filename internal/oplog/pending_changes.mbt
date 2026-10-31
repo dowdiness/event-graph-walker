@@ -123,7 +123,7 @@ pub struct ApplyChanges {
 /// Recorded-history lookup used only by the core-owned semantic gate. The
 /// pending-changes owner remains graph-agnostic: the caller supplies the history view.
 priv struct ChangeSemantics {
-  op_of : (@core.RawVersion) -> @core.Op?
+  is_insert : (@core.RawVersion) -> Bool?
 }
 
 ///|
@@ -327,20 +327,20 @@ fn apply_changes_validate(op : @core.Op) -> Unit raise OpLogError {
 }
 
 ///|
-/// Look up an operation in the disposable incoming overlay, retained pending,
+/// Look up the insertion kind in the disposable incoming overlay, retained pending,
 /// or the recorded-history view, in that order.
-fn PendingChangesView::find_operation(
+fn PendingChangesView::find_insert_kind(
   self : PendingChangesView,
   raw : @core.RawVersion,
   staged_lookup : (@core.RawVersion) -> @core.Op?,
   semantics : ChangeSemantics,
-) -> @core.Op? {
+) -> Bool? {
   match staged_lookup(raw) {
-    Some(op) => Some(op)
+    Some(op) => Some(op.content() is @core.Insert(_))
     None =>
       match self.pending.get(raw) {
-        Some(node) => Some(node.op)
-        None => (semantics.op_of)(raw)
+        Some(node) => Some(node.op.content() is @core.Insert(_))
+        None => (semantics.is_insert)(raw)
       }
   }
 }
@@ -354,19 +354,15 @@ fn PendingChangesView::validate_known_origins(
   staged_lookup : (@core.RawVersion) -> @core.Op?,
   semantics : ChangeSemantics,
 ) -> ChangeValidation {
-  let lookup = raw => self.find_operation(raw, staged_lookup, semantics)
+  let lookup = raw => self.find_insert_kind(raw, staged_lookup, semantics)
   let check = fn(target : @core.RawVersion?) -> ChangeValidation {
     match target {
       None => Valid
       Some(target) =>
         match lookup(target) {
           None => Valid
-          Some(target_op) =>
-            match target_op.content() {
-              @core.Insert(_) => Valid
-              @core.Delete | @core.Undelete =>
-                Origin(operation=apply_changes_raw(op), target~)
-            }
+          Some(true) => Valid
+          Some(false) => Origin(operation=apply_changes_raw(op), target~)
         }
     }
   }
@@ -384,7 +380,7 @@ fn PendingChangesView::validate_semantics(
   staged_lookup : (@core.RawVersion) -> @core.Op?,
   semantics : ChangeSemantics,
 ) -> ChangeValidation {
-  let lookup = raw => self.find_operation(raw, staged_lookup, semantics)
+  let lookup = raw => self.find_insert_kind(raw, staged_lookup, semantics)
   match self.validate_known_origins(op, staged_lookup, semantics) {
     Valid => ()
     result => return result
@@ -394,12 +390,8 @@ fn PendingChangesView::validate_semantics(
       None => Valid
       Some(target) =>
         match lookup(target) {
-          Some(target_op) =>
-            match target_op.content() {
-              @core.Insert(_) => Valid
-              @core.Delete | @core.Undelete =>
-                Origin(operation=apply_changes_raw(op), target~)
-            }
+          Some(true) => Valid
+          Some(false) => Origin(operation=apply_changes_raw(op), target~)
           None => Invalid
         }
     }

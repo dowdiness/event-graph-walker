@@ -178,6 +178,15 @@ pub fn OpLog::undelete(
 /// beyond the end of the log. All valid LVs in `[0, op_count())` are
 /// guaranteed to return `Some`.
 pub fn OpLog::get_op(self : OpLog, lv : Int32) -> @core.Op? {
+  match self.run_at(lv) {
+    Some(run) => run.decompress(lv - run.start_lv)
+    None => None
+  }
+}
+
+///|
+/// Locate stored metadata without materializing an operation or its payload.
+fn OpLog::run_at(self : OpLog, lv : Int32) -> @core.OpRun? {
   if lv < 0 {
     return None
   }
@@ -198,7 +207,7 @@ pub fn OpLog::get_op(self : OpLog, lv : Int32) -> @core.Op? {
     } else if lv >= end {
       low = middle + 1
     } else {
-      return run.decompress(lv - start)
+      return Some(run)
     }
   }
   None
@@ -440,18 +449,17 @@ fn OpLog::preflight_remote_identities(
 }
 
 ///|
-/// Look up an recorded operation without expanding the resident history.
-fn OpLog::applied_op(self : OpLog, raw : @core.RawVersion) -> @core.Op? {
-  match self.graph.raw_to_lv(raw) {
-    Some(lv) => self.get_op(lv)
-    None => None
-  }
-}
-
-///|
 /// Build the core semantic view without giving the pending-changes owner graph ownership.
+/// Origin validation needs only the operation kind, never a decompressed payload.
 fn OpLog::apply_changes_semantics(self : OpLog) -> ChangeSemantics {
-  { op_of: raw => self.applied_op(raw), }
+  {
+    is_insert: raw => {
+      match self.graph.raw_to_lv(raw) {
+        Some(lv) => self.run_at(lv).map(run => run.content is @core.Inserts(_))
+        None => None
+      }
+    },
+  }
 }
 
 ///|
