@@ -43,6 +43,112 @@ pub impl @undo.Undoable for FailureProbeDoc with fn undelete_lv(self, lv) -> @un
 }
 
 ///|
+test "explicit multi-item group is one undo and redo" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_group(
+    [@undo.UndoItem::insert(1, "a"), @undo.UndoItem::delete(2, "b")],
+    join=false,
+  )
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="undelete:2,delete:1")
+  inspect(manager.can_undo(), content="false")
+  doc.applied = []
+  inspect(manager.redo(doc), content="true")
+  inspect(doc.applied.join(","), content="undelete:1,delete:2")
+  inspect(manager.can_redo(), content="false")
+}
+
+///|
+test "explicit join creates first group and joins only when requested" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_group([@undo.UndoItem::insert(1, "a")], join=true)
+  manager.stop_capturing()
+  manager.record_group([@undo.UndoItem::insert(2, "b")], join=true)
+  manager.record_group([@undo.UndoItem::insert(3, "c")], join=false)
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:3")
+  doc.applied = []
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:2,delete:1")
+  inspect(manager.can_undo(), content="false")
+}
+
+///|
+test "empty explicit group preserves redo and nonempty clears it" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_group([], join=true)
+  inspect(manager.can_undo(), content="false")
+  manager.record_group([@undo.UndoItem::insert(1, "a")], join=false)
+  inspect(manager.undo(doc), content="true")
+  manager.record_group([], join=false)
+  manager.record_group([], join=true)
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="true")
+  inspect(manager.redo(doc), content="true")
+  inspect(manager.undo(doc), content="true")
+  manager.record_group([@undo.UndoItem::insert(2, "b")], join=true)
+  inspect(manager.can_redo(), content="false")
+}
+
+///|
+test "explicit groups copy caller arrays for new and joined groups" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  let items = [@undo.UndoItem::insert(1, "a")]
+  manager.record_group(items[:], join=false)
+  items[0] = @undo.UndoItem::insert(99, "changed")
+  items.push(@undo.UndoItem::insert(99, "extra"))
+  let joined = [@undo.UndoItem::delete(2, "b")]
+  manager.record_group(joined[:], join=true)
+  joined[0] = @undo.UndoItem::delete(99, "changed")
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="undelete:2,delete:1")
+  inspect(manager.can_undo(), content="false")
+}
+
+///|
+test "explicit group separates subsequent time capture" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_insert(1, "alice", 100)
+  manager.record_group([@undo.UndoItem::insert(2, "b")], join=true)
+  manager.record_insert(3, "alice", 101)
+  manager.record_delete(4, "alice", 102)
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="undelete:4,delete:3")
+  doc.applied = []
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:2,delete:1")
+}
+
+///|
+test "empty explicit group does not interrupt time capture" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_insert(1, "alice", 100)
+  manager.record_group([], join=false)
+  manager.record_insert(2, "alice", 101)
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:2,delete:1")
+  inspect(manager.can_undo(), content="false")
+}
+
+///|
+test "explicit recording respects disabled tracking" {
+  let manager = @undo.UndoManager::new("alice")
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_group([@undo.UndoItem::insert(1, "a")], join=false)
+  inspect(manager.undo(doc), content="true")
+  manager.set_tracking(false)
+  manager.record_group([@undo.UndoItem::insert(2, "b")], join=false)
+  inspect(manager.can_undo(), content="false")
+  inspect(manager.can_redo(), content="true")
+}
+
+///|
 test "internal undo failure clears history and restores tracking" {
   let manager = @undo.UndoManager::new("alice")
   manager.record_insert(1, "alice", 1000)
@@ -72,7 +178,7 @@ test "internal redo failure clears history and restores tracking" {
   let doc = FailureProbeDoc::FailureProbeDoc(99, None)
   inspect(manager.undo(doc), content="true")
   doc.applied = []
-  doc.fail_target = 1
+  doc.fail_target = 2
   let result : Result[Bool, @undo.UndoError] = Ok(manager.redo(doc)) catch {
     error => Err(error)
   }
@@ -81,7 +187,7 @@ test "internal redo failure clears history and restores tracking" {
       inspect(detail, content="injected undelete failure")
     _ => fail("Expected internal redo error")
   }
-  inspect(doc.applied.join(","), content="undelete:2")
+  inspect(doc.applied.join(","), content="undelete:1")
   inspect(manager.can_undo(), content="false")
   inspect(manager.can_redo(), content="false")
   inspect(manager.is_tracking(), content="true")
@@ -122,14 +228,24 @@ test "basic undo delete" {
 
 ///|
 test "undo-redo roundtrip" {
-  let doc = try! @text.TextState::new("alice")
-  let mgr = @undo.UndoManager::new("alice")
-  doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
-  inspect(doc.text(), content="H")
-  let _ = mgr.undo(doc)
-  inspect(doc.text(), content="")
-  let _ = mgr.redo(doc)
-  inspect(doc.text(), content="H")
+  for delete_again in [false, true] {
+    let doc = try! @text.TextState::new("alice")
+    let mgr = @undo.UndoManager::new("alice")
+    doc.insert_and_record(@text.Pos::at(0), "H", mgr, timestamp_ms=1000)
+    if delete_again {
+      doc.delete_and_record(@text.Pos::at(0), mgr, timestamp_ms=1000)
+    }
+    let expected = if delete_again { "" } else { "H" }
+    assert_eq(doc.text(), expected)
+    for _ in 0..<3 {
+      assert_true(mgr.undo(doc))
+      assert_eq(doc.text(), "")
+      assert_true(!mgr.can_undo())
+      assert_true(mgr.redo(doc))
+      assert_eq(doc.text(), expected)
+      assert_true(!mgr.can_redo())
+    }
+  }
 }
 
 ///|

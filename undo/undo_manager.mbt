@@ -31,6 +31,36 @@ pub fn UndoManager::new(
 }
 
 ///|
+/// Record a caller-defined group without time-based grouping.
+/// Joins the previous undo group only when `join` is true and one exists.
+/// Copies the items; empty input or disabled tracking leaves history unchanged.
+/// Nonempty input clears redo and closes time-based capture. Callers supply
+/// only local operations; this path does not filter by agent.
+pub fn UndoManager::record_group(
+  self : UndoManager,
+  items : ArrayView[UndoItem],
+  join~ : Bool,
+) -> Unit {
+  if items.length() == 0 || !self.tracking_enabled {
+    return
+  }
+  match (join, self.undo_stack.last()) {
+    (true, Some(group)) =>
+      for item in items {
+        group.items.push(item)
+      }
+    _ =>
+      // Timestamp is compatibility metadata only, never a grouping decision.
+      self.undo_stack.push({
+        items: items.to_owned(),
+        timestamp: self.last_change_ms,
+      })
+  }
+  self.redo_stack = []
+  self.stop_capturing()
+}
+
+///|
 /// Record an insert operation for undo tracking.
 /// `target_lv` is the inserted item's LV.
 /// Only records if agent matches and tracking is enabled.
@@ -178,8 +208,9 @@ pub fn[D : Undoable] UndoManager::redo(
   let was_tracking = self.tracking_enabled
   self.tracking_enabled = false
   let undo_items : Array[UndoItem] = []
-  for i = group.items.length() - 1; i >= 0; i = i - 1 {
-    let item = group.items[i]
+  // Undo stores redo items in original application order. Replaying backward
+  // loses dependencies between edits of the same target (insert then delete).
+  for item in group.items {
     errdefer {
       self.tracking_enabled = was_tracking
       // Internal failures may follow partial CRDT application. Do not leave
@@ -202,7 +233,6 @@ pub fn[D : Undoable] UndoManager::redo(
   }
   let any_applied = undo_items.length() > 0
   if any_applied {
-    undo_items.rev_in_place()
     self.undo_stack.push({ items: undo_items, timestamp: group.timestamp, })
   }
   self.tracking_enabled = was_tracking

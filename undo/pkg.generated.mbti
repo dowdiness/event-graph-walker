@@ -27,7 +27,11 @@ pub fn CompensatingEditResult::stale() -> Self
 type UndoGroup
 
 #derive(@debug.Debug)
-type UndoItem
+pub struct UndoItem {
+  // private fields
+}
+pub fn UndoItem::delete(Int32, String) -> Self
+pub fn UndoItem::insert(Int32, String) -> Self
 
 #derive(@debug.Debug)
 pub struct UndoManager {
@@ -39,6 +43,7 @@ pub fn UndoManager::clear(Self) -> Unit
 pub fn UndoManager::is_tracking(Self) -> Bool
 pub fn UndoManager::new(String, capture_timeout_ms? : Int32) -> Self
 pub fn UndoManager::record_delete(Self, Int32, String, Int32, content? : String?) -> Unit
+pub fn UndoManager::record_group(Self, ArrayView[UndoItem], join~ : Bool) -> Unit
 pub fn UndoManager::record_insert(Self, Int32, String, Int32, content? : String?) -> Unit
 pub fn[D : Undoable] UndoManager::redo(Self, D) -> Bool raise UndoError
 pub fn UndoManager::set_tracking(Self, Bool) -> Unit

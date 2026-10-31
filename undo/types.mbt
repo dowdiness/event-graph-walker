@@ -30,10 +30,22 @@ pub enum UndoOpType {
 /// For inserts: the inserted item's LV.
 /// For deletes: the deleted item's LV (the tombstone to revive on undo).
 #derive(Debug)
-struct UndoItem {
-  target_lv : Int32
-  op_type : UndoOpType
-  content : String?
+pub struct UndoItem {
+  priv target_lv : Int32
+  priv op_type : UndoOpType
+  priv content : String?
+}
+
+///|
+/// Track an insertion of the element at `target_lv`.
+pub fn UndoItem::insert(target_lv : Int, content : String) -> UndoItem {
+  { target_lv, op_type: Insert, content: Some(content), }
+}
+
+///|
+/// Track deletion of the element at `target_lv`, not the deletion operation LV.
+pub fn UndoItem::delete(target_lv : Int, content : String) -> UndoItem {
+  { target_lv, op_type: Delete, content: Some(content), }
 }
 
 ///|
