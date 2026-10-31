@@ -114,7 +114,7 @@ test "graph_diff with no overlap" {
   let lv0 = try! graph.add_version([], "agent1")
   let lv1 = try! graph.add_version([lv0], "agent1")
   let lv2 = try! graph.add_version([lv0], "agent2") // Branch from lv0
-  let (retreat, advance) = graph.graph_diff(
+  let (retreat, advance) = graph.diff_frontiers_lvs(
     @core.Frontier::from_array([lv1]),
     @core.Frontier::from_array([lv2]),
   )
@@ -126,4 +126,86 @@ test "graph_diff with no overlap" {
   // lv0 should be in neither (reachable from both)
   inspect(retreat.contains(lv0), content="false")
   inspect(advance.contains(lv0), content="false")
+}
+
+///|
+test "continuous identities preserve interior branches sparse roots and maximum sequence" {
+  let g = @causal_graph.CausalGraph::new()
+  for i in 0..<100 {
+    let parents = if i == 0 { [] } else { [i - 1] }
+    assert_eq(g.add_version_with_seq(parents, "a", 1000 + i), i)
+  }
+  let saved = g.current_graph_version()
+  // A later child of an interior entry must coexist with its implicit successor.
+  assert_eq(g.add_version_with_seq([37, 37], "branch", 0), 100)
+  assert_eq(g.children_counts()[37], 3)
+  assert_eq(g.get_entry(100).unwrap().parents, [37, 37])
+  assert_eq(g.get_entry(100).unwrap().timestamp, 38)
+  assert_true(g.is_ancestor(37, 100))
+  assert_false(g.is_ancestor(38, 100))
+  // Sequence order is not LV order and is not an implicit causal edge.
+  assert_eq(g.add_version_with_seq([], "a", 4), 101)
+  assert_eq(g.add_version_with_seq([101], "a", 5), 102)
+  assert_false(g.is_ancestor(99, 102))
+  for i in 0..<100 {
+    let entry = g.get_entry(i).unwrap()
+    assert_eq(entry.seq, 1000 + i)
+    assert_eq(entry.timestamp, i)
+    assert_eq(entry.parents, if i == 0 { [] } else { [i - 1] })
+    assert_eq(g.raw_to_lv(@core.RawVersion("a", 1000 + i)), Some(i))
+  }
+  assert_eq(g.raw_to_lv(@core.RawVersion("a", 4)), Some(101))
+  assert_eq(g.raw_to_lv(@core.RawVersion("a", 5)), Some(102))
+  for missing in [-1, 3, 6, 999, 1100, 2147483647] {
+    assert_eq(g.raw_to_lv(@core.RawVersion("a", missing)), None)
+  }
+  assert_eq(g.resolve_graph_version(saved).unwrap().to_array(), [99])
+  let max1 = g.add_version_with_seq([102], "max", 2147483646)
+  let max2 = g.add_version_with_seq([max1], "max", 2147483647)
+  assert_eq(g.lv_to_raw(max2), Some(@core.RawVersion("max", 2147483647)))
+  assert_eq(g.raw_to_lv(@core.RawVersion("max", 2147483647)), Some(max2))
+  // The maximum sequence must also resolve outside the latest run.
+  ignore(g.add_version_with_seq([max2], "tail", 0))
+  assert_eq(g.raw_to_lv(@core.RawVersion("max", 2147483646)), Some(max1))
+  assert_eq(g.raw_to_lv(@core.RawVersion("max", 2147483647)), Some(max2))
+  assert_eq(g.raw_to_lv(@core.RawVersion("max", 2147483645)), None)
+  let version = g.current_graph_version()
+  assert_true(
+    try g.add_version_with_seq([], "a", 1042) catch {
+      _ => true
+    } noraise {
+      _ => false
+    },
+  )
+  assert_eq(g.current_graph_version(), version)
+}
+
+///|
+test "identity lookup preserves gaps and growing ranges after nested page splits" {
+  for descending in [true, false] {
+    let graph = @causal_graph.CausalGraph::new()
+    // Enough independently addressed intervals to split both leaves and branches.
+    for i in 0..<6144 {
+      let group = if descending { 2047 - i / 3 } else { i / 3 * 37 % 2048 }
+      let seq = group * 4 + i % 3
+      assert_eq(
+        graph.add_version_with_seq(if i == 0 { [] } else { [i - 1] }, "a", seq),
+        i,
+      )
+      for offset in 0..<=(i % 3) {
+        assert_eq(
+          graph.raw_to_lv(@core.RawVersion("a", group * 4 + offset)),
+          Some(i - i % 3 + offset),
+        )
+      }
+      assert_eq(graph.raw_to_lv(@core.RawVersion("a", group * 4 + 3)), None)
+    }
+    for i in 0..<6144 {
+      let lv = if i % 2 == 0 { i / 2 } else { 6143 - i / 2 }
+      let group = if descending { 2047 - lv / 3 } else { lv / 3 * 37 % 2048 }
+      let raw = @core.RawVersion("a", group * 4 + lv % 3)
+      assert_eq(graph.lv_to_raw(lv), Some(raw))
+      assert_eq(graph.raw_to_lv(raw), Some(lv))
+    }
+  }
 }

@@ -1,47 +1,41 @@
 ///|
 /// One canonical half-open sequence range in peer knowledge.
-#derive(Debug, Eq, Hash)
 priv struct SequenceRange {
-  start : UInt32
-  end : UInt32
-}
+  start : UInt
+  end : UInt
+} derive(Debug, Eq, Hash)
 
 ///|
-#derive(Debug, Eq, Hash)
 priv struct HaveEntry {
   agent : String
   ranges : Array[SequenceRange]
-}
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Exact membership knowledge. Entries and ranges are canonical: sorted,
 /// unique, non-overlapping, and non-adjacent.
-#derive(Debug, Eq, Hash)
 priv struct HaveSummary {
   entries : Array[HaveEntry]
-}
+} derive(Debug, Eq, Hash)
 
 ///|
 /// Exact maximal identities for one causal cut.
-#derive(Debug, Eq, Hash)
 priv struct CausalCheckpoint {
   frontier : Array[@core.RawVersion]
-}
+} derive(Debug, Eq, Hash)
 
 ///|
 /// One opaque graph version statement. The checkpoint names an exact causal
 /// cut; `have` names the identities in that cut's closure.
-#derive(Debug, Eq, Hash)
 pub struct GraphVersion {
   priv checkpoint : CausalCheckpoint
   priv have : HaveSummary
-}
+} derive(Debug, Eq, Hash)
 
 ///|
-#derive(Debug)
 pub suberror GraphVersionError {
   Invalid
-}
+} derive(Debug)
 
 ///|
 /// Current-summary cache owned by the causal authority. A cold graph pays no
@@ -52,7 +46,7 @@ priv enum GraphVersionCache {
 }
 
 ///|
-fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
+fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
   match a.agent.compare(b.agent) {
     0 => a.seq.compare(b.seq)
     other => other
@@ -163,7 +157,7 @@ fn HaveSummary::subtract(
 fn HaveSummary::subtract_counted(
   self : HaveSummary,
   other : HaveSummary,
-) -> (HaveSummary, Int32, Int32) {
+) -> (HaveSummary, Int, Int) {
   let result = HaveSummary::empty()
   let mut other_entry_index = 0
   let mut agent_steps = 0
@@ -226,27 +220,58 @@ fn HaveSummary::subtract_counted(
 
 ///|
 fn HaveSummary::from_graph(self : CausalGraph) -> HaveSummary {
-  let summary = HaveSummary::empty()
-  for lv in 0..<self.next_lv {
-    let entry = self.entries[lv]
-    summary.insert(@core.RawVersion(entry.agent, entry.seq))
-  }
-  summary
+  HaveSummary::from_reachable(
+    self,
+    RangeSet::from_array([{ start: 0, count: self.next_lv, }]),
+  )
 }
 
 ///|
 fn HaveSummary::from_reachable(
   graph : CausalGraph,
-  reachable : Array[Int32],
-) -> HaveSummary? {
-  let summary = HaveSummary::empty()
-  for lv in reachable {
-    match graph.lv_to_raw(lv) {
-      Some(raw) => summary.insert(raw)
-      None => return None
+  reachable : RangeSet,
+) -> HaveSummary {
+  let by_agent : Map[String, Array[SequenceRange]] = Map([])
+  for range in reachable.iter() {
+    let mut index = graph.run_index(range.start)
+    let mut lv = range.start
+    while lv < range.end() {
+      let run = graph.runs[index]
+      let end = if run.start + run.count < range.end() {
+        run.start + run.count
+      } else {
+        range.end()
+      }
+      let start = (run.seq + (lv - run.start)).reinterpret_as_uint()
+      let part = { start, end: start + (end - lv).reinterpret_as_uint(), }
+      match by_agent.get(run.agent) {
+        Some(ranges) => ranges.push(part)
+        None => by_agent[run.agent] = [part]
+      }
+      lv = end
+      index += 1
     }
   }
-  Some(summary)
+  let entries : Array[HaveEntry] = []
+  for agent, parts in by_agent {
+    parts.sort_by((a, b) => a.start.compare(b.start))
+    let ranges : Array[SequenceRange] = []
+    for part in parts {
+      if !ranges.is_empty() {
+        let last = ranges[ranges.length() - 1]
+        if part.start <= last.end {
+          if part.end > last.end {
+            ranges[ranges.length() - 1] = { start: last.start, end: part.end, }
+          }
+          continue
+        }
+      }
+      ranges.push(part)
+    }
+    entries.push({ agent, ranges, })
+  }
+  entries.sort_by((a, b) => a.agent.compare(b.agent))
+  { entries, }
 }
 
 ///|
@@ -295,7 +320,7 @@ fn validate_graph_version(
 /// `CausalGraph::resolve_graph_version`.
 pub fn GraphVersion::from_parts(
   frontier : Array[@core.RawVersion],
-  ranges : Array[(String, Array[(UInt32, UInt32)])],
+  ranges : Array[(String, Array[(UInt, UInt)])],
 ) -> GraphVersion raise GraphVersionError {
   let checkpoint_values = frontier.copy()
   checkpoint_values.sort_by(compare_graph_raw)
@@ -322,7 +347,7 @@ pub fn GraphVersion::frontier(self : GraphVersion) -> Array[@core.RawVersion] {
 /// Return a defensive sparse-membership DTO for a wire adapter.
 pub fn GraphVersion::ranges(
   self : GraphVersion,
-) -> Array[(String, Array[(UInt32, UInt32)])] {
+) -> Array[(String, Array[(UInt, UInt)])] {
   self.have.entries.map(entry => {
     (entry.agent, entry.ranges.map(range => (range.start, range.end)))
   })
@@ -344,7 +369,7 @@ pub fn GraphVersion::contains(
 pub fn GraphVersion::subtract_ranges(
   self : GraphVersion,
   other : GraphVersion,
-) -> Array[(String, Array[(UInt32, UInt32)])] {
+) -> Array[(String, Array[(UInt, UInt)])] {
   self.have.subtract(other.have).entries.map(entry => {
     (entry.agent, entry.ranges.map(range => (range.start, range.end)))
   })
@@ -365,7 +390,7 @@ pub fn CausalGraph::current_graph_version(self : CausalGraph) -> GraphVersion {
   for lv in self.frontier.iter() {
     match self.lv_to_raw(lv) {
       Some(raw) => frontier.push(raw)
-      None => ()
+      None => abort("resident frontier LV outside graph")
     }
   }
   frontier.sort_by(compare_graph_raw)
@@ -379,7 +404,7 @@ pub fn CausalGraph::resolve_graph_version(
   self : CausalGraph,
   version : GraphVersion,
 ) -> @core.Frontier? {
-  let frontier : Array[Int32] = []
+  let frontier : Array[Int] = []
   for raw in version.checkpoint.frontier {
     match self.raw_to_lv(raw) {
       Some(lv) => frontier.push(lv)
@@ -387,20 +412,27 @@ pub fn CausalGraph::resolve_graph_version(
     }
   }
   let resolved = @core.Frontier::from_array(frontier)
-  let (membership_gen, reachable) = self.transitive_closure_gen(resolved)
-  // A checkpoint is the maximal antichain of its cut, not merely any set
-  // whose union has the same closure. A checkpoint member is redundant exactly
-  // when one of its direct children is also in the closure.
-  for lv in frontier {
-    for child in self.children[lv] {
-      if self.query_visited[child] == membership_gen {
-        return None
-      }
+  let reachable = self.walk_from_frontier(resolved)
+  // A checkpoint is an antichain, not just an arbitrary generating set.
+  let parents : Array[Int] = []
+  for head in frontier {
+    let run = self.run_at(head)
+    if head > run.start {
+      parents.push(head - 1)
+    } else {
+      parents.append(run.parents)
     }
   }
-  match HaveSummary::from_reachable(self, reachable) {
-    Some(actual) if actual == version.have => Some(resolved)
-    _ => None
+  let ancestors = self.walk_from_frontier(@core.Frontier::from_array(parents))
+  for head in frontier {
+    if ancestors.contains(head) {
+      return None
+    }
+  }
+  if HaveSummary::from_reachable(self, reachable) == version.have {
+    Some(resolved)
+  } else {
+    None
   }
 }
 

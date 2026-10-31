@@ -405,17 +405,13 @@ pub fn VersionVector::from_frontier(
   // For each agent, find the maximum sequence number in the frontier
   let agent_max_seq = Map([])
 
-  // Get transitive closure of frontier to include all reachable versions
-  let (_, reachable_lvs) = graph.transitive_closure_gen(frontier)
-
-  // Find max seq for each agent in reachable versions
-  for lv in reachable_lvs {
-    if graph[lv] is Some(entry) {
-      let current_max = agent_max_seq.get(entry.agent).unwrap_or(-1)
-      if entry.seq > current_max {
-        agent_max_seq[entry.agent] = entry.seq
-      }
-    }
+  let summary = HaveSummary::from_reachable(
+    graph,
+    graph.walk_from_frontier(frontier),
+  )
+  for entry in summary.entries {
+    let last = entry.ranges[entry.ranges.length() - 1]
+    agent_max_seq[entry.agent] = (last.end - 1U).reinterpret_as_int()
   }
   VersionVector(agent_max_seq)
 }

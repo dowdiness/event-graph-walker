@@ -423,7 +423,9 @@ test "merge - context apply operations (50 ops)" (b : @bench.T) {
     lv_ints.push(op.lv())
     prev = op.lv()
   }
-  let lvs : @rle.Rle[@core.LvRange] = @rle.Rle::from_sorted_ints(lv_ints)
+  let lvs = @causal_graph.RangeSet::from_array(
+    lv_ints.map(lv => { start: lv, count: 1, }),
+  )
   b.bench(fn() {
     let ctx = MergeContext::new(tree, oplog)
     try! ctx.apply_operations(lvs)

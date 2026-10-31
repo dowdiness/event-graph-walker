@@ -93,10 +93,8 @@ pub fn Frontier::to_array(self : Frontier) -> Array[Int32] {
 ///|
 /// Causal metadata for a single operation in the CausalGraph.
 ///
-/// Each operation in the graph has one `GraphEntry` stored at its local
-/// version (LV). Fields use local LVs internally; the globally stable
-/// identifiers (`agent` + `seq`) are stored here so entries can be
-/// serialized and sent to peers.
+/// Materialized on request from the graph's causal runs, not stored per event.
+/// Parent fields use local LVs; `agent` + `seq` identify the event globally.
 #derive(Debug)
 pub(all) struct GraphEntry {
   /// LVs of the operations this one directly depends on (its causal parents).

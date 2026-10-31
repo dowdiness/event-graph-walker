@@ -233,8 +233,14 @@ fn prop_generated_compression_matches_model(trace : CompressionTrace) -> Bool {
   let selected_rle : @rle.Rle[@core.LvRange] = @rle.Rle::from_sorted_ints(
     selected_lvs,
   )
-  let from_lvs = compression_snapshots(oplog.get_ops(selected_lvs))
-  let from_rle = compression_snapshots(oplog.get_ops_rle(selected_rle))
+  let from_lvs = compression_snapshots(
+    selected_lvs.map(lv => oplog.get_op(lv).unwrap()),
+  )
+  let from_rle = compression_snapshots(
+    oplog.collect_ops(
+      @causal_graph.RangeSet::from_array(selected_rle.iter().collect()),
+    ),
+  )
   from_lvs == selected_expected &&
   from_rle == selected_expected &&
   from_lvs == from_rle

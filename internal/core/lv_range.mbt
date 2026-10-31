@@ -1,9 +1,8 @@
 ///|
 /// A contiguous range of local versions [start, start+count).
 ///
-/// Used to compress graph traversal results (topological_sort,
-/// walk_from_frontier, diff_frontiers_lvs) where consecutive LVs
-/// are common in linear editing sessions.
+/// Used by canonical RangeSet coverage and frontier differences, where
+/// consecutive LVs are common in linear editing sessions.
 #derive(Eq, Debug)
 pub(all) struct LvRange {
   start : Int32

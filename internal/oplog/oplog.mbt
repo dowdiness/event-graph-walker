@@ -214,35 +214,39 @@ fn OpLog::run_at(self : OpLog, lv : Int32) -> @core.OpRun? {
 }
 
 ///|
-/// Collect operations for a list of LVs, silently skipping invalid indices.
+/// Collect operations from a canonical interval set in the requested direction.
 ///
-/// This is the batch counterpart of `get_op`: given a slice of LVs
-/// (e.g. from `walk_and_collect` or `diff_and_collect`) it returns the
-/// corresponding operations in the same order, omitting any LV that is
-/// out of range.
-pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int32]) -> Array[@core.Op] {
-  lvs.filter_map(lv => self.get_op(lv))
-}
-
-///|
-/// Collect operations for an RLE-compressed list of LV ranges.
-///
-/// Expands the compressed ranges by slicing operation runs directly, silently
-/// skipping any invalid index. This is the compressed counterpart of `get_ops`.
-pub fn OpLog::get_ops_rle(
+/// Every selected LV must exist. Invalid ranges or missing operation data are
+/// programmer errors, never a successful partial collection.
+pub fn OpLog::collect_ops(
   self : OpLog,
-  lvs : @rle.Rle[@core.LvRange],
+  lvs : @causal_graph.RangeSet,
+  direction? : @causal_graph.Direction = Forward,
 ) -> Array[@core.Op] {
   let result : Array[@core.Op] = []
-  for range in lvs.iter() {
+  for range in lvs.iter(direction~) {
     // LVs are assigned densely, so an LV range is also a positional slice of
     // the operation runs. Slicing runs once avoids an RLE lookup per LV.
-    for
-      slice in self.operations.range_clamped(start=range.start, end=range.end()) {
-      for offset in slice.start..<slice.end {
+    let slices = match
+      self.operations.range(start=range.start, end=range.end()) {
+      Ok(slices) => slices.collect()
+      Err(_) => abort("operation range outside log")
+    }
+    let ordered = if direction == Forward {
+      slices.iter()
+    } else {
+      slices.rev_iter()
+    }
+    for slice in ordered {
+      for i in 0..<(slice.end - slice.start) {
+        let offset = if direction == Forward {
+          slice.start + i
+        } else {
+          slice.end - 1 - i
+        }
         match slice.value.decompress(offset) {
           Some(op) => result.push(op)
-          None => ()
+          None => abort("missing operation inside recorded range")
         }
       }
     }

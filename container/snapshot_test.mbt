@@ -1,7 +1,7 @@
 ///|
 test "container causal snapshot stays live across tree and text mutations" {
   let document = try! @container.Document::new("snapshot-replica")
-  let snapshot = document.causal_snapshot()
+  let snapshot = document.causal_view()
   inspect(snapshot.op_count(), content="0")
   let block = try! document.create_node(parent=@container.root_id)
   inspect(snapshot.op_count(), content="1")

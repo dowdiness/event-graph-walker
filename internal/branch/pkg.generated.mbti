@@ -6,7 +6,6 @@ import {
   "dowdiness/event-graph-walker/internal/core",
   "dowdiness/event-graph-walker/internal/fugue",
   "dowdiness/event-graph-walker/internal/oplog",
-  "dowdiness/rle",
 }
 
 // Values
@@ -16,7 +15,7 @@ pub fn merge_remote_ops(@fugue.FugueTree[String], @oplog.OpLog, Array[@core.Op])
 
 // Errors
 pub(all) suberror BranchError {
-  MissingOp(lv~ : Int32)
+  MissingOp(lv~ : Int)
   MissingOrigin(raw~ : @core.RawVersion)
   OpLog(@oplog.OpLogError)
   Fugue(@fugue.FugueError)
@@ -39,18 +38,18 @@ pub fn Branch::inner_tree(Self) -> @fugue.FugueTree[String]
 pub fn Branch::merge_remote_ops(Self, Array[@core.Op]) -> Self raise BranchError
 pub fn Branch::new(@oplog.OpLog) -> Self
 pub fn Branch::to_text(Self) -> String
-pub fn Branch::visible_count(Self) -> Int32
+pub fn Branch::visible_count(Self) -> Int
 
 pub struct DeleteIndex {
-  index : Map[@core.RawVersion, Array[Int32]]
+  index : Map[@core.RawVersion, Array[Int]]
 }
 pub fn DeleteIndex::build(@oplog.OpLog) -> Self
-pub fn DeleteIndex::get_delete_ops(Self, @core.RawVersion) -> Array[Int32]
-pub fn DeleteIndex::recompute_winner(Self, @core.RawVersion, @oplog.OpLog, @rle.Rle[@core.LvRange]) -> DeleteWinner
+pub fn DeleteIndex::get_delete_ops(Self, @core.RawVersion) -> Array[Int]
+pub fn DeleteIndex::recompute_winner(Self, @core.RawVersion, @oplog.OpLog, @causal_graph.RangeSet) -> DeleteWinner
 
 pub(all) struct DeleteWinner {
   deleted : Bool
-  ts : Int32
+  ts : Int
   agent : String
   is_undelete : Bool
 }
@@ -58,9 +57,9 @@ pub(all) struct DeleteWinner {
 pub struct MergeContext {
   // private fields
 }
-pub fn MergeContext::apply_operations(Self, @rle.Rle[@core.LvRange]) -> Unit raise BranchError
+pub fn MergeContext::apply_operations(Self, @causal_graph.RangeSet) -> Unit raise BranchError
 pub fn MergeContext::new(@fugue.FugueTree[String], @oplog.OpLog) -> Self
-pub fn MergeContext::retreat_operations(Self, @rle.Rle[@core.LvRange]) -> Unit raise BranchError
+pub fn MergeContext::retreat_operations(Self, @causal_graph.RangeSet) -> Unit raise BranchError
 
 // Type aliases
 

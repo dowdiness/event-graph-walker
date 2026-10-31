@@ -94,13 +94,13 @@ pub fn TextState::is_empty(self : TextState) -> Bool {
 ///|
 /// Read-only view of the document's causal DAG.
 ///
-/// The returned `CausalSnapshot` is a live alias — it reflects mutations made
+/// The returned `CausalView` is a live alias — it reflects mutations made
 /// to this `TextState` after the call returns. It is not a point-in-time
 /// copy; callers needing a stable baseline must capture the fields they care
 /// about (e.g. `frontier()`, which already returns a fresh array) before
 /// further edits.
-pub fn TextState::causal_snapshot(self : TextState) -> @history.CausalSnapshot {
-  self.inner.causal_snapshot()
+pub fn TextState::causal_view(self : TextState) -> @history.CausalView {
+  self.inner.causal_view()
 }
 
 ///|

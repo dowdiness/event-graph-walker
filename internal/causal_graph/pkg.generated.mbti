@@ -2,80 +2,93 @@
 package "dowdiness/event-graph-walker/internal/causal_graph"
 
 import {
-  "dowdiness/alga",
   "dowdiness/event-graph-walker/internal/core",
-  "dowdiness/rle",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
   "moonbitlang/core/quickcheck",
-  "moonbitlang/core/quickcheck/shrink",
   "moonbitlang/core/quickcheck/splitmix",
+  "moonbitlang/quickcheck/shrink",
 }
 
 // Values
 
 // Errors
-#derive(@debug.Debug)
 pub(all) suberror CausalGraphError {
   InvalidIdentity(raw~ : @core.RawVersion)
-  MissingParent(lv~ : Int32)
+  MissingParent(lv~ : Int)
   DuplicateVersion(raw~ : @core.RawVersion)
-  MissingEntry(lv~ : Int32)
-}
+  MissingEntry(lv~ : Int)
+} derive(@debug.Debug)
 
-#derive(@debug.Debug)
 pub suberror GraphVersionError {
   Invalid
-}
+} derive(@debug.Debug)
 
 // Types and methods
 pub struct CausalGraph {
   // private fields
 }
-pub fn CausalGraph::add_version(Self, Array[Int32], String) -> Int32 raise CausalGraphError
-pub fn CausalGraph::add_version_with_seq(Self, Array[Int32], String, Int32) -> Int32 raise CausalGraphError
-pub fn CausalGraph::children_count(Self, Int32) -> Int32
+pub fn CausalGraph::add_version(Self, Array[Int], String) -> Int raise CausalGraphError
+pub fn CausalGraph::add_version_with_seq(Self, Array[Int], String, Int) -> Int raise CausalGraphError
+pub fn CausalGraph::children_counts(Self) -> Array[Int]
 pub fn CausalGraph::current_graph_version(Self) -> GraphVersion
-pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange])
+pub fn CausalGraph::diff_frontiers_lvs(Self, @core.Frontier, @core.Frontier) -> (RangeSet, RangeSet)
 pub fn CausalGraph::from_topological_ops_experimental(ArrayView[@core.Op]) -> Self raise CausalGraphError
 #alias("_[_]")
-pub fn CausalGraph::get_entry(Self, Int32) -> @core.GraphEntry?
+pub fn CausalGraph::get_entry(Self, Int) -> @core.GraphEntry?
 pub fn CausalGraph::get_frontier(Self) -> @core.Frontier
-pub fn CausalGraph::graph_diff(Self, @core.Frontier, @core.Frontier) -> (Array[Int32], Array[Int32])
-pub fn CausalGraph::is_ancestor(Self, Int32, Int32) -> Bool
-pub fn CausalGraph::lv_to_raw(Self, Int32) -> @core.RawVersion?
+pub fn CausalGraph::is_ancestor(Self, Int, Int) -> Bool
+pub fn CausalGraph::lv_to_raw(Self, Int) -> @core.RawVersion?
 pub fn CausalGraph::new() -> Self
-pub fn CausalGraph::op_count(Self) -> Int32
-pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int32?
+pub fn CausalGraph::op_count(Self) -> Int
+pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int?
 pub fn CausalGraph::resolve_graph_version(Self, GraphVersion) -> @core.Frontier?
-pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> @rle.Rle[@core.LvRange]
-pub impl @alga.DirectedGraph for CausalGraph
-pub impl @alga.Successors for CausalGraph
-pub impl @alga.VertexSet for CausalGraph
+pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> RangeSet
 pub impl Show for CausalGraph
 pub impl @debug.Debug for CausalGraph
 
-#derive(Eq, Hash, @debug.Debug)
+pub(all) enum Direction {
+  Forward
+  Backward
+} derive(Eq)
+pub fn Direction::equal(Self, Self) -> Bool
+pub fn Direction::not_equal(Self, Self) -> Bool
+
 pub struct GraphVersion {
   // private fields
-}
+} derive(Eq, Hash, @debug.Debug)
 pub fn GraphVersion::contains(Self, @core.RawVersion) -> Bool
-pub fn GraphVersion::from_parts(Array[@core.RawVersion], Array[(String, Array[(UInt32, UInt32)])]) -> Self raise GraphVersionError
+pub fn GraphVersion::from_parts(Array[@core.RawVersion], Array[(String, Array[(UInt, UInt)])]) -> Self raise GraphVersionError
 pub fn GraphVersion::frontier(Self) -> Array[@core.RawVersion]
-pub fn GraphVersion::ranges(Self) -> Array[(String, Array[(UInt32, UInt32)])]
-pub fn GraphVersion::subtract_ranges(Self, Self) -> Array[(String, Array[(UInt32, UInt32)])]
+pub fn GraphVersion::ranges(Self) -> Array[(String, Array[(UInt, UInt)])]
+pub fn GraphVersion::subtract_ranges(Self, Self) -> Array[(String, Array[(UInt, UInt)])]
 
-#derive(Default, Eq, @debug.Debug, @json.FromJson, @json.ToJson)
-pub struct VersionVector(Map[String, Int32])
+pub struct RangeSet {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn RangeSet::cardinality(Self) -> Int
+pub fn RangeSet::contains(Self, Int) -> Bool
+pub fn RangeSet::equal(Self, Self) -> Bool
+pub fn RangeSet::from_array(Array[@core.LvRange]) -> Self
+pub fn RangeSet::is_empty(Self) -> Bool
+pub fn RangeSet::iter(Self, direction? : Direction) -> Iter[@core.LvRange]
+pub fn RangeSet::iter_units(Self, direction? : Direction) -> Iter[Int]
+pub fn RangeSet::new() -> Self
+pub fn RangeSet::not_equal(Self, Self) -> Bool
+pub fn RangeSet::range_count(Self) -> Int
+pub fn RangeSet::subtract(Self, Self) -> Self
+pub fn RangeSet::to_repr(Self) -> @debug.Repr
+
+pub struct VersionVector(Map[String, Int]) derive(Default, Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn VersionVector::agents(Self) -> Array[String]
 pub fn VersionVector::concurrent(Self, Self) -> Bool
 pub fn VersionVector::from_frontier(CausalGraph, @core.Frontier) -> Self
-pub fn VersionVector::includes(Self, String, Int32) -> Bool
+pub fn VersionVector::includes(Self, String, Int) -> Bool
 pub fn VersionVector::increment(Self, String) -> Self
 pub fn VersionVector::merge(Self, Self) -> Self
 pub fn VersionVector::new() -> Self
-pub fn VersionVector::sequence_for(Self, String) -> Int32?
-pub fn VersionVector::set(Self, String, Int32) -> Self
+pub fn VersionVector::sequence_for(Self, String) -> Int?
+pub fn VersionVector::set(Self, String, Int) -> Self
 pub fn VersionVector::to_frontier(Self, CausalGraph) -> @core.Frontier
 pub impl Compare for VersionVector
 pub impl Show for VersionVector

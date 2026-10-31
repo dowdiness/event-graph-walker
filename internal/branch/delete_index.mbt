@@ -62,7 +62,7 @@ pub fn DeleteIndex::recompute_winner(
   self : DeleteIndex,
   target : @core.RawVersion,
   oplog : @oplog.OpLog,
-  retreat_set : @rle.Rle[@core.LvRange],
+  retreat_set : @causal_graph.RangeSet,
 ) -> DeleteWinner {
   let cg = oplog.causal_graph()
   let mut best_ts = 0
@@ -72,7 +72,7 @@ pub fn DeleteIndex::recompute_winner(
   let ops = self.get_delete_ops(target)
   for op_lv in ops {
     // Skip ops in the retreat set
-    if rle_contains_lv(retreat_set, op_lv) {
+    if retreat_set.contains(op_lv) {
       continue
     }
     match oplog.get_op(op_lv) {

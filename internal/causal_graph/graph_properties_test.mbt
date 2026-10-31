@@ -336,13 +336,13 @@ fn prop_graph_diff_matches_model_delta(scenario : GraphScenario) -> Bool {
   let graph = scenario.to_graph() catch { _ => return false }
   let from_frontier = @core.Frontier::from_array(scenario.frontier_a)
   let to_frontier = @core.Frontier::from_array(scenario.frontier_b)
-  let (retreat, advance) = graph.graph_diff(from_frontier, to_frontier)
+  let (retreat, advance) = graph.diff_frontiers_lvs(from_frontier, to_frontier)
   diff_matches_model(
     scenario.parents_by_lv,
     scenario.frontier_a,
     scenario.frontier_b,
-    retreat,
-    advance,
+    retreat.iter_units().collect(),
+    advance.iter_units().collect(),
   )
 }
 
@@ -361,7 +361,7 @@ fn prop_diff_frontiers_rle_matches_model_delta(
   let (retreat_rle, advance_rle) = graph.diff_frontiers_lvs(
     from_frontier, to_frontier,
   )
-  let retreat = retreat_rle.iter_units().collect()
+  let retreat = retreat_rle.iter_units(direction=Backward).collect()
   let advance = advance_rle.iter_units().collect()
   diff_matches_model(
     scenario.parents_by_lv,

@@ -266,7 +266,9 @@ test "merge error - missing op during apply" {
   // Try to apply operations including a non-existent LV
   let result : Result[Unit, @branch.BranchError] = try {
     ctx.apply_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1, }]),
+      @causal_graph.RangeSet::from_array([
+        @core.LvRange::{ start: 999, count: 1, },
+      ]),
     )
     Ok(())
   } catch {
@@ -314,7 +316,9 @@ test "merge error - apply operations succeeds for valid ops" {
   // Apply op2 through merge context - should succeed
   let result : Result[Unit, @branch.BranchError] = try {
     ctx.apply_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: op2.lv(), count: 1, }]),
+      @causal_graph.RangeSet::from_array([
+        @core.LvRange::{ start: op2.lv(), count: 1, },
+      ]),
     )
     Ok(())
   } catch {
@@ -369,7 +373,9 @@ test "merge error - state unchanged after failure" {
   // Try an operation that will fail
   let result : Result[Unit, @branch.BranchError] = try {
     ctx.apply_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1, }]),
+      @causal_graph.RangeSet::from_array([
+        @core.LvRange::{ start: 999, count: 1, },
+      ]),
     )
     Ok(())
   } catch {
@@ -424,7 +430,9 @@ test "retreat then apply with missing item" {
   // (retreat now looks up the op in the oplog first)
   let result : Result[Unit, @branch.BranchError] = try {
     ctx.retreat_operations(
-      @rle.Rle::from_array([@core.LvRange::{ start: 999, count: 1, }]),
+      @causal_graph.RangeSet::from_array([
+        @core.LvRange::{ start: 999, count: 1, },
+      ]),
     )
     Ok(())
   } catch {

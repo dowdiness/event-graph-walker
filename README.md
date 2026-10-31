@@ -132,7 +132,7 @@ The library provides modular public facade packages targeting different collabor
 | [`tree`](tree/) | Movable-tree CRDT facade (nodes, hierarchy moves, sorted properties) | [`tree/pkg.generated.mbti`](tree/pkg.generated.mbti) |
 | [`undo`](undo/) | Local undo/redo manager preserving concurrent remote mutations | [`undo/pkg.generated.mbti`](undo/pkg.generated.mbti) |
 | [`container`](container/) | Advanced document API combining tree nodes, per-block text, sync, and undo | [`container/pkg.generated.mbti`](container/pkg.generated.mbti) |
-| [`history`](history/) | Read-only `CausalSnapshot` for DAG visualization and history inspection | [`history/pkg.generated.mbti`](history/pkg.generated.mbti) |
+| [`history`](history/) | Live read-only `CausalView` for DAG visualization and history inspection | [`history/pkg.generated.mbti`](history/pkg.generated.mbti) |
 | [`sync`](sync/) | Shared sync limits, wire envelopes, and structured failure classifications | [`sync/pkg.generated.mbti`](sync/pkg.generated.mbti) |
 | [`peer_sync`](peer_sync/) | Transport-free synchronization decision engine and façade adapters (`peer_sync/text`, `peer_sync/container`) | [`peer_sync/pkg.generated.mbti`](peer_sync/pkg.generated.mbti) |
 

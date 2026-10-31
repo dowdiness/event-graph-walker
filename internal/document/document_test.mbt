@@ -18,7 +18,7 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
     None,
   )
   ignore(try! doc.apply_remote(pending))
-  let before = doc.causal_snapshot()
+  let before = doc.causal_view()
   let before_frontier = doc.get_frontier()
   let before_text = doc.to_text()
   let before_position = doc.lv_to_position(seed.lv())
@@ -45,8 +45,8 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
     ) => assert_eq(raw, @core.RawVersion("document-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }
-  assert_eq(doc.causal_snapshot().op_count(), before.op_count())
-  assert_eq(doc.causal_snapshot().frontier(), before.frontier())
+  assert_eq(doc.causal_view().op_count(), before.op_count())
+  assert_eq(doc.causal_view().frontier(), before.frontier())
   assert_eq(doc.get_frontier(), before_frontier)
   assert_eq(doc.to_text(), before_text)
   assert_eq(doc.lv_to_position(seed.lv()), before_position)
@@ -74,7 +74,7 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   ignore(doc.get_visible_items())
-  let before_snapshot = doc.causal_snapshot()
+  let before_snapshot = doc.causal_view()
   let before_op_count = before_snapshot.op_count()
   let before_frontier = before_snapshot.frontier()
   let before_export = doc.get_all_ops().map(op => op.lv())
@@ -104,8 +104,8 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
     }
     _ => fail("expected core origin-target error")
   }
-  inspect(doc.causal_snapshot().op_count() == before_op_count, content="true")
-  inspect(doc.causal_snapshot().frontier() == before_frontier, content="true")
+  inspect(doc.causal_view().op_count() == before_op_count, content="true")
+  inspect(doc.causal_view().frontier() == before_frontier, content="true")
   inspect(doc.get_all_ops().map(op => op.lv()) == before_export, content="true")
   inspect(doc.get_visible_items().length(), content="0")
 
@@ -119,7 +119,7 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
   let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
-  let before_snapshot = doc.causal_snapshot()
+  let before_snapshot = doc.causal_view()
   let before_frontier = before_snapshot.frontier()
   let bad_undelete = @core.Op::undelete(
     -1,
@@ -148,10 +148,10 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
     _ => fail("expected core origin-target error")
   }
   inspect(
-    doc.causal_snapshot().op_count() == before_snapshot.op_count(),
+    doc.causal_view().op_count() == before_snapshot.op_count(),
     content="true",
   )
-  inspect(doc.causal_snapshot().frontier() == before_frontier, content="true")
+  inspect(doc.causal_view().frontier() == before_frontier, content="true")
 }
 
 ///|
@@ -160,7 +160,7 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
   let graph_only = @core.RawVersion("local", delete_op.seq())
-  let before_snapshot = doc.causal_snapshot()
+  let before_snapshot = doc.causal_view()
   let before_export = doc.get_all_ops().map(op => op.lv())
   let bad_left = @core.Op::insert(
     -1,
@@ -201,7 +201,7 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
     }
   }
   inspect(
-    doc.causal_snapshot().op_count() == before_snapshot.op_count(),
+    doc.causal_view().op_count() == before_snapshot.op_count(),
     content="true",
   )
   inspect(doc.get_all_ops().map(op => op.lv()) == before_export, content="true")
@@ -224,7 +224,7 @@ test "apply_remote validates an unready incoming origin before pending" {
     None,
   )
   try! doc.apply_remote(pending)
-  let before_snapshot = doc.causal_snapshot()
+  let before_snapshot = doc.causal_view()
   let bad = @core.Op::insert(
     -1,
     [missing_parent],
@@ -253,7 +253,7 @@ test "apply_remote validates an unready incoming origin before pending" {
     _ => fail("expected core origin-target error")
   }
   inspect(
-    doc.causal_snapshot().op_count() == before_snapshot.op_count(),
+    doc.causal_view().op_count() == before_snapshot.op_count(),
     content="true",
   )
   let parent = @core.Op::insert(-1, [], "ghost", 0, "g", None, None)
@@ -266,7 +266,7 @@ test "merge_remote rejects graph-only target before oplog mutation" {
   let doc = @document.Document::new("local")
   let _ = try! doc.insert(0, "x")
   let delete_op = try! doc.delete(0)
-  let before_snapshot = doc.causal_snapshot()
+  let before_snapshot = doc.causal_view()
   let before_export = doc.get_all_ops().map(op => op.lv())
   let bad_delete = @core.Op::delete(
     -1,
@@ -295,7 +295,7 @@ test "merge_remote rejects graph-only target before oplog mutation" {
     _ => fail("expected core origin-target error")
   }
   inspect(
-    doc.causal_snapshot().op_count() == before_snapshot.op_count(),
+    doc.causal_view().op_count() == before_snapshot.op_count(),
     content="true",
   )
   inspect(doc.get_all_ops().map(op => op.lv()) == before_export, content="true")
@@ -353,7 +353,7 @@ test "core change application discards pending graph-only targets and dependents
   )
   try! doc.apply_remote(target_delete)
   inspect(doc.get_all_ops().length(), content="2")
-  inspect(doc.causal_snapshot().op_count(), content="2")
+  inspect(doc.causal_view().op_count(), content="2")
   inspect(doc.to_text(), content="")
 
   // The target is now an ordinary duplicate; unrelated valid change application works.
@@ -369,7 +369,7 @@ test "unknown local delete target does not poison later synchronization" {
   let bob = @document.Document::new("bob")
   let _ = try! alice.insert(0, "A")
   let delete_op = try! alice.delete(0)
-  let before_snapshot = alice.causal_snapshot()
+  let before_snapshot = alice.causal_view()
   let before_op_count = before_snapshot.op_count()
   let before_frontier = before_snapshot.frontier()
   let before_export = alice.get_all_ops().map(op => op.lv())
@@ -387,7 +387,7 @@ test "unknown local delete target does not poison later synchronization" {
       inspect(id == @fugue.Lv(delete_op.lv()), content="true")
     _ => fail("expected structurally missing target error")
   }
-  let after_snapshot = alice.causal_snapshot()
+  let after_snapshot = alice.causal_view()
   inspect(after_snapshot.op_count() == before_op_count, content="true")
   inspect(after_snapshot.frontier() == before_frontier, content="true")
   inspect(

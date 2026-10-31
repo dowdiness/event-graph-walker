@@ -1,93 +1,51 @@
-///| Event Graph Walker - Core eg-walker algorithm
-
 ///|
+/// Visit run prefixes in descending LV order. Every pending parent precedes its
+/// child, so the first visit to a run is its greatest reachable prefix.
+/// All frontier LVs must belong to this graph; violation is a programmer error.
 pub fn CausalGraph::walk_from_frontier(
   self : CausalGraph,
   frontier : @core.Frontier,
-) -> @rle.Rle[@core.LvRange] {
-  let (gen, reachable_lvs) = self.transitive_closure_gen(frontier)
-  topological_sort_subset(self, reachable_lvs, self.query_visited, gen)
+) -> RangeSet {
+  for lv in frontier.iter() {
+    guard lv >= 0 && lv < self.next_lv else {
+      abort("frontier LV outside graph")
+    }
+  }
+  let pending = @priority_queue.PriorityQueue::from_iter(frontier.iter())
+  let descending : Array[@core.LvRange] = []
+  let mut start = self.next_lv
+  let mut end = self.next_lv
+  while pending.pop() is Some(lv) {
+    if lv >= start {
+      continue
+    }
+    let run = self.run_at(lv)
+    if lv + 1 != start {
+      if start < end {
+        descending.push({ start, count: end - start, })
+      }
+      end = lv + 1
+    }
+    start = run.start
+    for parent in run.parents {
+      pending.push(parent)
+    }
+  }
+  if start < end {
+    descending.push({ start, count: end - start, })
+  }
+  { ranges: descending.rev_iter().collect(), }
 }
 
 ///|
-/// Kahn's algorithm on a subset. Only iterates reachable LVs.
-/// `membership_buf[lv] == membership_gen` checks subset membership.
-fn topological_sort_subset(
-  graph : CausalGraph,
-  reachable_lvs : Array[Int32],
-  membership_buf : Array[Int32],
-  membership_gen : Int32,
-) -> @rle.Rle[@core.LvRange] {
-  let int_buf = graph.query_int_buf
-  for lv in reachable_lvs {
-    int_buf[lv] = 0
-  }
-  for lv in reachable_lvs {
-    for parent in graph.entries[lv].parents {
-      if membership_buf[parent] == membership_gen {
-        int_buf[lv] = int_buf[lv] + 1
-      }
-    }
-  }
-  let queue : Array[Int32] = []
-  for lv in reachable_lvs {
-    if int_buf[lv] == 0 {
-      queue.push(lv)
-    }
-  }
-  queue.sort()
-  let result : Array[Int32] = []
-  let ready : Array[Int32] = []
-  let mut head = 0
-  while head < queue.length() {
-    let current = queue[head]
-    head = head + 1
-    result.push(current)
-    ready.clear()
-    for child in graph.children[current] {
-      if membership_buf[child] != membership_gen {
-        continue
-      }
-      int_buf[child] = int_buf[child] - 1
-      if int_buf[child] == 0 {
-        ready.push(child)
-      }
-    }
-    ready.sort()
-    for child in ready {
-      queue.push(child)
-    }
-  }
-  for lv in reachable_lvs {
-    int_buf[lv] = 0
-  }
-  @rle.Rle::from_sorted_ints(result)
-}
-
-///|
+/// Both sets are canonical ascending intervals, not execution sequences.
+/// Execute retreat backward and advance forward, including within each interval.
 pub fn CausalGraph::diff_frontiers_lvs(
   self : CausalGraph,
   from_frontier : @core.Frontier,
   to_frontier : @core.Frontier,
-) -> (@rle.Rle[@core.LvRange], @rle.Rle[@core.LvRange]) {
-  let (retreat_set, advance_set) = self.graph_diff(from_frontier, to_frontier)
-  let retreat_rle = if retreat_set.length() > 0 {
-    let sorted = self.toposort_lv_set(retreat_set)
-    let expanded = sorted.iter_units().collect()
-    let reversed : Array[Int32] = []
-    for i = expanded.length() - 1; i >= 0; i = i - 1 {
-      reversed.push(expanded[i])
-    }
-    @rle.Rle::from_array(
-      reversed.map(fn(lv) { @core.LvRange::{ start: lv, count: 1, } }),
-    )
-  } else {
-    @rle.Rle::Rle()
-  }
-  let advance_rle = if advance_set.length() > 0 {
-    self.toposort_lv_set(advance_set)
-  } else {
-    @rle.Rle::Rle()
-  }
-  (retreat_rle, advance_rle)
+) -> (RangeSet, RangeSet) {
+  let from = self.walk_from_frontier(from_frontier)
+  let to = self.walk_from_frontier(to_frontier)
+  (from.subtract(to), to.subtract(from))
 }

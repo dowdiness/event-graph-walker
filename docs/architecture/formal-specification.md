@@ -568,6 +568,58 @@ forall a, b, c: (a == b AND b == c) -> a == c
 A **CausalGraph** maps logical versions (LV) to graph entries with parent
 pointers, agent IDs, sequence numbers, and Lamport timestamps.
 
+The resident representation is interval-native (`internal/causal_graph/causal_runs.mbt`):
+
+- A `CausalRun` stores an LV start/count, actor, sequence start, rank start,
+  and explicit parents of its first event. Interior events imply the immediately
+  preceding LV as their sole parent. Singletons use the same representation.
+- Admission requires every parent LV to precede the new LV. Ascending LV order
+  is therefore topological; no Kahn sort or stored child index is needed.
+- LV lookup binary-searches append-only runs. External identity lookup uses one
+  bounded-page B+ tree per actor, keyed by nonnegative sequence starts. Arbitrary
+  insertion order and sparse sequences do not require singleton promotions or
+  an alternate representation. Identity, parent multiplicity, and ranks are exact.
+- Coverage uses a query-local max-priority queue of pending LVs. Since parents
+  precede children, the first visit to a run determines its greatest reached
+  prefix; later pending LVs at or above the processed run start are redundant.
+  Adjacent prefixes coalesce during traversal, without a visited map or sort.
+  Each reached run's head parents are queued once. Results are
+  immutable, canonical ascending `RangeSet` values; subtraction operates on
+  intervals without expanding individual operations.
+- Consumers expand only when executing operations. Retreat explicitly iterates
+  **both ranges and their interiors backward**; advance iterates forward. The
+  old traversal's ordering among concurrent events is not an API contract.
+
+For R stored runs, P explicit head-parent edges, and V reached runs, resident
+graph storage is O(R + P), excluding frontier and sparse version summaries.
+With H initial heads and maximum pending queue size Q, coverage costs
+O(V log(R + 1) + (H + P_reached) log(Q + 1)); scratch is O(Q + K) for K output
+intervals, independent of event count within a run. There is no final sort;
+interval subtraction is linear in the two range counts. `children_counts()`
+returns an owned array indexed by LV in O(events + P) time and O(events) scratch
+space. It includes implicit interior edges and preserves explicit parent-edge
+multiplicity. No child index is retained. A `CausalView` is a live view,
+but each returned counts array is a detached point-in-time capture. This replaces
+the per-LV diagnostic API rather than wrapping its repeated scans.
+
+`RangeSet` exposes `range_count()` for stored intervals, `cardinality()` for
+covered LVs, and `is_empty()`. It does not implement RLE storage traits.
+`walk_from_frontier` requires all heads to belong to the graph, and
+`OpLog::collect_ops` requires every selected LV to exist; violations are internal
+programmer errors, not clipped or partially successful execution. Likewise,
+`current_graph_version` must resolve every resident frontier LV, never omit one.
+Optional individual lookup uses `get_op`; there is no separate permissive bulk
+selection API. The old method names and per-LV diagnostic callback are removed
+without compatibility aliases. `causal_view()` exposes live diagnostics; its
+callbacks return owning values, without another copy at the view boundary.
+
+This compression does not impose a memory bound on arbitrarily fragmented
+history, discard causal events, or make `Editor` operation storage and an
+application recovery journal bounded. Their lifetime is a separate concern.
+`RangeSet::from_array` accepts nonnegative ranges with representable endpoints;
+invalid ranges are programmer errors. There is no old graph implementation or
+traversal fallback behind these APIs.
+
 **L4.15 Lamport Clock.** **UNTESTED (standalone)**
 
 ```
@@ -588,7 +640,7 @@ forall lv_i, lv_j in walk_from_frontier(f):
 ```
 
 - **Rationale:** Walker output respects causal dependencies.
-- **Implemented at:** `event-graph-walker/causal_graph/walker.mbt:81-170` (Kahn's algorithm)
+- **Implemented at:** `internal/causal_graph/walker.mbt` (run-prefix coverage in ascending LV intervals)
 - **Tested indirectly:** `"topological sort determinism"` in `event-graph-walker/causal_graph/walker_test.mbt:195`
   and all merge tests depend on correct topological ordering.
 
@@ -754,10 +806,10 @@ property is necessary for correctness of higher-layer optimizations
 
 ### 6.1 Definitions
 
-The **graph_diff** function (`event-graph-walker/causal_graph/graph.mbt:247-262`) computes:
+The **diff_frontiers_lvs** function (`internal/causal_graph/walker.mbt`) computes:
 
 ```
-graph_diff(from_frontier, to_frontier) -> (retreat, advance)
+diff_frontiers_lvs(from_frontier, to_frontier) -> (RangeSet, RangeSet)
 where:
   retreat = transitive_closure(from) \ transitive_closure(to)
   advance = transitive_closure(to) \ transitive_closure(from)
@@ -767,7 +819,7 @@ The **merge procedure** (`event-graph-walker/branch/branch_merge.mbt:124-141`) p
 three-phase state transition:
 
 ```
-Phase 1: Retreat  - For each lv in retreat: tree.delete(lv)
+Phase 1: Retreat  - For each lv in retreat (descending LV): tree.delete(lv)
 Phase 2: Advance  - For each lv in advance (sorted by LV):
                      apply_operation_to_tree(lv)
 Result:  Tree state represents target_frontier
@@ -779,7 +831,7 @@ Result:  Tree state represents target_frontier
 
 ```
 forall from_f, to_f:
-  let (retreat, advance) = graph_diff(from_f, to_f)
+  let (retreat, advance) = diff_frontiers_lvs(from_f, to_f)
   retreat INTERSECT advance == empty
   retreat UNION advance == symmetric_difference(closure(from_f), closure(to_f))
 ```
@@ -792,7 +844,7 @@ forall from_f, to_f:
 
 ```
 forall from_f, to_f:
-  let (retreat, advance) = graph_diff(from_f, to_f)
+  let (retreat, advance) = diff_frontiers_lvs(from_f, to_f)
   closure(from_f) \ retreat UNION advance == closure(to_f)
 ```
 

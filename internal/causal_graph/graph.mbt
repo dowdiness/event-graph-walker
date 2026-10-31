@@ -1,172 +1,108 @@
 ///|
-/// CausalGraph - tracks operation dependencies and causal ordering
-///
-/// Stores both parent and children edges for bidirectional traversal:
-/// - parents: backward traversal (is_ancestor, transitive_closure)
-/// - children: forward traversal (topological_sort, walk_from_frontier)
-///
-/// Uses flat arrays indexed by LV (0..n-1) for O(1) lookup.
+/// Append-only causal intervals. Every parent LV precedes its child LV.
 pub struct CausalGraph {
-  priv entries : Array[@core.GraphEntry]
-  priv children : Array[Array[Int32]]
-  priv version_map : Map[@core.RawVersion, Int32]
-  priv mut next_lv : Int32
+  priv runs : Array[CausalRun]
+  priv agent_runs : Map[String, IdentityIndex]
+  priv mut next_lv : Int
   priv mut frontier : @core.Frontier
-  priv agent_seqs : Map[String, Int32]
-  // Sparse membership is graph authority; it is deliberately lazy.
+  priv agent_seqs : Map[String, Int]
   priv mut version_cache : GraphVersionCache
-  // Reusable query buffers — amortize allocation across repeated calls.
-  // Two gen-counter visited buffers (independent counters).
-  // One in-degree buffer for toposort (manually zeroed before/after use).
-  priv query_visited : Array[Int32]
-  priv mut query_gen : Int32
-  priv query_visited2 : Array[Int32]
-  priv mut query_gen2 : Int32
-  priv query_int_buf : Array[Int32]
 }
 
 ///|
 pub impl @debug.Debug for CausalGraph with fn to_repr(self) {
-  @debug.Repr::literal(
-    "CausalGraph(entries=" + self.entries.length().to_string() + ")",
-  )
+  @debug.Repr::literal("CausalGraph(entries=" + self.next_lv.to_string() + ")")
 }
 
 ///|
 pub fn CausalGraph::new() -> CausalGraph {
   {
-    entries: [],
-    children: [],
-    version_map: Map([]),
+    runs: [],
+    agent_runs: Map([]),
     next_lv: 0,
     frontier: @core.Frontier::from_array([]),
     agent_seqs: Map([]),
-    version_cache: GraphVersionCache::Cold,
-    query_visited: [],
-    query_gen: 0,
-    query_visited2: [],
-    query_gen2: 0,
-    query_int_buf: [],
+    version_cache: Cold,
   }
-}
-
-///|
-fn CausalGraph::ensure_query_buffers(self : CausalGraph) -> Unit {
-  let n = self.next_lv
-  if self.query_visited.length() < n {
-    let cap = if n < 16 { 16 } else { n * 2 }
-    self.query_visited.resize(cap, 0)
-    self.query_visited2.resize(cap, 0)
-    self.query_int_buf.resize(cap, 0)
-    // Resetting generation counters makes old marks visible again unless the
-    // reused portion of both buffers is cleared as well.
-    self.query_visited.fill(0)
-    self.query_visited2.fill(0)
-    self.query_gen = 0
-    self.query_gen2 = 0
-  }
-}
-
-///|
-fn CausalGraph::fresh_gen(self : CausalGraph) -> Int32 {
-  self.ensure_query_buffers()
-  self.query_gen = self.query_gen + 1
-  self.query_gen
-}
-
-///|
-fn CausalGraph::fresh_gen2(self : CausalGraph) -> Int32 {
-  self.ensure_query_buffers()
-  self.query_gen2 = self.query_gen2 + 1
-  self.query_gen2
 }
 
 ///|
 pub fn CausalGraph::lv_to_raw(
   self : CausalGraph,
-  lv : Int32,
+  lv : Int,
 ) -> @core.RawVersion? {
   if lv < 0 || lv >= self.next_lv {
     return None
   }
-  let entry = self.entries[lv]
-  Some(@core.RawVersion(entry.agent, entry.seq))
+  let run = self.run_at(lv)
+  Some(@core.RawVersion(run.agent, run.seq + (lv - run.start)))
 }
 
 ///|
 pub fn CausalGraph::raw_to_lv(
   self : CausalGraph,
   raw : @core.RawVersion,
-) -> Int32? {
-  self.version_map.get(raw)
+) -> Int? {
+  guard raw.seq >= 0 && self.agent_runs.get(raw.agent) is Some(index) else {
+    return None
+  }
+  index.find(raw.seq).map(run => run.start + (raw.seq - run.seq))
 }
 
 ///|
+/// Materialize a single diagnostic entry; traversal does not use this API.
 #alias("_[_]")
 pub fn CausalGraph::get_entry(
   self : CausalGraph,
-  lv : Int32,
+  lv : Int,
 ) -> @core.GraphEntry? {
   if lv < 0 || lv >= self.next_lv {
     return None
   }
-  let entry = self.entries[lv]
+  let run = self.run_at(lv)
+  let offset = lv - run.start
   Some(@core.GraphEntry::{
-    parents: entry.parents.copy(),
-    agent: entry.agent,
-    seq: entry.seq,
-    timestamp: entry.timestamp,
+    parents: if offset == 0 {
+      run.parents.copy()
+    } else {
+      [lv - 1]
+    },
+    agent: run.agent,
+    seq: run.seq + offset,
+    timestamp: run.timestamp + offset,
   })
 }
 
 ///|
-/// Shared logic for add_version and add_version_with_seq.
 fn CausalGraph::add_version_inner(
   self : CausalGraph,
-  parents : Array[Int32],
+  parents : Array[Int],
   agent : String,
-  seq : Int32,
-) -> Int32 raise CausalGraphError {
-  let raw = @core.RawVersion(agent, seq)
+  seq : Int,
+) -> Int raise CausalGraphError {
   if agent == "" || seq < 0 {
-    raise CausalGraphError::InvalidIdentity(raw~)
+    raise CausalGraphError::InvalidIdentity(raw=@core.RawVersion(agent, seq))
   }
-  if self.version_map.get(raw) is Some(_) {
-    raise CausalGraphError::DuplicateVersion(raw~)
+  if self.agent_runs.get(agent) is Some(index) && index.find(seq) is Some(_) {
+    raise CausalGraphError::DuplicateVersion(raw=@core.RawVersion(agent, seq))
   }
+  let mut timestamp = 0
   for parent in parents {
     if parent < 0 || parent >= self.next_lv {
       raise CausalGraphError::MissingParent(lv=parent)
     }
-  }
-  let timestamp = if parents.is_empty() {
-    0
-  } else {
-    for p in parents; max_ts = 0 {
-      let ts = self.entries[p].timestamp
-      continue if ts > max_ts { ts } else { max_ts }
-    } nobreak {
-      max_ts + 1
+    let run = self.run_at(parent)
+    let rank = run.timestamp + (parent - run.start)
+    if rank >= timestamp {
+      timestamp = rank + 1
     }
   }
   let lv = self.next_lv
-  let entry = @core.GraphEntry::{
-    parents: parents.copy(),
-    agent,
-    seq,
-    timestamp,
-  }
-  self.entries.push(entry)
-  self.children.push([])
-  for p in parents {
-    self.children[p].push(lv)
-  }
-  self.version_map.set(raw, lv)
-  self.next_lv = lv + 1
-  self.update_frontier(lv, parents)
+  self.append_entry(parents, agent, seq, timestamp)
+  self.frontier = self.frontier.advance(lv, parents)
   match self.version_cache {
-    GraphVersionCache::Cold => ()
-    GraphVersionCache::Hot(summary) => summary.insert(raw)
+    Cold => ()
+    Hot(summary) => summary.insert(@core.RawVersion(agent, seq))
   }
   lv
 }
@@ -174,39 +110,26 @@ fn CausalGraph::add_version_inner(
 ///|
 pub fn CausalGraph::add_version(
   self : CausalGraph,
-  parents : Array[Int32],
+  parents : Array[Int],
   agent : String,
-) -> Int32 raise CausalGraphError {
-  let seq = match self.agent_seqs.get(agent) {
-    Some(s) => s + 1
-    None => 0
-  }
+) -> Int raise CausalGraphError {
+  let seq = self.agent_seqs.get(agent).unwrap_or(-1) + 1
   let lv = self.add_version_inner(parents, agent, seq)
-  self.agent_seqs.set(agent, seq)
+  self.agent_seqs[agent] = seq
   lv
 }
 
 ///|
 pub fn CausalGraph::add_version_with_seq(
   self : CausalGraph,
-  parents : Array[Int32],
+  parents : Array[Int],
   agent : String,
-  seq : Int32,
-) -> Int32 raise CausalGraphError {
+  seq : Int,
+) -> Int raise CausalGraphError {
   let lv = self.add_version_inner(parents, agent, seq)
-  let current_seq = self.agent_seqs.get(agent).unwrap_or(-1)
-  let next_seq = if seq > current_seq { seq } else { current_seq }
-  self.agent_seqs.set(agent, next_seq)
+  let previous = self.agent_seqs.get(agent).unwrap_or(-1)
+  self.agent_seqs[agent] = if seq > previous { seq } else { previous }
   lv
-}
-
-///|
-fn CausalGraph::update_frontier(
-  self : CausalGraph,
-  new_lv : Int32,
-  parents : Array[Int32],
-) -> Unit {
-  self.frontier = self.frontier.advance(new_lv, parents)
 }
 
 ///|
@@ -215,144 +138,36 @@ pub fn CausalGraph::get_frontier(self : CausalGraph) -> @core.Frontier {
 }
 
 ///|
-/// Number of operations recorded in the graph (LV count).
-pub fn CausalGraph::op_count(self : CausalGraph) -> Int32 {
+pub fn CausalGraph::op_count(self : CausalGraph) -> Int {
   self.next_lv
 }
 
 ///|
-/// Number of direct successors (outdegree) of an LV in the causal DAG.
-/// Returns 0 for out-of-range LVs.
-pub fn CausalGraph::children_count(self : CausalGraph, lv : Int32) -> Int32 {
-  if lv < 0 || lv >= self.next_lv {
-    return 0
+/// Owning diagnostic counts indexed by LV. One O(events + head edges) pass;
+/// no child index or diagnostic cache is retained by the graph.
+pub fn CausalGraph::children_counts(self : CausalGraph) -> Array[Int] {
+  let counts = Array::make(self.next_lv, 1)
+  for head in self.runs {
+    counts[head.start + head.count - 1] = 0
   }
-  self.children[lv].length()
+  for head in self.runs {
+    for parent in head.parents {
+      counts[parent] += 1
+    }
+  }
+  counts
 }
 
 ///|
 pub fn CausalGraph::is_ancestor(
   self : CausalGraph,
-  lv1 : Int32,
-  lv2 : Int32,
+  lv1 : Int,
+  lv2 : Int,
 ) -> Bool {
-  if lv1 == lv2 {
-    return true
-  }
-  let n = self.next_lv
-  if lv1 < 0 || lv1 >= n || lv2 < 0 || lv2 >= n {
+  if lv1 < 0 || lv2 < 0 || lv1 >= self.next_lv || lv2 >= self.next_lv {
     return false
   }
-  let gen = self.fresh_gen()
-  let visited = self.query_visited
-  let queue : Array[Int32] = []
-  for parent in self.entries[lv2].parents {
-    queue.push(parent)
-  }
-  let mut head = 0
-  while head < queue.length() {
-    let current = queue[head]
-    head = head + 1
-    if current == lv1 {
-      return true
-    }
-    if visited[current] == gen {
-      continue
-    }
-    visited[current] = gen
-    for parent in self.entries[current].parents {
-      if visited[parent] != gen {
-        queue.push(parent)
-      }
-    }
-  }
-  false
-}
-
-///|
-/// BFS backward through parents. Marks visited[lv] = gen for each reachable LV.
-fn CausalGraph::bfs_backward(
-  self : CausalGraph,
-  frontiers : @core.Frontier,
-  visited : Array[Int32],
-  gen : Int32,
-) -> Array[Int32] {
-  let n = self.next_lv
-  let reachable : Array[Int32] = []
-  let queue : Array[Int32] = []
-  for lv in frontiers.iter() {
-    if lv >= 0 && lv < n {
-      queue.push(lv)
-    }
-  }
-  let mut head = 0
-  while head < queue.length() {
-    let current = queue[head]
-    head = head + 1
-    if visited[current] == gen {
-      continue
-    }
-    visited[current] = gen
-    reachable.push(current)
-    for parent in self.entries[current].parents {
-      if visited[parent] != gen {
-        queue.push(parent)
-      }
-    }
-  }
-  reachable
-}
-
-///|
-fn CausalGraph::transitive_closure_gen(
-  self : CausalGraph,
-  frontiers : @core.Frontier,
-) -> (Int32, Array[Int32]) {
-  let gen = self.fresh_gen()
-  let reachable = self.bfs_backward(frontiers, self.query_visited, gen)
-  (gen, reachable)
-}
-
-///|
-/// Topological sort a subset, marking membership in query_visited.
-fn CausalGraph::toposort_lv_set(
-  self : CausalGraph,
-  lv_set : Array[Int32],
-) -> @rle.Rle[@core.LvRange] {
-  let gen = self.fresh_gen()
-  let visited = self.query_visited
-  for lv in lv_set {
-    visited[lv] = gen
-  }
-  topological_sort_subset(self, lv_set, visited, gen)
-}
-
-///|
-pub fn CausalGraph::graph_diff(
-  self : CausalGraph,
-  from : @core.Frontier,
-  to : @core.Frontier,
-) -> (Array[Int32], Array[Int32]) {
-  // Two BFS passes on independent buffers (no interference)
-  let from_gen = self.fresh_gen()
-  let from_lvs = self.bfs_backward(from, self.query_visited, from_gen)
-  let to_gen = self.fresh_gen2()
-  let to_lvs = self.bfs_backward(to, self.query_visited2, to_gen)
-  let retreat : Array[Int32] = []
-  let to_buf = self.query_visited2
-  for lv in from_lvs {
-    if to_buf[lv] != to_gen {
-      retreat.push(lv)
-    }
-  }
-  let advance : Array[Int32] = []
-  let from_buf = self.query_visited
-  for lv in to_lvs {
-    if from_buf[lv] != from_gen {
-      advance.push(lv)
-    }
-  }
-  (retreat, advance)
+  self.walk_from_frontier(@core.Frontier::from_array([lv2])).contains(lv1)
 }
 
 ///|
@@ -361,12 +176,6 @@ pub impl Show for CausalGraph with fn output(self, logger) {
   logger.write_string(self.next_lv.to_string())
   logger.write_string(" versions)")
 }
-
-// ---------------------------------------------------------------------------
-// Explicit trait-method promotions (E0079).
-// `#doc(hidden)` keeps these out of the generated interface while preserving
-// dot-syntax and cross-package use.
-// ---------------------------------------------------------------------------
 
 ///|
 #deprecated("Use `@debug.to_repr` instead", skip_current_package=true)

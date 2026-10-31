@@ -150,7 +150,7 @@ pub struct TextSnapshot {
 pub(all) struct TextState {
   // private fields
 }
-pub fn TextState::causal_snapshot(Self) -> @history.CausalSnapshot
+pub fn TextState::causal_view(Self) -> @history.CausalView
 pub fn TextState::checkout(Self, Version) -> TextView raise TextError
 pub fn TextState::delete(Self, Pos) -> Unit raise TextError
 pub fn TextState::delete_and_record(Self, Pos, @undo.UndoManager, timestamp_ms~ : Int) -> Unit raise TextError

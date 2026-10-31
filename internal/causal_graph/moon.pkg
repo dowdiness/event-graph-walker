@@ -1,10 +1,9 @@
 import {
   "dowdiness/event-graph-walker/internal/core",
-  "dowdiness/rle",
-  "dowdiness/alga",
   "moonbitlang/core/bench",
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/core/priority_queue",
   "moonbitlang/core/quickcheck",
   "moonbitlang/core/quickcheck/shrink",
 }

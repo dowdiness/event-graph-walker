@@ -9,7 +9,7 @@ fn closed_graph_oracle(operations : Array[@core.Op]) -> Unit raise {
   assert_eq(built.next_lv, replay.next_lv)
   assert_eq(built.frontier.to_array(), replay.frontier.to_array())
   assert_true(built.version_cache is Cold)
-  assert_true(built.query_visited.is_empty())
+  assert_eq(built.children_counts(), replay.children_counts())
   for lv = 0; lv < built.next_lv; lv = lv + 1 {
     let a = built.get_entry(lv).unwrap()
     let b = replay.get_entry(lv).unwrap()
@@ -17,7 +17,6 @@ fn closed_graph_oracle(operations : Array[@core.Op]) -> Unit raise {
     assert_eq(a.timestamp, b.timestamp)
     assert_eq(a.agent, b.agent)
     assert_eq(a.seq, b.seq)
-    assert_eq(built.children[lv], replay.children[lv])
     let raw = built.lv_to_raw(lv).unwrap()
     assert_eq(built.raw_to_lv(raw), Some(lv))
     assert_eq(built.agent_seqs.get(raw.agent), replay.agent_seqs.get(raw.agent))
@@ -101,8 +100,8 @@ test "direct graph origin is not parent and decreasing sequences keep allocation
   ]
   closed_graph_oracle(ops)
   let graph = CausalGraph::from_topological_ops_experimental(ops[:])
-  assert_eq(graph.entries[1].timestamp, 0)
-  assert_eq(graph.entries[1].parents, [])
+  assert_eq(graph.get_entry(1).unwrap().timestamp, 0)
+  assert_eq(graph.get_entry(1).unwrap().parents, [])
   let lv = graph.add_version(graph.frontier.to_array(), "actor")
   assert_eq(graph.lv_to_raw(lv), Some(@core.RawVersion("actor", 3)))
   let max_ops = [@core.Op::insert(-1, [], "max", 2147483647, "x", None, None)]

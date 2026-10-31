@@ -28,7 +28,7 @@ pub struct Document {
 }
 pub fn Document::can_redo(Self) -> Bool
 pub fn Document::can_undo(Self) -> Bool
-pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
+pub fn Document::causal_view(Self) -> @history.CausalView
 pub fn Document::children(Self, TreeNodeId) -> Array[TreeNodeId]
 pub fn Document::clear_undo(Self) -> Unit
 pub fn Document::create_node(Self, parent~ : TreeNodeId) -> TreeNodeId raise DocumentError

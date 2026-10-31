@@ -26,11 +26,11 @@ pub fn MergeContext::new(
 /// Integrates operations into the tree in topological order.
 pub fn MergeContext::apply_operations(
   self : MergeContext,
-  operations : @rle.Rle[@core.LvRange],
+  operations : @causal_graph.RangeSet,
 ) -> Unit raise BranchError {
   let cg = self.oplog.causal_graph()
 
-  // Apply each operation in order (Rle is already topologically sorted)
+  // Ascending LV order is topological by the graph's admission contract.
   for range in operations.iter() {
     for lv = range.start; lv < range.end(); lv = lv + 1 {
       match self.oplog.get_op(lv) {
@@ -39,17 +39,6 @@ pub fn MergeContext::apply_operations(
       }
     }
   }
-}
-
-///|
-/// Check if a given LV is contained in any range of the Rle.
-fn rle_contains_lv(rle : @rle.Rle[@core.LvRange], lv : Int32) -> Bool {
-  for range in rle.iter() {
-    if range.contains(lv) {
-      return true
-    }
-  }
-  false
 }
 
 ///|
@@ -62,13 +51,13 @@ fn rle_contains_lv(rle : @rle.Rle[@core.LvRange], lv : Int32) -> Bool {
 /// using DeleteIndex (O(d) per item instead of O(total_ops)).
 pub fn MergeContext::retreat_operations(
   self : MergeContext,
-  operations : @rle.Rle[@core.LvRange],
+  operations : @causal_graph.RangeSet,
 ) -> Unit raise BranchError {
   let cg = self.oplog.causal_graph()
   let dirty_items : Array[@core.RawVersion] = []
 
-  for range in operations.iter() {
-    for lv = range.start; lv < range.end(); lv = lv + 1 {
+  for range in operations.iter(direction=Backward) {
+    for lv = range.end() - 1; lv >= range.start; lv = lv - 1 {
       match self.oplog.get_op(lv) {
         Some(op) =>
           match op.content() {

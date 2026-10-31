@@ -34,7 +34,7 @@ test "DeleteIndex - recompute_winner" {
   let raw_a = @core.RawVersion(op_a.agent(), op_a.seq())
 
   // Recompute winner excluding nothing (empty retreat set)
-  let empty_retreat : @rle.Rle[@core.LvRange] = @rle.Rle::Rle()
+  let empty_retreat = @causal_graph.RangeSet::new()
   let winner = index.recompute_winner(raw_a, oplog, empty_retreat)
   // Should find the delete as winner
   inspect(winner.deleted, content="true")

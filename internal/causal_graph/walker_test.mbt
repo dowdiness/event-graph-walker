@@ -5,7 +5,7 @@ test "walk empty frontier" {
   let graph = @causal_graph.CausalGraph::new()
   let frontier = @core.Frontier::from_array([])
   let result = graph.walk_from_frontier(frontier)
-  inspect(@rle.Spanning::span(result), content="0")
+  inspect(result.cardinality(), content="0")
 }
 
 ///|
@@ -32,8 +32,8 @@ test "walk linear history" {
   let result = graph.walk_from_frontier(@core.Frontier::from_array([lv3]))
 
   // Linear history should compress to 1 run
-  inspect(@rle.HasLength::length(result), content="1")
-  inspect(@rle.Spanning::span(result), content="4")
+  inspect(result.range_count(), content="1")
+  inspect(result.cardinality(), content="4")
 
   let expanded = result.iter_units().collect()
   inspect(expanded[0], content="0")
@@ -188,11 +188,11 @@ test "diff_frontiers_lvs for incremental update" {
   )
 
   // No retreat LVs (moving forward)
-  inspect(@rle.Spanning::span(retreat_rle), content="0")
+  inspect(retreat_rle.cardinality(), content="0")
 
   // Should have 2 advance LVs, compressed to 1 run (consecutive)
-  inspect(@rle.HasLength::length(advance_rle), content="1")
-  inspect(@rle.Spanning::span(advance_rle), content="2")
+  inspect(advance_rle.range_count(), content="1")
+  inspect(advance_rle.cardinality(), content="2")
 
   // Verify advance LVs are correct (2 and 3)
   let advance_expanded = advance_rle.iter_units().collect()
@@ -236,8 +236,8 @@ test "walk_from_frontier linear compression" {
   let result = graph.walk_from_frontier(graph.get_frontier())
 
   // 10 consecutive LVs should compress to exactly 1 run
-  inspect(@rle.HasLength::length(result), content="1")
-  inspect(@rle.Spanning::span(result), content="10")
+  inspect(result.range_count(), content="1")
+  inspect(result.cardinality(), content="10")
 }
 
 ///|
@@ -254,9 +254,60 @@ test "diff_frontiers_lvs compression ratio" {
   let (retreat_rle, advance_rle) = graph.diff_frontiers_lvs(empty, full)
 
   // No retreat
-  inspect(@rle.Spanning::span(retreat_rle), content="0")
+  inspect(retreat_rle.cardinality(), content="0")
 
   // 100 consecutive advance LVs -> 1 run
-  inspect(@rle.HasLength::length(advance_rle), content="1")
-  inspect(@rle.Spanning::span(advance_rle), content="100")
+  inspect(advance_rle.range_count(), content="1")
+  inspect(advance_rle.cardinality(), content="100")
+}
+
+///|
+test "interval union and subtraction agree with independent finite sets" {
+  let caller_ranges : Array[@core.LvRange] = [
+    { start: 5, count: 2, },
+    { start: 1, count: 3, },
+  ]
+  let saved = @causal_graph.RangeSet::from_array(caller_ranges)
+  caller_ranges.clear()
+  assert_eq(saved.iter_units().collect(), [1, 2, 3, 5, 6])
+  for left in 0..<64 {
+    for right in 0..<64 {
+      let source : Array[@core.LvRange] = []
+      let excluded : Array[@core.LvRange] = []
+      for i in 0..<6 {
+        if (left & (1 << i)) != 0 {
+          source.push({ start: i * 2, count: 3, })
+        }
+        if (right & (1 << i)) != 0 {
+          excluded.push({ start: i * 2 + 1, count: 2, })
+        }
+      }
+      let ranges = @causal_graph.RangeSet::from_array(
+        source.rev_iter().collect(),
+      )
+      let result = ranges.subtract(@causal_graph.RangeSet::from_array(excluded))
+      let expected : Array[Int] = []
+      for lv in 0..<14 {
+        let mut present = false
+        let mut removed = false
+        for i in 0..<6 {
+          if (left & (1 << i)) != 0 && lv >= i * 2 && lv < i * 2 + 3 {
+            present = true
+          }
+          if (right & (1 << i)) != 0 && lv >= i * 2 + 1 && lv < i * 2 + 3 {
+            removed = true
+          }
+        }
+        if present && !removed {
+          expected.push(lv)
+        }
+        assert_eq(result.contains(lv), present && !removed)
+      }
+      assert_eq(result.iter_units().collect(), expected)
+      assert_eq(
+        result.iter_units(direction=Backward).collect(),
+        expected.rev_iter().collect(),
+      )
+    }
+  }
 }

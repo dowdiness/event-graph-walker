@@ -541,11 +541,11 @@ pub fn Document::new_with_sync_limits(
 ///|
 /// Return a live, read-only view of this document's causal operation graph.
 ///
-/// The snapshot reflects later tree and block-text mutations. Values returned
-/// from the snapshot own their arrays and may be retained safely.
-pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
+/// The view reflects later tree and block-text mutations. Values returned
+/// from the view own their arrays and may be retained safely.
+pub fn Document::causal_view(self : Document) -> @history.CausalView {
   let graph = self.graph
-  @history.CausalSnapshot::CausalSnapshot(
+  @history.CausalView::CausalView(
     fn() { graph.op_count() },
     fn(lv) {
       match graph.get_entry(lv) {
@@ -561,7 +561,7 @@ pub fn Document::causal_snapshot(self : Document) -> @history.CausalSnapshot {
       }
     },
     fn() { graph.get_frontier().to_array() },
-    fn(lv) { graph.children_count(lv) },
+    fn() { graph.children_counts() },
   )
 }
 
@@ -825,7 +825,7 @@ fn Document::versioned_sync_ops_between(
   to : @core.Frontier,
 ) -> SyncMessage raise DocumentError {
   let (_, advance_rle) = self.graph.diff_frontiers_lvs(from, to)
-  let advance_lvs = @rle.Rle::iter_units(advance_rle).collect()
+  let advance_lvs = advance_rle.iter_units().collect()
   let tree_ops : Array[VersionedTreeOp] = []
   let text_ops : Array[VersionedBlockTextOp] = []
   for lv in advance_lvs {

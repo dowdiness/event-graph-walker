@@ -42,7 +42,7 @@ pub fn Document::apply_changes(Self, Array[@core.Op], max_pending? : Int, max_pe
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
 pub fn Document::apply_structural_changes(Self, ArrayView[@core.StructuralOp], max_pending? : Int, max_pending_after_complete? : Int) -> DocumentChanges raise DocumentError
 pub fn Document::begin_text_change(Self) -> Unit raise DocumentError
-pub fn Document::causal_snapshot(Self) -> @history.CausalSnapshot
+pub fn Document::causal_view(Self) -> @history.CausalView
 pub fn Document::checkout_branch(Self, @core.Frontier) -> @branch.Branch raise DocumentError
 pub fn Document::clear_pending(Self) -> Unit
 pub fn Document::collect_missing_ops(Self, @causal_graph.GraphVersion) -> Array[@core.Op] raise DocumentError
