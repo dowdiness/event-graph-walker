@@ -7,16 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-18
+
 ### Breaking changes
 
 - `TextAdmissionTransition` is renamed to `TextSyncTransition`; its `finish()`
   and `availability()` methods become `report()` and `effect_availability()`.
+- Requires MoonBit 0.10.15; CI pins compiler and core to
+  `0.10.15+943464bfa`. Older compilers are no longer supported.
+- Internal `VersionVector`'s `Shrink` implementation now uses
+  `moonbitlang/core/quickcheck/shrink`, not the external QuickCheck trait.
+  See [the v0.9 migration guide](docs/migration/to-v0.9.md).
+
+### Added
+
+- Experimental `TextState::export_compact_experimental` and
+  `TextState::restore_compact_direct_experimental` for compact history
+  archives and validated direct restore.
+
+### Changed
+
+- Use published `dowdiness/alga@0.5.0`, `dowdiness/rle@0.3.0`,
+  `moonbitlang/quickcheck@0.15.0`, and `moonbitlang/x@0.5.5`.
+- Preserve incremental text projection and avoid full-history scans during
+  sparse-version delta export.
 
 ### Fixed
 
 - Explicitly qualify the container synchronization RLE iterator call so its
-  package import is recognized by both MoonBit 0.10.12 and the CI-pinned
-  0.10.14.
+  package import is recognized by MoonBit.
 
 ## [0.8.0] - 2026-08-28
 
@@ -366,7 +385,8 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.6.0...v0.7.0
