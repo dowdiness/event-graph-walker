@@ -2,7 +2,7 @@
 package "dowdiness/event-graph-walker/internal/oplog/order"
 
 // Values
-pub fn dependency_ready_round(Int, Int, Int) -> Int
+pub fn dependency_ready_round(Int32, Int32, Int32) -> Int32
 
 // Errors
 

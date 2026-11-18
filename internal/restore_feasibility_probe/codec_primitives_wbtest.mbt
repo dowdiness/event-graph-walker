@@ -14,7 +14,7 @@ test "shared codec primitive vectors" {
     "01618001",
   )
   assert_eq(
-    sha256_hex(Bytes::new(0)),
+    sha256_hex(Bytes::make(0, b'\x00')),
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   )
   let negative : Result[Bytes, R0CodecError] = Ok(

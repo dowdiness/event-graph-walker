@@ -44,31 +44,6 @@ fn assert_unchanged(change : @fugue_projection.VisibilityChange) -> Unit raise {
 }
 
 ///|
-fn capture_apply(
-  tree : @fugue.FugueTree[String],
-  op : @core.Op,
-  graph : @causal_graph.CausalGraph,
-) -> Result[Unit, @fugue_projection.FugueProjectionError] {
-  Ok(@fugue_projection.apply(tree, op, graph)) catch {
-    error => Err(error)
-  }
-}
-
-///|
-fn capture_observed(
-  tree : @fugue.FugueTree[String],
-  op : @core.Op,
-  graph : @causal_graph.CausalGraph,
-) -> Result[
-  @fugue_projection.VisibilityChange,
-  @fugue_projection.FugueProjectionError,
-] {
-  Ok(@fugue_projection.apply_with_visible_change(tree, op, graph)) catch {
-    error => Err(error)
-  }
-}
-
-///|
 test "insert returns visible change" {
   let graph = @causal_graph.CausalGraph::new()
   let lv = try! graph.add_version_with_seq([], "agent", 0)
@@ -394,9 +369,11 @@ test "missing right insert origin is reported before mutation" {
   let op = @core.Op::insert(lv, [], "agent", 0, "A", None, Some(missing))
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
-  match capture_apply(tree, op, graph) {
-    Err(@fugue_projection.FugueProjectionError::MissingOrigin(raw~)) =>
+  try @fugue_projection.apply(tree, op, graph) catch {
+    @fugue_projection.FugueProjectionError::MissingOrigin(raw~) =>
       assert_eq(raw, missing)
+    _ => fail("expected MissingOrigin")
+  } noraise {
     _ => fail("expected MissingOrigin")
   }
   assert_eq(tree.to_text(), "")
@@ -407,9 +384,11 @@ test "missing causal entry is reported before insert or targeted mutation" {
   let graph = @causal_graph.CausalGraph::new()
   let insert = @core.Op::insert(0, [], "agent", 0, "A", None, None)
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
-  match capture_observed(tree, insert, graph) {
-    Err(@fugue_projection.FugueProjectionError::MissingCausalEntry(lv~)) =>
+  try @fugue_projection.apply_with_visible_change(tree, insert, graph) catch {
+    @fugue_projection.FugueProjectionError::MissingCausalEntry(lv~) =>
       assert_eq(lv, 0)
+    _ => fail("expected MissingCausalEntry for insert")
+  } noraise {
     _ => fail("expected MissingCausalEntry for insert")
   }
   assert_eq(tree.to_text(), "")
@@ -424,9 +403,11 @@ test "missing causal entry is reported before insert or targeted mutation" {
     0,
     Some(target_raw()),
   )
-  match capture_apply(target_tree, delete, graph_with_target) {
-    Err(@fugue_projection.FugueProjectionError::MissingCausalEntry(lv~)) =>
+  try @fugue_projection.apply(target_tree, delete, graph_with_target) catch {
+    @fugue_projection.FugueProjectionError::MissingCausalEntry(lv~) =>
       assert_eq(lv, 99)
+    _ => fail("expected MissingCausalEntry for delete")
+  } noraise {
     _ => fail("expected MissingCausalEntry for delete")
   }
   assert_eq(target_tree.to_text(), "A")
@@ -444,9 +425,11 @@ test "missing causal entry is reported before targeted undelete" {
   )
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
-  match capture_apply(tree, undelete, graph) {
-    Err(@fugue_projection.FugueProjectionError::MissingCausalEntry(lv~)) =>
+  try @fugue_projection.apply(tree, undelete, graph) catch {
+    @fugue_projection.FugueProjectionError::MissingCausalEntry(lv~) =>
       assert_eq(lv, 99)
+    _ => fail("expected MissingCausalEntry for undelete")
+  } noraise {
     _ => fail("expected MissingCausalEntry for undelete")
   }
   assert_eq(tree.to_text(), "")
@@ -465,11 +448,13 @@ test "missing Fugue target is reported before mutation" {
   )
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
-  match capture_observed(tree, delete, graph) {
-    Err(@fugue_projection.FugueProjectionError::Fugue(error~)) =>
+  try @fugue_projection.apply_with_visible_change(tree, delete, graph) catch {
+    @fugue_projection.FugueProjectionError::Fugue(error~) =>
       match error {
         @fugue.FugueError::MissingItem(id~) => assert_eq(id, @fugue.Lv(0))
       }
+    _ => fail("expected Fugue missing target")
+  } noraise {
     _ => fail("expected Fugue missing target")
   }
   assert_eq(tree.to_text(), "")
@@ -488,11 +473,13 @@ test "missing Fugue target is reported before undelete mutation" {
   )
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
 
-  match capture_apply(tree, undelete, graph) {
-    Err(@fugue_projection.FugueProjectionError::Fugue(error~)) =>
+  try @fugue_projection.apply(tree, undelete, graph) catch {
+    @fugue_projection.FugueProjectionError::Fugue(error~) =>
       match error {
         @fugue.FugueError::MissingItem(id~) => assert_eq(id, @fugue.Lv(0))
       }
+    _ => fail("expected Fugue missing undelete target")
+  } noraise {
     _ => fail("expected Fugue missing undelete target")
   }
   assert_eq(tree.to_text(), "")

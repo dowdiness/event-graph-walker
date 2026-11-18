@@ -42,4 +42,6 @@ pub(all) suberror OpLogError {
   )
   /// A causal graph error occurred during operation creation or application
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
+  /// The RLE operation log rejected an appended operation run.
+  OperationRunRejected(error~ : @rle.RleError)
 }

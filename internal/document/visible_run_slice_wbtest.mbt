@@ -9,23 +9,24 @@ test "VisibleRun slice scalar bounds agree for BMP and astral mixtures" {
     let run : VisibleRun = { start_lv: 17, text, count: chars.length(), }
     for start = 0; start <= chars.length(); start = start + 1 {
       for end = start; end <= chars.length(); end = end + 1 {
-        match @rle.Sliceable::slice(run, start~, end~) {
-          Ok(slice) => {
-            assert_eq(
-              slice.text,
-              String::from_array(chars[start:end].to_owned()),
-            )
-            assert_eq(slice.count, end - start)
-            assert_eq(slice.start_lv, 17 + start)
-          }
-          Err(_) => fail("valid scalar interval rejected")
+        let slice = @rle.Sliceable::slice(run, start~, end~) catch {
+          _ => fail("valid scalar interval rejected")
         }
+        assert_eq(slice.text, String::from_array(chars[start:end].to_owned()))
+        assert_eq(slice.count, end - start)
+        assert_eq(slice.start_lv, 17 + start)
       }
     }
-    assert_true(@rle.Sliceable::slice(run, start=-1, end=0) is Err(_))
-    assert_true(
-      @rle.Sliceable::slice(run, start=0, end=chars.length() + 1) is Err(_),
-    )
+    let negative = Some(@rle.Sliceable::slice(run, start=-1, end=0)) catch {
+      _ => None
+    }
+    assert_true(negative is None)
+    let too_long = Some(
+      @rle.Sliceable::slice(run, start=0, end=chars.length() + 1),
+    ) catch {
+      _ => None
+    }
+    assert_true(too_long is None)
   }
 }
 

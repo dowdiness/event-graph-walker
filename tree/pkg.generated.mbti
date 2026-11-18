@@ -27,16 +27,16 @@ pub(all) struct SyncMessage {
 }
 pub fn SyncMessage::from_json_string(String) -> Self raise TreeError
 pub fn SyncMessage::is_empty(Self) -> Bool
-pub fn SyncMessage::op_count(Self) -> Int
+pub fn SyncMessage::op_count(Self) -> Int32
 pub fn SyncMessage::to_canonical_bytes(Self) -> Bytes
 pub fn SyncMessage::to_json_string(Self) -> String
 
 pub(all) struct SyncReport {
   // private fields
 }
-pub fn SyncReport::applied_operations(Self) -> Int
-pub fn SyncReport::duplicate_operations(Self) -> Int
-pub fn SyncReport::pending_operations(Self) -> Int
+pub fn SyncReport::applied_operations(Self) -> Int32
+pub fn SyncReport::duplicate_operations(Self) -> Int32
+pub fn SyncReport::pending_operations(Self) -> Int32
 
 pub(all) struct SyncSession {
   // private fields
@@ -46,15 +46,16 @@ pub fn SyncSession::clear_pending_sync(Self) -> Unit
 pub fn SyncSession::decode_json(Self, String) -> SyncMessage raise TreeError
 pub fn SyncSession::export_all(Self) -> SyncMessage raise TreeError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise TreeError
-pub fn SyncSession::pending_sync_count(Self) -> Int
+pub fn SyncSession::pending_sync_count(Self) -> Int32
 
+#derive(Compare, Eq, Hash, @debug.Debug)
 pub(all) struct TreeNodeId {
   // private fields
-} derive(Compare, Eq, Hash, @debug.Debug)
-pub fn TreeNodeId::TreeNodeId(String, Int) -> Self raise TreeError
+}
+pub fn TreeNodeId::TreeNodeId(String, Int32) -> Self raise TreeError
 pub fn TreeNodeId::key(Self) -> String
 pub fn TreeNodeId::replica_id(Self) -> String
-pub fn TreeNodeId::sequence(Self) -> Int
+pub fn TreeNodeId::sequence(Self) -> Int32
 
 pub struct TreeState {
   // private fields
@@ -73,9 +74,10 @@ pub fn TreeState::set_property(Self, TreeNodeId, String, String) -> Unit
 pub fn TreeState::sync(Self) -> SyncSession
 pub fn TreeState::version(Self) -> Version
 
+#derive(Eq)
 pub(all) struct Version {
   // private fields
-} derive(Eq)
+}
 pub fn Version::empty() -> Self
 pub fn Version::from_json_string(String) -> Self raise TreeError
 pub fn Version::to_json_string(Self) -> String

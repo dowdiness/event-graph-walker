@@ -14,9 +14,9 @@ pub struct FractionalIndex {
   // private fields
 }
 pub fn FractionalIndex::between(left~ : Self?, right~ : Self?) -> Self
-pub fn FractionalIndex::elements(Self) -> Array[Int]
-pub fn FractionalIndex::length(Self) -> Int
-pub fn FractionalIndex::new(Array[Int]) -> Self
+pub fn FractionalIndex::elements(Self) -> Array[Int32]
+pub fn FractionalIndex::length(Self) -> Int32
+pub fn FractionalIndex::new(Array[Int32]) -> Self
 pub impl Compare for FractionalIndex
 pub impl Eq for FractionalIndex
 pub impl Show for FractionalIndex

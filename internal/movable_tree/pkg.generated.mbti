@@ -33,13 +33,14 @@ pub fn MovableTree::remove_node(Self, TreeNodeId) -> Unit
 pub fn MovableTree::set_property(Self, TreeNodeId, String, String) -> Unit
 pub fn MovableTree::would_create_cycle(Self, TreeNodeId, TreeNodeId) -> Bool
 
+#derive(@debug.Debug)
 pub(all) struct TreeMoveOp {
-  timestamp : Int
+  timestamp : Int32
   target : TreeNodeId
   new_parent : TreeNodeId
   position : @fractional_index.FractionalIndex
   agent : String
-} derive(@debug.Debug)
+}
 
 pub(all) struct TreeNode {
   id : TreeNodeId
@@ -48,16 +49,18 @@ pub(all) struct TreeNode {
   properties : Map[String, String]
 }
 
+#derive(Compare, Eq, Hash, @debug.Debug)
 pub(all) struct TreeNodeId {
   agent : String
-  counter : Int
-} derive(Compare, Eq, Hash, @debug.Debug)
+  counter : Int32
+}
 pub impl Show for TreeNodeId
 
+#derive(@debug.Debug)
 pub(all) enum TreeOp {
   Move(TreeMoveOp)
   SetProperty(TreePropertyOp)
-} derive(@debug.Debug)
+}
 
 pub struct TreeOpLog {
   // private fields
@@ -67,13 +70,14 @@ pub fn TreeOpLog::apply(Self, MovableTree, TreeMoveOp) -> Unit
 pub fn TreeOpLog::copy(Self) -> Self
 pub fn TreeOpLog::new() -> Self
 
+#derive(@debug.Debug)
 pub(all) struct TreePropertyOp {
-  timestamp : Int
+  timestamp : Int32
   target : TreeNodeId
   key : String
   value : String
   agent : String
-} derive(@debug.Debug)
+}
 
 // Type aliases
 
