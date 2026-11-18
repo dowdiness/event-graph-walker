@@ -18,7 +18,7 @@ Used as the core CRDT engine in [dowdiness/canopy](https://github.com/dowdiness/
 
 ## Installation
 
-Requires MoonBit 0.10.15 or newer (CI: `0.10.15+943464bfa`).
+Requires MoonBit 0.10.21 or newer (CI: `0.10.21+06da1ed44`).
 Upgrading from 0.8? See the [v0.9 migration guide](docs/migration/to-v0.9.md).
 
 Add the dependency to your project using the MoonBit CLI:
