@@ -5,11 +5,12 @@
 /// reusing the production walker implementation to compute expected results.
 
 ///|
+#derive(Debug)
 struct GraphScenario {
   parents_by_lv : Array[Array[Int32]]
   frontier_a : Array[Int32]
   frontier_b : Array[Int32]
-} derive(Debug)
+}
 
 ///|
 fn graph_property_agent(lv : Int32) -> String {

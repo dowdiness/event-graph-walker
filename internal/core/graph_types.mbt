@@ -2,9 +2,10 @@
 /// A frontier represents the "tips" of the causal graph - versions with no successors.
 ///
 /// **Invariant**: Elements are unique and stored in first-occurrence order.
+#derive(Eq)
 pub struct Frontier {
   priv values : Array[Int32]
-} derive(Eq)
+}
 
 ///|
 pub impl @debug.Debug for Frontier with fn to_repr(self) {
@@ -96,6 +97,7 @@ pub fn Frontier::to_array(self : Frontier) -> Array[Int32] {
 /// version (LV). Fields use local LVs internally; the globally stable
 /// identifiers (`agent` + `seq`) are stored here so entries can be
 /// serialized and sent to peers.
+#derive(Debug)
 pub(all) struct GraphEntry {
   /// LVs of the operations this one directly depends on (its causal parents).
   /// All parent LVs must already exist in the graph before this entry is added.
@@ -109,7 +111,7 @@ pub(all) struct GraphEntry {
   /// Lamport timestamp: always `max(parents' timestamps) + 1`, or 0 for roots.
   /// Used for deterministic total ordering when causal order alone is ambiguous.
   timestamp : Int32
-} derive(Debug)
+}
 
 // ---------------------------------------------------------------------------
 // Explicit trait-method promotions (E0079).

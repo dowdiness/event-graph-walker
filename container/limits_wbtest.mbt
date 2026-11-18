@@ -6,7 +6,7 @@ test "encoded byte limit succeeds at boundary and fails one over" {
     @sync.Failure::LimitExceeded(
       kind=@sync.LimitKind::EncodedBytes,
       limit=4,
-      actual=5
+      actual=5,
     ) => ()
     _ => fail("expected encoded-byte limit classification")
   } noraise {
@@ -38,8 +38,8 @@ test "decoded and pending operation limits are exact and failure atomic" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::DecodedOperations,
         limit=1,
-        actual=2
-      )
+        actual=2,
+      ),
     ) => ()
     _ => fail("expected decoded-operation limit classification")
   } noraise {
@@ -70,8 +70,8 @@ test "parent limit succeeds at boundary and rejects one over atomically" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
         limit=0,
-        actual=1
-      )
+        actual=1,
+      ),
     ) => ()
     _ => fail("expected parent limit classification")
   } noraise {

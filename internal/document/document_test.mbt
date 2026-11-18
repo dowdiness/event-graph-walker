@@ -40,8 +40,8 @@ test "apply_remote wraps pending OpLog ConflictingIdentity atomically" {
   match result {
     Err(
       @document.DocumentError::OpLog(
-        @oplog.OpLogError::ConflictingIdentity(raw~)
-      )
+        @oplog.OpLogError::ConflictingIdentity(raw~),
+      ),
     ) => assert_eq(raw, @core.RawVersion("document-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }
@@ -95,8 +95,8 @@ test "apply_remote rejects graph-only delete target before oplog mutation" {
   match result {
     Err(
       @document.DocumentError::OpLog(
-        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
-      )
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~),
+      ),
     ) => {
       inspect(operation.agent, content="remote")
       inspect(target.agent, content="local")
@@ -138,8 +138,8 @@ test "apply_remote rejects graph-only undelete target before oplog mutation" {
   match result {
     Err(
       @document.DocumentError::OpLog(
-        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
-      )
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~),
+      ),
     ) => {
       inspect(operation.agent, content="remote")
       inspect(target.agent, content="local")
@@ -190,8 +190,8 @@ test "apply_remote rejects graph-only insert origins before oplog mutation" {
     match result {
       Err(
         @document.DocumentError::OpLog(
-          @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
-        )
+          @oplog.OpLogError::OriginTargetNotInsert(operation~, target~),
+        ),
       ) => {
         inspect(operation.agent, content="remote")
         inspect(target.agent, content="local")
@@ -243,8 +243,8 @@ test "apply_remote validates an unready incoming origin before pending" {
   match result {
     Err(
       @document.DocumentError::OpLog(
-        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
-      )
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~),
+      ),
     ) => {
       inspect(operation.agent, content="remote")
       inspect(target.agent, content="local")
@@ -285,8 +285,8 @@ test "merge_remote rejects graph-only target before oplog mutation" {
   match result {
     Err(
       @document.DocumentError::OpLog(
-        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~)
-      )
+        @oplog.OpLogError::OriginTargetNotInsert(operation~, target~),
+      ),
     ) => {
       inspect(operation.agent, content="remote")
       inspect(target.agent, content="local")

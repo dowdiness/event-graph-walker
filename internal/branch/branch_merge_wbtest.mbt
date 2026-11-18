@@ -32,8 +32,8 @@ test "merge_remote_ops preserves a retained branch after partial change applicat
   match result {
     Err(
       BranchError::OpLog(
-        @oplog.OpLogError::PartialApplyChanges(committed~, error~)
-      )
+        @oplog.OpLogError::PartialApplyChanges(committed~, error~),
+      ),
     ) => {
       assert_eq(committed.length(), 1)
       assert_eq(committed[0].agent(), "remote")

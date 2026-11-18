@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-18
+
+### Breaking changes
+
+- Requires MoonBit 0.10.21; CI pins compiler and core to
+  `0.10.21+06da1ed44`. Older compilers are no longer supported. See
+  [the v0.10 migration guide](docs/migration/to-v0.10.md).
+- Resolves `dowdiness/rle@0.4.0`, `dowdiness/btree@0.3.0` and
+  `dowdiness/order-tree@0.3.0`. Applications that also depend on these modules
+  must adopt their typed-error APIs (`raise RleError` instead of `Result`).
+
+### Changed
+
+- Use `moonbitlang/quickcheck@0.15.1` and `moonbitlang/x@0.5.7`;
+  `dowdiness/alga@0.5.0` is unchanged.
+- Adopt rle 0.4.0 typed errors without `try!` in library code: an
+  operation-run append failure now raises an internal `OpLogError` instead of
+  being ignored, and `VisibleRun` slicing raises `RleError`.
+- Apply the MoonBit 0.10.21 formatter, including `#derive(...)` attributes and
+  `Int32` spelling in generated interfaces. Public facade signatures are
+  unchanged.
+
 ## [0.9.0] - 2026-11-18
 
 ### Breaking changes

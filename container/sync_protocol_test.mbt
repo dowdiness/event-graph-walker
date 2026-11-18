@@ -136,8 +136,8 @@ test "container sync rejects conflicting duplicate identities in one message ato
   match decode_result {
     Err(
       @container.DocumentError::SyncFailed(
-        @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0)
-      )
+        @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0),
+      ),
     ) => ()
     _ => fail("expected in-message ConflictingIdentity")
   }
@@ -161,7 +161,7 @@ test "container sync retains authoritative pending payload after identity confli
   )
   try receiver.sync().apply(conflict) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1)
+      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1),
     ) => ()
     _ => fail("expected pending ConflictingIdentity")
   } noraise {
@@ -203,7 +203,7 @@ test "container rejects replica sequence that does not descend from predecessor"
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::MalformedMessage(detail=_)
+      @sync.Failure::MalformedMessage(detail=_),
     ) => ()
     _ => fail("expected causal sequence-descent failure")
   } noraise {
@@ -222,7 +222,7 @@ test "container rejects cross-replica forward-created tree targets atomically" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::InvalidContent(detail=_)
+      @sync.Failure::InvalidContent(detail=_),
     ) => ()
     _ => fail("expected invalid cross-replica tree target")
   } noraise {
@@ -241,7 +241,7 @@ test "container rejects properties for unestablished tree targets atomically" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::InvalidContent(detail=_)
+      @sync.Failure::InvalidContent(detail=_),
     ) => ()
     _ => fail("expected unestablished property target failure")
   } noraise {
@@ -260,7 +260,7 @@ test "container rejects non-monotonic Lamport timestamp after predecessor" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::MalformedMessage(detail=_)
+      @sync.Failure::MalformedMessage(detail=_),
     ) => ()
     _ => fail("expected non-monotonic Lamport timestamp failure")
   } noraise {
@@ -279,7 +279,7 @@ test "container rejects Lamport timestamp not above causal parent" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::MalformedMessage(detail=_)
+      @sync.Failure::MalformedMessage(detail=_),
     ) => ()
     _ => fail("expected non-monotonic causal-parent timestamp failure")
   } noraise {
@@ -356,7 +356,7 @@ test "container rejects tree operation identity used as text origin" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::InvalidContent(detail=_)
+      @sync.Failure::InvalidContent(detail=_),
     ) => ()
     _ => fail("expected invalid text origin")
   } noraise {
@@ -374,7 +374,7 @@ test "container rejects insert origin from a different block" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::InvalidContent(detail=_)
+      @sync.Failure::InvalidContent(detail=_),
     ) => ()
     _ => fail("expected cross-block origin failure")
   } noraise {
@@ -393,7 +393,7 @@ test "container rejects delete and undelete targets from a different block" {
     )
     try receiver.sync().apply(message) catch {
       @container.DocumentError::SyncFailed(
-        @sync.Failure::InvalidContent(detail=_)
+        @sync.Failure::InvalidContent(detail=_),
       ) => ()
       _ => fail("expected cross-block " + kind + " failure")
     } noraise {
@@ -412,7 +412,7 @@ test "container rejects text targeting a nonexistent block atomically" {
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::InvalidContent(detail=_)
+      @sync.Failure::InvalidContent(detail=_),
     ) => ()
     _ => fail("expected nonexistent text block failure")
   } noraise {
@@ -431,7 +431,7 @@ test "container tree preflight snapshot cannot mutate receiver on text failure" 
   )
   try receiver.sync().apply(message) catch {
     @container.DocumentError::SyncFailed(
-      @sync.Failure::InvalidContent(detail=_)
+      @sync.Failure::InvalidContent(detail=_),
     ) => ()
     _ => fail("expected nonexistent text block failure")
   } noraise {
@@ -457,8 +457,8 @@ test "container receiver limits govern decode and later apply" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected encoded-byte limit during apply")
   } noraise {
@@ -481,8 +481,8 @@ test "empty container message still enforces receiver encoded-byte limit" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected receiver encoded-byte limit for empty message")
   } noraise {
@@ -507,8 +507,8 @@ test "container receiver decoder honors raised parent limit" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
         limit=256,
-        actual=257
-      )
+        actual=257,
+      ),
     ) => ()
     _ => fail("expected receiver parent limit during apply")
   } noraise {
@@ -535,8 +535,8 @@ test "container duplicate-heavy decoded operation limit counts wire operations" 
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::DecodedOperations,
         limit=1,
-        actual=2
-      )
+        actual=2,
+      ),
     ) => ()
     _ => fail("wire operation count must survive canonical deduplication")
   } noraise {

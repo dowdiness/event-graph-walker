@@ -5,20 +5,23 @@ suberror R0ProofError {
 }
 
 ///|
+#derive(Eq, Debug)
 struct MmrPeak {
   height : Int32
   start : Int32
   digest : Bytes
-} derive(Eq, Debug)
+}
 
 ///|
 /// Direction is the sibling's side: 0 left, 1 right.
+#derive(Eq, Debug)
 struct MmrSibling {
   direction : Int32
   digest : Bytes
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 struct R0MmrProof {
   leaf_position : Int32
   containing_peak_height : Int32
@@ -27,7 +30,7 @@ struct R0MmrProof {
   declared_sibling_count : Int32
   declared_other_peak_count : Int32
   trailing_byte : Bool
-} derive(Eq, Debug)
+}
 
 ///|
 struct R0Mmr {

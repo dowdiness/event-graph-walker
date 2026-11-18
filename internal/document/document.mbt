@@ -8,11 +8,12 @@
 /// Cursor for fast sequential append. Caches the position immediately
 /// after the last insert and the LV of that op, to skip position_to_lv()
 /// on the next sequential insert.
+#derive(Debug)
 struct InsertCursor {
   next_position : Int32 // position right after the last-inserted item
   lv : Int32 // LV of last inserted item
   at_end : Bool // whether origin_right was None (end of document)
-} derive(Debug)
+}
 
 ///|
 /// Provides position-based operations (insert/delete at cursor position)

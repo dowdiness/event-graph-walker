@@ -19,17 +19,18 @@ pub(all) suberror DocumentError {
   /// Fresh projection checkout failed; derived readers must remain fail-closed.
   ProjectionRecoveryRequired(
     frontier~ : @core.Frontier,
-    error~ : @branch.BranchError
+    error~ : @branch.BranchError,
   )
 }
 
 ///|
+#derive(Debug, Eq)
 pub(all) enum ContentErrorReason {
   /// Insert Op text contained a lone surrogate (not part of a valid pair).
   MalformedUtf16
   /// Insert Op text contained more than one Unicode scalar value.
   MultipleCodepoints
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ContentErrorReason with fn output(self, logger) {

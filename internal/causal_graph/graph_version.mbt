@@ -1,41 +1,47 @@
 ///|
 /// One canonical half-open sequence range in peer knowledge.
+#derive(Debug, Eq, Hash)
 priv struct SequenceRange {
   start : UInt32
   end : UInt32
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 priv struct HaveEntry {
   agent : String
   ranges : Array[SequenceRange]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Exact membership knowledge. Entries and ranges are canonical: sorted,
 /// unique, non-overlapping, and non-adjacent.
+#derive(Debug, Eq, Hash)
 priv struct HaveSummary {
   entries : Array[HaveEntry]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Exact maximal identities for one causal cut.
+#derive(Debug, Eq, Hash)
 priv struct CausalCheckpoint {
   frontier : Array[@core.RawVersion]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// One opaque graph version statement. The checkpoint names an exact causal
 /// cut; `have` names the identities in that cut's closure.
+#derive(Debug, Eq, Hash)
 pub struct GraphVersion {
   priv checkpoint : CausalCheckpoint
   priv have : HaveSummary
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug)
 pub suberror GraphVersionError {
   Invalid
-} derive(Debug)
+}
 
 ///|
 /// Current-summary cache owned by the causal authority. A cold graph pays no

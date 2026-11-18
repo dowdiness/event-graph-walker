@@ -1,9 +1,10 @@
 ///| Generated typed-change application ownership traces.
 
 ///|
+#derive(Debug)
 struct TypedOwnershipTrace {
   mode : Int32
-} derive(Debug)
+}
 
 ///|
 fn typed_ownership_rand_bounded(

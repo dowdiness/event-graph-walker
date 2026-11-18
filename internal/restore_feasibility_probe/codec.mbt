@@ -7,10 +7,11 @@ suberror R0CodecError {
 
 ///|
 /// Stable identity used by the R0 sidecar and fixture catalog.
+#derive(Eq, Debug)
 struct RawIdentity {
   agent : String
   sequence : Int32
-} derive(Eq, Debug)
+}
 
 ///|
 fn RawIdentity::RawIdentity(agent~ : String, sequence~ : Int32) -> RawIdentity {
@@ -19,11 +20,12 @@ fn RawIdentity::RawIdentity(agent~ : String, sequence~ : Int32) -> RawIdentity {
 
 ///|
 /// One canonical positional text event body.
+#derive(Eq, Debug)
 enum CanonicalBody {
   InsertScalar(Int32, String)
   DeleteScalar(Int32)
   Undelete(RawIdentity)
-} derive(Eq, Debug)
+}
 
 ///|
 fn validate_utf16(value : String) -> Unit raise R0CodecError {

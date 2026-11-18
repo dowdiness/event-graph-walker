@@ -25,7 +25,7 @@ fn self_test() -> Unit {
     "raw_version-a-128",
     bytes_hex(try! encode_raw_version(@core.RawVersion("a", 128))),
   )
-  emit_vector("sha256-empty", sha256_hex(Bytes::new(0)))
+  emit_vector("sha256-empty", sha256_hex(Bytes::make(0, b'\x00')))
   println(
     "{\"schema_version\":1,\"record\":\"summary\",\"vector_count\":10,\"passed\":true}",
   )
@@ -36,7 +36,7 @@ fn self_test() -> Unit {
 fn native_produce(case_id : String, run_id : String) -> Unit {
   let fixture = try! generate_required_fixture(case_id)
   let provider = try! canonical_fixture_bytes(fixture)
-  let empty = Bytes::new(0)
+  let empty = Bytes::make(0, b'\x00')
   let empty_hash = sha256_hex(empty)
   println(
     Json::object({
@@ -194,7 +194,7 @@ fn main {
         | "produce"
         | "consume"
         | "legacy-history"
-        | "oracle"
+        | "oracle",
       ) => command_index = index
       _ => ()
     }

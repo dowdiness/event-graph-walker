@@ -8,7 +8,7 @@ import {
 // Values
 pub let root_lv : Lv
 
-pub fn should_win_delete(Int, String, Bool, Int, String, Bool) -> Bool
+pub fn should_win_delete(Int32, String, Bool, Int32, String, Bool) -> Bool
 
 // Errors
 pub(all) suberror FugueError {
@@ -16,36 +16,38 @@ pub(all) suberror FugueError {
 }
 
 // Types and methods
+#derive(@debug.Debug)
 pub struct FugueTree[T] {
   items : Array[Item[T]?]
   lv_index : Array[ItemId?]
-  mut length : Int
-  mut visible : Int
+  mut length : Int32
+  mut visible : Int32
   root_children : Array[ItemId]
   children : Array[Array[ItemId]]
   jump_ancestors : JumpAncestors
-} derive(@debug.Debug)
-pub fn[T] FugueTree::adjust_delete_count(Self[T], Lv, Int) -> Unit raise FugueError
+}
+pub fn[T] FugueTree::adjust_delete_count(Self[T], Lv, Int32) -> Unit raise FugueError
 pub fn[T] FugueTree::delete(Self[T], Lv) -> Unit raise FugueError
-pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
+pub fn[T] FugueTree::delete_with_ts(Self[T], Lv, Int32, String) -> Unit raise FugueError
 pub fn[T : Eq, A] FugueTree::fold(Self[T], init~ : A, (A, Item[T]) -> A) -> A
 #alias("_[_]")
 pub fn[T] FugueTree::get(Self[T], Lv) -> Item[T]?
 pub fn[T : Eq] FugueTree::get_all_items(Self[T]) -> Array[(Lv, Item[T])]
 pub fn[T] FugueTree::get_children_index(Self[T], Lv) -> Array[Lv]
 pub fn[T : Eq] FugueTree::get_visible_items(Self[T]) -> Array[(Lv, Item[T])]
-pub fn[T] FugueTree::insert(Self[T], InsertOp[T], sequence~ : Int) -> Unit
+pub fn[T] FugueTree::insert(Self[T], InsertOp[T], sequence~ : Int32) -> Unit
 pub fn[T] FugueTree::is_ancestor(Self[T], Lv, Lv) -> Bool
 pub fn[T : Eq] FugueTree::iter(Self[T]) -> Iter[(Lv, Item[T])]
-pub fn[T : Eq] FugueTree::lv_to_position(Self[T], Lv) -> Int?
+pub fn[T : Eq] FugueTree::lv_to_position(Self[T], Lv) -> Int32?
 pub fn[T] FugueTree::make(T) -> Self[T]
 pub fn[T : Default] FugueTree::new() -> Self[T]
-pub fn[T] FugueTree::set_delete_winner(Self[T], Lv, Bool, Int, String, Bool) -> Unit raise FugueError
+pub fn[T] FugueTree::set_delete_winner(Self[T], Lv, Bool, Int32, String, Bool) -> Unit raise FugueError
 pub fn FugueTree::to_text(Self[String]) -> String
 pub fn[T] FugueTree::undelete(Self[T], Lv) -> Unit raise FugueError
-pub fn[T] FugueTree::undelete_with_ts(Self[T], Lv, Int, String) -> Unit raise FugueError
-pub fn[T] FugueTree::visible_count(Self[T]) -> Int
+pub fn[T] FugueTree::undelete_with_ts(Self[T], Lv, Int32, String) -> Unit raise FugueError
+pub fn[T] FugueTree::visible_count(Self[T]) -> Int32
 
+#derive(@debug.Debug)
 pub(all) struct InsertOp[T] {
   id : Lv
   content : T
@@ -53,55 +55,63 @@ pub(all) struct InsertOp[T] {
   origin_right : Lv?
   timestamp : Timestamp
   agent : ReplicaId
-} derive(@debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Item[T] {
   id : Lv
   content : T
   parent : Lv?
   side : Side
   mut deleted : Bool
-  mut deleted_ts : Int
+  mut deleted_ts : Int32
   mut deleted_agent : String
   mut deleted_is_undelete : Bool
   mut state : ItemState
-  mut delete_count : Int
+  mut delete_count : Int32
   timestamp : Timestamp
   agent : ReplicaId
-  sequence : Int
-} derive(Eq, @debug.Debug)
+  sequence : Int32
+}
 pub impl[T : @debug.Debug] Show for Item[T]
 
-pub(all) struct ItemId(Int) derive(Compare, Default, Eq, Hash, @debug.Debug)
+#derive(Compare, Default, Eq, Hash, @debug.Debug)
+pub(all) struct ItemId(Int32)
 pub impl Show for ItemId
 
+#derive(Eq, @debug.Debug)
 pub enum ItemState {
   NotInserted
   Inserted
   Deleted
   Retreated
-} derive(Eq, @debug.Debug)
+}
 pub fn ItemState::advance_insert(Self) -> Self
-pub fn ItemState::is_visible(Self, delete_count~ : Int) -> Bool
+pub fn ItemState::is_visible(Self, delete_count~ : Int32) -> Bool
 pub fn ItemState::retreat_insert(Self) -> Self
-pub fn ItemState::update_from_delete_count(Self, Int) -> Self
+pub fn ItemState::update_from_delete_count(Self, Int32) -> Self
 pub impl Default for ItemState
 pub impl Show for ItemState
 
-type JumpAncestors derive(@debug.Debug)
+#derive(@debug.Debug)
+type JumpAncestors
 
-pub(all) struct Lv(Int) derive(Compare, Default, Eq, Hash, @debug.Debug)
+#derive(Compare, Default, Eq, Hash, @debug.Debug)
+pub(all) struct Lv(Int32)
 pub impl Show for Lv
 
-pub(all) struct ReplicaId(String) derive(Compare, Eq, @debug.Debug)
+#derive(Compare, Eq, @debug.Debug)
+pub(all) struct ReplicaId(String)
 
+#derive(Eq, @debug.Debug)
 pub enum Side {
   Left
   Right
-} derive(Eq, @debug.Debug)
+}
 pub impl Show for Side
 
-pub(all) struct Timestamp(Int) derive(Compare, Default, Eq, @debug.Debug)
+#derive(Compare, Default, Eq, @debug.Debug)
+pub(all) struct Timestamp(Int32)
 
 // Type aliases
 

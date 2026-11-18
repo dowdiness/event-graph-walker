@@ -3,20 +3,22 @@
 ///| and remote merge orchestration over OpLog/Fugue.
 
 ///|
+#derive(Debug)
 struct TraceSnapshot {
   frontier : @core.Frontier
   text : String
   visible_count : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct BranchTrace {
   ops : Array[@core.Op]
   snapshots : Array[TraceSnapshot]
   from_index : Int32
   to_index : Int32
   merge_split : Int32
-} derive(Debug)
+}
 
 ///|
 fn rand_bounded(rs : @splitmix.RandomState, bound : Int32) -> Int32 {

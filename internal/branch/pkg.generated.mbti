@@ -16,7 +16,7 @@ pub fn merge_remote_ops(@fugue.FugueTree[String], @oplog.OpLog, Array[@core.Op])
 
 // Errors
 pub(all) suberror BranchError {
-  MissingOp(lv~ : Int)
+  MissingOp(lv~ : Int32)
   MissingOrigin(raw~ : @core.RawVersion)
   OpLog(@oplog.OpLogError)
   Fugue(@fugue.FugueError)
@@ -39,18 +39,18 @@ pub fn Branch::inner_tree(Self) -> @fugue.FugueTree[String]
 pub fn Branch::merge_remote_ops(Self, Array[@core.Op]) -> Self raise BranchError
 pub fn Branch::new(@oplog.OpLog) -> Self
 pub fn Branch::to_text(Self) -> String
-pub fn Branch::visible_count(Self) -> Int
+pub fn Branch::visible_count(Self) -> Int32
 
 pub struct DeleteIndex {
-  index : Map[@core.RawVersion, Array[Int]]
+  index : Map[@core.RawVersion, Array[Int32]]
 }
 pub fn DeleteIndex::build(@oplog.OpLog) -> Self
-pub fn DeleteIndex::get_delete_ops(Self, @core.RawVersion) -> Array[Int]
+pub fn DeleteIndex::get_delete_ops(Self, @core.RawVersion) -> Array[Int32]
 pub fn DeleteIndex::recompute_winner(Self, @core.RawVersion, @oplog.OpLog, @rle.Rle[@core.LvRange]) -> DeleteWinner
 
 pub(all) struct DeleteWinner {
   deleted : Bool
-  ts : Int
+  ts : Int32
   agent : String
   is_undelete : Bool
 }

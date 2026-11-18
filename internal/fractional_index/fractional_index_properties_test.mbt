@@ -2,10 +2,11 @@
 
 ///|
 /// Wrapper for generating valid FractionalIndex pairs where a < b.
+#derive(Debug)
 pub(all) struct OrderedPair {
   left : @fractional_index.FractionalIndex
   right : @fractional_index.FractionalIndex
-} derive(Debug)
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for OrderedPair with fn arbitrary(size, rs) {
@@ -66,9 +67,10 @@ pub impl @shrink.Shrink for OrderedPair with fn shrink(self) {
 
 ///|
 /// Wrapper for generating a single valid FractionalIndex.
+#derive(Debug)
 pub(all) struct SingleKey {
   key : @fractional_index.FractionalIndex
-} derive(Debug)
+}
 
 ///|
 /// Shrink instance for SingleKey — try shorter element lists.

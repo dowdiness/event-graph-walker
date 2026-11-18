@@ -1,6 +1,6 @@
 ///|
 test "R0 capture base64 matches RFC 4648 vectors" {
-  inspect(base64_encode(Bytes::new(0)), content="")
+  inspect(base64_encode(Bytes::make(0, b'\x00')), content="")
   inspect(base64_encode(@utf8.encode("f")), content="Zg==")
   inspect(base64_encode(@utf8.encode("fo")), content="Zm8=")
   inspect(base64_encode(@utf8.encode("foo")), content="Zm9v")

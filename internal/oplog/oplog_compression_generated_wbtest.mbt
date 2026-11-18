@@ -1,18 +1,21 @@
 ///| Generated compression properties for valid local OpLog traces.
 
 ///|
+#derive(Debug)
 enum CompressionLocalEdit {
   Append(Int32)
   Delete(Int32)
   Undelete(Int32)
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct CompressionTrace {
   suffix : Array[CompressionLocalEdit]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug, Eq)
 struct CompressionExpectedOp {
   lv : Int32
   parents : Array[@core.RawVersion]
@@ -21,7 +24,7 @@ struct CompressionExpectedOp {
   content : @core.OpContent
   origin_left : @core.RawVersion?
   origin_right : @core.RawVersion?
-} derive(Debug, Eq)
+}
 
 ///|
 struct CompressionReplay {

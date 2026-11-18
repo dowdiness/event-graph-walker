@@ -21,11 +21,12 @@ fn join_chunks(chunks : Array[String]) -> String {
 }
 
 ///|
+#derive(Debug)
 struct VisibleRunModel {
   start_lv : Int32
   chunks : Array[String]
   text : String
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VisibleRunModel with fn arbitrary(
@@ -53,11 +54,12 @@ fn model_to_run(model : VisibleRunModel) -> VisibleRun {
 }
 
 ///|
+#derive(Debug)
 struct VisibleRunSlice {
   model : VisibleRunModel
   start : Int32
   end : Int32
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VisibleRunSlice with fn arbitrary(
@@ -77,10 +79,11 @@ impl @quickcheck.Arbitrary for VisibleRunSlice with fn arbitrary(
 ///|
 
 ///|
+#derive(Debug)
 struct VisibleRunSplit {
   model : VisibleRunModel
   split : Int32
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VisibleRunSplit with fn arbitrary(
@@ -103,12 +106,11 @@ impl @quickcheck.Arbitrary for VisibleRunSplit with fn arbitrary(
 ///|
 fn prop_visible_slice_metadata(query : VisibleRunSlice) -> Bool {
   let run = model_to_run(query.model)
-  match run.slice(start=query.start, end=query.end) {
-    Ok(segment) =>
-      segment.start_lv == run.start_lv + query.start &&
-      segment.count == query.end - query.start
-    Err(_) => false
+  let segment = run.slice(start=query.start, end=query.end) catch {
+    _ => return false
   }
+  segment.start_lv == run.start_lv + query.start &&
+  segment.count == query.end - query.start
 }
 
 ///|
@@ -122,10 +124,8 @@ test "property: VisibleRun::slice preserves start_lv and count" {
 ///|
 fn prop_visible_slice_full_run(model : VisibleRunModel) -> Bool {
   let run = model_to_run(model)
-  match run.slice(start=0, end=run.count) {
-    Ok(all) => all == run
-    Err(_) => false
-  }
+  let all = run.slice(start=0, end=run.count) catch { _ => return false }
+  all == run
 }
 
 ///|
@@ -157,9 +157,8 @@ fn prop_visible_slice_singletons_round_trip(model : VisibleRunModel) -> Bool {
     return true
   }
   for offset in 0..<run.count {
-    let segment = match run.slice(start=offset, end=offset + 1) {
-      Ok(seg) => seg
-      Err(_) => return false
+    let segment = run.slice(start=offset, end=offset + 1) catch {
+      _ => return false
     }
     if segment.text != model.chunks[offset] {
       return false
@@ -188,14 +187,8 @@ fn prop_visible_adjacent_slices_merge_back(
 ) -> Bool {
   let run = model_to_run(split_query.model)
   let split = split_query.split
-  let left = match run.slice(start=0, end=split) {
-    Ok(left) => left
-    Err(_) => return false
-  }
-  let right = match run.slice(start=split, end=run.count) {
-    Ok(right) => right
-    Err(_) => return false
-  }
+  let left = run.slice(start=0, end=split) catch { _ => return false }
+  let right = run.slice(start=split, end=run.count) catch { _ => return false }
   @rle.Mergeable::can_merge(left, right) &&
   @rle.Mergeable::merge(left, right) == run
 }
@@ -211,10 +204,10 @@ test "property: adjacent slice merges reconstruct original run" {
 ///|
 fn prop_visible_slice_invalid_bounds(model : VisibleRunModel) -> Bool {
   let run = model_to_run(model)
-  let too_long = run.slice(start=0, end=run.count + 1)
-  let negative_start = run.slice(start=-1, end=0)
-  let reversed = run.slice(start=run.count, end=0)
-  too_long is Err(_) && negative_start is Err(_) && reversed is Err(_)
+  let too_long = Some(run.slice(start=0, end=run.count + 1)) catch { _ => None }
+  let negative_start = Some(run.slice(start=-1, end=0)) catch { _ => None }
+  let reversed = Some(run.slice(start=run.count, end=0)) catch { _ => None }
+  too_long is None && negative_start is None && reversed is None
 }
 
 ///|

@@ -1,4 +1,5 @@
 ///|
+#derive(Eq)
 priv enum DecisionKind {
   SendVersion
   RequestFullSync
@@ -9,7 +10,7 @@ priv enum DecisionKind {
   ReportRecoveryExhausted
   ReportFailure
   Escalate
-} derive(Eq)
+}
 
 ///|
 priv struct DecisionRoute {

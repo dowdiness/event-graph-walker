@@ -2,12 +2,13 @@
 
 ///|
 /// The kind of resource limit enforced while decoding or preparing a message.
+#derive(Debug, Eq)
 pub(all) enum LimitKind {
   EncodedBytes
   DecodedOperations
   PendingOperations
   ParentsPerOperation
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for LimitKind with fn output(self, logger) {
@@ -47,12 +48,13 @@ pub impl Show for Failure with fn output(self, logger) {
 ///
 /// Values are immutable after construction. Call `Limits(...)` to override
 /// defaults for an individual state instance.
+#derive(Debug, Eq)
 pub(all) struct Limits {
   priv max_encoded_bytes : Int32
   priv max_decoded_operations : Int32
   priv max_pending_operations : Int32
   priv max_parents_per_operation : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Construct limits, using protocol defaults for omitted values.

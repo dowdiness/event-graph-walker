@@ -1,6 +1,7 @@
 ///| Causal graph error types
 
 ///|
+#derive(Debug)
 pub(all) suberror CausalGraphError {
   /// An operation identity has an empty agent or negative sequence.
   InvalidIdentity(raw~ : @core.RawVersion)
@@ -12,7 +13,7 @@ pub(all) suberror CausalGraphError {
   /// A graph entry was not found for the given LV.
   /// Indicates a consistency bug — LV was referenced but never registered.
   MissingEntry(lv~ : Int32)
-} derive(Debug)
+}
 
 // ---------------------------------------------------------------------------
 // Explicit trait-method promotions (E0079).

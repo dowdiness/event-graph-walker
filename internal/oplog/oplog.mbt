@@ -28,11 +28,10 @@ pub fn OpLog::causal_graph(self : OpLog) -> @causal_graph.CausalGraph {
 
 ///|
 /// Add a new operation to the log
-fn OpLog::add_op(self : OpLog, op : @core.Op) -> Unit {
+fn OpLog::add_op(self : OpLog, op : @core.Op) -> Unit raise OpLogError {
   let run = @core.OpRun::from_op(op)
-  match self.operations.append(run) {
-    Ok(_) => ()
-    Err(_) => () // OpRun with count=1 always has span > 0
+  self.operations.append(run) catch {
+    error => raise OpLogError::OperationRunRejected(error~)
   }
 }
 

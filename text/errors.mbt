@@ -187,6 +187,8 @@ fn TextError::from_oplog_error(err : @oplog.OpLogError) -> TextError {
     StaleApplyChanges => TextError::Internal(detail="stale ApplyChanges")
     ConsumedApplyChanges => TextError::Internal(detail="consumed ApplyChanges")
     InvalidApplyChanges => TextError::Internal(detail="invalid ApplyChanges")
+    OperationRunRejected(error~) =>
+      TextError::Internal(detail="operation run rejected: \{error}")
     PartialApplyChanges(committed=_, error~) =>
       TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~))
     CausalGraphError(error~) =>

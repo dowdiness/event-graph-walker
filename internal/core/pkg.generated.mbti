@@ -24,100 +24,108 @@ pub suberror OpStructureError {
 }
 
 // Types and methods
+#derive(Eq)
 pub struct Frontier {
   // private fields
-} derive(Eq)
-pub fn Frontier::advance(Self, Int, Array[Int]) -> Self
-pub fn Frontier::from_array(Array[Int]) -> Self
-pub fn Frontier::from_array_dedup(Array[Int]) -> Self
-pub fn Frontier::iter(Self) -> Iter[Int]
-pub fn Frontier::length(Self) -> Int
-pub fn Frontier::to_array(Self) -> Array[Int]
+}
+pub fn Frontier::advance(Self, Int32, Array[Int32]) -> Self
+pub fn Frontier::from_array(Array[Int32]) -> Self
+pub fn Frontier::from_array_dedup(Array[Int32]) -> Self
+pub fn Frontier::iter(Self) -> Iter[Int32]
+pub fn Frontier::length(Self) -> Int32
+pub fn Frontier::to_array(Self) -> Array[Int32]
 pub impl Show for Frontier
-pub impl ToJson for Frontier
 pub impl @debug.Debug for Frontier
 pub impl @json.FromJson for Frontier
+pub impl @json.ToJson for Frontier
 
+#derive(@debug.Debug)
 pub(all) struct GraphEntry {
-  parents : Array[Int]
+  parents : Array[Int32]
   agent : String
-  seq : Int
-  timestamp : Int
-} derive(@debug.Debug)
+  seq : Int32
+  timestamp : Int32
+}
 
+#derive(Eq, @debug.Debug)
 pub(all) struct LvRange {
-  start : Int
-  count : Int
-} derive(Eq, @debug.Debug)
-pub fn LvRange::contains(Self, Int) -> Bool
-pub fn LvRange::end(Self) -> Int
+  start : Int32
+  count : Int32
+}
+pub fn LvRange::contains(Self, Int32) -> Bool
+pub fn LvRange::end(Self) -> Int32
 pub impl @rle.Addressable for LvRange
 pub impl @rle.FromRange for LvRange
 pub impl @rle.HasLength for LvRange
 pub impl @rle.Mergeable for LvRange
 pub impl @rle.Spanning for LvRange
 
+#derive(@debug.Debug, @json.ToJson)
 pub struct Op {
   // private fields
-} derive(ToJson, @debug.Debug)
+}
 pub fn Op::agent(Self) -> String
 pub fn Op::content(Self) -> OpContent
-pub fn Op::delete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
+pub fn Op::delete(Int32, Array[RawVersion], String, Int32, RawVersion?) -> Self
 pub fn Op::get_delete_target(Self) -> RawVersion?
 pub fn Op::get_insert_text(Self) -> String?
-pub fn Op::insert(Int, Array[RawVersion], String, Int, String, RawVersion?, RawVersion?) -> Self
+pub fn Op::insert(Int32, Array[RawVersion], String, Int32, String, RawVersion?, RawVersion?) -> Self
 pub fn Op::is_delete(Self) -> Bool
 pub fn Op::is_insert(Self) -> Bool
 pub fn Op::is_undelete(Self) -> Bool
-pub fn Op::lv(Self) -> Int
+pub fn Op::lv(Self) -> Int32
 pub fn Op::origin_left(Self) -> RawVersion?
 pub fn Op::origin_right(Self) -> RawVersion?
 pub fn Op::parents(Self) -> Array[RawVersion]
 pub fn Op::parents_iter(Self) -> Iter[RawVersion]
-pub fn Op::seq(Self) -> Int
-pub fn Op::undelete(Int, Array[RawVersion], String, Int, RawVersion?) -> Self
+pub fn Op::seq(Self) -> Int32
+pub fn Op::undelete(Int32, Array[RawVersion], String, Int32, RawVersion?) -> Self
 pub impl Show for Op
 
+#derive(Eq, @debug.Debug, @json.FromJson, @json.ToJson)
 pub enum OpContent {
   Insert(String)
   Delete
   Undelete
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+}
 pub impl Show for OpContent
 
+#derive(Eq, @debug.Debug)
 pub struct OpRun {
-  start_lv : Int
+  start_lv : Int32
   agent : String
-  start_seq : Int
+  start_seq : Int32
   content : OpRunContent
   parents : Array[RawVersion]
   origin_left : RawVersion?
   origin_right : RawVersion?
-  count : Int
-} derive(Eq, @debug.Debug)
-pub fn OpRun::decompress(Self, Int) -> Op?
+  count : Int32
+}
+pub fn OpRun::decompress(Self, Int32) -> Op?
 pub fn OpRun::decompress_into(Self, Array[Op]) -> Unit
 pub fn OpRun::from_op(Op) -> Self
-pub fn OpRun::lv_bounds(Self) -> (Int, Int)
+pub fn OpRun::lv_bounds(Self) -> (Int32, Int32)
 pub impl @rle.HasLength for OpRun
 pub impl @rle.Mergeable for OpRun
 pub impl @rle.Spanning for OpRun
-pub impl ToJson for OpRun
 pub impl @json.FromJson for OpRun
+pub impl @json.ToJson for OpRun
 
+#derive(Eq, @debug.Debug)
 pub enum OpRunContent {
   Inserts(Array[Char])
   Deletes
   Undeletes
-} derive(Eq, @debug.Debug)
-pub impl ToJson for OpRunContent
+}
 pub impl @json.FromJson for OpRunContent
+pub impl @json.ToJson for OpRunContent
 
+#derive(Compare, Eq, @debug.Debug, @json.ToJson)
 pub struct RawVersion {
   agent : String
-  seq : Int
-} derive(Compare, Eq, ToJson, @debug.Debug)
-pub fn RawVersion::RawVersion(String, Int) -> Self
+  seq : Int32
+}
+pub fn RawVersion::RawVersion(String, Int32) -> Self
 pub fn RawVersion::to_string(Self) -> String
 pub impl Hash for RawVersion
 pub impl Show for RawVersion
@@ -132,9 +140,9 @@ pub fn StructuralOp::raw(Self) -> Op
 // Type aliases
 pub type AgentId = String
 
-pub type LV = Int
+pub type LV = Int32
 
 // Traits
 pub(open) trait RawToLv {
-  fn raw_to_lv(Self, RawVersion) -> Int?
+  fn raw_to_lv(Self, RawVersion) -> Int32?
 }

@@ -5,9 +5,10 @@
 
 ///|
 /// Stable façade-owned tree node identifier.
+#derive(Eq, Hash, Debug, Compare)
 pub(all) struct TreeNodeId {
   priv inner : @mt.TreeNodeId
-} derive(Eq, Hash, Debug, Compare)
+}
 
 ///|
 /// Construct a validated non-sentinel node identifier.
@@ -64,10 +65,11 @@ pub let trash_id : TreeNodeId = TreeNodeId::from_inner(@mt.trash_id)
 ///
 /// Each local mutation generates a Lamport-timestamped operation that can be
 /// exported and applied on remote peers for convergent replication.
+#derive(Eq, Hash)
 priv struct PropertyKey {
   id : @mt.TreeNodeId
   key : String
-} derive(Eq, Hash)
+}
 
 ///|
 priv struct BlockTextOp {
@@ -127,9 +129,10 @@ fn SyncMessage::SyncMessage(
 
 ///|
 /// Opaque version vector for container synchronization and checkout.
+#derive(Debug, Eq)
 pub(all) struct Version {
   priv inner : @cg.VersionVector
-} derive(Debug, Eq)
+}
 
 ///|
 fn Version::Version(inner : @cg.VersionVector) -> Version {

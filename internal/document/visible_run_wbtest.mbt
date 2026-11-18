@@ -39,16 +39,10 @@ test "VisibleRun: merge concatenates text and counts" {
 ///|
 test "VisibleRun: slice extracts subrange" {
   let run : VisibleRun = { start_lv: 10, text: "abcde", count: 5, }
-  let sliced = @rle.Sliceable::slice(run, start=1, end=4)
-  inspect(sliced is Ok(_), content="true")
-  match sliced {
-    Ok(s) => {
-      inspect(s.start_lv, content="11")
-      inspect(s.text, content="bcd")
-      inspect(s.count, content="3")
-    }
-    Err(_) => ()
-  }
+  let s = @rle.Sliceable::slice(run, start=1, end=4)
+  inspect(s.start_lv, content="11")
+  inspect(s.text, content="bcd")
+  inspect(s.count, content="3")
 }
 
 ///|

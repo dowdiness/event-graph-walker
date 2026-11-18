@@ -6,12 +6,13 @@
 /// richer four-state model that correctly handles retreat/advance cycles.
 
 ///|
+#derive(Debug, Eq)
 pub enum ItemState {
   NotInserted
   Inserted
   Deleted
   Retreated
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for ItemState with fn output(self, logger) {

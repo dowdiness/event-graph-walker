@@ -15,7 +15,7 @@ pub(all) suberror OpLogError {
   /// An operation origin or delete/undelete target names a non-Insert.
   OriginTargetNotInsert(
     operation~ : @core.RawVersion,
-    target~ : @core.RawVersion
+    target~ : @core.RawVersion,
   )
   /// A delete or undelete carries the insert-only right-origin field.
   InvalidOriginShape(raw~ : @core.RawVersion)
@@ -38,8 +38,10 @@ pub(all) suberror OpLogError {
   /// A remote change application committed a prefix before a causal graph failure.
   PartialApplyChanges(
     committed~ : Array[@core.Op],
-    error~ : @causal_graph.CausalGraphError
+    error~ : @causal_graph.CausalGraphError,
   )
   /// A causal graph error occurred during operation creation or application
   CausalGraphError(error~ : @causal_graph.CausalGraphError)
+  /// The RLE operation log rejected an appended operation run.
+  OperationRunRejected(error~ : @rle.RleError)
 }

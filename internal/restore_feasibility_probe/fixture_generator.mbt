@@ -1,31 +1,35 @@
 ///|
 /// Deterministic fixture construction failures.
+#derive(Eq)
 suberror FixtureError {
   Invalid(detail~ : String)
-} derive(Eq)
+}
 
 ///|
 /// One canonical event in catalog generation order.
+#derive(Eq)
 struct FixtureEvent {
   ordinal : Int32
   identity : RawIdentity
   parents : Array[RawIdentity]
   body : CanonicalBody
   canonical_body_bytes : Bytes
-} derive(Eq)
+}
 
 ///|
 /// One generated morphology with its expected stable replay order.
+#derive(Eq)
 struct GeneratedFixture {
   fixture_id : String
   document_id : String
   events : Array[FixtureEvent]
   replay_order : Array[RawIdentity]
   final_text : String
-} derive(Eq)
+}
 
 ///|
 /// Immutable per-fixture catalog summary.
+#derive(Eq)
 struct CatalogFixture {
   fixture_id : String
   document_id : String
@@ -33,15 +37,16 @@ struct CatalogFixture {
   canonical_sha256 : String
   replay_order : Array[RawIdentity]
   final_text : String
-} derive(Eq)
+}
 
 ///|
 /// Complete required morphology catalog summary.
+#derive(Eq)
 struct FixtureCatalog {
   schema_version : Int32
   fixture_seed : String
   fixtures : Array[CatalogFixture]
-} derive(Eq)
+}
 
 ///|
 /// Stable JSON summary used to prove repeated generation is byte-identical.

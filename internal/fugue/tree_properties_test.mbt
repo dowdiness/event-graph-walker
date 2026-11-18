@@ -3,18 +3,20 @@
 
 ///|
 /// Generated concurrent insert operations for determinism property test
+#derive(Debug)
 pub(all) struct QcInsertOp {
   id : Int32
   content : String
   ts : Int32
   agent : String
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 pub(all) struct QcInsertOpSet {
   ops : Array[QcInsertOp]
   shuffle_seed : UInt64
-} derive(Debug)
+}
 
 ///|
 /// Arbitrary instance for QcInsertOpSet
@@ -195,9 +197,10 @@ test "property: fugue insertion determinism (order independence)" {
 
 ///|
 /// Generated chain length for ancestor properties
+#derive(Debug)
 pub(all) struct ChainLen {
   len : Int32
-} derive(Debug)
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for ChainLen with fn arbitrary(
@@ -361,10 +364,11 @@ test "property: fugue ancestor transitivity (chain)" {
 
 ///|
 /// Generated inserts for strong list and delete properties
+#derive(Debug)
 pub(all) struct InsertSetWithDeletes {
   inserts : Array[QcInsertOp]
   delete_count : Int32
-} derive(Debug)
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for InsertSetWithDeletes with fn arbitrary(
@@ -523,12 +527,13 @@ test "property: fugue delete removes from visible list" {
 
 ///|
 /// Generated concurrent insert sizes for non-interleaving property test
+#derive(Debug)
 pub(all) struct ConcurrentInsertSeq {
   len_a : Int32
   len_b : Int32
   ts_a : Int32
   ts_b : Int32
-} derive(Debug)
+}
 
 ///|
 /// Arbitrary instance for ConcurrentInsertSeq
@@ -727,12 +732,13 @@ test "property: fugue non-interleaving (concurrent sequences)" {
 
 ///|
 /// Generated agent/ID pairs for tie-break property test
+#derive(Debug)
 pub(all) struct TieBreakCase {
   agent_a : String
   agent_b : String
   id_a : Int32
   id_b : Int32
-} derive(Debug)
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for TieBreakCase with fn arbitrary(
@@ -821,9 +827,10 @@ test "property: fugue RawVersion ordering (agent then sequence)" {
 
 ///|
 /// Generated branching tree size for binary lifting property tests
+#derive(Debug)
 pub(all) struct BranchingTree {
   len : Int32
-} derive(Debug)
+}
 
 ///|
 pub impl @quickcheck.Arbitrary for BranchingTree with fn arbitrary(size, rs) {

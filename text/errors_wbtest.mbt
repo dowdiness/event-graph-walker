@@ -6,7 +6,7 @@ test "TextError maps OpLog ConflictingIdentity to sync failure" {
   )
   match err {
     TextError::SyncFailed(
-      @sync.Failure::ConflictingIdentity(replica_id~, sequence~)
+      @sync.Failure::ConflictingIdentity(replica_id~, sequence~),
     ) => {
       assert_eq(replica_id, "alice")
       assert_eq(sequence, 0)

@@ -10,11 +10,12 @@
 /// Document-order adjacency is guaranteed by the build order (tree
 /// traversal emits items in document order, so two successive visible
 /// items that also have consecutive LVs must be adjacent).
+#derive(Debug, Eq)
 struct VisibleRun {
   start_lv : Int32 // First LV in this visible run
   text : String // Concatenated visible text
   count : Int32 // Number of items in run
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl @rle.HasLength for VisibleRun with fn length(self) -> Int32 {
@@ -61,11 +62,9 @@ pub impl @rle.Sliceable for VisibleRun with fn slice(
   self,
   start~ : Int32,
   end~ : Int32,
-) -> Result[VisibleRun, @rle.RleError] {
+) -> VisibleRun raise @rle.RleError {
   if start < 0 || end > self.count || start > end {
-    return Err(
-      @rle.RleError::InvalidSlice(reason=@rle.SliceError::IndexOutOfBounds),
-    )
+    raise @rle.RleError::InvalidSlice(reason=@rle.SliceError::IndexOutOfBounds)
   }
   // All production nonempty runs contain one scalar per item. Both merging
   // and projection batching isolate positive-count legacy empty items. Under
@@ -81,15 +80,14 @@ pub impl @rle.Sliceable for VisibleRun with fn slice(
   } else {
     item_offset_to_utf16(self.text, end)
   }
-  match @rle.slice_string_view(self.text, start=text_start, end=text_end) {
-    Ok(sliced_text) =>
-      Ok({
-        start_lv: self.start_lv + start,
-        text: sliced_text,
-        count: end - start,
-      })
-    Err(e) => Err(@rle.RleError::InvalidSlice(reason=e))
+  let sliced_text = @rle.slice_string_view(
+    self.text,
+    start=text_start,
+    end=text_end,
+  ) catch {
+    error => raise @rle.RleError::InvalidSlice(reason=error)
   }
+  { start_lv: self.start_lv + start, text: sliced_text, count: end - start, }
 }
 
 ///|

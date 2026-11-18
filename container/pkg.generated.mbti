@@ -34,10 +34,10 @@ pub fn Document::clear_undo(Self) -> Unit
 pub fn Document::create_node(Self, parent~ : TreeNodeId) -> TreeNodeId raise DocumentError
 pub fn Document::create_node_after(Self, parent~ : TreeNodeId, after~ : TreeNodeId) -> TreeNodeId raise DocumentError
 pub fn Document::delete_node(Self, TreeNodeId) -> Unit raise DocumentError
-pub fn Document::delete_text(Self, TreeNodeId, Int) -> Unit raise DocumentError
+pub fn Document::delete_text(Self, TreeNodeId, Int32) -> Unit raise DocumentError
 pub fn Document::get_property(Self, TreeNodeId, String) -> String?
 pub fn Document::get_text(Self, TreeNodeId) -> String
-pub fn Document::insert_text(Self, TreeNodeId, Int, String) -> Unit raise DocumentError
+pub fn Document::insert_text(Self, TreeNodeId, Int32, String) -> Unit raise DocumentError
 pub fn Document::is_alive(Self, TreeNodeId) -> Bool
 pub fn Document::is_tracking(Self) -> Bool
 pub fn Document::move_node(Self, target~ : TreeNodeId, new_parent~ : TreeNodeId) -> Unit raise DocumentError
@@ -52,7 +52,7 @@ pub fn Document::replace_text(Self, TreeNodeId, String) -> Unit raise DocumentEr
 pub fn Document::set_property(Self, TreeNodeId, String, String) -> Unit
 pub fn Document::set_tracking(Self, Bool) -> Unit
 pub fn Document::sync(Self) -> SyncSession
-pub fn Document::text_len(Self, TreeNodeId) -> Int
+pub fn Document::text_len(Self, TreeNodeId) -> Int32
 pub fn[T, E : Error] Document::transaction(Self, () -> T raise E) -> T raise E
 pub fn Document::undo(Self) -> Bool raise DocumentError
 pub fn Document::version(Self) -> Version
@@ -63,17 +63,17 @@ pub(all) struct SyncMessage {
 pub fn SyncMessage::from_json_string(String) -> Self raise DocumentError
 pub fn SyncMessage::has_text_operations(Self) -> Bool
 pub fn SyncMessage::is_empty(Self) -> Bool
-pub fn SyncMessage::op_count(Self) -> Int
+pub fn SyncMessage::op_count(Self) -> Int32
 pub fn SyncMessage::to_canonical_bytes(Self) -> Bytes
 pub fn SyncMessage::to_json_string(Self) -> String
 
 pub(all) struct SyncReport {
   // private fields
 }
-pub fn SyncReport::applied_text_operations(Self) -> Int
-pub fn SyncReport::applied_tree_operations(Self) -> Int
-pub fn SyncReport::duplicate_operations(Self) -> Int
-pub fn SyncReport::pending_operations(Self) -> Int
+pub fn SyncReport::applied_text_operations(Self) -> Int32
+pub fn SyncReport::applied_tree_operations(Self) -> Int32
+pub fn SyncReport::duplicate_operations(Self) -> Int32
+pub fn SyncReport::pending_operations(Self) -> Int32
 
 pub(all) struct SyncSession {
   // private fields
@@ -83,19 +83,21 @@ pub fn SyncSession::clear_pending_sync(Self) -> Unit
 pub fn SyncSession::decode_json(Self, String) -> SyncMessage raise DocumentError
 pub fn SyncSession::export_all(Self) -> SyncMessage raise DocumentError
 pub fn SyncSession::export_since(Self, Version) -> SyncMessage raise DocumentError
-pub fn SyncSession::pending_sync_count(Self) -> Int
+pub fn SyncSession::pending_sync_count(Self) -> Int32
 
+#derive(Compare, Eq, Hash, @debug.Debug)
 pub(all) struct TreeNodeId {
   // private fields
-} derive(Compare, Eq, Hash, @debug.Debug)
-pub fn TreeNodeId::TreeNodeId(String, Int) -> Self raise DocumentError
+}
+pub fn TreeNodeId::TreeNodeId(String, Int32) -> Self raise DocumentError
 pub fn TreeNodeId::key(Self) -> String
 pub fn TreeNodeId::replica_id(Self) -> String
-pub fn TreeNodeId::sequence(Self) -> Int
+pub fn TreeNodeId::sequence(Self) -> Int32
 
+#derive(Eq, @debug.Debug)
 pub(all) struct Version {
   // private fields
-} derive(Eq, @debug.Debug)
+}
 pub fn Version::empty() -> Self
 pub fn Version::from_json_string(String) -> Self raise DocumentError
 pub fn Version::to_json_string(Self) -> String

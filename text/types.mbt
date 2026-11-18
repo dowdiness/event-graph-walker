@@ -4,9 +4,10 @@
 
 ///|
 /// Negative values are clamped to 0 during construction.
+#derive(Debug, Eq)
 pub(all) struct Pos {
   priv value : Int32
-} derive(Debug, Eq)
+}
 
 ///| Create a position at the given index.
 
@@ -26,10 +27,11 @@ pub fn Pos::value(self : Pos) -> Int32 {
 /// Text range representing a contiguous span of text.
 ///
 /// `start` is inclusive, `end` is exclusive (half-open interval).
+#derive(Debug, Eq)
 pub struct Range {
   priv start : Pos
   priv end : Pos
-} derive(Debug, Eq)
+}
 
 ///|
 /// Create a range from two ordered positions.
@@ -65,9 +67,10 @@ pub fn Range::end(self : Range) -> Pos {
 /// Opaque version identifier representing a document state at a point in time.
 /// Exact checkpoint and sparse membership semantics are owned by the causal
 /// graph; this façade only preserves the public text type.
+#derive(Debug, Eq, Hash)
 pub(all) struct Version {
   priv graph_version : @causal_graph.GraphVersion
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 pub impl Show for Version with fn output(self, logger) {

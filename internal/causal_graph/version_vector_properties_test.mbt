@@ -4,10 +4,11 @@
 // using Arbitrary and Shrink traits for automatic test generation and minimization.
 
 ///|
+#derive(Debug)
 struct VersionVectorPair {
   a : @causal_graph.VersionVector
   b : @causal_graph.VersionVector
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VersionVectorPair with fn arbitrary(size, rs) {
@@ -21,11 +22,12 @@ impl @quickcheck.Arbitrary for VersionVectorPair with fn arbitrary(size, rs) {
 impl @shrink.Shrink for VersionVectorPair
 
 ///|
+#derive(Debug)
 struct VersionVectorTriple {
   a : @causal_graph.VersionVector
   b : @causal_graph.VersionVector
   c : @causal_graph.VersionVector
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VersionVectorTriple with fn arbitrary(size, rs) {

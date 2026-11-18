@@ -8,6 +8,7 @@ This directory contains migration guides for breaking API changes, protocol sche
 
 | Target Upgrade | Type | Guide | Summary |
 | :--- | :--- | :--- | :--- |
+| **v0.10.0** | Compiler / Dependencies | [Migrating to v0.10](to-v0.10.md) | MoonBit 0.10.21 floor and typed-error rle/btree/order-tree dependencies. |
 | **v0.9.0** | Compiler / Source API | [Migrating to v0.9](to-v0.9.md) | MoonBit 0.10.15 floor, published dependencies, and text transition API rename. |
 | **Text Schema 2** | Protocol / Wire | [Text Schema 2 Migration](text-schema-2.md) | Coordinated breaking upgrade for text peers and persisted `Version` checkpoints. |
 | **v0.5.0** | Source API | [Migrating to v0.5](to-v0.5.md) | Opaque `text.Range` fields with validated constructors raising `TextError::InvalidRange`. |

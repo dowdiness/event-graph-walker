@@ -11,12 +11,14 @@ import {
 // Errors
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub enum ApplyDisposition {
   CausallyComplete
   PendingDependencies
-} derive(Eq, @debug.Debug)
-pub fn ApplyDisposition::ApplyDisposition(Int) -> Self
+}
+pub fn ApplyDisposition::ApplyDisposition(Int32) -> Self
 
+#derive(Eq, @debug.Debug)
 pub enum Decision {
   SendVersion
   RequestFullSync
@@ -25,12 +27,13 @@ pub enum Decision {
   ReportRecovered
   ReportFailure
   Escalate
-} derive(Eq, @debug.Debug)
+}
 
+#derive(Eq, @debug.Debug)
 pub enum FailureDisposition {
   Recoverable
   Terminal
-} derive(Eq, @debug.Debug)
+}
 pub fn FailureDisposition::FailureDisposition(@sync.Failure) -> Self
 pub fn FailureDisposition::recoverable() -> Self
 

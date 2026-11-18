@@ -143,8 +143,8 @@ fn p2_boundary_apply_each(
         }
       Err(
         DocumentError::OpLog(
-          @oplog.OpLogError::PartialApplyChanges(committed~, error~)
-        )
+          @oplog.OpLogError::PartialApplyChanges(committed~, error~),
+        ),
       ) =>
         match failure_index {
           Some(expected) if index == expected => {

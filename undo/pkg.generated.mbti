@@ -15,41 +15,46 @@ pub fn UndoError::is_retryable(Self) -> Bool
 pub fn UndoError::message(Self) -> String
 
 // Types and methods
+#derive(Eq, @debug.Debug)
 pub enum CompensatingEditResult {
   Applied
   Stale
-} derive(Eq, @debug.Debug)
+}
 pub fn CompensatingEditResult::applied() -> Self
 pub fn CompensatingEditResult::stale() -> Self
 
-type UndoGroup derive(@debug.Debug)
+#derive(@debug.Debug)
+type UndoGroup
 
-type UndoItem derive(@debug.Debug)
+#derive(@debug.Debug)
+type UndoItem
 
+#derive(@debug.Debug)
 pub struct UndoManager {
   // private fields
-} derive(@debug.Debug)
+}
 pub fn UndoManager::can_redo(Self) -> Bool
 pub fn UndoManager::can_undo(Self) -> Bool
 pub fn UndoManager::clear(Self) -> Unit
 pub fn UndoManager::is_tracking(Self) -> Bool
-pub fn UndoManager::new(String, capture_timeout_ms? : Int) -> Self
-pub fn UndoManager::record_delete(Self, Int, String, Int, content? : String?) -> Unit
-pub fn UndoManager::record_insert(Self, Int, String, Int, content? : String?) -> Unit
+pub fn UndoManager::new(String, capture_timeout_ms? : Int32) -> Self
+pub fn UndoManager::record_delete(Self, Int32, String, Int32, content? : String?) -> Unit
+pub fn UndoManager::record_insert(Self, Int32, String, Int32, content? : String?) -> Unit
 pub fn[D : Undoable] UndoManager::redo(Self, D) -> Bool raise UndoError
 pub fn UndoManager::set_tracking(Self, Bool) -> Unit
 pub fn UndoManager::stop_capturing(Self) -> Unit
 pub fn[D : Undoable] UndoManager::undo(Self, D) -> Bool raise UndoError
 
+#derive(Eq, @debug.Debug)
 pub enum UndoOpType {
   Insert
   Delete
-} derive(Eq, @debug.Debug)
+}
 
 // Type aliases
 
 // Traits
 pub(open) trait Undoable {
-  fn delete_lv(Self, Int) -> CompensatingEditResult raise UndoError
-  fn undelete_lv(Self, Int) -> CompensatingEditResult raise UndoError
+  fn delete_lv(Self, Int32) -> CompensatingEditResult raise UndoError
+  fn undelete_lv(Self, Int32) -> CompensatingEditResult raise UndoError
 }

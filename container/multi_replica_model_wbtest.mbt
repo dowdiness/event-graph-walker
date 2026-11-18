@@ -1,6 +1,7 @@
 ///| Generated multi-replica convergence coverage for the container façade.
 
 ///|
+#derive(Debug)
 enum ContainerModelAction {
   Create(Int32)
   MoveToRoot(Int32, Int32)
@@ -13,13 +14,14 @@ enum ContainerModelAction {
   Redo(Int32)
   Sync(Int32, Int32)
   DuplicateSync(Int32, Int32)
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct ContainerModelTrace {
   replica_count : Int32
   actions : Array[ContainerModelAction]
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for ContainerModelTrace with fn arbitrary(size, rs) {
