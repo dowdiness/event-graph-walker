@@ -6,17 +6,19 @@
 
 ///|
 /// A single tree action: create a node, move it, or delete it.
+#derive(Debug)
 enum TreeAction {
   Create(Int32)
   Move(Int32, Int32)
   Delete(Int32)
-} derive(Debug)
+}
 
 ///|
 /// A scenario consisting of a sequence of tree actions for property testing.
+#derive(Debug)
 struct TreeScenario {
   actions : Array[TreeAction]
-} derive(Debug)
+}
 
 ///|
 /// Arbitrary instance for TreeScenario.

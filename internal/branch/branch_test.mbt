@@ -36,7 +36,7 @@ test "merge_remote_ops wraps pending OpLog ConflictingIdentity atomically" {
   }
   match result {
     Err(
-      @branch.BranchError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~))
+      @branch.BranchError::OpLog(@oplog.OpLogError::ConflictingIdentity(raw~)),
     ) => assert_eq(raw, @core.RawVersion("branch-pending", 0))
     _ => fail("expected wrapped identity conflict")
   }

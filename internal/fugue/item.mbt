@@ -30,7 +30,8 @@
 
 ///|
 /// Logical Version (local sequence number)
-pub(all) struct Lv(Int32) derive(Debug, Eq, Compare, Default, Hash)
+#derive(Debug, Eq, Compare, Default, Hash)
+pub(all) struct Lv(Int32)
 
 ///|
 pub impl Show for Lv with fn output(self, logger) {
@@ -48,7 +49,8 @@ pub impl Show for Lv with fn output(self, logger) {
 /// Existing code still uses `Lv` at most call sites. Later refactor slices will
 /// migrate storage and merge logic to use `ItemId` where block-local sequence
 /// identity is the real concern.
-pub(all) struct ItemId(Int32) derive(Debug, Eq, Compare, Default, Hash)
+#derive(Debug, Eq, Compare, Default, Hash)
+pub(all) struct ItemId(Int32)
 
 ///|
 pub impl Show for ItemId with fn output(self, logger) {
@@ -57,11 +59,13 @@ pub impl Show for ItemId with fn output(self, logger) {
 
 ///|
 /// Lamport Timestamp for causal ordering
-pub(all) struct Timestamp(Int32) derive(Debug, Eq, Compare, Default)
+#derive(Debug, Eq, Compare, Default)
+pub(all) struct Timestamp(Int32)
 
 ///|
 /// Replica identifier
-pub(all) struct ReplicaId(String) derive(Debug, Eq, Compare)
+#derive(Debug, Eq, Compare)
+pub(all) struct ReplicaId(String)
 
 ///|
 /// The root node's logical version sentinel
@@ -69,10 +73,11 @@ pub let root_lv : Lv = Lv(-1)
 
 ///|
 /// Side of parent node where item is attached
+#derive(Debug, Eq)
 pub enum Side {
   Left
   Right
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl Show for Side with fn output(self, logger) {
@@ -84,6 +89,7 @@ pub impl Show for Side with fn output(self, logger) {
 ///
 /// Items are never removed — deleted content becomes a **tombstone** (`deleted = true`)
 /// so that concurrent operations that reference it can still resolve correctly.
+#derive(Debug, Eq)
 pub(all) struct Item[T] {
   /// Current item identity.
   ///
@@ -122,7 +128,7 @@ pub(all) struct Item[T] {
   /// Per-replica operation sequence. Together with `agent`, this is the
   /// stable event identity used by the EG-walker reference implementation.
   sequence : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl[T : Debug] Show for Item[T] with fn output(self, logger) {
@@ -150,6 +156,7 @@ impl[T : Eq] Compare for Item[T] with fn compare(self, other) -> Int32 {
 
 ///|
 /// Insert operation descriptor
+#derive(Debug)
 pub(all) struct InsertOp[T] {
   id : Lv
   content : T
@@ -157,7 +164,7 @@ pub(all) struct InsertOp[T] {
   origin_right : Lv? // None = no right constraint
   timestamp : Timestamp
   agent : ReplicaId
-} derive(Debug)
+}
 
 ///|
 /// Create a new item

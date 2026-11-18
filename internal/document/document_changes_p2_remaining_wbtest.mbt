@@ -293,8 +293,8 @@ test "P2 red pending limit rejection is fully atomic" {
   match result {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PendingLimitExceeded(limit~, required~)
-      )
+        @oplog.OpLogError::PendingLimitExceeded(limit~, required~),
+      ),
     ) => {
       assert_eq(limit, 0)
       assert_eq(required, 1)
@@ -763,8 +763,8 @@ test "P2 wrapper apply_remote translates partial change application" {
   match result {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PartialApplyChanges(committed~, error~)
-      )
+        @oplog.OpLogError::PartialApplyChanges(committed~, error~),
+      ),
     ) => {
       assert_eq(committed.length(), 0)
       match error {

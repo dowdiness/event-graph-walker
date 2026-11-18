@@ -5,22 +5,25 @@
 
 ///|
 /// A single text edit captured during generation (position-based).
+#derive(Debug)
 enum TextEdit {
   Insert(Int32, String)
   Delete(Int32)
-} derive(Debug)
+}
 
 ///|
 /// Generated operations for property testing (real TextState edits).
+#derive(Debug)
 struct RealOps {
   edits : Array[TextEdit]
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct RealOpsPair {
   left : RealOps
   right : RealOps
-} derive(Debug)
+}
 
 ///|
 /// Arbitrary instance for RealOps

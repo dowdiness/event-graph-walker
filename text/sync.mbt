@@ -369,11 +369,12 @@ pub fn SyncMessage::op_count(self : SyncMessage) -> Int32 {
 
 ///|
 /// Result of applying a text synchronization message.
+#derive(Debug, Eq)
 pub(all) struct SyncReport {
   priv applied_operations : Int32
   priv duplicate_operations : Int32
   priv pending_operations : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn SyncReport::applied_operations(self : SyncReport) -> Int32 {
@@ -514,20 +515,23 @@ fn exact_object_fields(
 /// Derived `FromJson` intentionally handles field type conversion, while the
 /// surrounding decoders retain responsibility for rejecting unknown fields
 /// and enforcing protocol semantics and resource limits.
+#derive(FromJson)
 priv struct WireIdentity {
   replica_id : String
   sequence : Int32
-} derive(FromJson)
+}
 
 ///|
+#derive(FromJson)
 priv struct WireVersionEnvelope {
   schema : Int32
   format : String
   frontier : Array[Json]
   ranges : Array[Json]
-} derive(FromJson)
+}
 
 ///|
+#derive(FromJson)
 priv struct WireOperation {
   id : Json
   parents : Array[Json]
@@ -535,15 +539,16 @@ priv struct WireOperation {
   content : Json
   origin_left : Json
   origin_right : Json
-} derive(FromJson)
+}
 
 ///|
+#derive(FromJson)
 priv struct WireSyncEnvelope {
   schema : Int32
   format : String
   operations : Array[Json]
   heads : Array[Json]
-} derive(FromJson)
+}
 
 ///|
 fn decode_identity(json : Json) -> @core.RawVersion raise {

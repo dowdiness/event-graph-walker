@@ -12,13 +12,8 @@
 /// - Version Vector: {"alice": 4, "bob": 8}
 ///
 /// This provides O(1) comparison for common operations and reduces memory usage.
-pub struct VersionVector(Map[String, Int32]) derive (
-  Debug,
-  Eq,
-  Default,
-  ToJson,
-  FromJson,
-)
+#derive(Debug, Eq, Default, ToJson, FromJson)
+pub struct VersionVector(Map[String, Int32])
 
 ///|
 pub impl Show for VersionVector with fn output(self, logger) {

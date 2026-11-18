@@ -1,20 +1,22 @@
 ///| Generated properties for general remote operation delivery.
 
 ///|
+#derive(Debug)
 struct RemoteDeliveryTrace {
   suffix_count : Int32
   source_seed : Int32
   schedule_seed : Int32
-} derive(Debug)
+}
 
 ///|
+#derive(Debug, Eq)
 struct RemoteDeliverySnapshot {
   raw : @core.RawVersion
   parents : Array[@core.RawVersion]
   content : @core.OpContent
   origin_left : @core.RawVersion?
   origin_right : @core.RawVersion?
-} derive(Debug, Eq)
+}
 
 ///|
 struct RemoteDeliveryScenario {
@@ -35,6 +37,7 @@ struct RemoteDeliveryModel {
 }
 
 ///|
+#derive(Debug)
 struct RemoteDeliveryEvidence {
   valid : Bool
   out_of_order : Bool
@@ -47,7 +50,7 @@ struct RemoteDeliveryEvidence {
   duplicate_while_pending : Bool
   duplicate_after_apply_changes : Bool
   final_count : Int32
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for RemoteDeliveryTrace with fn arbitrary(

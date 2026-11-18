@@ -1,6 +1,7 @@
 ///| Generated model traces for the private remote-change application pending-changes owner lifecycle.
 
 ///|
+#derive(Debug)
 enum PendingChangesLifecycleEvent {
   MalformedBegin
   StaleBegin
@@ -13,14 +14,15 @@ enum PendingChangesLifecycleEvent {
   PartialAcknowledge
   Compact
   AcknowledgeRest
-} derive(Debug)
+}
 
 ///|
+#derive(Debug)
 struct PendingChangesLifecycleTrace {
   depth : Int32
   arrival_mode : Int32
   acknowledgement_prefix : Int32
-} derive(Debug)
+}
 
 ///|
 struct PendingChangesLifecycleFixture {

@@ -162,8 +162,8 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     match legacy_result {
       Err(
         DocumentError::OpLog(
-          @oplog.OpLogError::PartialApplyChanges(committed~, error~)
-        )
+          @oplog.OpLogError::PartialApplyChanges(committed~, error~),
+        ),
       ) => {
         assert_eq(committed.length(), failed_index)
         p2_assert_operation_prefix(committed, incoming, failed_index)
@@ -415,8 +415,8 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   match legacy {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PartialApplyChanges(committed~, error~)
-      )
+        @oplog.OpLogError::PartialApplyChanges(committed~, error~),
+      ),
     ) => {
       assert_eq(committed.length(), 0)
       ignore(error)
@@ -669,8 +669,8 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   match typed_limit_result {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PendingLimitExceeded(limit~, required~)
-      )
+        @oplog.OpLogError::PendingLimitExceeded(limit~, required~),
+      ),
     ) => {
       assert_eq(limit, 0)
       assert_eq(required, 1)
@@ -680,8 +680,8 @@ test "P2.3 differential gate covers malformed and lifecycle rejection" {
   match legacy_limit_result {
     Err(
       DocumentError::OpLog(
-        @oplog.OpLogError::PendingLimitExceeded(limit~, required~)
-      )
+        @oplog.OpLogError::PendingLimitExceeded(limit~, required~),
+      ),
     ) => {
       assert_eq(limit, 0)
       assert_eq(required, 1)

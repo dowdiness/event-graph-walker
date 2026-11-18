@@ -21,11 +21,12 @@ fn join_chunks(chunks : Array[String]) -> String {
 }
 
 ///|
+#derive(Debug)
 struct VisibleRunModel {
   start_lv : Int32
   chunks : Array[String]
   text : String
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VisibleRunModel with fn arbitrary(
@@ -53,11 +54,12 @@ fn model_to_run(model : VisibleRunModel) -> VisibleRun {
 }
 
 ///|
+#derive(Debug)
 struct VisibleRunSlice {
   model : VisibleRunModel
   start : Int32
   end : Int32
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VisibleRunSlice with fn arbitrary(
@@ -77,10 +79,11 @@ impl @quickcheck.Arbitrary for VisibleRunSlice with fn arbitrary(
 ///|
 
 ///|
+#derive(Debug)
 struct VisibleRunSplit {
   model : VisibleRunModel
   split : Int32
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for VisibleRunSplit with fn arbitrary(

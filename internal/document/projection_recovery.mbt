@@ -5,7 +5,7 @@ priv enum ProjectionHealth {
   Ready
   RecoveryRequired(
     frontier~ : @core.Frontier,
-    checkout~ : (@oplog.OpLog, @core.Frontier) -> @branch.Branch raise @branch.BranchError
+    checkout~ : (@oplog.OpLog, @core.Frontier) -> @branch.Branch raise @branch.BranchError,
   )
 }
 

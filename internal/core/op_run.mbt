@@ -2,11 +2,12 @@
 
 ///|
 /// Compressed content for a run of operations.
+#derive(Debug, Eq)
 pub enum OpRunContent {
   Inserts(Array[Char]) // One char per op, O(1) index access, O(1) amortized append
   Deletes
   Undeletes
-} derive(Debug, Eq)
+}
 
 ///|
 /// A compressed run of consecutive operations from the same agent.
@@ -17,6 +18,7 @@ pub enum OpRunContent {
 /// Only linear left-to-right typing compresses: each op's parent must be the
 /// immediately preceding op in the run, and for inserts the origin_left must
 /// chain sequentially while origin_right stays constant.
+#derive(Debug, Eq)
 pub struct OpRun {
   start_lv : Int32
   agent : String
@@ -26,7 +28,7 @@ pub struct OpRun {
   origin_left : RawVersion?
   origin_right : RawVersion?
   count : Int32
-} derive(Debug, Eq)
+}
 
 ///|
 /// Create a single-element OpRun from an Op.

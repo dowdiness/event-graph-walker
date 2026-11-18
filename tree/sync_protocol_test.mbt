@@ -74,8 +74,8 @@ test "tree receiver limits govern decode and later apply" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected receiver encoded-byte limit")
   } noraise {
@@ -87,8 +87,8 @@ test "tree receiver limits govern decode and later apply" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected encoded-byte limit during tree apply")
   } noraise {

@@ -89,11 +89,12 @@ priv enum ApplyChangesStorage {
 
 ///|
 /// A max-first queue entry. Negative keys invert the desired min order.
+#derive(Eq, Compare)
 priv struct ReadyChange {
   round_key : Int32
   arrival_key : Int32
   raw : @core.RawVersion
-} derive(Eq, Compare)
+}
 
 ///|
 /// One-shot action prepared without changing causal history or canonical pending state.

@@ -194,7 +194,7 @@ fn main {
         | "produce"
         | "consume"
         | "legacy-history"
-        | "oracle"
+        | "oracle",
       ) => command_index = index
       _ => ()
     }

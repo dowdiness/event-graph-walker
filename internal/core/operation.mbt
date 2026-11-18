@@ -2,11 +2,12 @@
 
 ///|
 /// Operation content - either insert or delete
+#derive(Eq, Debug, FromJson, ToJson)
 pub enum OpContent {
   Insert(String) // Insert text
   Delete // Delete character
   Undelete // Undelete (revive) a previously deleted character
-} derive(Eq, Debug, FromJson, ToJson)
+}
 
 ///|
 pub impl Show for OpContent with fn output(self, logger) {
@@ -15,6 +16,7 @@ pub impl Show for OpContent with fn output(self, logger) {
 
 ///|
 /// Operation structure with causal and FugueMax metadata
+#derive(Debug, ToJson)
 pub struct Op {
   priv lv : Int32 // Local version when this op was created
   priv parents : Array[RawVersion] // Causal dependencies (frontier)
@@ -23,7 +25,7 @@ pub struct Op {
   priv content : OpContent // Operation content
   priv origin_left : RawVersion? // FugueMax: item to the left
   priv origin_right : RawVersion? // FugueMax: item to the right
-} derive(Debug, ToJson)
+}
 
 ///|
 pub impl Show for Op with fn output(self, logger) {

@@ -4,12 +4,13 @@
 /// They verify visible semantics only, not internal storage shape.
 
 ///|
+#derive(Debug)
 enum BlockEdit {
   Insert(Int32, Int32, String)
   Delete(Int32, Int32)
   Replace(Int32, String)
   DeleteNode(Int32)
-} derive(Debug)
+}
 
 ///|
 pub impl Show for BlockEdit with fn output(self, logger) {
@@ -17,9 +18,10 @@ pub impl Show for BlockEdit with fn output(self, logger) {
 }
 
 ///|
+#derive(Debug)
 struct BlockScenario {
   edits : Array[BlockEdit]
-} derive(Debug)
+}
 
 ///|
 pub impl Show for BlockScenario with fn output(self, logger) {

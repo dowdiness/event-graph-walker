@@ -1,6 +1,7 @@
 ///| UndoManager - LV-based undo/redo plugin, generic over Undoable
 
 ///|
+#derive(Debug)
 pub struct UndoManager {
   priv agent_id : String
   priv mut undo_stack : Array[UndoGroup]
@@ -9,7 +10,7 @@ pub struct UndoManager {
   priv mut last_change_ms : Int32
   priv mut force_new_group : Bool
   priv mut tracking_enabled : Bool
-} derive(Debug)
+}
 
 ///|
 /// Create a new UndoManager for the given agent.

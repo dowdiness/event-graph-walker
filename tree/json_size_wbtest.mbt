@@ -9,8 +9,8 @@ test "tree JSON size counts exact UTF-8 bytes" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=9,
-        actual=10
-      )
+        actual=10,
+      ),
     ) => ()
     _ => fail("expected exact UTF-8 encoded size")
   } noraise {

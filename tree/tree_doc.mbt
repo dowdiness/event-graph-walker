@@ -2,9 +2,10 @@
 
 ///|
 /// Stable façade-owned tree node identifier.
+#derive(Eq, Hash, Debug, Compare)
 pub(all) struct TreeNodeId {
   priv inner : @container.TreeNodeId
-} derive(Eq, Hash, Debug, Compare)
+}
 
 ///|
 /// Construct a validated non-sentinel node identifier.
@@ -52,9 +53,10 @@ pub let trash_id : TreeNodeId = TreeNodeId::from_inner(@container.trash_id)
 
 ///|
 /// Opaque tree version.
+#derive(Eq)
 pub(all) struct Version {
   priv inner : @container.Version
-} derive(Eq)
+}
 
 ///|
 fn Version::Version(inner : @container.Version) -> Version {

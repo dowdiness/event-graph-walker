@@ -10,11 +10,12 @@
 /// Document-order adjacency is guaranteed by the build order (tree
 /// traversal emits items in document order, so two successive visible
 /// items that also have consecutive LVs must be adjacent).
+#derive(Debug, Eq)
 struct VisibleRun {
   start_lv : Int32 // First LV in this visible run
   text : String // Concatenated visible text
   count : Int32 // Number of items in run
-} derive(Debug, Eq)
+}
 
 ///|
 pub impl @rle.HasLength for VisibleRun with fn length(self) -> Int32 {

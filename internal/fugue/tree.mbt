@@ -4,6 +4,7 @@
 
 ///|
 /// FugueTree - maintains ordered sequence with CRDT properties
+#derive(Debug)
 pub struct FugueTree[T] {
   items : Array[Item[T]?] // Dense array indexed by ItemId
   lv_index : Array[ItemId?] // Sparse LV -> ItemId lookup bridge
@@ -12,7 +13,7 @@ pub struct FugueTree[T] {
   root_children : Array[ItemId] // Root's children (root not in items array)
   children : Array[Array[ItemId]] // Children index, dense by ItemId
   jump_ancestors : JumpAncestors // Binary lifting for O(log n) ancestor queries
-} derive(Debug)
+}
 
 ///|
 /// Creates a default empty FugueTree with a virtual root node.

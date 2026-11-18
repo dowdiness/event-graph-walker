@@ -13,23 +13,23 @@ priv enum UndoItem {
     old_parent~ : @mt.TreeNodeId,
     old_pos~ : @fi.FractionalIndex,
     new_parent~ : @mt.TreeNodeId,
-    new_pos~ : @fi.FractionalIndex
+    new_pos~ : @fi.FractionalIndex,
   )
   TreeCreate(
     target~ : @mt.TreeNodeId,
     parent~ : @mt.TreeNodeId,
-    pos~ : @fi.FractionalIndex
+    pos~ : @fi.FractionalIndex,
   )
   TreeDelete(
     target~ : @mt.TreeNodeId,
     old_parent~ : @mt.TreeNodeId,
-    old_pos~ : @fi.FractionalIndex
+    old_pos~ : @fi.FractionalIndex,
   )
   PropertySet(
     target~ : @mt.TreeNodeId,
     key~ : String,
     old_value~ : String?,
-    new_value~ : String
+    new_value~ : String,
   )
 }
 

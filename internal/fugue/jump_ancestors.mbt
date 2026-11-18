@@ -2,10 +2,11 @@
 ///  Exploits FugueTree's append-only structure: jump pointers are permanent.
 
 ///|
+#derive(Debug)
 struct JumpAncestors {
   depth : Array[Int32] // depth[item_id.0], -1 = gap (non-tree slot)
   jump : Array[Array[ItemId]] // jump[item_id.0][k] = 2^k-th ancestor, [] = gap
-} derive(Debug)
+}
 
 ///|
 fn JumpAncestors::new() -> JumpAncestors {

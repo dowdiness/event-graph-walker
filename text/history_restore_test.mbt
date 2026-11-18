@@ -146,7 +146,7 @@ test "restore preserves deleted origins and conflicting identity evidence" {
     let before = try! receiver.sync().export_all().to_canonical_bytes()
     try receiver.sync().apply(conflict) catch {
       @text.TextError::SyncFailed(
-        @sync.Failure::ConflictingIdentity(replica_id="author", sequence=0)
+        @sync.Failure::ConflictingIdentity(replica_id="author", sequence=0),
       ) => ()
       _ => fail("expected preserved identity conflict evidence")
     } noraise {

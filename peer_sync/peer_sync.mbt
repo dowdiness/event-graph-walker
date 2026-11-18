@@ -19,20 +19,23 @@ pub struct State {
 
 ///|
 /// Causal meaning of a successful EGW sync apply.
+#derive(Debug, Eq)
 pub enum ApplyDisposition {
   CausallyComplete
   PendingDependencies
-} derive(Debug, Eq)
+}
 
 ///|
 /// Recovery meaning of an EGW synchronization failure.
+#derive(Debug, Eq)
 pub enum FailureDisposition {
   Recoverable
   Terminal
-} derive(Debug, Eq)
+}
 
 ///|
 /// Peer-free action selected by the EGW synchronization policy.
+#derive(Debug, Eq)
 pub enum Decision {
   SendVersion
   RequestFullSync
@@ -41,7 +44,7 @@ pub enum Decision {
   ReportRecovered
   ReportFailure
   Escalate
-} derive(Debug, Eq)
+}
 
 ///|
 /// Private semantic events used to share the transition implementation.

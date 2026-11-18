@@ -19,10 +19,11 @@ pub type AgentId = String
 ///
 /// The decoder requires a non-empty agent and non-negative sequence. Replica
 /// uniqueness remains a deployment and protocol responsibility.
+#derive(Eq, Compare, Debug, ToJson)
 pub struct RawVersion {
   agent : String
   seq : Int32
-} derive(Eq, Compare, Debug, ToJson)
+}
 
 ///|
 pub impl @json.FromJson for RawVersion with fn from_json(json, path) {

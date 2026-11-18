@@ -1,10 +1,11 @@
 ///| Types for undo/redo tracking
 
 ///|
+#derive(Debug, Eq)
 pub enum CompensatingEditResult {
   Applied
   Stale
-} derive(Debug, Eq)
+}
 
 ///|
 pub fn CompensatingEditResult::applied() -> CompensatingEditResult {
@@ -17,28 +18,31 @@ pub fn CompensatingEditResult::stale() -> CompensatingEditResult {
 }
 
 ///|
+#derive(Debug, Eq)
 pub enum UndoOpType {
   Insert
   Delete
-} derive(Debug, Eq)
+}
 
 ///|
 /// A single tracked operation.
 /// `target_lv` is the LV of the element being inserted/deleted (NOT the op LV).
 /// For inserts: the inserted item's LV.
 /// For deletes: the deleted item's LV (the tombstone to revive on undo).
+#derive(Debug)
 struct UndoItem {
   target_lv : Int32
   op_type : UndoOpType
   content : String?
-} derive(Debug)
+}
 
 ///|
 /// A group of operations undone/redone together
+#derive(Debug)
 struct UndoGroup {
   items : Array[UndoItem]
   timestamp : Int32
-} derive(Debug)
+}
 
 ///|
 /// Errors that can occur during undo/redo operations

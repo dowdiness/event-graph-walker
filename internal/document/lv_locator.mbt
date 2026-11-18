@@ -6,7 +6,7 @@ priv enum LocatorSiblings {
     left~ : LocatorSiblings,
     lv~ : Int32,
     right~ : LocatorSiblings,
-    height~ : Int32
+    height~ : Int32,
   )
 }
 

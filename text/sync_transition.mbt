@@ -1,9 +1,10 @@
 ///|
 /// One authority-owned visible-text effect in Unicode-scalar coordinates.
+#derive(Debug, Eq)
 pub(all) enum TextEffect {
   Insert(Pos, String)
   Delete(Range)
-} derive(Debug, Eq)
+}
 
 ///|
 pub(all) enum TextEffectAvailability {

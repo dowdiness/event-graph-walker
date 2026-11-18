@@ -65,10 +65,11 @@ fn make_op_run(
 }
 
 ///|
+#derive(Debug)
 struct CompatibleOpRunPair {
   first : OpRun
   second : OpRun
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for CompatibleOpRunPair with fn arbitrary(
@@ -136,11 +137,12 @@ impl @quickcheck.Arbitrary for CompatibleOpRunPair with fn arbitrary(
 }
 
 ///|
+#derive(Debug)
 struct CompatibleOpRunTriple {
   first : OpRun
   second : OpRun
   third : OpRun
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for CompatibleOpRunTriple with fn arbitrary(
@@ -219,9 +221,10 @@ impl @quickcheck.Arbitrary for CompatibleOpRunTriple with fn arbitrary(
 }
 
 ///|
+#derive(Debug)
 struct OpRunSingle {
   run : OpRun
-} derive(Debug)
+}
 
 ///|
 impl @quickcheck.Arbitrary for OpRunSingle with fn arbitrary(

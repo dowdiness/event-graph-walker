@@ -19,8 +19,8 @@ test "SyncSession change application uses per-call limits atomically" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected per-call encoded byte limit")
   } noraise {
@@ -43,7 +43,7 @@ test "text sync rejects conflicting duplicate identities in one message atomical
     "{\"id\":{\"replica_id\":\"alice\",\"sequence\":0},\"parents\":[],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[]}"
   try @text.SyncMessage::from_json_string(conflict) catch {
     @text.TextError::SyncFailed(
-      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0)
+      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=0),
     ) => ()
     _ => fail("expected in-message ConflictingIdentity")
   } noraise {
@@ -69,7 +69,7 @@ test "text sync retains authoritative pending payload after identity conflict" {
   )
   try receiver.sync().apply(conflict) catch {
     @text.TextError::SyncFailed(
-      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1)
+      @sync.Failure::ConflictingIdentity(replica_id="alice", sequence=1),
     ) => ()
     _ => fail("expected pending ConflictingIdentity")
   } noraise {
@@ -118,8 +118,8 @@ test "text sync retains authoritative pending payload after identity conflict" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::PendingOperations,
         limit=0,
-        actual=1
-      )
+        actual=1,
+      ),
     ) => ()
     _ => fail("expected pending-operation limit")
   } noraise {
@@ -329,8 +329,8 @@ test "receiver encoded-byte limit succeeds at boundary and rejects one under" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected encoded byte limit")
   } noraise {
@@ -354,8 +354,8 @@ test "receiver encoded-byte limit also covers direct exported messages" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected encoded byte limit")
   } noraise {
@@ -490,8 +490,8 @@ test "decode accepts structurally valid JSON and apply enforces receiver limits"
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected receiver encoded byte limit during apply")
   } noraise {
@@ -511,8 +511,8 @@ test "receiver-specific decoder may raise the default encoded byte limit" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::EncodedBytes,
         limit=_,
-        actual=_
-      )
+        actual=_,
+      ),
     ) => ()
     _ => fail("expected apply encoded byte limit")
   } noraise {
@@ -537,8 +537,8 @@ test "receiver-specific decoder honors raised parent limits in validation" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::ParentsPerOperation,
         limit=256,
-        actual=257
-      )
+        actual=257,
+      ),
     ) => ()
     _ => fail("expected receiver parent limit during apply")
   } noraise {
@@ -563,8 +563,8 @@ test "duplicate-heavy decoded operation limit counts wire operations" {
       @sync.Failure::LimitExceeded(
         kind=@sync.LimitKind::DecodedOperations,
         limit=1,
-        actual=2
-      )
+        actual=2,
+      ),
     ) => ()
     _ => fail("wire operation count must survive canonical deduplication")
   } noraise {
