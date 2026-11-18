@@ -23,18 +23,18 @@ enum P2BoundaryLane {
 struct P2BoundaryObservation {
   case_name : String
   lane_name : String
-  count : Int
+  count : Int32
   elapsed_us : Double
-  prepare_calls : Int
-  commit_calls : Int
-  projection_attempts : Int
-  recovery_checkouts : Int
-  committed_count : Int
-  operation_count : Int
+  prepare_calls : Int32
+  commit_calls : Int32
+  projection_attempts : Int32
+  recovery_checkouts : Int32
+  committed_count : Int32
+  operation_count : Int32
   pending : Bool
-  pending_count : Int
+  pending_count : Int32
   projection_status : String
-  retained_work : Int
+  retained_work : Int32
 }
 
 ///|
@@ -63,7 +63,7 @@ fn p2_boundary_lane_name(lane : P2BoundaryLane) -> String {
 }
 
 ///|
-fn p2_boundary_pending_batch(prefix : String, count : Int) -> Array[@core.Op] {
+fn p2_boundary_pending_batch(prefix : String, count : Int32) -> Array[@core.Op] {
   let operations : Array[@core.Op] = []
   for index in 0..<count {
     let agent = prefix + "-" + index.to_string()
@@ -76,9 +76,9 @@ fn p2_boundary_pending_batch(prefix : String, count : Int) -> Array[@core.Op] {
 ///|
 fn p2_boundary_fixture(
   case : P2BoundaryCase,
-  count : Int,
-  iteration : Int,
-) -> (Document, Array[@core.Op], Int) {
+  count : Int32,
+  iteration : Int32,
+) -> (Document, Array[@core.Op], Int32) {
   let prefix = "p2-boundary-" +
     p2_boundary_case_name(case) +
     "-" +
@@ -112,7 +112,7 @@ fn p2_boundary_fixture(
 }
 
 ///|
-fn p2_boundary_failure_index(case : P2BoundaryCase, count : Int) -> Int? {
+fn p2_boundary_failure_index(case : P2BoundaryCase, count : Int32) -> Int32? {
   match case {
     Partial => Some(count / 2)
     Complete | DuplicateOnly | PendingOnly => None
@@ -126,7 +126,7 @@ fn p2_boundary_failure_index(case : P2BoundaryCase, count : Int) -> Int? {
 fn p2_boundary_apply_each(
   doc : Document,
   incoming : Array[@core.Op],
-  failure_index : Int?,
+  failure_index : Int32?,
 ) -> Unit {
   for index in 0..<incoming.length() {
     let result : Result[Unit, DocumentError] = Ok(
@@ -178,8 +178,8 @@ fn p2_boundary_apply_batch(
   doc : Document,
   incoming : Array[@core.Op],
   case : P2BoundaryCase,
-  failure_index : Int?,
-) -> (String, Int) {
+  failure_index : Int32?,
+) -> (String, Int32) {
   let result : Result[DocumentChanges, DocumentError] = Ok(
     doc.apply_changes(incoming),
   ) catch {
@@ -275,7 +275,7 @@ fn p2_boundary_apply_batch(
 }
 
 ///|
-fn p2_boundary_pending_probe(doc : Document) -> Int {
+fn p2_boundary_pending_probe(doc : Document) -> Int32 {
   let result : Result[DocumentChanges, DocumentError] = Ok(
     doc.apply_changes([]),
   ) catch {
@@ -296,9 +296,9 @@ fn p2_boundary_pending_probe(doc : Document) -> Int {
 ///|
 fn p2_boundary_expected_committed(
   case : P2BoundaryCase,
-  count : Int,
-  failure_index : Int?,
-) -> Int {
+  count : Int32,
+  failure_index : Int32?,
+) -> Int32 {
   match case {
     Complete => count
     DuplicateOnly | PendingOnly => 0
@@ -314,8 +314,8 @@ fn p2_boundary_expected_committed(
 fn p2_boundary_run(
   case : P2BoundaryCase,
   lane : P2BoundaryLane,
-  count : Int,
-  iteration : Int,
+  count : Int32,
+  iteration : Int32,
 ) -> P2BoundaryObservation {
   let (doc, incoming, initial_count) = p2_boundary_fixture(
     case, count, iteration,
@@ -490,7 +490,7 @@ fn p2_boundary_run(
 fn p2_boundary_bench_case(
   b : @bench.T,
   case : P2BoundaryCase,
-  count : Int,
+  count : Int32,
   lane : P2BoundaryLane,
 ) -> Unit {
   let benchmark_name = "bench: document change application boundary " +

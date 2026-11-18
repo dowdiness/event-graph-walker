@@ -1,7 +1,7 @@
 ///| Release baselines for v0.4 container synchronization and local histories.
 
 ///|
-fn benchmark_sequential_text(b : @bench.T, count : Int) -> Unit {
+fn benchmark_sequential_text(b : @bench.T, count : Int32) -> Unit {
   b.bench(fn() {
     let document = try! Document::new("text-benchmark")
     let block = try! document.create_node(parent=root_id)
@@ -35,7 +35,7 @@ test "container text sequential 100k" (b : @bench.T) {
 /// FugueTree::insert and retains the resulting visible count. With each
 /// origin_left set to the previous LV and no origin_right, every item is a
 /// right child of the preceding item.
-fn benchmark_fugue_sequential_right_insert(b : @bench.T, count : Int) -> Unit {
+fn benchmark_fugue_sequential_right_insert(b : @bench.T, count : Int32) -> Unit {
   let ops : Array[@fugue.InsertOp[String]] = Array::makei(count, index => {
     id: @fugue.Lv(index),
     content: "x",
@@ -80,7 +80,7 @@ test "container Stage2 FugueTree sequential Right-child insert 100k" (
 
 ///|
 /// Prepare sibling children once, then measure only the position lookup.
-fn benchmark_position_after_last_child(b : @bench.T, count : Int) -> Unit {
+fn benchmark_position_after_last_child(b : @bench.T, count : Int32) -> Unit {
   let document = try! Document::new("position-benchmark")
   for _index = 0; _index < count; _index = _index + 1 {
     ignore(try! document.create_node(parent=root_id))
@@ -140,7 +140,7 @@ fn benchmark_document_insert_text_append_pool(b : @bench.T) -> Unit {
   let pool_size = 4
   let documents : Array[Document] = []
   let blocks : Array[TreeNodeId] = []
-  let added : Array[Int] = []
+  let added : Array[Int32] = []
   for pool_index = 0; pool_index < pool_size; pool_index = pool_index + 1 {
     let document = try! Document::new(
       "public-text-append-" + pool_index.to_string(),
@@ -191,7 +191,7 @@ test "container Document insert_text append public 10k pool 4" (b : @bench.T) {
 fn benchmark_document_create_node_root_pool(b : @bench.T) -> Unit {
   let pool_size = 4
   let documents : Array[Document] = []
-  let added : Array[Int] = []
+  let added : Array[Int32] = []
   for pool_index = 0; pool_index < pool_size; pool_index = pool_index + 1 {
     let document = try! Document::new(
       "public-root-append-" + pool_index.to_string(),
@@ -232,7 +232,7 @@ test "container Document create_node root public 10k pool 4" (b : @bench.T) {
 }
 
 ///|
-fn benchmark_sequential_tree(b : @bench.T, count : Int) -> Unit {
+fn benchmark_sequential_tree(b : @bench.T, count : Int32) -> Unit {
   b.bench(fn() {
     let document = try! Document::new("tree-benchmark")
     for _index = 0; _index < count; _index = _index + 1 {
@@ -253,7 +253,7 @@ test "container tree sequential 10k" (b : @bench.T) {
 }
 
 ///|
-fn reverse_ordered_tree_message(count : Int) -> SyncMessage {
+fn reverse_ordered_tree_message(count : Int32) -> SyncMessage {
   let source = try! Document::new("reverse-source")
   for _index = 0; _index < count; _index = _index + 1 {
     let _ = try! source.create_node(parent=root_id)

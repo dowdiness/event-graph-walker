@@ -373,7 +373,7 @@ test "convergence: six orderings all converge" {
     { timestamp: 5, target: c, new_parent: b, position: pos, agent: "bob", },
   ]
   // Six different orderings (permutations)
-  let orderings : Array[Array[Int]] = [
+  let orderings : Array[Array[Int32]] = [
     [0, 1, 2, 3, 4],
     [4, 3, 2, 1, 0],
     [2, 0, 4, 1, 3],

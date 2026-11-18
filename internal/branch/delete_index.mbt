@@ -4,14 +4,14 @@
 /// of delete/undelete ops on a single item (typically 0-2).
 pub struct DeleteIndex {
   /// target raw version -> Array of op LVs that delete/undelete this item.
-  index : Map[@core.RawVersion, Array[Int]]
+  index : Map[@core.RawVersion, Array[Int32]]
 }
 
 ///|
 /// Result of LWW winner recomputation
 pub(all) struct DeleteWinner {
   deleted : Bool
-  ts : Int
+  ts : Int32
   agent : String
   is_undelete : Bool
 }
@@ -20,7 +20,7 @@ pub(all) struct DeleteWinner {
 /// Build the index by scanning all ops in the oplog once.
 /// O(total_ops) but done once per merge, not per retreated delete.
 pub fn DeleteIndex::build(oplog : @oplog.OpLog) -> DeleteIndex {
-  let index : Map[@core.RawVersion, Array[Int]] = Map([])
+  let index : Map[@core.RawVersion, Array[Int32]] = Map([])
   let count = oplog.op_count()
   for lv = 0; lv < count; lv = lv + 1 {
     match oplog.get_op(lv) {
@@ -48,7 +48,7 @@ pub fn DeleteIndex::build(oplog : @oplog.OpLog) -> DeleteIndex {
 pub fn DeleteIndex::get_delete_ops(
   self : DeleteIndex,
   target : @core.RawVersion,
-) -> Array[Int] {
+) -> Array[Int32] {
   match self.index.get(target) {
     Some(ops) => ops
     None => []

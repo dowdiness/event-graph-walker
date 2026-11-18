@@ -41,8 +41,8 @@ fn OpLog::add_op(self : OpLog, op : @core.Op) -> Unit {
 pub fn OpLog::insert(
   self : OpLog,
   text : String,
-  origin_left : Int,
-  origin_right : Int,
+  origin_left : Int32,
+  origin_right : Int32,
 ) -> @core.Op raise OpLogError {
   let parents = self.graph.get_frontier().to_array()
   let parents_raw : Array[@core.RawVersion] = []
@@ -90,7 +90,7 @@ pub fn OpLog::insert(
 /// Create and add a delete operation
 pub fn OpLog::delete(
   self : OpLog,
-  origin_left : Int,
+  origin_left : Int32,
 ) -> @core.Op raise OpLogError {
   let origin_left_raw = self.raw_target_from_lv(origin_left)
   let parents = self.graph.get_frontier().to_array()
@@ -133,7 +133,7 @@ pub fn OpLog::delete(
 /// Create and add an undelete operation
 pub fn OpLog::undelete(
   self : OpLog,
-  origin_left : Int,
+  origin_left : Int32,
 ) -> @core.Op raise OpLogError {
   let origin_left_raw = self.raw_target_from_lv(origin_left)
   let parents = self.graph.get_frontier().to_array()
@@ -178,7 +178,7 @@ pub fn OpLog::undelete(
 /// Returns `None` for negative LVs, the sentinel value -1, or any LV
 /// beyond the end of the log. All valid LVs in `[0, op_count())` are
 /// guaranteed to return `Some`.
-pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
+pub fn OpLog::get_op(self : OpLog, lv : Int32) -> @core.Op? {
   if lv < 0 {
     return None
   }
@@ -212,7 +212,7 @@ pub fn OpLog::get_op(self : OpLog, lv : Int) -> @core.Op? {
 /// (e.g. from `walk_and_collect` or `diff_and_collect`) it returns the
 /// corresponding operations in the same order, omitting any LV that is
 /// out of range.
-pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int]) -> Array[@core.Op] {
+pub fn OpLog::get_ops(self : OpLog, lvs : Array[Int32]) -> Array[@core.Op] {
   lvs.filter_map(lv => self.get_op(lv))
 }
 
@@ -267,7 +267,7 @@ pub fn OpLog::collect_missing_ops(
 fn OpLog::collect_missing_ops_counted(
   self : OpLog,
   peer : @causal_graph.GraphVersion,
-) -> (Array[@core.Op], Int, Int, Int, Int) raise OpLogError {
+) -> (Array[@core.Op], Int32, Int32, Int32, Int32) raise OpLogError {
   let current = self.graph.current_graph_version()
   let operations : Array[@core.Op] = []
   let mut missing_ranges = 0
@@ -315,7 +315,7 @@ pub fn OpLog::get_all_runs(self : OpLog) -> Array[@core.OpRun] {
 
 ///|
 /// Get operation count
-pub fn OpLog::op_count(self : OpLog) -> Int {
+pub fn OpLog::op_count(self : OpLog) -> Int32 {
   self.operations.span()
 }
 
@@ -382,7 +382,7 @@ pub fn OpLog::has_pending(self : OpLog) -> Bool {
 
 ///|
 /// Return the live canonical pending membership count.
-pub fn OpLog::pending_count(self : OpLog) -> Int {
+pub fn OpLog::pending_count(self : OpLog) -> Int32 {
   self.pending_changes.pending_count()
 }
 
@@ -466,8 +466,8 @@ fn OpLog::apply_changes_semantics(self : OpLog) -> ChangeSemantics {
 pub fn ApplyChanges::ApplyChanges(
   oplog : OpLog,
   incoming : Array[@core.Op],
-  max_pending? : Int,
-  max_pending_after_complete? : Int,
+  max_pending? : Int32,
+  max_pending_after_complete? : Int32,
 ) -> ApplyChanges raise OpLogError {
   oplog.preflight_remote_identities(incoming)
   let (already_applied, duplicate_of_pending) = oplog.apply_changes_duplicate_evidence(
@@ -654,7 +654,7 @@ pub fn OpLog::apply_changes(
 /// Unlike insert origins, a target cannot be the root sentinel.
 fn OpLog::raw_target_from_lv(
   self : OpLog,
-  lv : Int,
+  lv : Int32,
 ) -> @core.RawVersion raise OpLogError {
   guard lv != -1 else { raise OpLogError::MissingLocalVersion(lv~) }
   match self.graph.lv_to_raw(lv) {
@@ -667,7 +667,7 @@ fn OpLog::raw_target_from_lv(
 /// Convert LV to RawVersion? with sentinel handling
 fn OpLog::raw_from_lv(
   self : OpLog,
-  lv : Int,
+  lv : Int32,
 ) -> @core.RawVersion? raise OpLogError {
   if lv == -1 {
     None
@@ -681,7 +681,7 @@ fn OpLog::raw_from_lv(
 
 ///|
 /// Convert RawVersion? to LV, returning None if missing
-fn OpLog::lv_from_raw(self : OpLog, raw : @core.RawVersion?) -> Int? {
+fn OpLog::lv_from_raw(self : OpLog, raw : @core.RawVersion?) -> Int32? {
   match raw {
     None => Some(-1)
     Some(rv) => self.graph.raw_to_lv(rv)
@@ -705,7 +705,7 @@ fn OpLog::try_apply_remote(
   if (op.is_delete() || op.is_undelete()) && origin_left is None {
     raise OpLogError::MissingOrigin
   }
-  let local_parents : Array[Int] = []
+  let local_parents : Array[Int32] = []
   for parent in op.parents_iter() {
     match self.graph.raw_to_lv(parent) {
       Some(lv) => local_parents.push(lv)

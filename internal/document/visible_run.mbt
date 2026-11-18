@@ -11,26 +11,26 @@
 /// traversal emits items in document order, so two successive visible
 /// items that also have consecutive LVs must be adjacent).
 struct VisibleRun {
-  start_lv : Int // First LV in this visible run
+  start_lv : Int32 // First LV in this visible run
   text : String // Concatenated visible text
-  count : Int // Number of items in run
+  count : Int32 // Number of items in run
 } derive(Debug, Eq)
 
 ///|
-pub impl @rle.HasLength for VisibleRun with fn length(self) -> Int {
+pub impl @rle.HasLength for VisibleRun with fn length(self) -> Int32 {
   self.count
 }
 
 ///|
 /// span = count (one item per position in the item space).
 /// This is the coordinate space for OrderTree::find — position-based lookup.
-pub impl @rle.Spanning for VisibleRun with fn span(self) -> Int {
+pub impl @rle.Spanning for VisibleRun with fn span(self) -> Int32 {
   self.count
 }
 
 ///|
 /// logical_length = text.length() (visible character count in UTF-16 code units).
-pub impl @rle.Spanning for VisibleRun with fn logical_length(self) -> Int {
+pub impl @rle.Spanning for VisibleRun with fn logical_length(self) -> Int32 {
   self.text.length()
 }
 
@@ -59,8 +59,8 @@ pub impl @rle.Mergeable for VisibleRun with fn merge(self, other) -> VisibleRun 
 /// Sliceable enables split/insert/delete on OrderTree[VisibleRun].
 pub impl @rle.Sliceable for VisibleRun with fn slice(
   self,
-  start~ : Int,
-  end~ : Int,
+  start~ : Int32,
+  end~ : Int32,
 ) -> Result[VisibleRun, @rle.RleError] {
   if start < 0 || end > self.count || start > end {
     return Err(
@@ -99,7 +99,7 @@ impl @btree.BTreeElem for VisibleRun
 /// Convert an item offset (0-based character index) to a UTF-16 code unit offset.
 ///
 /// Each CRDT item is one character. Characters may be 1 or 2 UTF-16 code units.
-fn item_offset_to_utf16(text : String, item_offset : Int) -> Int {
+fn item_offset_to_utf16(text : String, item_offset : Int32) -> Int32 {
   if item_offset == 0 {
     return 0
   }

@@ -1,10 +1,10 @@
 ///|
 /// A dependency in a later arrival slot wakes its dependent in the next scan.
 pub fn dependency_ready_round(
-  arrival : Int,
-  dependency_arrival : Int,
-  dependency_round : Int,
-) -> Int where {
+  arrival : Int32,
+  dependency_arrival : Int32,
+  dependency_round : Int32,
+) -> Int32 where {
   proof_require: 0 <= dependency_round && dependency_round < 2147483647,
   proof_ensure: round => {
     dependency_round <= round &&

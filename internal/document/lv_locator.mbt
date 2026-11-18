@@ -4,9 +4,9 @@ priv enum LocatorSiblings {
   Empty
   Branch(
     left~ : LocatorSiblings,
-    lv~ : Int,
+    lv~ : Int32,
     right~ : LocatorSiblings,
-    height~ : Int
+    height~ : Int32
   )
 }
 
@@ -14,10 +14,10 @@ priv enum LocatorSiblings {
 /// Stable Euler-tour handles and Fugue sibling ownership for one LV.
 priv struct LocatorItem {
   agent : @fugue.ReplicaId
-  sequence : Int
-  open_node : Int
-  content_node : Int
-  close_node : Int
+  sequence : Int32
+  open_node : Int32
+  content_node : Int32
+  close_node : Int32
   mut left_children : LocatorSiblings
   mut right_children : LocatorSiblings
 }
@@ -27,12 +27,12 @@ priv struct LocatorItem {
 /// content nodes toggle between zero and one without changing their handle.
 priv struct LocatorRankNode {
   priority : UInt64
-  mut left : Int
-  mut right : Int
-  mut parent : Int
-  mut size : Int
+  mut left : Int32
+  mut right : Int32
+  mut parent : Int32
+  mut size : Int32
   mut visible : Bool
-  mut visible_span : Int
+  mut visible_span : Int32
 }
 
 ///|
@@ -45,11 +45,11 @@ priv struct LocatorRankNode {
 /// visibility updates follow treap height only and never traverse visible runs
 /// or Fugue ancestors.
 priv struct LvLocator {
-  items : Map[Int, LocatorItem]
+  items : Map[Int32, LocatorItem]
   nodes : Array[LocatorRankNode]
-  mut rank_root : Int
-  mut root_divider : Int
-  mut root_close : Int
+  mut rank_root : Int32
+  mut root_divider : Int32
+  mut root_close : Int32
   mut root_left : LocatorSiblings
   mut root_right : LocatorSiblings
 }
@@ -57,7 +57,7 @@ priv struct LvLocator {
 ///|
 /// SplitMix64 priority keeps sequential LV allocation from degenerating the
 /// implicit treap while remaining deterministic across runtimes.
-fn locator_priority(seed : Int) -> UInt64 {
+fn locator_priority(seed : Int32) -> UInt64 {
   let mut value = seed.to_uint64() + 0x9E3779B97F4A7C15
   value = value.lxor(value >> 30) * 0xBF58476D1CE4E5B9
   value = value.lxor(value >> 27) * 0x94D049BB133111EB
@@ -65,7 +65,7 @@ fn locator_priority(seed : Int) -> UInt64 {
 }
 
 ///|
-fn LvLocator::push_rank_node(self : LvLocator, visible : Bool) -> Int {
+fn LvLocator::push_rank_node(self : LvLocator, visible : Bool) -> Int32 {
   let index = self.nodes.length()
   self.nodes.push({
     priority: locator_priority(index),
@@ -103,7 +103,7 @@ fn LvLocator::new() -> LvLocator {
 }
 
 ///|
-fn LvLocator::rank_size(self : LvLocator, node : Int) -> Int {
+fn LvLocator::rank_size(self : LvLocator, node : Int32) -> Int32 {
   if node == -1 {
     0
   } else {
@@ -112,7 +112,7 @@ fn LvLocator::rank_size(self : LvLocator, node : Int) -> Int {
 }
 
 ///|
-fn LvLocator::rank_visible_span(self : LvLocator, node : Int) -> Int {
+fn LvLocator::rank_visible_span(self : LvLocator, node : Int32) -> Int32 {
   if node == -1 {
     0
   } else {
@@ -123,8 +123,8 @@ fn LvLocator::rank_visible_span(self : LvLocator, node : Int) -> Int {
 ///|
 fn LvLocator::set_rank_parent(
   self : LvLocator,
-  node : Int,
-  parent : Int,
+  node : Int32,
+  parent : Int32,
 ) -> Unit {
   if node != -1 {
     self.nodes[node].parent = parent
@@ -132,7 +132,7 @@ fn LvLocator::set_rank_parent(
 }
 
 ///|
-fn LvLocator::refresh_rank_node(self : LvLocator, node : Int) -> Unit {
+fn LvLocator::refresh_rank_node(self : LvLocator, node : Int32) -> Unit {
   if node == -1 {
     return
   }
@@ -149,9 +149,9 @@ fn LvLocator::refresh_rank_node(self : LvLocator, node : Int) -> Unit {
 /// Split by total marker count; both returned roots are detached.
 fn LvLocator::split_rank(
   self : LvLocator,
-  root : Int,
-  left_count : Int,
-) -> (Int, Int) {
+  root : Int32,
+  left_count : Int32,
+) -> (Int32, Int32) {
   if root == -1 {
     return (-1, -1)
   }
@@ -179,7 +179,11 @@ fn LvLocator::split_rank(
 
 ///|
 /// Merge two marker sequences whose order is already established.
-fn LvLocator::merge_rank(self : LvLocator, left : Int, right : Int) -> Int {
+fn LvLocator::merge_rank(
+  self : LvLocator,
+  left : Int32,
+  right : Int32,
+) -> Int32 {
   if left == -1 {
     self.set_rank_parent(right, -1)
     return right
@@ -203,7 +207,7 @@ fn LvLocator::merge_rank(self : LvLocator, left : Int, right : Int) -> Int {
 
 ///|
 /// Total-marker rank of a stable node handle.
-fn LvLocator::marker_rank(self : LvLocator, node : Int) -> Int {
+fn LvLocator::marker_rank(self : LvLocator, node : Int32) -> Int32 {
   let mut rank = self.rank_size(self.nodes[node].left)
   let mut current = node
   let mut parent = self.nodes[current].parent
@@ -219,7 +223,11 @@ fn LvLocator::marker_rank(self : LvLocator, node : Int) -> Int {
 
 ///|
 /// Toggle a content marker and refresh only its treap ancestor path.
-fn LvLocator::set_visible(self : LvLocator, node : Int, visible : Bool) -> Unit {
+fn LvLocator::set_visible(
+  self : LvLocator,
+  node : Int32,
+  visible : Bool,
+) -> Unit {
   self.nodes[node].visible = visible
   let mut current = node
   while current != -1 {
@@ -230,7 +238,7 @@ fn LvLocator::set_visible(self : LvLocator, node : Int, visible : Bool) -> Unit 
 
 ///|
 /// Visible scalar prefix before one content marker.
-fn LvLocator::visible_rank(self : LvLocator, node : Int) -> Int {
+fn LvLocator::visible_rank(self : LvLocator, node : Int32) -> Int32 {
   let mut rank = self.rank_visible_span(self.nodes[node].left)
   let mut current = node
   let mut parent = self.nodes[current].parent
@@ -247,7 +255,7 @@ fn LvLocator::visible_rank(self : LvLocator, node : Int) -> Int {
 }
 
 ///|
-fn LocatorSiblings::height(self : LocatorSiblings) -> Int {
+fn LocatorSiblings::height(self : LocatorSiblings) -> Int32 {
   match self {
     Empty => 0
     Branch(height~, ..) => height
@@ -256,7 +264,7 @@ fn LocatorSiblings::height(self : LocatorSiblings) -> Int {
 
 ///|
 /// Compare two siblings using the reference RawVersion `(agent, sequence)` order.
-fn LvLocator::compare_lvs(self : LvLocator, a : Int, b : Int) -> Int {
+fn LvLocator::compare_lvs(self : LvLocator, a : Int32, b : Int32) -> Int32 {
   let a_item = self.items.get(a).unwrap()
   let b_item = self.items.get(b).unwrap()
   let agent = a_item.agent.0.lexical_compare(b_item.agent.0)
@@ -270,7 +278,7 @@ fn LvLocator::compare_lvs(self : LvLocator, a : Int, b : Int) -> Int {
 fn LvLocator::sibling_branch(
   self : LvLocator,
   left : LocatorSiblings,
-  lv : Int,
+  lv : Int32,
   right : LocatorSiblings,
 ) -> LocatorSiblings {
   let _ = self
@@ -281,7 +289,7 @@ fn LvLocator::sibling_branch(
 fn LvLocator::balance_siblings(
   self : LvLocator,
   left : LocatorSiblings,
-  lv : Int,
+  lv : Int32,
   right : LocatorSiblings,
 ) -> LocatorSiblings {
   let delta = left.height() - right.height()
@@ -330,7 +338,7 @@ fn LvLocator::balance_siblings(
 fn LvLocator::insert_sibling(
   self : LvLocator,
   tree : LocatorSiblings,
-  target : Int,
+  target : Int32,
 ) -> LocatorSiblings {
   match tree {
     Empty => self.sibling_branch(Empty, target, Empty)
@@ -352,8 +360,8 @@ fn LvLocator::insert_sibling(
 fn LvLocator::next_sibling(
   self : LvLocator,
   tree : LocatorSiblings,
-  target : Int,
-) -> Int? {
+  target : Int32,
+) -> Int32? {
   match tree {
     Empty => None
     Branch(left~, lv~, right~, ..) =>
@@ -371,7 +379,7 @@ fn LvLocator::next_sibling(
 ///|
 fn LvLocator::children(
   self : LvLocator,
-  parent : Int,
+  parent : Int32,
   side : @fugue.Side,
 ) -> LocatorSiblings {
   if parent == -1 {
@@ -391,7 +399,7 @@ fn LvLocator::children(
 ///|
 fn LvLocator::set_children(
   self : LvLocator,
-  parent : Int,
+  parent : Int32,
   side : @fugue.Side,
   children : LocatorSiblings,
 ) -> Unit {
@@ -481,12 +489,12 @@ fn LvLocator::from_tree(tree : @fugue.FugueTree[String]) -> LvLocator {
 }
 
 ///|
-fn LvLocator::contains(self : LvLocator, lv : Int) -> Bool {
+fn LvLocator::contains(self : LvLocator, lv : Int32) -> Bool {
   self.items.contains(lv)
 }
 
 ///|
-fn LvLocator::show(self : LvLocator, lv : Int) -> Bool {
+fn LvLocator::show(self : LvLocator, lv : Int32) -> Bool {
   match self.items.get(lv) {
     Some(item) => {
       self.set_visible(item.content_node, true)
@@ -497,7 +505,7 @@ fn LvLocator::show(self : LvLocator, lv : Int) -> Bool {
 }
 
 ///|
-fn LvLocator::hide(self : LvLocator, lv : Int) -> Bool {
+fn LvLocator::hide(self : LvLocator, lv : Int32) -> Bool {
   match self.items.get(lv) {
     Some(item) => {
       self.set_visible(item.content_node, false)
@@ -509,7 +517,7 @@ fn LvLocator::hide(self : LvLocator, lv : Int) -> Bool {
 
 ///|
 /// Constant-handle lookup plus logarithmic visible-prefix rank.
-fn LvLocator::position(self : LvLocator, lv : Int) -> Int? {
+fn LvLocator::position(self : LvLocator, lv : Int32) -> Int32? {
   match self.items.get(lv) {
     Some(item) if self.nodes[item.content_node].visible =>
       Some(self.visible_rank(item.content_node))

@@ -1,5 +1,5 @@
 ///|
-fn transition_test_item(sequence : Int) -> UndoItem {
+fn transition_test_item(sequence : Int32) -> UndoItem {
   TextInsert(
     block={ agent: "block", counter: 0, },
     id=@core.RawVersion("alice", sequence),
@@ -7,7 +7,7 @@ fn transition_test_item(sequence : Int) -> UndoItem {
 }
 
 ///|
-fn transition_item_sequence(item : UndoItem) -> Int {
+fn transition_item_sequence(item : UndoItem) -> Int32 {
   match item {
     TextInsert(id~, block=_) => id.seq
     _ => -1

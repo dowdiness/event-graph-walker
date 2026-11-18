@@ -10,11 +10,11 @@ priv struct PendingChanges {
   mut pending_order : Array[PendingChangeOrderEntry]
   mut waiters : Map[@core.RawVersion, Array[PendingChangeWaiter]]
   mut ready : @priority_queue.PriorityQueue[ReadyChange]
-  mut next_arrival : Int
-  mut generation : Int
-  mut stale_order_tombstones : Int
-  mut stale_waiter_refs : Int
-  mut stale_ready_refs : Int
+  mut next_arrival : Int32
+  mut generation : Int32
+  mut stale_order_tombstones : Int32
+  mut stale_waiter_refs : Int32
+  mut stale_ready_refs : Int32
 }
 
 ///|
@@ -25,9 +25,9 @@ priv struct PendingChangesView {
   pending_order : Array[PendingChangeOrderEntry]
   waiters : Map[@core.RawVersion, Array[PendingChangeWaiter]]
   ready : @priority_queue.PriorityQueue[ReadyChange]
-  next_arrival : Int
-  generation : Int
-  stale_ready_refs : Int
+  next_arrival : Int32
+  generation : Int32
+  stale_ready_refs : Int32
 }
 
 ///|
@@ -48,25 +48,25 @@ fn PendingChanges::view(self : PendingChanges) -> PendingChangesView {
 /// requiring a suffix scan to find the live occurrence.
 priv struct PendingChangeOrderEntry {
   raw : @core.RawVersion
-  arrival : Int
+  arrival : Int32
 }
 
 ///|
 /// Reverse-edge identity. The arrival makes stale edges harmless after retry.
 priv struct PendingChangeWaiter {
   raw : @core.RawVersion
-  arrival : Int
+  arrival : Int32
 }
 
 ///|
 /// Canonical metadata for one live pending identity.
 priv struct PendingChange {
   op : @core.Op
-  arrival : Int
+  arrival : Int32
   dependencies : Array[@core.RawVersion]
   waiting_dependencies : Array[@core.RawVersion]
-  mut unresolved_count : Int
-  mut ready_refs : Int
+  mut unresolved_count : Int32
+  mut ready_refs : Int32
 }
 
 ///|
@@ -74,24 +74,24 @@ priv struct PendingChange {
 priv struct StagedChange {
   op : @core.Op
   raw : @core.RawVersion
-  arrival : Int
+  arrival : Int32
   dependencies : Array[@core.RawVersion]
   waiting_dependencies : Array[@core.RawVersion]
-  unresolved_count : Int
+  unresolved_count : Int32
 }
 
 ///|
 /// Private representation of staged capability data.
 priv enum ApplyChangesStorage {
   DeferredFast
-  ImmediateGeneral(Array[StagedChange], planned_count~ : Int)
+  ImmediateGeneral(Array[StagedChange], planned_count~ : Int32)
 }
 
 ///|
 /// A max-first queue entry. Negative keys invert the desired min order.
 priv struct ReadyChange {
-  round_key : Int
-  arrival_key : Int
+  round_key : Int32
+  arrival_key : Int32
   raw : @core.RawVersion
 } derive(Eq, Compare)
 
@@ -103,13 +103,13 @@ pub struct ApplyChanges {
   priv discard_roots : Array[@core.RawVersion]
   priv discarded_pending : @hashset.HashSet[@core.RawVersion]
   priv discarded_staged : @hashset.HashSet[@core.RawVersion]
-  priv next_arrival : Int
-  priv generation : Int
-  priv pending_before_count : Int
-  priv new_staged_count : Int
-  priv required_pending : Int
-  priv max_pending : Int?
-  priv max_pending_after_complete : Int?
+  priv next_arrival : Int32
+  priv generation : Int32
+  priv pending_before_count : Int32
+  priv new_staged_count : Int32
+  priv required_pending : Int32
+  priv max_pending : Int32?
+  priv max_pending_after_complete : Int32?
   priv already_applied : Array[@core.RawVersion]
   priv duplicate_of_pending : Array[@core.RawVersion]
   // Prospective provenance for retained identities affected by this plan.
@@ -142,13 +142,13 @@ priv enum BeginApplyResult {
   Stale
   Consumed
   Conflict
-  PendingLimit(limit~ : Int, required~ : Int)
+  PendingLimit(limit~ : Int32, required~ : Int32)
 }
 
 ///|
 priv enum RegistrationError {
   Conflict
-  PendingLimit(limit~ : Int, required~ : Int)
+  PendingLimit(limit~ : Int32, required~ : Int32)
 }
 
 ///|
@@ -156,12 +156,12 @@ priv enum RegistrationError {
 priv struct ChangeOverlay {
   staged : Map[@core.RawVersion, PendingChange]
   staged_order : Array[@core.RawVersion]
-  staged_unresolved : Map[@core.RawVersion, Int]
-  touched_deltas : Map[@core.RawVersion, Int]
+  staged_unresolved : Map[@core.RawVersion, Int32]
+  touched_deltas : Map[@core.RawVersion, Int32]
   waiter_edges : Map[@core.RawVersion, Array[PendingChangeWaiter]]
   planned : @hashset.HashSet[@core.RawVersion]
   discard_roots : Array[@core.RawVersion]
-  ready_rounds : Map[@core.RawVersion, Int]
+  ready_rounds : Map[@core.RawVersion, Int32]
   ready : @priority_queue.PriorityQueue[ReadyChange]
   planned_operations : Array[@core.Op]
 }
@@ -489,7 +489,7 @@ fn PendingChanges::remove_canonical(
 
 ///|
 /// Current retained stale-index count. Compaction is intentionally explicit.
-fn PendingChanges::stale_count(self : PendingChanges) -> Int {
+fn PendingChanges::stale_count(self : PendingChanges) -> Int32 {
   self.stale_order_tombstones + self.stale_waiter_refs + self.stale_ready_refs
 }
 
@@ -651,7 +651,7 @@ fn PendingChanges::reject_pending_dependents(
 fn ChangeOverlay::note_round(
   self : ChangeOverlay,
   raw : @core.RawVersion,
-  round : Int,
+  round : Int32,
 ) -> Unit {
   let round = match self.ready_rounds.get(raw) {
     Some(previous) => previous.max(round)
@@ -665,8 +665,8 @@ fn ChangeOverlay::note_round(
 fn ChangeOverlay::schedule(
   self : ChangeOverlay,
   raw : @core.RawVersion,
-  arrival : Int,
-  round : Int,
+  arrival : Int32,
+  round : Int32,
 ) -> Unit {
   self.note_round(raw, round)
   let round = self.ready_rounds.get(raw).unwrap_or(round)
@@ -748,7 +748,7 @@ fn ChangeOverlay::unresolved(
   self : ChangeOverlay,
   pending_changes : PendingChangesView,
   raw : @core.RawVersion,
-) -> Int? {
+) -> Int32? {
   match self.staged_unresolved.get(raw) {
     Some(count) => Some(count)
     None =>
@@ -768,8 +768,8 @@ fn ChangeOverlay::resolve_waiters(
   self : ChangeOverlay,
   pending_changes : PendingChangesView,
   dependency : @core.RawVersion,
-  source_arrival : Int,
-  source_round : Int,
+  source_arrival : Int32,
+  source_round : Int32,
 ) -> Unit {
   match pending_changes.waiters.get(dependency) {
     Some(waiters) =>
@@ -1322,7 +1322,7 @@ fn PendingChangesView::registration_for(
       for node in nodes {
         staged_index.set(node.raw, node)
       }
-      let planned_states : Map[@core.RawVersion, (Int, Int)] = Default::default()
+      let planned_states : Map[@core.RawVersion, (Int32, Int32)] = Default::default()
       let mut previous_round = -1
       let mut previous_arrival = -1
       for op in plan.planned {
@@ -1569,7 +1569,7 @@ fn ApplyChanges::staged_raws(self : ApplyChanges) -> Array[@core.RawVersion] {
 
 ///|
 /// Count live canonical pending membership without materializing arrival order.
-fn PendingChanges::pending_count(self : PendingChanges) -> Int {
+fn PendingChanges::pending_count(self : PendingChanges) -> Int32 {
   self.pending.length()
 }
 
@@ -1592,7 +1592,7 @@ fn PendingChanges::clear_pending(self : PendingChanges) -> Unit {
 
 ///|
 /// Count staged identities without materializing their RawVersion array.
-fn ApplyChanges::staged_count(self : ApplyChanges) -> Int {
+fn ApplyChanges::staged_count(self : ApplyChanges) -> Int32 {
   match self.storage {
     DeferredFast => self.planned.length()
     ImmediateGeneral(nodes, planned_count=_) => nodes.length()
@@ -1606,7 +1606,7 @@ fn ApplyChanges::staged_count(self : ApplyChanges) -> Int {
 fn PendingChangesView::required_pending_for(
   self : PendingChangesView,
   plan : ApplyChanges,
-) -> Int {
+) -> Int32 {
   let pending_before_count = self.pending.length()
   let discarded_pending_count = plan.discarded_pending.length()
   if discarded_pending_count > pending_before_count {
@@ -1659,8 +1659,8 @@ fn ApplyChanges::with_pending_evidence(
 fn ApplyChanges::with_prospective(
   self : ApplyChanges,
   pending_changes : PendingChanges,
-  max_pending : Int?,
-  max_pending_after_complete : Int?,
+  max_pending : Int32?,
+  max_pending_after_complete : Int32?,
   already_applied : Array[@core.RawVersion],
   duplicate_of_pending : Array[@core.RawVersion],
 ) -> ApplyChanges raise OpLogError {

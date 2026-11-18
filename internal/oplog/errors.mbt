@@ -3,7 +3,7 @@
 ///|
 pub(all) suberror OpLogError {
   /// A local version (LV) was not found in the graph during operation creation
-  MissingLocalVersion(lv~ : Int)
+  MissingLocalVersion(lv~ : Int32)
   /// Sparse graph membership named an identity absent from the graph index.
   /// This is an internal authority inconsistency, not ordinary peer absence.
   MissingLocalIdentity(raw~ : @core.RawVersion)
@@ -20,7 +20,7 @@ pub(all) suberror OpLogError {
   /// A delete or undelete carries the insert-only right-origin field.
   InvalidOriginShape(raw~ : @core.RawVersion)
   /// The begin-after pending membership exceeds the hard accepted limit.
-  PendingLimitExceeded(limit~ : Int, required~ : Int)
+  PendingLimitExceeded(limit~ : Int32, required~ : Int32)
   /// Remote op refers to a parent not present locally or in the batch.
   MissingRemoteParent(raw~ : @core.RawVersion)
   /// Remote frontier references an op not present locally or in the batch.

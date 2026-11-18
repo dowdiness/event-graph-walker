@@ -38,7 +38,7 @@ test "R0 codec rejects invalid and non-minimal uvarints" {
   ]
   for encoded in invalid {
     let decoder = R0Decoder::_new(encoded)
-    let result : Result[Int, R0CodecError] = Ok(decoder._read_uvarint()) catch {
+    let result : Result[Int32, R0CodecError] = Ok(decoder._read_uvarint()) catch {
       error => Err(error)
     }
     inspect(result is Err(_), content="true")

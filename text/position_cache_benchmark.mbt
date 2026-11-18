@@ -2,7 +2,7 @@
 // Run with: cd event-graph-walker && moon bench --package text --release
 
 ///|
-fn bench_insert(doc : TextState, pos : Int, text : String) -> Unit {
+fn bench_insert(doc : TextState, pos : Int32, text : String) -> Unit {
   doc.insert(Pos::at(pos), text) catch {
     _ => ()
   }

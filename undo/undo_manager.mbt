@@ -5,8 +5,8 @@ pub struct UndoManager {
   priv agent_id : String
   priv mut undo_stack : Array[UndoGroup]
   priv mut redo_stack : Array[UndoGroup]
-  priv capture_timeout_ms : Int
-  priv mut last_change_ms : Int
+  priv capture_timeout_ms : Int32
+  priv mut last_change_ms : Int32
   priv mut force_new_group : Bool
   priv mut tracking_enabled : Bool
 } derive(Debug)
@@ -16,7 +16,7 @@ pub struct UndoManager {
 /// `capture_timeout_ms` controls time-based grouping (default 500ms).
 pub fn UndoManager::new(
   agent_id : String,
-  capture_timeout_ms? : Int = 500,
+  capture_timeout_ms~ : Int32 = 500,
 ) -> UndoManager {
   {
     agent_id,
@@ -36,10 +36,10 @@ pub fn UndoManager::new(
 /// Groups by time window. Clears redo stack on new edit.
 pub fn UndoManager::record_insert(
   self : UndoManager,
-  target_lv : Int,
+  target_lv : Int32,
   agent : String,
-  timestamp_ms : Int,
-  content? : String? = None,
+  timestamp_ms : Int32,
+  content~ : String? = None,
 ) -> Unit {
   self.record_item(target_lv, Insert, agent, timestamp_ms, content)
 }
@@ -51,10 +51,10 @@ pub fn UndoManager::record_insert(
 /// Groups by time window. Clears redo stack on new edit.
 pub fn UndoManager::record_delete(
   self : UndoManager,
-  target_lv : Int,
+  target_lv : Int32,
   agent : String,
-  timestamp_ms : Int,
-  content? : String? = None,
+  timestamp_ms : Int32,
+  content~ : String? = None,
 ) -> Unit {
   self.record_item(target_lv, Delete, agent, timestamp_ms, content)
 }
@@ -62,10 +62,10 @@ pub fn UndoManager::record_delete(
 ///|
 fn UndoManager::record_item(
   self : UndoManager,
-  target_lv : Int,
+  target_lv : Int32,
   op_type : UndoOpType,
   agent : String,
-  timestamp_ms : Int,
+  timestamp_ms : Int32,
   content : String?,
 ) -> Unit {
   if !self.tracking_enabled {

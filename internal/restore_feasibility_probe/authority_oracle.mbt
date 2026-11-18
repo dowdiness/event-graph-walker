@@ -15,42 +15,42 @@
 /// read.
 struct EvidenceDetector {
   history : @text.SyncMessage
-  mut provider_calls : Int
-  mut provider_operations : Int
-  mut provider_bytes : Int
-  mut in_memory_scans : Int
-  mut control_logical_queries : Int
-  mut metadata_records : Int
-  mut metadata_bytes : Int
-  mut proof_bytes : Int
-  mut requested_identities : Int
-  mut payload_events : Int
-  mut payload_bytes : Int
-  mut scan_records_visited : Int
-  mut full_history_events : Int
-  mut full_history_bytes : Int
-  mut utf16_code_units : Int
-  mut unicode_scalars : Int
+  mut provider_calls : Int32
+  mut provider_operations : Int32
+  mut provider_bytes : Int32
+  mut in_memory_scans : Int32
+  mut control_logical_queries : Int32
+  mut metadata_records : Int32
+  mut metadata_bytes : Int32
+  mut proof_bytes : Int32
+  mut requested_identities : Int32
+  mut payload_events : Int32
+  mut payload_bytes : Int32
+  mut scan_records_visited : Int32
+  mut full_history_events : Int32
+  mut full_history_bytes : Int32
+  mut utf16_code_units : Int32
+  mut unicode_scalars : Int32
 }
 
 ///|
 struct EvidenceSnapshot {
-  provider_calls : Int
-  provider_operations : Int
-  provider_bytes : Int
-  in_memory_scans : Int
-  control_logical_queries : Int
-  metadata_records : Int
-  metadata_bytes : Int
-  proof_bytes : Int
-  requested_identities : Int
-  payload_events : Int
-  payload_bytes : Int
-  scan_records_visited : Int
-  full_history_events : Int
-  full_history_bytes : Int
-  utf16_code_units : Int
-  unicode_scalars : Int
+  provider_calls : Int32
+  provider_operations : Int32
+  provider_bytes : Int32
+  in_memory_scans : Int32
+  control_logical_queries : Int32
+  metadata_records : Int32
+  metadata_bytes : Int32
+  proof_bytes : Int32
+  requested_identities : Int32
+  payload_events : Int32
+  payload_bytes : Int32
+  scan_records_visited : Int32
+  full_history_events : Int32
+  full_history_bytes : Int32
+  utf16_code_units : Int32
+  unicode_scalars : Int32
 }
 
 ///|

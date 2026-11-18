@@ -28,7 +28,7 @@ fn base64_encode(bytes : Bytes) -> String {
 }
 
 ///|
-fn base64_value(code_unit : UInt16) -> Int {
+fn base64_value(code_unit : UInt16) -> Int32 {
   let code = code_unit.to_int()
   if code >= 'A'.to_int() && code <= 'Z'.to_int() {
     code - 'A'.to_int()

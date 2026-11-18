@@ -47,13 +47,13 @@ priv enum ReplayDirection {
 ///|
 /// A pure replay command referring back to its source group position.
 priv struct ReplayCommand {
-  source_index : Int
+  source_index : Int32
   item : UndoItem
 }
 
 ///|
 fn ReplayCommand::ReplayCommand(
-  source_index : Int,
+  source_index : Int32,
   item : UndoItem,
 ) -> ReplayCommand {
   { source_index, item, }

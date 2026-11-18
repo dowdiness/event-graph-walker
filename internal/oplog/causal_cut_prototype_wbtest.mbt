@@ -10,7 +10,7 @@
 /// operation payload and resolve through the append-only node store.
 priv struct CausalNode {
   operation : @core.Op
-  timestamp : Int
+  timestamp : Int32
 }
 
 ///|
@@ -92,7 +92,7 @@ fn CausalCut::from_operations(
 }
 
 ///|
-fn CausalCutSnapshot::op_count(self : CausalCutSnapshot) -> Int {
+fn CausalCutSnapshot::op_count(self : CausalCutSnapshot) -> Int32 {
   self.nodes.length()
 }
 

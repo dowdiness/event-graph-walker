@@ -67,7 +67,7 @@ fn resolve_origin(
 #inline
 fn resolve_causal_entry(
   causal_graph : @causal_graph.CausalGraph,
-  lv : Int,
+  lv : Int32,
 ) -> @core.GraphEntry raise FugueProjectionError {
   match causal_graph.get_entry(lv) {
     Some(entry) => entry
@@ -113,7 +113,7 @@ fn delete(
   tree : @fugue.FugueTree[String],
   op : @core.Op,
   causal_graph : @causal_graph.CausalGraph,
-) -> Int raise FugueProjectionError {
+) -> Int32 raise FugueProjectionError {
   match op.origin_left() {
     None => -1
     Some(raw) => {
@@ -134,7 +134,7 @@ fn undelete(
   tree : @fugue.FugueTree[String],
   op : @core.Op,
   causal_graph : @causal_graph.CausalGraph,
-) -> Int raise FugueProjectionError {
+) -> Int32 raise FugueProjectionError {
   match op.origin_left() {
     None => -1
     Some(raw) => {

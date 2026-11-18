@@ -92,7 +92,7 @@ priv struct LogEntry {
 pub struct TreeOpLog {
   priv entries : Array[LogEntry]
   priv seen : Map[String, Bool]
-  priv mut ordering_comparisons : Int
+  priv mut ordering_comparisons : Int32
 }
 
 ///|
@@ -106,7 +106,7 @@ fn TreeOpLog::compare_counted(
   self : TreeOpLog,
   a : TreeMoveOp,
   b : TreeMoveOp,
-) -> Int {
+) -> Int32 {
   self.ordering_comparisons = self.ordering_comparisons + 1
   compare_ops(a, b)
 }
@@ -145,7 +145,7 @@ pub fn TreeOpLog::all_ops(self : TreeOpLog) -> Array[TreeMoveOp] {
 /// The agent id tie-break makes the order deterministic even for concurrent ops:
 /// every replica will sort them identically, so every redo phase applies them
 /// in the same sequence.
-fn compare_ops(a : TreeMoveOp, b : TreeMoveOp) -> Int {
+fn compare_ops(a : TreeMoveOp, b : TreeMoveOp) -> Int32 {
   let ts_cmp = a.timestamp.compare(b.timestamp)
   if ts_cmp != 0 {
     return ts_cmp

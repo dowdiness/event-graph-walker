@@ -27,7 +27,7 @@ pub fn CausalGraph::from_topological_ops_experimental(
     if graph.version_map.contains(raw) {
       raise CausalGraphError::DuplicateVersion(raw~)
     }
-    let parents : Array[Int] = []
+    let parents : Array[Int32] = []
     let mut timestamp = 0
     for parent in op.parents_iter() {
       let lv = match graph.version_map.get(parent) {
@@ -59,7 +59,7 @@ pub fn CausalGraph::from_topological_ops_experimental(
     }
   }
   graph.next_lv = operations.length()
-  let heads : Array[Int] = []
+  let heads : Array[Int32] = []
   for lv = 0; lv < graph.next_lv; lv = lv + 1 {
     if graph.children[lv].is_empty() {
       heads.push(lv)

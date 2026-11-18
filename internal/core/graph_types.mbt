@@ -3,7 +3,7 @@
 ///
 /// **Invariant**: Elements are unique and stored in first-occurrence order.
 pub struct Frontier {
-  priv values : Array[Int]
+  priv values : Array[Int32]
 } derive(Eq)
 
 ///|
@@ -18,30 +18,30 @@ pub impl Show for Frontier with fn output(self, logger) {
 
 ///|
 pub impl ToJson for Frontier with fn to_json(self) {
-  self.values.to_json()
+  Json(self.values)
 }
 
 ///|
 pub impl @json.FromJson for Frontier with fn from_json(json, path) {
-  let values : Array[Int] = @json.from_json(json, path~)
+  let values : Array[Int32] = @json.from_json(json, path~)
   Frontier::from_array(values)
 }
 
 ///|
 /// Create a frontier from an array of LVs, taking ownership of neither the input
 /// nor any duplicate values.
-pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
+pub fn Frontier::from_array(values : Array[Int32]) -> Frontier {
   if values.length() == 0 {
     return { values: [], }
   }
   if values.length() == 1 {
     return { values: [values[0]], }
   }
-  let seen : @hashset.HashSet[Int] = @hashset.HashSet(
+  let seen : @hashset.HashSet[Int32] = @hashset.HashSet(
     [],
     capacity=values.length(),
   )
-  let deduped : Array[Int] = []
+  let deduped : Array[Int32] = []
   for value in values {
     if seen.add_and_check(value) {
       deduped.push(value)
@@ -58,8 +58,8 @@ pub fn Frontier::from_array(values : Array[Int]) -> Frontier {
 /// without canonicalizing the complete result again.
 pub fn Frontier::advance(
   self : Frontier,
-  new_version : Int,
-  parents : Array[Int],
+  new_version : Int32,
+  parents : Array[Int32],
 ) -> Frontier {
   let next = self.values.filter(value => !parents.contains(value))
   if !next.contains(new_version) {
@@ -70,22 +70,22 @@ pub fn Frontier::advance(
 
 ///|
 /// Create a frontier from an array of LVs, removing duplicates.
-pub fn Frontier::from_array_dedup(values : Array[Int]) -> Frontier {
+pub fn Frontier::from_array_dedup(values : Array[Int32]) -> Frontier {
   Frontier::from_array(values)
 }
 
 ///|
-pub fn Frontier::length(self : Frontier) -> Int {
+pub fn Frontier::length(self : Frontier) -> Int32 {
   self.values.length()
 }
 
 ///|
-pub fn Frontier::iter(self : Frontier) -> Iter[Int] {
+pub fn Frontier::iter(self : Frontier) -> Iter[Int32] {
   self.values.iter()
 }
 
 ///|
-pub fn Frontier::to_array(self : Frontier) -> Array[Int] {
+pub fn Frontier::to_array(self : Frontier) -> Array[Int32] {
   self.values.copy()
 }
 
@@ -100,15 +100,15 @@ pub(all) struct GraphEntry {
   /// LVs of the operations this one directly depends on (its causal parents).
   /// All parent LVs must already exist in the graph before this entry is added.
   /// An empty array means this is a root operation with no dependencies.
-  parents : Array[Int]
+  parents : Array[Int32]
   /// Globally stable agent ID — does not change across peers or restarts.
   agent : String
   /// Agent-local sequence number, monotonically increasing per agent.
   /// Together with `agent`, forms the globally unique `RawVersion` for this op.
-  seq : Int
+  seq : Int32
   /// Lamport timestamp: always `max(parents' timestamps) + 1`, or 0 for roots.
   /// Used for deterministic total ordering when causal order alone is ambiguous.
-  timestamp : Int
+  timestamp : Int32
 } derive(Debug)
 
 // ---------------------------------------------------------------------------

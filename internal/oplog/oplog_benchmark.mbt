@@ -2,7 +2,7 @@
 // Run with: moon bench --package oplog --release
 
 ///|
-fn benchmark_raw_versions(n : Int) -> Array[@core.RawVersion] {
+fn benchmark_raw_versions(n : Int32) -> Array[@core.RawVersion] {
   let raws : Array[@core.RawVersion] = []
   for i in 0..<n {
     raws.push(@core.RawVersion("bench", i))
@@ -36,7 +36,7 @@ test "oplog - mutable hashset build (1000 raw versions)" (b : @bench.T) {
 
 ///|
 /// Benchmark: Insert operations (linear, 100 ops)
-fn benchmark_remote_chain(n : Int) -> Array[@core.Op] {
+fn benchmark_remote_chain(n : Int32) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<n {
     let parents = if i == 0 { [] } else { [@core.RawVersion("remote", i - 1)] }
@@ -47,7 +47,7 @@ fn benchmark_remote_chain(n : Int) -> Array[@core.Op] {
 
 ///|
 fn benchmark_remote_live_pending_changes(
-  n : Int,
+  n : Int32,
 ) -> PendingChanges raise OpLogError {
   let pending_changes = PendingChanges()
   for i in 0..<n {
@@ -67,7 +67,7 @@ fn benchmark_remote_live_pending_changes(
 
 ///|
 fn benchmark_remote_compaction_pending_changes(
-  n : Int,
+  n : Int32,
 ) -> PendingChanges raise OpLogError {
   let pending_changes = PendingChanges()
   let rejected : Array[@core.RawVersion] = []
@@ -139,7 +139,7 @@ test "oplog - remote pending-changes owner build+reject+policy compact (10000 en
 /// stale ready reference, so 511/512/513 entries exercise weighted stale counts
 /// 1022/1024/1026 around the policy floor.
 fn benchmark_retained_ready_pending_changes(
-  stale_ready_entries : Int,
+  stale_ready_entries : Int32,
 ) -> PendingChanges raise OpLogError {
   let pending_changes = PendingChanges()
   pending_changes.register_pending(
@@ -180,7 +180,7 @@ fn benchmark_retained_ready_pending_changes(
 /// divide the reported duration by 100 for the per-prepare cost.
 fn benchmark_repeated_retained_ready_prepare(
   b : @bench.T,
-  stale_ready_entries : Int,
+  stale_ready_entries : Int32,
   after_quiescent_policy : Bool,
   incoming : Array[@core.Op],
 ) -> Unit raise {
@@ -363,7 +363,7 @@ fn benchmark_remote_stream_lifecycle(
 /// maximum prepares per quiescent caller transition is structurally one.
 fn benchmark_remote_stream_incidence(
   ready_ops : Array[@core.Op],
-) -> (Int, Int, Int, Int, Int, Int) raise OpLogError {
+) -> (Int32, Int32, Int32, Int32, Int32, Int32) raise OpLogError {
   let oplog = OpLog("incidence-evidence")
   ignore(oplog.apply_remote(benchmark_remote_stream_blocker()))
   let mut prepares_with_stale_ready = 0
@@ -754,7 +754,7 @@ test "oplog - production reverse dependency chain plan batch (10000 ops)" (
 }
 
 ///|
-fn benchmark_remote_branches(depth : Int) -> Array[@core.Op] {
+fn benchmark_remote_branches(depth : Int32) -> Array[@core.Op] {
   let agents = ["remote-a", "remote-b", "remote-c", "remote-d"]
   let ops : Array[@core.Op] = []
   for level in 0..<depth {
@@ -819,7 +819,7 @@ test "oplog - production reverse branching dependencies plan batch (4 x 250 ops)
 }
 
 ///|
-fn benchmark_all_ready_batch(n : Int) -> Array[@core.Op] {
+fn benchmark_all_ready_batch(n : Int32) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for i in 0..<n {
     ops.push(@core.Op::insert(-1, [], "ready", i, "x", None, None))
@@ -829,8 +829,8 @@ fn benchmark_all_ready_batch(n : Int) -> Array[@core.Op] {
 
 ///|
 fn benchmark_duplicate_heavy_batch(
-  unique_count : Int,
-  copies : Int,
+  unique_count : Int32,
+  copies : Int32,
 ) -> Array[@core.Op] {
   let unique = benchmark_all_ready_batch(unique_count)
   let ops : Array[@core.Op] = []

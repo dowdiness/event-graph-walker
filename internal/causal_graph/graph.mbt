@@ -8,21 +8,21 @@
 /// Uses flat arrays indexed by LV (0..n-1) for O(1) lookup.
 pub struct CausalGraph {
   priv entries : Array[@core.GraphEntry]
-  priv children : Array[Array[Int]]
-  priv version_map : Map[@core.RawVersion, Int]
-  priv mut next_lv : Int
+  priv children : Array[Array[Int32]]
+  priv version_map : Map[@core.RawVersion, Int32]
+  priv mut next_lv : Int32
   priv mut frontier : @core.Frontier
-  priv agent_seqs : Map[String, Int]
+  priv agent_seqs : Map[String, Int32]
   // Sparse membership is graph authority; it is deliberately lazy.
   priv mut version_cache : GraphVersionCache
   // Reusable query buffers — amortize allocation across repeated calls.
   // Two gen-counter visited buffers (independent counters).
   // One in-degree buffer for toposort (manually zeroed before/after use).
-  priv query_visited : Array[Int]
-  priv mut query_gen : Int
-  priv query_visited2 : Array[Int]
-  priv mut query_gen2 : Int
-  priv query_int_buf : Array[Int]
+  priv query_visited : Array[Int32]
+  priv mut query_gen : Int32
+  priv query_visited2 : Array[Int32]
+  priv mut query_gen2 : Int32
+  priv query_int_buf : Array[Int32]
 }
 
 ///|
@@ -68,14 +68,14 @@ fn CausalGraph::ensure_query_buffers(self : CausalGraph) -> Unit {
 }
 
 ///|
-fn CausalGraph::fresh_gen(self : CausalGraph) -> Int {
+fn CausalGraph::fresh_gen(self : CausalGraph) -> Int32 {
   self.ensure_query_buffers()
   self.query_gen = self.query_gen + 1
   self.query_gen
 }
 
 ///|
-fn CausalGraph::fresh_gen2(self : CausalGraph) -> Int {
+fn CausalGraph::fresh_gen2(self : CausalGraph) -> Int32 {
   self.ensure_query_buffers()
   self.query_gen2 = self.query_gen2 + 1
   self.query_gen2
@@ -84,7 +84,7 @@ fn CausalGraph::fresh_gen2(self : CausalGraph) -> Int {
 ///|
 pub fn CausalGraph::lv_to_raw(
   self : CausalGraph,
-  lv : Int,
+  lv : Int32,
 ) -> @core.RawVersion? {
   if lv < 0 || lv >= self.next_lv {
     return None
@@ -97,7 +97,7 @@ pub fn CausalGraph::lv_to_raw(
 pub fn CausalGraph::raw_to_lv(
   self : CausalGraph,
   raw : @core.RawVersion,
-) -> Int? {
+) -> Int32? {
   self.version_map.get(raw)
 }
 
@@ -105,7 +105,7 @@ pub fn CausalGraph::raw_to_lv(
 #alias("_[_]")
 pub fn CausalGraph::get_entry(
   self : CausalGraph,
-  lv : Int,
+  lv : Int32,
 ) -> @core.GraphEntry? {
   if lv < 0 || lv >= self.next_lv {
     return None
@@ -123,10 +123,10 @@ pub fn CausalGraph::get_entry(
 /// Shared logic for add_version and add_version_with_seq.
 fn CausalGraph::add_version_inner(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-  seq : Int,
-) -> Int raise CausalGraphError {
+  seq : Int32,
+) -> Int32 raise CausalGraphError {
   let raw = @core.RawVersion(agent, seq)
   if agent == "" || seq < 0 {
     raise CausalGraphError::InvalidIdentity(raw~)
@@ -174,9 +174,9 @@ fn CausalGraph::add_version_inner(
 ///|
 pub fn CausalGraph::add_version(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-) -> Int raise CausalGraphError {
+) -> Int32 raise CausalGraphError {
   let seq = match self.agent_seqs.get(agent) {
     Some(s) => s + 1
     None => 0
@@ -189,10 +189,10 @@ pub fn CausalGraph::add_version(
 ///|
 pub fn CausalGraph::add_version_with_seq(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-  seq : Int,
-) -> Int raise CausalGraphError {
+  seq : Int32,
+) -> Int32 raise CausalGraphError {
   let lv = self.add_version_inner(parents, agent, seq)
   let current_seq = self.agent_seqs.get(agent).unwrap_or(-1)
   let next_seq = if seq > current_seq { seq } else { current_seq }
@@ -203,8 +203,8 @@ pub fn CausalGraph::add_version_with_seq(
 ///|
 fn CausalGraph::update_frontier(
   self : CausalGraph,
-  new_lv : Int,
-  parents : Array[Int],
+  new_lv : Int32,
+  parents : Array[Int32],
 ) -> Unit {
   self.frontier = self.frontier.advance(new_lv, parents)
 }
@@ -216,14 +216,14 @@ pub fn CausalGraph::get_frontier(self : CausalGraph) -> @core.Frontier {
 
 ///|
 /// Number of operations recorded in the graph (LV count).
-pub fn CausalGraph::op_count(self : CausalGraph) -> Int {
+pub fn CausalGraph::op_count(self : CausalGraph) -> Int32 {
   self.next_lv
 }
 
 ///|
 /// Number of direct successors (outdegree) of an LV in the causal DAG.
 /// Returns 0 for out-of-range LVs.
-pub fn CausalGraph::children_count(self : CausalGraph, lv : Int) -> Int {
+pub fn CausalGraph::children_count(self : CausalGraph, lv : Int32) -> Int32 {
   if lv < 0 || lv >= self.next_lv {
     return 0
   }
@@ -233,8 +233,8 @@ pub fn CausalGraph::children_count(self : CausalGraph, lv : Int) -> Int {
 ///|
 pub fn CausalGraph::is_ancestor(
   self : CausalGraph,
-  lv1 : Int,
-  lv2 : Int,
+  lv1 : Int32,
+  lv2 : Int32,
 ) -> Bool {
   if lv1 == lv2 {
     return true
@@ -245,7 +245,7 @@ pub fn CausalGraph::is_ancestor(
   }
   let gen = self.fresh_gen()
   let visited = self.query_visited
-  let queue : Array[Int] = []
+  let queue : Array[Int32] = []
   for parent in self.entries[lv2].parents {
     queue.push(parent)
   }
@@ -274,12 +274,12 @@ pub fn CausalGraph::is_ancestor(
 fn CausalGraph::bfs_backward(
   self : CausalGraph,
   frontiers : @core.Frontier,
-  visited : Array[Int],
-  gen : Int,
-) -> Array[Int] {
+  visited : Array[Int32],
+  gen : Int32,
+) -> Array[Int32] {
   let n = self.next_lv
-  let reachable : Array[Int] = []
-  let queue : Array[Int] = []
+  let reachable : Array[Int32] = []
+  let queue : Array[Int32] = []
   for lv in frontiers.iter() {
     if lv >= 0 && lv < n {
       queue.push(lv)
@@ -307,7 +307,7 @@ fn CausalGraph::bfs_backward(
 fn CausalGraph::transitive_closure_gen(
   self : CausalGraph,
   frontiers : @core.Frontier,
-) -> (Int, Array[Int]) {
+) -> (Int32, Array[Int32]) {
   let gen = self.fresh_gen()
   let reachable = self.bfs_backward(frontiers, self.query_visited, gen)
   (gen, reachable)
@@ -317,7 +317,7 @@ fn CausalGraph::transitive_closure_gen(
 /// Topological sort a subset, marking membership in query_visited.
 fn CausalGraph::toposort_lv_set(
   self : CausalGraph,
-  lv_set : Array[Int],
+  lv_set : Array[Int32],
 ) -> @rle.Rle[@core.LvRange] {
   let gen = self.fresh_gen()
   let visited = self.query_visited
@@ -332,20 +332,20 @@ pub fn CausalGraph::graph_diff(
   self : CausalGraph,
   from : @core.Frontier,
   to : @core.Frontier,
-) -> (Array[Int], Array[Int]) {
+) -> (Array[Int32], Array[Int32]) {
   // Two BFS passes on independent buffers (no interference)
   let from_gen = self.fresh_gen()
   let from_lvs = self.bfs_backward(from, self.query_visited, from_gen)
   let to_gen = self.fresh_gen2()
   let to_lvs = self.bfs_backward(to, self.query_visited2, to_gen)
-  let retreat : Array[Int] = []
+  let retreat : Array[Int32] = []
   let to_buf = self.query_visited2
   for lv in from_lvs {
     if to_buf[lv] != to_gen {
       retreat.push(lv)
     }
   }
-  let advance : Array[Int] = []
+  let advance : Array[Int32] = []
   let from_buf = self.query_visited
   for lv in to_lvs {
     if from_buf[lv] != from_gen {

@@ -3,7 +3,7 @@
 ///|
 pub(all) suberror BranchError {
   /// Operation not found in oplog (branch-specific lookup failure)
-  MissingOp(lv~ : Int)
+  MissingOp(lv~ : Int32)
   /// RawVersion could not be resolved to local version
   MissingOrigin(raw~ : @core.RawVersion)
   /// Wrapped error from oplog operations

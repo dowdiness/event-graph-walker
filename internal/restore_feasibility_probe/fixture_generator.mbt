@@ -7,7 +7,7 @@ suberror FixtureError {
 ///|
 /// One canonical event in catalog generation order.
 struct FixtureEvent {
-  ordinal : Int
+  ordinal : Int32
   identity : RawIdentity
   parents : Array[RawIdentity]
   body : CanonicalBody
@@ -29,7 +29,7 @@ struct GeneratedFixture {
 struct CatalogFixture {
   fixture_id : String
   document_id : String
-  event_count : Int
+  event_count : Int32
   canonical_sha256 : String
   replay_order : Array[RawIdentity]
   final_text : String
@@ -38,7 +38,7 @@ struct CatalogFixture {
 ///|
 /// Complete required morphology catalog summary.
 struct FixtureCatalog {
-  schema_version : Int
+  schema_version : Int32
   fixture_seed : String
   fixtures : Array[CatalogFixture]
 } derive(Eq)
@@ -50,21 +50,23 @@ fn FixtureCatalog::_to_json_string(self : FixtureCatalog) -> String {
   for fixture in self.fixtures {
     fixtures.push(
       Json::object({
-        "fixture_id": fixture.fixture_id.to_json(),
-        "document_id": fixture.document_id.to_json(),
-        "event_count": fixture.event_count.to_json(),
-        "canonical_sha256": fixture.canonical_sha256.to_json(),
-        "replay_order": fixture.replay_order
-        .map(identity => identity.agent + ":" + identity.sequence.to_string())
-        .to_json(),
-        "final_text": fixture.final_text.to_json(),
+        "fixture_id": Json(fixture.fixture_id),
+        "document_id": Json(fixture.document_id),
+        "event_count": Json(fixture.event_count),
+        "canonical_sha256": Json(fixture.canonical_sha256),
+        "replay_order": Json(
+          fixture.replay_order.map(identity => {
+            identity.agent + ":" + identity.sequence.to_string()
+          }),
+        ),
+        "final_text": Json(fixture.final_text),
       }),
     )
   }
   Json::object({
-    "schema_version": self.schema_version.to_json(),
-    "fixture_seed": self.fixture_seed.to_json(),
-    "fixtures": fixtures.to_json(),
+    "schema_version": Json(self.schema_version),
+    "fixture_seed": Json(self.fixture_seed),
+    "fixtures": Json(fixtures),
   }).stringify()
 }
 
@@ -98,61 +100,64 @@ fn GeneratedFixture::to_full_json_string(
     for parent in event.parents {
       parents.push(
         Json::object({
-          "agent": parent.agent.to_json(),
-          "sequence": parent.sequence.to_json(),
+          "agent": Json(parent.agent),
+          "sequence": Json(parent.sequence),
         }),
       )
     }
     let body = match event.body {
       InsertScalar(position, scalar) =>
         Json::object({
-          "kind": "insert".to_json(),
-          "position": position.to_json(),
-          "scalar": scalar.to_json(),
+          "kind": Json("insert"),
+          "position": Json(position),
+          "scalar": Json(scalar),
         })
       DeleteScalar(position) =>
-        Json::object({
-          "kind": "delete".to_json(),
-          "position": position.to_json(),
-        })
+        Json::object({ "kind": Json("delete"), "position": Json(position) })
       Undelete(target) =>
         Json::object({
-          "kind": "undelete".to_json(),
+          "kind": Json("undelete"),
           "target": Json::object({
-            "agent": target.agent.to_json(),
-            "sequence": target.sequence.to_json(),
+            "agent": Json(target.agent),
+            "sequence": Json(target.sequence),
           }),
         })
     }
     events.push(
       Json::object({
-        "ordinal": event.ordinal.to_json(),
+        "ordinal": Json(event.ordinal),
         "identity": Json::object({
-          "agent": event.identity.agent.to_json(),
-          "sequence": event.identity.sequence.to_json(),
+          "agent": Json(event.identity.agent),
+          "sequence": Json(event.identity.sequence),
         }),
-        "parents": parents.to_json(),
+        "parents": Json(parents),
         "body": body,
-        "canonical_body_bytes_hex": bytes_hex(event.canonical_body_bytes).to_json(),
-        "canonical_event_bytes_hex": bytes_hex(canonical_event_bytes(event)).to_json(),
+        "canonical_body_bytes_hex": Json(bytes_hex(event.canonical_body_bytes)),
+        "canonical_event_bytes_hex": Json(
+          bytes_hex(canonical_event_bytes(event)),
+        ),
       }),
     )
   }
   Json::object({
-    "fixture_id": self.fixture_id.to_json(),
-    "document_id": self.document_id.to_json(),
-    "event_count": self.events.length().to_json(),
-    "canonical_sha256": sha256_hex(canonical_fixture_bytes(self)).to_json(),
-    "events": events.to_json(),
-    "replay_order": self.replay_order
-    .map(identity => identity.agent + ":" + identity.sequence.to_string())
-    .to_json(),
-    "final_text": self.final_text.to_json(),
-    "adapter_observation_sha256": sha256_hex(
-      strict_utf8(self.final_text) catch {
-        _ => raise FixtureError::Invalid(detail="final text encoding failure")
-      },
-    ).to_json(),
+    "fixture_id": Json(self.fixture_id),
+    "document_id": Json(self.document_id),
+    "event_count": Json(self.events.length()),
+    "canonical_sha256": Json(sha256_hex(canonical_fixture_bytes(self))),
+    "events": Json(events),
+    "replay_order": Json(
+      self.replay_order.map(identity => {
+        identity.agent + ":" + identity.sequence.to_string()
+      }),
+    ),
+    "final_text": Json(self.final_text),
+    "adapter_observation_sha256": Json(
+      sha256_hex(
+        strict_utf8(self.final_text) catch {
+          _ => raise FixtureError::Invalid(detail="final text encoding failure")
+        },
+      ),
+    ),
   }).stringify()
 }
 
@@ -168,7 +173,7 @@ struct VisibleScalar {
 struct FixtureBuilder {
   events : Array[FixtureEvent]
   visible : Array[VisibleScalar]
-  next_sequences : Map[String, Int]
+  next_sequences : Map[String, Int32]
 }
 
 ///|
@@ -224,7 +229,7 @@ fn FixtureBuilder::insert(
   self : FixtureBuilder,
   agent : String,
   parents : Array[RawIdentity],
-  position : Int,
+  position : Int32,
   scalar : String,
 ) -> FixtureEvent raise FixtureError {
   if position < 0 || position > self.visible.length() {
@@ -240,7 +245,7 @@ fn FixtureBuilder::delete(
   self : FixtureBuilder,
   agent : String,
   parents : Array[RawIdentity],
-  position : Int,
+  position : Int32,
 ) -> (FixtureEvent, VisibleScalar) raise FixtureError {
   if position < 0 || position >= self.visible.length() {
     raise FixtureError::Invalid(detail="delete position outside visible text")
@@ -256,7 +261,7 @@ fn FixtureBuilder::undelete(
   self : FixtureBuilder,
   agent : String,
   parents : Array[RawIdentity],
-  position : Int,
+  position : Int32,
   scalar : VisibleScalar,
 ) -> FixtureEvent raise FixtureError {
   if position < 0 || position > self.visible.length() {
@@ -277,7 +282,7 @@ fn FixtureBuilder::chain_parents(self : FixtureBuilder) -> Array[RawIdentity] {
 }
 
 ///|
-fn default_writer(ordinal : Int) -> String {
+fn default_writer(ordinal : Int32) -> String {
   if ordinal / 64 % 2 == 0 {
     "r0-a"
   } else {
@@ -286,7 +291,7 @@ fn default_writer(ordinal : Int) -> String {
 }
 
 ///|
-fn scalar_pattern(ordinal : Int) -> String {
+fn scalar_pattern(ordinal : Int32) -> String {
   match ordinal % 7 {
     0 => "a"
     1 => "é"
@@ -310,7 +315,7 @@ fn visible_text(visible : Array[VisibleScalar]) -> String {
 ///|
 /// Construct an event directly for ordering conformance tests.
 fn _fixture_event_for_order(
-  ordinal : Int,
+  ordinal : Int32,
   identity : RawIdentity,
   parents : Array[RawIdentity],
 ) -> FixtureEvent {
@@ -348,7 +353,7 @@ fn stable_topological_order(
   events : Array[FixtureEvent],
 ) -> Array[RawIdentity] raise FixtureError {
   let by_key : Map[String, FixtureEvent] = Default::default()
-  let remaining : Map[String, Int] = Default::default()
+  let remaining : Map[String, Int32] = Default::default()
   let children : Map[String, Array[RawIdentity]] = Default::default()
   for event in events {
     let key = raw_identity_key(event.identity)
@@ -398,7 +403,7 @@ fn stable_topological_order(
 ///|
 fn add_default_insert(
   builder : FixtureBuilder,
-  position : Int,
+  position : Int32,
 ) -> FixtureEvent raise FixtureError {
   let ordinal = builder.events.length()
   builder.insert(
@@ -412,7 +417,7 @@ fn add_default_insert(
 ///|
 fn generate_sequential(
   shape : String,
-  event_count : Int,
+  event_count : Int32,
 ) -> FixtureBuilder raise FixtureError {
   let builder = FixtureBuilder::new()
   match shape {
@@ -475,7 +480,7 @@ fn generate_sequential(
 }
 
 ///|
-fn generate_u_mixed(event_count : Int) -> FixtureBuilder raise FixtureError {
+fn generate_u_mixed(event_count : Int32) -> FixtureBuilder raise FixtureError {
   if event_count % 4 != 0 {
     raise FixtureError::Invalid(
       detail="U-mixed event count must be divisible by four",
@@ -497,7 +502,7 @@ fn generate_u_mixed(event_count : Int) -> FixtureBuilder raise FixtureError {
 }
 
 ///|
-fn generate_c_short(event_count : Int) -> FixtureBuilder raise FixtureError {
+fn generate_c_short(event_count : Int32) -> FixtureBuilder raise FixtureError {
   let builder = FixtureBuilder::new()
   let block_count = event_count / 17
   for block = 0; block < block_count; block = block + 1 {
@@ -553,8 +558,8 @@ fn generate_c_short(event_count : Int) -> FixtureBuilder raise FixtureError {
 
 ///|
 fn generate_a_long(
-  event_count : Int,
-  ratio_percent : Int,
+  event_count : Int32,
+  ratio_percent : Int32,
 ) -> FixtureBuilder raise FixtureError {
   let builder = FixtureBuilder::new()
   let branch_total = event_count * ratio_percent / 100
@@ -614,7 +619,9 @@ fn generate_a_long(
 }
 
 ///|
-fn generate_c_multiroot(event_count : Int) -> FixtureBuilder raise FixtureError {
+fn generate_c_multiroot(
+  event_count : Int32,
+) -> FixtureBuilder raise FixtureError {
   let builder = FixtureBuilder::new()
   let a_length = event_count / 2
   let b_length = event_count - a_length
@@ -652,8 +659,8 @@ fn generate_c_multiroot(event_count : Int) -> FixtureBuilder raise FixtureError 
 ///|
 fn fixture_id(
   shape : String,
-  event_count : Int,
-  ratio_percent : Int?,
+  event_count : Int32,
+  ratio_percent : Int32?,
 ) -> String {
   match ratio_percent {
     Some(1) => "A-long-" + event_count.to_string() + "-r001"
@@ -667,7 +674,7 @@ fn fixture_id(
 /// Generate one canonical morphology from an empty document.
 fn generate_fixture(
   shape : String,
-  event_count : Int,
+  event_count : Int32,
 ) -> GeneratedFixture raise FixtureError {
   if event_count <= 0 {
     raise FixtureError::Invalid(detail="fixture event count must be positive")
@@ -699,7 +706,7 @@ fn generate_fixture(
 
 ///|
 /// Immutable fixture matrix fixed by the R0 decision contract.
-fn required_fixture_specs() -> Array[(String, Int)] {
+fn required_fixture_specs() -> Array[(String, Int32)] {
   [
     ("S-linear", 1000),
     ("S-linear", 10000),

@@ -6,7 +6,7 @@
 
 ///|
 /// Maximum value for each element (exclusive upper bound).
-let max_value : Int = 65536
+let max_value : Int32 = 65536
 
 ///|
 /// A fractional index for dense sibling ordering.
@@ -15,14 +15,14 @@ let max_value : Int = 65536
 /// compared lexicographically with implicit zero-padding for shorter arrays.
 /// Trailing zeros are stripped on construction (normalization).
 pub struct FractionalIndex {
-  priv elements : Array[Int]
+  priv elements : Array[Int32]
 }
 
 ///|
 /// Create a new FractionalIndex from raw elements.
 /// Normalizes by stripping trailing zeros.
 /// Aborts if any element is outside `[0, max_value)`.
-pub fn FractionalIndex::new(elements : Array[Int]) -> FractionalIndex {
+pub fn FractionalIndex::new(elements : Array[Int32]) -> FractionalIndex {
   for i = 0; i < elements.length(); i = i + 1 {
     if elements[i] < 0 || elements[i] >= max_value {
       abort("FractionalIndex::new: element out of range [0, 65536)")
@@ -34,19 +34,19 @@ pub fn FractionalIndex::new(elements : Array[Int]) -> FractionalIndex {
 
 ///|
 /// Return the underlying elements (read-only copy).
-pub fn FractionalIndex::elements(self : FractionalIndex) -> Array[Int] {
+pub fn FractionalIndex::elements(self : FractionalIndex) -> Array[Int32] {
   self.elements.copy()
 }
 
 ///|
 /// Length of the elements array.
-pub fn FractionalIndex::length(self : FractionalIndex) -> Int {
+pub fn FractionalIndex::length(self : FractionalIndex) -> Int32 {
   self.elements.length()
 }
 
 ///|
 /// Get element at position, defaulting to 0 for out-of-bounds (implicit zero-padding).
-fn FractionalIndex::get_or_zero(self : FractionalIndex, i : Int) -> Int {
+fn FractionalIndex::get_or_zero(self : FractionalIndex, i : Int32) -> Int32 {
   if i < self.elements.length() {
     self.elements[i]
   } else {
@@ -56,7 +56,7 @@ fn FractionalIndex::get_or_zero(self : FractionalIndex, i : Int) -> Int {
 
 ///|
 /// Normalize by stripping trailing zeros.
-fn normalize(elements : Array[Int]) -> Array[Int] {
+fn normalize(elements : Array[Int32]) -> Array[Int32] {
   let mut last_nonzero = -1
   for i = 0; i < elements.length(); i = i + 1 {
     if elements[i] != 0 {
@@ -89,7 +89,7 @@ fn successor_after(left : FractionalIndex) -> FractionalIndex {
 
 ///|
 /// Lexicographic comparison with implicit zero-padding.
-pub impl Compare for FractionalIndex with fn compare(self, other) -> Int {
+pub impl Compare for FractionalIndex with fn compare(self, other) -> Int32 {
   let len = if self.elements.length() > other.elements.length() {
     self.elements.length()
   } else {
@@ -170,7 +170,7 @@ fn between_impl(
   if left.compare(right) >= 0 {
     abort("FractionalIndex::between: left must be strictly less than right")
   }
-  let result : Array[Int] = []
+  let result : Array[Int32] = []
   let max_len = if left.elements.length() > right.elements.length() {
     left.elements.length()
   } else {

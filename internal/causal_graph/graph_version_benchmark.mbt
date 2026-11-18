@@ -1,7 +1,7 @@
 ///|
-fn graph_version_benchmark_graph(operation_count : Int) -> CausalGraph {
+fn graph_version_benchmark_graph(operation_count : Int32) -> CausalGraph {
   let graph = CausalGraph::new()
-  let mut frontier : Array[Int] = []
+  let mut frontier : Array[Int32] = []
   for _ in 0..<operation_count {
     frontier = [try! graph.add_version(frontier, "agent")]
   }
@@ -74,7 +74,7 @@ test "perf: sparse summary insert (32 agents)" (b : @bench.T) {
 }
 
 ///|
-fn resource_agent_name(index : Int) -> String {
+fn resource_agent_name(index : Int32) -> String {
   let digits = index.to_string()
   "agent-" + "0".repeat(5 - digits.length()) + digits
 }
@@ -83,13 +83,13 @@ fn resource_agent_name(index : Int) -> String {
 /// Build independent per-agent causal chains whose even sequence numbers form
 /// the requested number of non-adjacent knowledge ranges.
 fn graph_version_resource_graph(
-  agent_count : Int,
-  ranges_per_agent : Int,
+  agent_count : Int32,
+  ranges_per_agent : Int32,
 ) -> CausalGraph {
   let graph = CausalGraph::new()
   for agent_index in 0..<agent_count {
     let agent = resource_agent_name(agent_index)
-    let mut frontier : Array[Int] = []
+    let mut frontier : Array[Int32] = []
     for range_index in 0..<ranges_per_agent {
       frontier = [
         try! graph.add_version_with_seq(frontier, agent, range_index * 2),

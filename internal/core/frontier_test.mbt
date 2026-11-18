@@ -72,7 +72,7 @@ test "from_array isolates source array mutations" {
 
 ///|
 test "from_array isolates empty source mutation" {
-  let source : Array[Int] = []
+  let source : Array[Int32] = []
   let frontier = @core.Frontier::from_array(source)
   source.push(1)
   @debug.debug_inspect(frontier.to_array(), content="[]")

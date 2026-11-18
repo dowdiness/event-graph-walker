@@ -43,7 +43,7 @@ pub fn MergeContext::apply_operations(
 
 ///|
 /// Check if a given LV is contained in any range of the Rle.
-fn rle_contains_lv(rle : @rle.Rle[@core.LvRange], lv : Int) -> Bool {
+fn rle_contains_lv(rle : @rle.Rle[@core.LvRange], lv : Int32) -> Bool {
   for range in rle.iter() {
     if range.contains(lv) {
       return true

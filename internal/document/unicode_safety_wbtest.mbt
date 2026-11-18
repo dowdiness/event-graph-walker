@@ -18,7 +18,7 @@
 /// lone-surrogate escapes at lex time and `Char` rejects surrogates as
 /// non-scalar values, so this is the only path to a malformed-UTF-16
 /// String. Bytes are interpreted as UTF-16LE.
-fn lone_code_unit(code_unit : Int) -> String {
+fn lone_code_unit(code_unit : Int32) -> String {
   let lo = (code_unit & 0xFF).to_byte()
   let hi = ((code_unit >> 8) & 0xFF).to_byte()
   Bytes::from_array([lo, hi]).to_unchecked_string()

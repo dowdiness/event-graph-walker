@@ -12,7 +12,7 @@
 /// - Version Vector: {"alice": 4, "bob": 8}
 ///
 /// This provides O(1) comparison for common operations and reduces memory usage.
-pub struct VersionVector(Map[String, Int]) derive (
+pub struct VersionVector(Map[String, Int32]) derive (
   Debug,
   Eq,
   Default,
@@ -133,7 +133,7 @@ pub impl @quickcheck.Arbitrary for VersionVector with fn arbitrary(
 /// 1. Remove agents (fewer agents = simpler)
 /// 2. Decrease sequence numbers for each agent (smaller numbers = simpler)
 /// 3. Combination of both
-pub impl @qc.Shrink for VersionVector with fn shrink(vv) {
+pub impl @shrink.Shrink for VersionVector with fn shrink(vv) {
   let agents = vv.agents()
 
   // Strategy 1: Shrink by removing agents
@@ -238,7 +238,7 @@ pub fn VersionVector::new() -> VersionVector {
 pub fn VersionVector::set(
   self : VersionVector,
   agent : String,
-  seq : Int,
+  seq : Int32,
 ) -> VersionVector {
   self.0.set(agent, seq)
   self
@@ -295,7 +295,7 @@ pub fn VersionVector::agents(self : VersionVector) -> Array[String] {
 pub fn VersionVector::sequence_for(
   self : VersionVector,
   agent : String,
-) -> Int? {
+) -> Int32? {
   self.0.get(agent)
 }
 
@@ -477,7 +477,7 @@ pub fn VersionVector::to_frontier(
 pub fn VersionVector::includes(
   self : VersionVector,
   agent : String,
-  seq : Int,
+  seq : Int32,
 ) -> Bool {
   match self.0.get(agent) {
     Some(max_seq) => seq <= max_seq
@@ -506,7 +506,7 @@ pub extend VersionVector with @quickcheck.Arbitrary::{arbitrary}
 
 ///|
 #doc(hidden)
-pub extend VersionVector with @qc.Shrink::{shrink}
+pub extend VersionVector with @shrink.Shrink::{shrink}
 
 ///|
 #doc(hidden)

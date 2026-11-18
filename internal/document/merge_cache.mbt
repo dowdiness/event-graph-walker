@@ -18,8 +18,8 @@ pub struct MergeCache {
 /// If merge_size > doc_size / 2, skip incremental and rebuild after.
 pub fn MergeCache::new(
   cache : @order_tree.OrderTree[VisibleRun]?,
-  doc_size : Int,
-  merge_size : Int,
+  doc_size : Int32,
+  merge_size : Int32,
 ) -> MergeCache {
   if merge_size > doc_size / 2 {
     { cache: None, dirty: true, }
@@ -30,7 +30,7 @@ pub fn MergeCache::new(
 
 ///|
 /// Remove an item at a known document position.
-pub fn MergeCache::remove_at(self : MergeCache, position : Int) -> Unit {
+pub fn MergeCache::remove_at(self : MergeCache, position : Int32) -> Unit {
   match self.cache {
     Some(cache) => {
       let _ = cache.delete_at(position)
@@ -43,7 +43,7 @@ pub fn MergeCache::remove_at(self : MergeCache, position : Int) -> Unit {
 /// Insert an item at a document position.
 pub fn MergeCache::insert_at(
   self : MergeCache,
-  position : Int,
+  position : Int32,
   run : VisibleRun,
 ) -> Unit {
   match self.cache {

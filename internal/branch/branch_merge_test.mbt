@@ -23,7 +23,7 @@ fn resolve_origin_lv(
 }
 
 ///|
-fn resolve_op_lv(oplog : @oplog.OpLog, op : @core.Op) -> Int? {
+fn resolve_op_lv(oplog : @oplog.OpLog, op : @core.Op) -> Int32? {
   let raw = @core.RawVersion(op.agent(), op.seq())
   oplog.causal_graph().raw_to_lv(raw)
 }

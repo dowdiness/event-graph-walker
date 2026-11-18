@@ -107,7 +107,7 @@ fn[T, E : Error] Document::with_implicit_transaction(
 fn Document::emit_text_op(
   self : Document,
   block : @mt.TreeNodeId,
-  build : (@core.RawVersion, Int) -> TextOp raise DocumentError,
+  build : (@core.RawVersion, Int32) -> TextOp raise DocumentError,
 ) -> @core.RawVersion raise DocumentError {
   let (lv, timestamp, version) = self.next_version_with_raw()
   let parents = self.raw_parents_for_lv(lv)
@@ -257,7 +257,7 @@ fn plan_replay(
 fn replay_failure_transition(
   source : Array[UndoItem],
   direction : ReplayDirection,
-  failing_index : Int,
+  failing_index : Int32,
   completed_in_execution_order : Array[UndoItem],
 ) -> ReplayFailureTransition {
   match direction {

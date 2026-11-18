@@ -118,10 +118,10 @@ test "remote snapshot fallback discards an earlier exact effect and stale index"
 
 ///|
 test "property: published LV locator agrees with Fugue after randomized structural mutation" {
-  let seeds : Array[Int] = @quickcheck.samples(24)
+  let seeds : Array[Int32] = @quickcheck.samples(24)
   for raw_seed in seeds {
     let doc = Document::new("locator-property")
-    let deleted : Array[Int] = []
+    let deleted : Array[Int32] = []
     let mut state = raw_seed % 997
     if state < 0 {
       state = -state

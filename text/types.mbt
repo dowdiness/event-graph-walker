@@ -5,20 +5,20 @@
 ///|
 /// Negative values are clamped to 0 during construction.
 pub(all) struct Pos {
-  priv value : Int
+  priv value : Int32
 } derive(Debug, Eq)
 
 ///| Create a position at the given index.
 
 ///|
 /// Negative values are clamped to 0.
-pub fn Pos::at(value : Int) -> Pos {
+pub fn Pos::at(value : Int32) -> Pos {
   { value: if value < 0 { 0 } else { value }, }
 }
 
 ///|
 /// Get the underlying integer value.
-pub fn Pos::value(self : Pos) -> Int {
+pub fn Pos::value(self : Pos) -> Int32 {
   self.value
 }
 
@@ -42,7 +42,7 @@ pub fn Range::new(start : Pos, end : Pos) -> Range raise TextError {
 
 ///|
 /// Create a range from two ordered integers.
-pub fn Range::from_ints(start : Int, end : Int) -> Range raise TextError {
+pub fn Range::from_ints(start : Int32, end : Int32) -> Range raise TextError {
   if start > end {
     raise TextError::InvalidRange(start~, end~)
   }

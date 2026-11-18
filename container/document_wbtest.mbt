@@ -1,6 +1,6 @@
 ///|
 /// Integration tests for Document
-fn op_timestamp(op : @mt.TreeOp) -> Int {
+fn op_timestamp(op : @mt.TreeOp) -> Int32 {
   match op {
     @mt.Move(move_op) => move_op.timestamp
     @mt.SetProperty(prop_op) => prop_op.timestamp

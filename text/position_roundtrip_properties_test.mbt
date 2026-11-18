@@ -5,7 +5,7 @@
 // the FugueMax tree placement and the position-based API contract.
 
 ///|
-fn do_insert(doc : @text.TextState, pos : Int, ch : String) -> Unit {
+fn do_insert(doc : @text.TextState, pos : Int32, ch : String) -> Unit {
   doc.insert(@text.Pos::at(pos), ch) catch {
     _ => ()
   }

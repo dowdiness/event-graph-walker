@@ -24,7 +24,7 @@ fn p2_diff_assert_state(control : Document, legacy : Document) -> Unit raise {
 ///|
 fn p2_diff_hooks(
   doc : Document,
-  failed_index : Int?,
+  failed_index : Int32?,
   projection_error : DocumentError?,
   recovery_error : @branch.BranchError?,
 ) -> Unit {
@@ -452,7 +452,7 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
 ///|
 fn p2_diff_rejection_hooks(
   doc : Document,
-  counters : Array[Int],
+  counters : Array[Int32],
   action_override : ((Array[@core.Op]) -> @oplog.ApplyChanges raise @oplog.OpLogError)?,
 ) -> Unit {
   doc.set_apply_changes_hooks({
@@ -468,10 +468,10 @@ fn p2_diff_rejection_hooks(
 
 ///|
 fn p2_diff_assert_rejection_counts(
-  counters : Array[Int],
-  prepare : Int,
-  commit : Int,
-  projection : Int,
+  counters : Array[Int32],
+  prepare : Int32,
+  commit : Int32,
+  projection : Int32,
 ) -> Unit raise {
   assert_eq(counters[0], prepare)
   assert_eq(counters[1], commit)

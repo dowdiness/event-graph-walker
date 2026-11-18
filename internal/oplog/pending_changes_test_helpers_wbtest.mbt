@@ -4,7 +4,7 @@
 fn PendingChanges::required_pending_set_oracle(
   self : PendingChanges,
   plan : ApplyChanges,
-) -> Int {
+) -> Int32 {
   let pending : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet(
     self.pending_raws(),
   )
@@ -42,13 +42,13 @@ fn PendingChanges::pending_operations(self : PendingChanges) -> Array[@core.Op] 
 
 ///|
 /// Generation captured by this action.
-fn ApplyChanges::generation(self : ApplyChanges) -> Int {
+fn ApplyChanges::generation(self : ApplyChanges) -> Int32 {
   self.generation
 }
 
 ///|
 /// White-box generation accessor; preparation must preserve this value.
-fn PendingChanges::generation(self : PendingChanges) -> Int {
+fn PendingChanges::generation(self : PendingChanges) -> Int32 {
   self.generation
 }
 
@@ -57,7 +57,7 @@ fn PendingChanges::generation(self : PendingChanges) -> Int {
 fn PendingChanges::arrival_of(
   self : PendingChanges,
   raw : @core.RawVersion,
-) -> Int? {
+) -> Int32? {
   match self.pending.get(raw) {
     Some(node) => Some(node.arrival)
     None => None

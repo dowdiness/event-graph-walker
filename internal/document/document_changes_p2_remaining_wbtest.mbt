@@ -2,24 +2,24 @@
 
 ///|
 struct P2TreeItemSnapshot {
-  lv : Int
+  lv : Int32
   content : String
-  parent : Int?
+  parent : Int32?
   side : @fugue.Side
   deleted : Bool
-  deleted_ts : Int
+  deleted_ts : Int32
   deleted_agent : String
   deleted_is_undelete : Bool
   state : @fugue.ItemState
-  delete_count : Int
-  timestamp : Int
+  delete_count : Int32
+  timestamp : Int32
   agent : String
 }
 
 ///|
 struct P2CacheSnapshot {
   ready : Bool
-  positions : Array[Int]
+  positions : Array[Int32]
 }
 
 ///|
@@ -60,7 +60,7 @@ fn p2_cache_snapshot(doc : Document) -> P2CacheSnapshot raise {
   if !doc.indexed_state.is_ready() {
     return { ready: false, positions: [], }
   }
-  let positions : Array[Int] = []
+  let positions : Array[Int32] = []
   for position = 0; position < doc.tree.visible_count(); position = position + 1 {
     match doc.lv_at_position(position) {
       Some(lv) => positions.push(lv)

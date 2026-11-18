@@ -19,9 +19,9 @@ pub impl Show for LimitKind with fn output(self, logger) {
 pub(all) suberror Failure {
   MalformedMessage(detail~ : String)
   InvalidContent(detail~ : String)
-  MissingDependency(replica_id~ : String, sequence~ : Int)
-  ConflictingIdentity(replica_id~ : String, sequence~ : Int)
-  LimitExceeded(kind~ : LimitKind, limit~ : Int, actual~ : Int)
+  MissingDependency(replica_id~ : String, sequence~ : Int32)
+  ConflictingIdentity(replica_id~ : String, sequence~ : Int32)
+  LimitExceeded(kind~ : LimitKind, limit~ : Int32, actual~ : Int32)
 }
 
 ///|
@@ -48,10 +48,10 @@ pub impl Show for Failure with fn output(self, logger) {
 /// Values are immutable after construction. Call `Limits(...)` to override
 /// defaults for an individual state instance.
 pub(all) struct Limits {
-  priv max_encoded_bytes : Int
-  priv max_decoded_operations : Int
-  priv max_pending_operations : Int
-  priv max_parents_per_operation : Int
+  priv max_encoded_bytes : Int32
+  priv max_decoded_operations : Int32
+  priv max_pending_operations : Int32
+  priv max_parents_per_operation : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -59,10 +59,10 @@ pub(all) struct Limits {
 ///
 /// Every supplied value must be non-negative.
 pub fn Limits::Limits(
-  max_encoded_bytes? : Int = 16 * 1024 * 1024,
-  max_decoded_operations? : Int = 100000,
-  max_pending_operations? : Int = 10000,
-  max_parents_per_operation? : Int = 256,
+  max_encoded_bytes~ : Int32 = 16 * 1024 * 1024,
+  max_decoded_operations~ : Int32 = 100000,
+  max_pending_operations~ : Int32 = 10000,
+  max_parents_per_operation~ : Int32 = 256,
 ) -> Limits raise Failure {
   if max_encoded_bytes < 0 {
     raise Failure::LimitExceeded(
@@ -112,22 +112,22 @@ pub impl Default for Limits with fn default() {
 }
 
 ///|
-pub fn Limits::max_encoded_bytes(self : Limits) -> Int {
+pub fn Limits::max_encoded_bytes(self : Limits) -> Int32 {
   self.max_encoded_bytes
 }
 
 ///|
-pub fn Limits::max_decoded_operations(self : Limits) -> Int {
+pub fn Limits::max_decoded_operations(self : Limits) -> Int32 {
   self.max_decoded_operations
 }
 
 ///|
-pub fn Limits::max_pending_operations(self : Limits) -> Int {
+pub fn Limits::max_pending_operations(self : Limits) -> Int32 {
   self.max_pending_operations
 }
 
 ///|
-pub fn Limits::max_parents_per_operation(self : Limits) -> Int {
+pub fn Limits::max_parents_per_operation(self : Limits) -> Int32 {
   self.max_parents_per_operation
 }
 

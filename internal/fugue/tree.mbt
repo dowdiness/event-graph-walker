@@ -7,8 +7,8 @@
 pub struct FugueTree[T] {
   items : Array[Item[T]?] // Dense array indexed by ItemId
   lv_index : Array[ItemId?] // Sparse LV -> ItemId lookup bridge
-  mut length : Int // Total items (including deleted)
-  mut visible : Int // Visible (non-deleted) item count — kept in sync on every mutation
+  mut length : Int32 // Total items (including deleted)
+  mut visible : Int32 // Visible (non-deleted) item count — kept in sync on every mutation
   root_children : Array[ItemId] // Root's children (root not in items array)
   children : Array[Array[ItemId]] // Children index, dense by ItemId
   jump_ancestors : JumpAncestors // Binary lifting for O(log n) ancestor queries
@@ -126,7 +126,7 @@ pub fn[T : Eq] FugueTree::get_all_items(
 ///|
 /// Count visible (non-deleted) items.
 /// O(1) — returns the cached counter maintained by `add_item`, `delete`, and `undelete`.
-pub fn[T] FugueTree::visible_count(self : FugueTree[T]) -> Int {
+pub fn[T] FugueTree::visible_count(self : FugueTree[T]) -> Int32 {
   self.visible
 }
 
@@ -171,7 +171,7 @@ pub fn FugueTree::to_text(self : FugueTree[String]) -> String {
 pub fn[T] FugueTree::insert(
   self : FugueTree[T],
   op : InsertOp[T],
-  sequence~ : Int,
+  sequence~ : Int32,
 ) -> Unit {
   let (parent, side) = self.find_parent_and_side(
     op.origin_left,
@@ -196,10 +196,10 @@ pub fn[T] FugueTree::insert(
 /// Rule: higher timestamp wins. Same timestamp: Undelete beats Delete (add-wins).
 /// Same timestamp and type: higher agent ID wins.
 pub fn should_win_delete(
-  new_ts : Int,
+  new_ts : Int32,
   new_agent : String,
   new_is_undelete : Bool,
-  cur_ts : Int,
+  cur_ts : Int32,
   cur_agent : String,
   cur_is_undelete : Bool,
 ) -> Bool {
@@ -222,7 +222,7 @@ pub fn should_win_delete(
 pub fn[T] FugueTree::delete_with_ts(
   self : FugueTree[T],
   id : Lv,
-  ts : Int,
+  ts : Int32,
   agent : String,
 ) -> Unit raise FugueError {
   if id == root_lv {
@@ -256,7 +256,7 @@ pub fn[T] FugueTree::delete_with_ts(
 pub fn[T] FugueTree::undelete_with_ts(
   self : FugueTree[T],
   id : Lv,
-  ts : Int,
+  ts : Int32,
   agent : String,
 ) -> Unit raise FugueError {
   if id == root_lv {
@@ -292,7 +292,7 @@ pub fn[T] FugueTree::set_delete_winner(
   self : FugueTree[T],
   id : Lv,
   deleted : Bool,
-  ts : Int,
+  ts : Int32,
   agent : String,
   is_undelete : Bool,
 ) -> Unit raise FugueError {
@@ -327,7 +327,7 @@ pub fn[T] FugueTree::set_delete_winner(
 pub fn[T] FugueTree::adjust_delete_count(
   self : FugueTree[T],
   id : Lv,
-  delta : Int,
+  delta : Int32,
 ) -> Unit raise FugueError {
   if id == root_lv {
     return
@@ -395,7 +395,10 @@ pub fn[T] FugueTree::undelete(
 ///|
 /// Find visible position of an item by LV.
 /// Returns None if deleted or missing.
-pub fn[T : Eq] FugueTree::lv_to_position(self : FugueTree[T], id : Lv) -> Int? {
+pub fn[T : Eq] FugueTree::lv_to_position(
+  self : FugueTree[T],
+  id : Lv,
+) -> Int32? {
   match self[id] {
     Some(item) if item.is_visible() => ()
     _ => return None
@@ -473,7 +476,7 @@ fn[T] FugueTree::add_item(self : FugueTree[T], item : Item[T]) -> Unit {
 fn[T : Eq] compare_children(
   a : (ItemId, Item[T]),
   b : (ItemId, Item[T]),
-) -> Int {
+) -> Int32 {
   let (_, item_a) = a
   let (_, item_b) = b
   Compare::compare(item_a, item_b)
@@ -764,12 +767,12 @@ fn[T : Eq, R] FugueTree::traverse_tree_until(
   self : FugueTree[T],
   start_id : Lv,
   visible_only~ : Bool,
-  visit : (Lv, Item[T], Int) -> R?,
+  visit : (Lv, Item[T], Int32) -> R?,
 ) -> R? {
   // Stack entries: (node_id, phase, sorted_left, sorted_right)
   // We store the sorted children arrays to avoid recomputing them between phases.
   let stack : Array[
-    (Lv, Int, Array[(ItemId, Item[T])], Array[(ItemId, Item[T])]),
+    (Lv, Int32, Array[(ItemId, Item[T])], Array[(ItemId, Item[T])]),
   ] = []
   stack.push((start_id, 0, [], []))
   let mut position = 0

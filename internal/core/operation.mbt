@@ -16,10 +16,10 @@ pub impl Show for OpContent with fn output(self, logger) {
 ///|
 /// Operation structure with causal and FugueMax metadata
 pub struct Op {
-  priv lv : Int // Local version when this op was created
+  priv lv : Int32 // Local version when this op was created
   priv parents : Array[RawVersion] // Causal dependencies (frontier)
   priv agent : String // Agent that created this operation
-  priv seq : Int // Sequence number for this agent
+  priv seq : Int32 // Sequence number for this agent
   priv content : OpContent // Operation content
   priv origin_left : RawVersion? // FugueMax: item to the left
   priv origin_right : RawVersion? // FugueMax: item to the right
@@ -31,7 +31,7 @@ pub impl Show for Op with fn output(self, logger) {
 }
 
 ///|
-pub fn Op::lv(self : Op) -> Int {
+pub fn Op::lv(self : Op) -> Int32 {
   self.lv
 }
 
@@ -52,7 +52,7 @@ pub fn Op::agent(self : Op) -> String {
 }
 
 ///|
-pub fn Op::seq(self : Op) -> Int {
+pub fn Op::seq(self : Op) -> Int32 {
   self.seq
 }
 
@@ -74,10 +74,10 @@ pub fn Op::origin_right(self : Op) -> RawVersion? {
 ///|
 /// Private full constructor. It establishes ownership of every mutable input.
 fn Op::Op(
-  lv~ : Int,
+  lv~ : Int32,
   parents~ : Array[RawVersion],
   agent~ : String,
-  seq~ : Int,
+  seq~ : Int32,
   content~ : OpContent,
   origin_left~ : RawVersion?,
   origin_right~ : RawVersion?,
@@ -96,10 +96,10 @@ fn Op::Op(
 ///|
 /// Create an insert operation.
 pub fn Op::insert(
-  lv : Int,
+  lv : Int32,
   parents : Array[RawVersion],
   agent : String,
-  seq : Int,
+  seq : Int32,
   text : String,
   origin_left : RawVersion?,
   origin_right : RawVersion?,
@@ -121,10 +121,10 @@ pub fn Op::insert(
 /// The `target` parameter specifies the tombstone ID - the local version of
 /// the item being deleted.
 pub fn Op::delete(
-  lv : Int,
+  lv : Int32,
   parents : Array[RawVersion],
   agent : String,
-  seq : Int,
+  seq : Int32,
   target : RawVersion?,
 ) -> Op {
   Op(
@@ -141,10 +141,10 @@ pub fn Op::delete(
 ///|
 /// Create an undelete operation.
 pub fn Op::undelete(
-  lv : Int,
+  lv : Int32,
   parents : Array[RawVersion],
   agent : String,
-  seq : Int,
+  seq : Int32,
   target : RawVersion?,
 ) -> Op {
   Op(

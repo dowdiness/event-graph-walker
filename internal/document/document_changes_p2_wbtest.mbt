@@ -3,7 +3,7 @@
 ///|
 fn p2_remote_insert(
   agent : String,
-  sequence : Int,
+  sequence : Int32,
   parents : Array[@core.RawVersion],
   origin_left : @core.RawVersion?,
 ) -> @core.Op {
@@ -11,7 +11,7 @@ fn p2_remote_insert(
 }
 
 ///|
-fn p2_ready_batch(agent : String, count : Int) -> Array[@core.Op] {
+fn p2_ready_batch(agent : String, count : Int32) -> Array[@core.Op] {
   let operations : Array[@core.Op] = []
   for sequence = 0; sequence < count; sequence = sequence + 1 {
     let previous = if sequence == 0 {
@@ -38,7 +38,7 @@ fn p2_pending_batch(agent : String) -> Array[@core.Op] {
 fn p2_assert_operation_prefix(
   actual : ArrayView[@core.Op],
   expected : Array[@core.Op],
-  count : Int,
+  count : Int32,
 ) -> Unit raise {
   assert_eq(actual.length(), count)
   for index = 0; index < count; index = index + 1 {
@@ -53,7 +53,7 @@ fn p2_assert_operation_prefix(
 fn p2_assert_identity_prefix(
   actual : ArrayView[@core.RawVersion],
   expected : Array[@core.Op],
-  count : Int,
+  count : Int32,
 ) -> Unit raise {
   assert_eq(actual.length(), count)
   for index = 0; index < count; index = index + 1 {

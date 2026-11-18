@@ -3,7 +3,7 @@
 /// the virtual root, so a traversal-based rank query must sort and walk the
 /// entire set while the warm locator follows one balanced child-set path.
 fn locator_sibling_fixture(
-  count : Int,
+  count : Int32,
 ) -> (@fugue.FugueTree[String], IndexedState) {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   for index in 0..<count {
@@ -23,7 +23,7 @@ fn locator_sibling_fixture(
 }
 
 ///|
-fn bench_warm_locator_sibling_rank(b : @bench.T, count : Int) -> Unit {
+fn bench_warm_locator_sibling_rank(b : @bench.T, count : Int32) -> Unit {
   let (tree, state) = locator_sibling_fixture(count)
   let target = count / 2
   b.bench(() => b.keep(state.lv_to_position(tree, target)))
@@ -43,7 +43,7 @@ test "bench: warm locator rank among 100000 siblings" (b : @bench.T) {
 /// Build the ordinary append-shaped Fugue chain that previously forced the
 /// topology locator to walk every ancestor for the final LV.
 fn locator_chain_fixture(
-  count : Int,
+  count : Int32,
 ) -> (@fugue.FugueTree[String], IndexedState) {
   let tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   for index in 0..<count {
@@ -67,7 +67,7 @@ fn locator_chain_fixture(
 }
 
 ///|
-fn bench_warm_locator_chain_rank(b : @bench.T, count : Int) -> Unit {
+fn bench_warm_locator_chain_rank(b : @bench.T, count : Int32) -> Unit {
   let (tree, state) = locator_chain_fixture(count)
   b.bench(() => b.keep(state.lv_to_position(tree, count - 1)))
 }

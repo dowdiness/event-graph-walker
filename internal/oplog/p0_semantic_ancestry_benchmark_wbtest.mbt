@@ -3,7 +3,7 @@
 /// an incoming M=1 operation or claim a production H/M performance result.
 
 ///|
-fn p0_ancestry_direct_ops(n : Int) -> Array[@core.Op] {
+fn p0_ancestry_direct_ops(n : Int32) -> Array[@core.Op] {
   let ops : Array[@core.Op] = []
   for seq in 0..<n {
     let parents = if seq == 0 {
@@ -19,7 +19,7 @@ fn p0_ancestry_direct_ops(n : Int) -> Array[@core.Op] {
 ///|
 /// Every path node has a distinct replica identity, forcing the final
 /// same-agent predecessor proof to walk the whole declared-parent chain.
-fn p0_ancestry_indirect_ops(depth : Int, invalid : Bool) -> Array[@core.Op] {
+fn p0_ancestry_indirect_ops(depth : Int32, invalid : Bool) -> Array[@core.Op] {
   let ops : Array[@core.Op] = [
     @core.Op::insert(-1, [], "alice", 0, "root", None, None),
   ]

@@ -33,7 +33,7 @@ fn Document::apply_block_text_op(
 pub fn Document::insert_text(
   self : Document,
   id : TreeNodeId,
-  pos : Int,
+  pos : Int32,
   text : String,
 ) -> Unit raise DocumentError {
   let id = id.to_inner()
@@ -57,7 +57,7 @@ pub fn Document::insert_text(
 pub fn Document::delete_text(
   self : Document,
   id : TreeNodeId,
-  pos : Int,
+  pos : Int32,
 ) -> Unit raise DocumentError {
   let id = id.to_inner()
   self.with_implicit_transaction(() => {
@@ -127,7 +127,7 @@ pub fn Document::get_text(self : Document, id : TreeNodeId) -> String {
 
 ///|
 /// Get the text length of a block.
-pub fn Document::text_len(self : Document, id : TreeNodeId) -> Int {
+pub fn Document::text_len(self : Document, id : TreeNodeId) -> Int32 {
   match self.blocks.get(id.to_inner()) {
     Some(block) => block.len()
     None => 0

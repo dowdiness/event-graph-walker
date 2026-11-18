@@ -5,14 +5,14 @@
 /// Test-only Adapter for validating post-commit Internal failure behavior.
 struct PartialFailureDoc {
   inner : @text.TextState
-  mut delete_calls : Int
-  fail_after : Int
+  mut delete_calls : Int32
+  fail_after : Int32
 }
 
 ///|
 fn PartialFailureDoc::PartialFailureDoc(
   inner : @text.TextState,
-  fail_after : Int,
+  fail_after : Int32,
 ) -> PartialFailureDoc {
   { inner, delete_calls: 0, fail_after, }
 }

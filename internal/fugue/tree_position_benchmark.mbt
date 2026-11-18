@@ -1,5 +1,5 @@
 ///|
-fn build_position_bench_tree(n : Int) -> FugueTree[String] {
+fn build_position_bench_tree(n : Int32) -> FugueTree[String] {
   let tree : FugueTree[String] = FugueTree::new()
   let mut left : Lv? = None
   for i in 0..<n {

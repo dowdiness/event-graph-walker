@@ -1,7 +1,7 @@
 ///|
 /// Build the deep Right-child chain used by query and mixed-workload baselines.
 /// Setup is intentionally kept outside timed closures for those workloads.
-fn build_ancestry_chain(count : Int) -> FugueTree[String] {
+fn build_ancestry_chain(count : Int32) -> FugueTree[String] {
   let tree : FugueTree[String] = FugueTree::new()
   for i = 0; i < count; i = i + 1 {
     tree.insert(
@@ -27,8 +27,8 @@ fn build_ancestry_chain(count : Int) -> FugueTree[String] {
 /// A small pool avoids timing chain construction for one-shot insert/query
 /// workloads while bounding mutable state drift across benchmark samples.
 fn build_ancestry_chain_pool(
-  count : Int,
-  pool_size : Int,
+  count : Int32,
+  pool_size : Int32,
 ) -> Array[FugueTree[String]] {
   Array::makei(pool_size, _ => build_ancestry_chain(count))
 }
@@ -36,7 +36,7 @@ fn build_ancestry_chain_pool(
 ///|
 /// Query pairs cover deep positive, reflexive, and reverse-direction checks.
 /// The first several pairs deliberately use the deepest descendant.
-fn deep_ancestry_query_pairs(count : Int) -> Array[(Lv, Lv)] {
+fn deep_ancestry_query_pairs(count : Int32) -> Array[(Lv, Lv)] {
   let last = count - 1
   [
     (Lv(0), Lv(last)),
@@ -50,7 +50,7 @@ fn deep_ancestry_query_pairs(count : Int) -> Array[(Lv, Lv)] {
 
 ///|
 /// The sequential baseline explicitly measures chain construction/insertion.
-fn benchmark_sequential_right_chain(b : @bench.T, count : Int) -> Unit {
+fn benchmark_sequential_right_chain(b : @bench.T, count : Int32) -> Unit {
   b.bench(fn() {
     let tree : FugueTree[String] = FugueTree::new()
     for i = 0; i < count; i = i + 1 {
@@ -92,7 +92,7 @@ test "ancestry baseline - sequential Right chain 100k" (b : @bench.T) {
 ///|
 /// Insert one concurrent operation into the midpoint of a prebuilt chain.
 /// The operation ID advances so repeated harness samples do not duplicate IDs.
-fn benchmark_midpoint_concurrent_insert(b : @bench.T, count : Int) -> Unit {
+fn benchmark_midpoint_concurrent_insert(b : @bench.T, count : Int32) -> Unit {
   let trees = build_ancestry_chain_pool(count, 4)
   let midpoint = count / 2
   let mut next_tree = 0
@@ -135,7 +135,7 @@ test "ancestry baseline - midpoint concurrent insert 100k" (b : @bench.T) {
 ///|
 /// Measure the first ancestry check assigned to each prebuilt chain in the
 /// pool. The pool keeps chain setup outside the timed closure and varies pairs.
-fn benchmark_cold_ancestry_query(b : @bench.T, count : Int) -> Unit {
+fn benchmark_cold_ancestry_query(b : @bench.T, count : Int32) -> Unit {
   let pairs = deep_ancestry_query_pairs(count)
   let trees = build_ancestry_chain_pool(count, pairs.length())
   let mut next_pair = 0
@@ -165,7 +165,7 @@ test "ancestry baseline - eager deep query 100k" (b : @bench.T) {
 
 ///|
 /// Measure varied ancestry pairs repeatedly against one prebuilt chain.
-fn benchmark_warm_ancestry_query(b : @bench.T, count : Int) -> Unit {
+fn benchmark_warm_ancestry_query(b : @bench.T, count : Int32) -> Unit {
   let tree = build_ancestry_chain(count)
   let pairs = deep_ancestry_query_pairs(count)
   let mut next_pair = 0
@@ -195,7 +195,7 @@ test "ancestry baseline - warm varied query 100k" (b : @bench.T) {
 ///|
 /// One midpoint insert followed by varied ancestry checks models a small
 /// collaboration/editing batch. Chain and query setup stay outside timing.
-fn benchmark_mixed_insert_and_query(b : @bench.T, count : Int) -> Unit {
+fn benchmark_mixed_insert_and_query(b : @bench.T, count : Int32) -> Unit {
   let trees = build_ancestry_chain_pool(count, 4)
   let pairs = deep_ancestry_query_pairs(count)
   let midpoint = count / 2

@@ -6,7 +6,7 @@ fn legacy_raw(identity : RawIdentity) -> @core.RawVersion {
 
 ///|
 /// Stable ordering and equality for raw frontiers.
-fn legacy_compare_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
+fn legacy_compare_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
   let by_agent = a.agent.compare(b.agent)
   if by_agent != 0 {
     by_agent
@@ -41,10 +41,10 @@ fn legacy_frontier(
   admitted : Array[@core.RawVersion],
   parents : Array[RawIdentity],
 ) -> @core.Frontier {
-  let local_versions : Array[Int] = []
+  let local_versions : Array[Int32] = []
   for parent in parents {
     let raw = legacy_raw(parent)
-    let mut found : Int? = None
+    let mut found : Int32? = None
     for index = 0; index < admitted.length(); index = index + 1 {
       if admitted[index] == raw {
         found = Some(index)
@@ -203,10 +203,7 @@ fn legacy_advance_visible(
 
 ///|
 fn legacy_identity_json(raw : @core.RawVersion) -> Json {
-  Json::object({
-    "replica_id": raw.agent.to_json(),
-    "sequence": raw.seq.to_json(),
-  })
+  Json::object({ "replica_id": Json(raw.agent), "sequence": Json(raw.seq) })
 }
 
 ///|
@@ -233,7 +230,7 @@ fn legacy_operation_json(operation : @core.Op) -> Json {
     parents.push(legacy_identity_json(parent))
   }
   let (kind, content) = match operation.content() {
-    @core.Insert(text) => ("insert", text.to_json())
+    @core.Insert(text) => ("insert", Json(text))
     @core.Delete => ("delete", Json::null())
     @core.Undelete => ("undelete", Json::null())
   }
@@ -241,8 +238,8 @@ fn legacy_operation_json(operation : @core.Op) -> Json {
     "id": legacy_identity_json(
       @core.RawVersion(operation.agent(), operation.seq()),
     ),
-    "parents": parents.to_json(),
-    "kind": kind.to_json(),
+    "parents": Json(parents),
+    "kind": Json(kind),
     "content": content,
     "origin_left": legacy_optional_identity_json(operation.origin_left()),
     "origin_right": legacy_optional_identity_json(operation.origin_right()),
@@ -305,9 +302,9 @@ fn generate_legacy_oracle_history(case_id : String) -> String {
     heads.push(legacy_identity_json(head))
   }
   Json::object({
-    "schema": (1).to_json(),
-    "format": "event-graph-walker/text-sync".to_json(),
-    "operations": operations.to_json(),
-    "heads": heads.to_json(),
+    "schema": Json(1),
+    "format": Json("event-graph-walker/text-sync"),
+    "operations": Json(operations),
+    "heads": Json(heads),
   }).stringify()
 }
