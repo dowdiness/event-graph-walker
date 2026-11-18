@@ -1,8 +1,9 @@
 ///|
 /// An immutable canonical union of LV intervals. Storage order is always ascending.
+#derive(Eq, @debug.Debug)
 pub struct RangeSet {
   priv ranges : Array[@core.LvRange]
-} derive(Eq, @debug.Debug)
+}
 
 ///|
 pub extend RangeSet with Eq::{equal, not_equal}
@@ -11,10 +12,11 @@ pub extend RangeSet with Eq::{equal, not_equal}
 pub extend RangeSet with @debug.Debug::{to_repr}
 
 ///|
+#derive(Eq)
 pub(all) enum Direction {
   Forward
   Backward
-} derive(Eq)
+}
 
 ///|
 pub extend Direction with Eq::{equal, not_equal}
@@ -57,7 +59,7 @@ pub fn RangeSet::from_array(input : Array[@core.LvRange]) -> RangeSet {
 ///|
 pub fn RangeSet::iter(
   self : RangeSet,
-  direction? : Direction = Forward,
+  direction~ : Direction = Forward,
 ) -> Iter[@core.LvRange] {
   if direction == Forward {
     self.ranges.iter()
@@ -70,8 +72,8 @@ pub fn RangeSet::iter(
 /// Expand only at the operation-execution boundary. Backward reverses both levels.
 pub fn RangeSet::iter_units(
   self : RangeSet,
-  direction? : Direction = Forward,
-) -> Iter[Int] {
+  direction~ : Direction = Forward,
+) -> Iter[Int32] {
   self
   .iter(direction~)
   .flat_map(range => {
@@ -92,7 +94,7 @@ pub fn RangeSet::iter_units(
 }
 
 ///|
-pub fn RangeSet::contains(self : RangeSet, lv : Int) -> Bool {
+pub fn RangeSet::contains(self : RangeSet, lv : Int32) -> Bool {
   self.ranges.binary_search_by(range => {
     if lv < range.start {
       1
@@ -136,12 +138,12 @@ pub fn RangeSet::subtract(self : RangeSet, other : RangeSet) -> RangeSet {
 }
 
 ///|
-pub fn RangeSet::range_count(self : RangeSet) -> Int {
+pub fn RangeSet::range_count(self : RangeSet) -> Int32 {
   self.ranges.length()
 }
 
 ///|
-pub fn RangeSet::cardinality(self : RangeSet) -> Int {
+pub fn RangeSet::cardinality(self : RangeSet) -> Int32 {
   self.ranges.fold(init=0, (sum, range) => sum + range.count)
 }
 

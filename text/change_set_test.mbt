@@ -22,9 +22,9 @@ fn apply_change_set(source : String, changes : @text.ChangeSet) -> String raise 
 
 ///|
 fn replacement(
-  length : Int,
-  start : Int,
-  end : Int,
+  length : Int32,
+  start : Int32,
+  end : Int32,
   text : String,
 ) -> @text.ChangeSet raise {
   @text.ChangeSet::new([
@@ -35,7 +35,7 @@ fn replacement(
 }
 
 ///|
-fn scalar_boundaries(source : String) -> Array[Int] {
+fn scalar_boundaries(source : String) -> Array[Int32] {
   let offsets = [0]
   for ch in source {
     offsets.push(offsets[offsets.length() - 1] + ch.to_string().length())

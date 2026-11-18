@@ -66,6 +66,11 @@ To ensure that the package can be bundled and published cleanly:
 just verify-publish
 ```
 
+This also runs `tools/verification/published_consumer` against the extracted
+archive in an isolated workspace, not the source checkout or a registry copy.
+It checks the public Editor, UTF-16 updates, synchronization, Undo policies, and
+causal-view API on all targets. No package is uploaded by this command.
+
 ### 4. Full CI Pipeline
 
 To run the exact pipeline that runs in GitHub Actions CI:

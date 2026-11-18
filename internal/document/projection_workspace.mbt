@@ -51,7 +51,7 @@ fn ProjectionWorkspace::project_all(
     }
   }
   let mut pending : ProjectionInsertRun? = None
-  let mut deleted : (Int, Int)? = None
+  let mut deleted : (Int32, Int32)? = None
   for operation in operations {
     if self.candidate is SnapshotRequired {
       apply_projection(tree, operation, causal_graph)
@@ -215,7 +215,7 @@ priv struct ProjectionInsertRun {
   start_lv : Int32
   mut count : Int32
   text : StringBuilder
-  mut utf16_end : Int
+  mut utf16_end : Int32
   mut can_chain : Bool
   chain : Array[@fugue.Item[String]]
 }
@@ -225,7 +225,7 @@ priv struct ProjectionInsertRun {
 /// still has the original interval until this publication-local buffer flushes.
 fn IndexedState::flush_projection_deletes(
   self : IndexedState,
-  deleted : (Int, Int)?,
+  deleted : (Int32, Int32)?,
 ) -> Bool {
   match deleted {
     None => true

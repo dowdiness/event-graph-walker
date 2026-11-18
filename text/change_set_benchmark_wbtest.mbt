@@ -1,6 +1,6 @@
 ///|
 /// Isolate first derivation from CRDT setup and the cached subsequent read.
-fn bench_change_set(b : @bench.T, payload : Int, count : Int) -> Unit {
+fn bench_change_set(b : @bench.T, payload : Int32, count : Int32) -> Unit {
   let edits : Array[Utf16Edit] = [
     { start: 0, end: 0, text: "a".repeat(payload), },
   ]
@@ -25,7 +25,7 @@ fn bench_change_set(b : @bench.T, payload : Int, count : Int) -> Unit {
 ///|
 /// Produce the update through the real API; exclude setup and mutation from
 /// the timed derivation, clearing only its lazy cache between samples.
-fn bench_actual_change_set(b : @bench.T, count : Int, remote : Bool) -> Unit {
+fn bench_actual_change_set(b : @bench.T, count : Int32, remote : Bool) -> Unit {
   let editor = try! Editor::new("bench-writer")
   guard editor.edit(editor.version(), {
       start: 0,

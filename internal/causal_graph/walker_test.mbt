@@ -286,7 +286,7 @@ test "interval union and subtraction agree with independent finite sets" {
         source.rev_iter().collect(),
       )
       let result = ranges.subtract(@causal_graph.RangeSet::from_array(excluded))
-      let expected : Array[Int] = []
+      let expected : Array[Int32] = []
       for lv in 0..<14 {
         let mut present = false
         let mut removed = false

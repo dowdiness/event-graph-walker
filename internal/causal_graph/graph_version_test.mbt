@@ -43,9 +43,9 @@ test "warm interval unions match membership through arbitrary insert order" {
       )
       seen[agent_index][seq] = true
       if i >= warm_at && (i % 17 == 0 || i == 770) {
-        let expected : Array[(String, Array[(UInt, UInt)])] = []
+        let expected : Array[(String, Array[(UInt32, UInt32)])] = []
         for a in 0..<3 {
-          let ranges : Array[(UInt, UInt)] = []
+          let ranges : Array[(UInt32, UInt32)] = []
           let mut s = 0
           while s < 257 {
             if !seen[a][s] {

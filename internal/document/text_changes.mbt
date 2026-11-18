@@ -2,18 +2,18 @@
 
 ///|
 pub(all) struct VisibleTextEdit {
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
   text : String
 }
 
 ///|
 priv struct PendingTextEdit {
-  mut start : Int
-  mut end : Int
+  mut start : Int32
+  mut end : Int32
   text : StringBuilder
   prepended : Array[String]
-  mut inserted_length : Int
+  mut inserted_length : Int32
 }
 
 ///|
@@ -46,7 +46,7 @@ fn TextChangeCollector::flush(self : TextChangeCollector) -> Unit {
 ///|
 fn TextChangeCollector::insert(
   self : TextChangeCollector,
-  position : Int,
+  position : Int32,
   text : String,
 ) -> Unit {
   match self.pending {
@@ -76,8 +76,8 @@ fn TextChangeCollector::insert(
 ///|
 fn TextChangeCollector::delete(
   self : TextChangeCollector,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> Unit {
   match self.pending {
     Some(edit) if edit.inserted_length == 0 && start == edit.start =>

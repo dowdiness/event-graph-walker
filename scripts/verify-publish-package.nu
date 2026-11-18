@@ -61,6 +61,19 @@ try {
   run-checked "extracted package check" {
     ^moon check --frozen
   }
+
+  # Resolve EGW exclusively from the extracted distribution, not this checkout
+  # or the registry. The separate module can import only public facades.
+  let consumer_dir = ($work_dir | path join "consumer")
+  cp --recursive ($repo_root | path join "tools/verification/published_consumer") $consumer_dir
+  'members = ["../extracted", "."]' | save ($consumer_dir | path join "moon.work")
+  cd $consumer_dir
+  run-checked "packaged public API consumer build" {
+    ^moon build --target all
+  }
+  run-checked "packaged public API consumer tests" {
+    ^moon test consumer_test.mbt --target all --deny-warn --frozen
+  }
 } catch {|error|
   cd $repo_root
   rm --recursive --force $work_dir

@@ -14,7 +14,7 @@ pub fn CausalGraph::from_topological_ops_experimental(
     if graph.raw_to_lv(raw) is Some(_) {
       raise CausalGraphError::DuplicateVersion(raw~)
     }
-    let parents : Array[Int] = []
+    let parents : Array[Int32] = []
     let mut timestamp = 0
     for parent in op.parents_iter() {
       let lv = match graph.raw_to_lv(parent) {
@@ -36,7 +36,7 @@ pub fn CausalGraph::from_topological_ops_experimental(
       graph.agent_seqs[raw.agent] = raw.seq
     }
   }
-  let candidates : Map[Int, Unit] = Map([])
+  let candidates : Map[Int32, Unit] = Map([])
   for run in graph.runs {
     candidates[run.start + run.count - 1] = ()
   }

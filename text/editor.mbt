@@ -3,8 +3,8 @@
 
 ///|
 pub(all) struct Utf16Edit {
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
   text : String
 }
 
@@ -19,7 +19,7 @@ pub struct TextSnapshot {
 pub struct TextUpdate {
   before : Version
   after : Version
-  before_len : Int
+  before_len : Int32
   origin : UpdateOrigin
   sync_report : SyncReport?
   priv changes : Array[Utf16Edit]
@@ -77,19 +77,21 @@ pub fn TextUpdate::change_set(self : TextUpdate) -> ChangeSet {
 }
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum UpdateOrigin {
   Local(String?)
   Remote
   Undo
   Redo
-} derive(Eq, Debug)
+}
 
 ///|
+#derive(Eq, Debug)
 pub(all) enum UndoPolicy {
   NewGroup
   JoinPrevious
   NoHistory
-} derive(Eq, Debug)
+}
 
 ///|
 pub(all) suberror EditError {
@@ -168,7 +170,7 @@ pub fn Editor::export_since(
 fn Editor::change(
   self : Editor,
   origin : UpdateOrigin,
-  action : (Int) -> SyncReport? raise EditError,
+  action : (Int32) -> SyncReport? raise EditError,
 ) -> Edit {
   if !self.available {
     return Invalidated(Unavailable)
@@ -231,7 +233,7 @@ pub fn Editor::edit(
   self : Editor,
   expected : Version,
   edit : Utf16Edit,
-  undo? : UndoPolicy = NewGroup,
+  undo~ : UndoPolicy = NewGroup,
   label? : String,
 ) -> Edit {
   self.edit_with(
@@ -282,7 +284,7 @@ pub fn Editor::edit_many(
   self : Editor,
   base : Version,
   changes : ChangeSet,
-  undo? : UndoPolicy = NewGroup,
+  undo~ : UndoPolicy = NewGroup,
   label? : String,
 ) -> Edit {
   self.edit_with(base, _ => changes, undo, label)
@@ -292,7 +294,7 @@ pub fn Editor::edit_many(
 fn Editor::edit_with(
   self : Editor,
   expected : Version,
-  build : (Int) -> ChangeSet raise EditError,
+  build : (Int32) -> ChangeSet raise EditError,
   undo : UndoPolicy,
   label : String?,
 ) -> Edit {
@@ -304,7 +306,7 @@ fn Editor::edit_with(
     if changes.length() != length {
       raise InvalidChange(LengthMismatch)
     }
-    let plans : Array[(Int, Int, String)] = []
+    let plans : Array[(Int32, Int32, String)] = []
     let mut position = 0
     for section in changes.sections() {
       match section {

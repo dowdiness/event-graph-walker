@@ -70,7 +70,7 @@ fn locator_priority(seed : Int32) -> UInt64 {
 fn LvLocator::push_rank_node(
   self : LvLocator,
   visible : Bool,
-  utf16_width? : Int32 = 0,
+  utf16_width~ : Int32 = 0,
 ) -> Int32 {
   let index = self.nodes.length()
   self.nodes.push({
@@ -514,7 +514,7 @@ fn LvLocator::add_right_chain(
   let owner = self.items.get(items[0].parent.unwrap().0).unwrap()
   let position = self.marker_rank(owner.close_node)
   let mut markers = -1
-  let closes : Array[Int] = []
+  let closes : Array[Int32] = []
   for item in items {
     let entry = self.register_item(item)
     let parent = self.items.get(item.parent.unwrap().0).unwrap()

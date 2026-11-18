@@ -71,8 +71,8 @@ test "Editor rejects invalid and stale UTF16 ranges without changing text versio
         editor.edit(version, { start, end, text, })
         is Rejected(
           @text.EditError::InvalidChange(
-            @text.ChangeError::InvalidBoundary(offset=actual)
-          )
+            @text.ChangeError::InvalidBoundary(offset=actual),
+          ),
         ) &&
         actual == offset,
       )
@@ -347,7 +347,7 @@ test "Editor batch validates all boundaries before mutation and preserves redo o
   assert_true(
     editor.edit_many(version, bad_length)
     is Rejected(
-      @text.EditError::InvalidChange(@text.ChangeError::LengthMismatch)
+      @text.EditError::InvalidChange(@text.ChangeError::LengthMismatch),
     ),
   )
   // A reverse-order apply-before-validation would change the last character
@@ -362,8 +362,8 @@ test "Editor batch validates all boundaries before mutation and preserves redo o
     editor.edit_many(version, bad_boundary)
     is Rejected(
       @text.EditError::InvalidChange(
-        @text.ChangeError::InvalidBoundary(offset=2)
-      )
+        @text.ChangeError::InvalidBoundary(offset=2),
+      ),
     ),
   )
   assert_true(

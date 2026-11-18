@@ -1,41 +1,47 @@
 ///|
 /// One canonical half-open sequence range in peer knowledge.
+#derive(Debug, Eq, Hash)
 priv struct SequenceRange {
-  start : UInt
-  end : UInt
-} derive(Debug, Eq, Hash)
+  start : UInt32
+  end : UInt32
+}
 
 ///|
+#derive(Debug, Eq, Hash)
 priv struct HaveEntry {
   agent : String
   ranges : Array[SequenceRange]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Exact membership knowledge. Entries and ranges are canonical: sorted,
 /// unique, non-overlapping, and non-adjacent.
+#derive(Debug, Eq, Hash)
 priv struct HaveSummary {
   entries : Array[HaveEntry]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// Exact maximal identities for one causal cut.
+#derive(Debug, Eq, Hash)
 priv struct CausalCheckpoint {
   frontier : Array[@core.RawVersion]
-} derive(Debug, Eq, Hash)
+}
 
 ///|
 /// One opaque graph version statement. The checkpoint names an exact causal
 /// cut; `have` names the identities in that cut's closure.
+#derive(Debug, Eq, Hash)
 pub struct GraphVersion {
   priv checkpoint : CausalCheckpoint
   priv have : HaveSummary
-} derive(Debug, Eq, Hash)
+}
 
 ///|
+#derive(Debug)
 pub suberror GraphVersionError {
   Invalid
-} derive(Debug)
+}
 
 ///|
 /// Current-summary cache owned by the causal authority. A cold graph pays no
@@ -51,7 +57,7 @@ priv struct HaveIndex {
 }
 
 ///|
-fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int {
+fn compare_graph_raw(a : @core.RawVersion, b : @core.RawVersion) -> Int32 {
   match a.agent.compare(b.agent) {
     0 => a.seq.compare(b.seq)
     other => other
@@ -126,7 +132,7 @@ fn HaveSummary::subtract(
 fn HaveSummary::subtract_counted(
   self : HaveSummary,
   other : HaveSummary,
-) -> (HaveSummary, Int, Int) {
+) -> (HaveSummary, Int32, Int32) {
   let result = HaveSummary::empty()
   let mut other_entry_index = 0
   let mut agent_steps = 0
@@ -289,7 +295,7 @@ fn validate_graph_version(
 /// `CausalGraph::resolve_graph_version`.
 pub fn GraphVersion::from_parts(
   frontier : Array[@core.RawVersion],
-  ranges : Array[(String, Array[(UInt, UInt)])],
+  ranges : Array[(String, Array[(UInt32, UInt32)])],
 ) -> GraphVersion raise GraphVersionError {
   let checkpoint_values = frontier.copy()
   checkpoint_values.sort_by(compare_graph_raw)
@@ -316,7 +322,7 @@ pub fn GraphVersion::frontier(self : GraphVersion) -> Array[@core.RawVersion] {
 /// Return a defensive sparse-membership DTO for a wire adapter.
 pub fn GraphVersion::ranges(
   self : GraphVersion,
-) -> Array[(String, Array[(UInt, UInt)])] {
+) -> Array[(String, Array[(UInt32, UInt32)])] {
   self.have.entries.map(entry => {
     (entry.agent, entry.ranges.map(range => (range.start, range.end)))
   })
@@ -338,7 +344,7 @@ pub fn GraphVersion::contains(
 pub fn GraphVersion::subtract_ranges(
   self : GraphVersion,
   other : GraphVersion,
-) -> Array[(String, Array[(UInt, UInt)])] {
+) -> Array[(String, Array[(UInt32, UInt32)])] {
   self.have.subtract(other.have).entries.map(entry => {
     (entry.agent, entry.ranges.map(range => (range.start, range.end)))
   })
@@ -373,7 +379,7 @@ pub fn CausalGraph::resolve_graph_version(
   self : CausalGraph,
   version : GraphVersion,
 ) -> @core.Frontier? {
-  let frontier : Array[Int] = []
+  let frontier : Array[Int32] = []
   for raw in version.checkpoint.frontier {
     match self.raw_to_lv(raw) {
       Some(lv) => frontier.push(lv)
@@ -383,7 +389,7 @@ pub fn CausalGraph::resolve_graph_version(
   let resolved = @core.Frontier::from_array(frontier)
   let reachable = self.walk_from_frontier(resolved)
   // A checkpoint is an antichain, not just an arbitrary generating set.
-  let parents : Array[Int] = []
+  let parents : Array[Int32] = []
   for head in frontier {
     let run = self.run_at(head)
     if head > run.start {

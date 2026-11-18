@@ -9,19 +9,19 @@ package "dowdiness/event-graph-walker/history"
 pub struct CausalView {
   // private fields
 }
-pub fn CausalView::CausalView(() -> Int, (Int) -> SnapshotEntry?, () -> Array[Int], () -> Array[Int]) -> Self
-pub fn CausalView::children_counts(Self) -> Array[Int]
-pub fn CausalView::entry(Self, Int) -> SnapshotEntry?
-pub fn CausalView::frontier(Self) -> Array[Int]
-pub fn CausalView::op_count(Self) -> Int
+pub fn CausalView::CausalView(() -> Int32, (Int32) -> SnapshotEntry?, () -> Array[Int32], () -> Array[Int32]) -> Self
+pub fn CausalView::children_counts(Self) -> Array[Int32]
+pub fn CausalView::entry(Self, Int32) -> SnapshotEntry?
+pub fn CausalView::frontier(Self) -> Array[Int32]
+pub fn CausalView::op_count(Self) -> Int32
 
 pub struct SnapshotEntry {
   // private fields
 }
-pub fn SnapshotEntry::SnapshotEntry(Array[Int], String, Int) -> Self
+pub fn SnapshotEntry::SnapshotEntry(Array[Int32], String, Int32) -> Self
 pub fn SnapshotEntry::agent(Self) -> String
-pub fn SnapshotEntry::parents(Self) -> ArrayView[Int]
-pub fn SnapshotEntry::seq(Self) -> Int
+pub fn SnapshotEntry::parents(Self) -> ArrayView[Int32]
+pub fn SnapshotEntry::seq(Self) -> Int32
 
 // Type aliases
 

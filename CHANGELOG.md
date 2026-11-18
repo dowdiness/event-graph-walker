@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `history.CausalSnapshot` and `causal_snapshot()` become `CausalView` and
+  `causal_view()`. The view is live, not a frozen graph. Replace per-LV
+  `children_count(lv)` calls with one owning `children_counts()` array per
+  diagnostic refresh. Custom view constructors now supply that bulk callback.
+- See [the unreleased API migration guide](docs/migration/unreleased-editor.md)
+  for coordinate contracts and Undo ownership. Text schema 2 is unchanged.
+
+### Added
+
+- `text.Editor` provides version-checked UTF-16 edits, atomic multi-range
+  requests, receive, and selective Undo/Redo with exact `TextUpdate` results.
+  Outcomes distinguish `Applied`, unchanged `Rejected`, and terminal
+  `Invalidated` sessions whose history may have advanced.
+- Normalized UTF-16 `ChangeSet` values and composition. Updates expose sequential
+  edits or a lazily derived base-coordinate change set, without a snapshot diff.
+- Explicit caller-defined Undo groups, plus Editor policies `NewGroup`,
+  `JoinPrevious`, and `NoHistory` for applications that own their Undo behavior.
+
+### Performance
+
+- Projection batches collect/coalesce exact UTF-16 changes while batching
+  locator splices and deletions. Qualifying descending edits derive a change
+  set directly instead of repeatedly composing intermediate sets.
+- Causal storage and traversal use intervals rather than per-event graph nodes;
+  warm graph-version membership uses per-agent interval indexes while exported
+  versions remain owning snapshots.
+- Pending-origin validation looks up operation kind without decompressing
+  stored payloads.
+
+### Scope
+
+- The experimental run-wire decoder and Loomark investigation tools are not
+  included. Existing experimental archive/restore APIs retain their experimental
+  status. Loom parser changes and Canopy/Loomark integration ship separately.
+
 ## [0.10.0] - 2026-11-18
 
 ### Breaking changes

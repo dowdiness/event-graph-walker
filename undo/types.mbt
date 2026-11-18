@@ -38,13 +38,13 @@ pub struct UndoItem {
 
 ///|
 /// Track an insertion of the element at `target_lv`.
-pub fn UndoItem::insert(target_lv : Int, content : String) -> UndoItem {
+pub fn UndoItem::insert(target_lv : Int32, content : String) -> UndoItem {
   { target_lv, op_type: Insert, content: Some(content), }
 }
 
 ///|
 /// Track deletion of the element at `target_lv`, not the deletion operation LV.
-pub fn UndoItem::delete(target_lv : Int, content : String) -> UndoItem {
+pub fn UndoItem::delete(target_lv : Int32, content : String) -> UndoItem {
   { target_lv, op_type: Delete, content: Some(content), }
 }
 

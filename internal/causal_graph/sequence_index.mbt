@@ -4,7 +4,7 @@
 /// unchanged intervals without copying them or exposing mutable tree nodes.
 priv struct SequenceNode {
   mut range : SequenceRange
-  mut height : Int
+  mut height : Int32
   mut left : SequenceNode?
   mut right : SequenceNode?
 }
@@ -15,7 +15,7 @@ priv struct SequenceIndex {
 }
 
 ///|
-fn sequence_height(node : SequenceNode?) -> Int {
+fn sequence_height(node : SequenceNode?) -> Int32 {
   match node {
     None => 0
     Some(node) => node.height
@@ -25,7 +25,7 @@ fn sequence_height(node : SequenceNode?) -> Int {
 ///|
 fn SequenceNode::update_height(self : SequenceNode) -> Unit {
   self.height = 1 +
-    Int::max(sequence_height(self.left), sequence_height(self.right))
+    Int32::max(sequence_height(self.left), sequence_height(self.right))
 }
 
 ///|
@@ -94,7 +94,7 @@ fn SequenceNode::remove_last(self : SequenceNode) -> SequenceNode? {
 ///|
 /// The graph has already proved this sequence absent. Join an adjacent interval
 /// where encountered, absorbing its other neighbor when this point closes a gap.
-fn sequence_insert(root : SequenceNode?, sequence : UInt) -> SequenceNode {
+fn sequence_insert(root : SequenceNode?, sequence : UInt32) -> SequenceNode {
   guard root is Some(node) else {
     return {
       range: { start: sequence, end: sequence + 1U, },
@@ -138,7 +138,7 @@ fn sequence_insert(root : SequenceNode?, sequence : UInt) -> SequenceNode {
 }
 
 ///|
-fn SequenceIndex::insert(self : SequenceIndex, sequence : UInt) -> Unit {
+fn SequenceIndex::insert(self : SequenceIndex, sequence : UInt32) -> Unit {
   self.root = Some(sequence_insert(self.root, sequence))
 }
 
@@ -146,7 +146,7 @@ fn SequenceIndex::insert(self : SequenceIndex, sequence : UInt) -> Unit {
 /// Input is already canonical. Build by median partition in O(intervals),
 /// rather than reinserting sorted keys through the incremental update path.
 fn SequenceIndex::from_ranges(ranges : Array[SequenceRange]) -> SequenceIndex {
-  fn build(start : Int, end : Int) -> SequenceNode? {
+  fn build(start : Int32, end : Int32) -> SequenceNode? {
     if start == end {
       return None
     }

@@ -221,17 +221,17 @@ fn OpLog::run_at(self : OpLog, lv : Int32) -> @core.OpRun? {
 pub fn OpLog::collect_ops(
   self : OpLog,
   lvs : @causal_graph.RangeSet,
-  direction? : @causal_graph.Direction = Forward,
+  direction~ : @causal_graph.Direction = Forward,
 ) -> Array[@core.Op] {
   let result : Array[@core.Op] = []
   for range in lvs.iter(direction~) {
     // LVs are assigned densely, so an LV range is also a positional slice of
     // the operation runs. Slicing runs once avoids an RLE lookup per LV.
-    let slices = match
-      self.operations.range(start=range.start, end=range.end()) {
-      Ok(slices) => slices.collect()
-      Err(_) => abort("operation range outside log")
-    }
+    let slices = self.operations
+      .range(start=range.start, end=range.end())
+      .collect() catch {
+        _ => abort("operation range outside log")
+      }
     let ordered = if direction == Forward {
       slices.iter()
     } else {

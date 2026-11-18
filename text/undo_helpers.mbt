@@ -109,8 +109,8 @@ pub fn TextState::replace_range_and_record(
 /// identities in application order, without touching UndoManager or timestamps.
 fn TextState::replace_range_collect(
   self : TextState,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
   text : String,
   items : Array[@undo.UndoItem],
 ) -> Unit raise TextError {

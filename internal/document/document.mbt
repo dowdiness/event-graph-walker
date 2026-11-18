@@ -755,7 +755,7 @@ fn Document::target_is_visible(
 fn Document::project_local_target(
   self : Document,
   op : @core.Op,
-  record? : Bool = true,
+  record~ : Bool = true,
 ) -> Unit raise DocumentError {
   let indexed = IndexedState::from_snapshot(self.indexed_state.take_cache())
   let change = {

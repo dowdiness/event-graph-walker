@@ -1,19 +1,19 @@
 ///|
 /// A causal chain with an affine mapping from LV to external identity and rank.
 priv struct CausalRun {
-  start : Int
-  mut count : Int
+  start : Int32
+  mut count : Int32
   agent : String
-  seq : Int
-  timestamp : Int
-  parents : Array[Int]
+  seq : Int32
+  timestamp : Int32
+  parents : Array[Int32]
 }
 
 ///|
 /// Positive sequence keys. Every run, including a singleton, has one leaf entry.
 priv enum IdentityPage {
   Leaf(Array[CausalRun])
-  Branch(Array[Int], Array[IdentityPage])
+  Branch(Array[Int32], Array[IdentityPage])
 }
 
 ///|
@@ -22,7 +22,7 @@ priv struct IdentityIndex {
 }
 
 ///|
-fn IdentityPage::first_key(self : IdentityPage) -> Int {
+fn IdentityPage::first_key(self : IdentityPage) -> Int32 {
   match self {
     Leaf(runs) => runs[0].seq
     Branch(keys, _) => keys[0]
@@ -31,7 +31,7 @@ fn IdentityPage::first_key(self : IdentityPage) -> Int {
 
 ///|
 /// Index of the last key <= sequence, or -1 before the first key.
-fn floor_key(keys : Array[Int], sequence : Int) -> Int {
+fn floor_key(keys : Array[Int32], sequence : Int32) -> Int32 {
   let mut low = 0
   let mut high = keys.length()
   while low < high {
@@ -46,7 +46,7 @@ fn floor_key(keys : Array[Int], sequence : Int) -> Int {
 }
 
 ///|
-fn IdentityIndex::find(self : IdentityIndex, seq : Int) -> CausalRun? {
+fn IdentityIndex::find(self : IdentityIndex, seq : Int32) -> CausalRun? {
   for page = self.root {
     match page {
       Branch(keys, children) => {
@@ -126,7 +126,7 @@ fn IdentityIndex::insert(self : IdentityIndex, run : CausalRun) -> Unit {
 
 ///|
 /// Internal callers have checked LV bounds. No query state lives in the graph.
-fn CausalGraph::run_index(self : CausalGraph, lv : Int) -> Int {
+fn CausalGraph::run_index(self : CausalGraph, lv : Int32) -> Int32 {
   let mut low = 0
   let mut high = self.runs.length() - 1
   while low < high {
@@ -141,7 +141,7 @@ fn CausalGraph::run_index(self : CausalGraph, lv : Int) -> Int {
 }
 
 ///|
-fn CausalGraph::run_at(self : CausalGraph, lv : Int) -> CausalRun {
+fn CausalGraph::run_at(self : CausalGraph, lv : Int32) -> CausalRun {
   self.runs[self.run_index(lv)]
 }
 
@@ -149,10 +149,10 @@ fn CausalGraph::run_at(self : CausalGraph, lv : Int) -> CausalRun {
 /// Both live admission and checked history import append through this path.
 fn CausalGraph::append_entry(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-  seq : Int,
-  timestamp : Int,
+  seq : Int32,
+  timestamp : Int32,
 ) -> Unit {
   let lv = self.next_lv
   if !self.runs.is_empty() {

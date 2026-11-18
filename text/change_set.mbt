@@ -1,25 +1,28 @@
 ///|
 /// Sections consume the base document from left to right, in UTF-16 units.
+#derive(Eq, Debug)
 pub(all) enum ChangeSection {
-  Keep(Int)
-  Replace(Int, String)
-} derive(Eq, Debug)
+  Keep(Int32)
+  Replace(Int32, String)
+}
 
 ///|
+#derive(Eq)
 pub(all) suberror ChangeError {
   LengthMismatch
   InvalidLength
-  InvalidBoundary(offset~ : Int)
+  InvalidBoundary(offset~ : Int32)
   InvalidText
-} derive(Eq)
+}
 
 ///|
 /// Immutable, normalized base-coordinate changes. No document or history owner.
+#derive(Eq, Debug)
 pub struct ChangeSet {
   priv parts : Array[ChangeSection]
-  priv old_length : Int
-  priv new_length : Int
-} derive(Eq, Debug)
+  priv old_length : Int32
+  priv new_length : Int32
+}
 
 ///|
 pub fn ChangeSet::new(
@@ -114,12 +117,12 @@ fn normalize_sections(
 }
 
 ///|
-pub fn ChangeSet::length(self : ChangeSet) -> Int {
+pub fn ChangeSet::length(self : ChangeSet) -> Int32 {
   self.old_length
 }
 
 ///|
-pub fn ChangeSet::new_length(self : ChangeSet) -> Int {
+pub fn ChangeSet::new_length(self : ChangeSet) -> Int32 {
   self.new_length
 }
 
@@ -130,12 +133,12 @@ pub fn ChangeSet::sections(self : ChangeSet) -> ArrayView[ChangeSection] {
 
 ///|
 priv enum ChangePiece {
-  Original(Int, Int)
+  Original(Int32, Int32)
   Inserted(String)
 }
 
 ///|
-fn ChangePiece::length(self : ChangePiece) -> Int {
+fn ChangePiece::length(self : ChangePiece) -> Int32 {
   match self {
     Original(start, end) => end - start
     Inserted(text) => text.length()

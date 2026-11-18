@@ -1,7 +1,7 @@
 ///| Both coordinate systems belong to the same projection and treap generation.
 
 ///|
-fn LvLocator::rank_utf16_span(self : LvLocator, node : Int) -> Int {
+fn LvLocator::rank_utf16_span(self : LvLocator, node : Int32) -> Int32 {
   if node == -1 {
     0
   } else {
@@ -12,9 +12,9 @@ fn LvLocator::rank_utf16_span(self : LvLocator, node : Int) -> Int {
 ///|
 fn LvLocator::convert_boundary(
   self : LvLocator,
-  offset : Int,
+  offset : Int32,
   from_utf16 : Bool,
-) -> Int? {
+) -> Int32? {
   let scalar_total = self.rank_visible_span(self.rank_root)
   let utf16_total = self.rank_utf16_span(self.rank_root)
   let total = if from_utf16 { utf16_total } else { scalar_total }
@@ -66,15 +66,15 @@ fn LvLocator::convert_boundary(
 }
 
 ///|
-fn IndexedState::utf16_at(self : IndexedState, position : Int) -> Int {
+fn IndexedState::utf16_at(self : IndexedState, position : Int32) -> Int32 {
   self.locator.unwrap().convert_boundary(position, false).unwrap()
 }
 
 ///|
 pub fn Document::scalar_at_utf16(
   self : Document,
-  offset : Int,
-) -> Int? raise DocumentError {
+  offset : Int32,
+) -> Int32? raise DocumentError {
   self.ensure_projection_ready()
   ignore(self.indexed_state.ensure(self.tree))
   self.indexed_state.locator.unwrap().convert_boundary(offset, true)
@@ -82,7 +82,7 @@ pub fn Document::scalar_at_utf16(
 
 ///|
 /// Length from the same index used for boundary conversion; no text snapshot.
-pub fn Document::utf16_len(self : Document) -> Int raise DocumentError {
+pub fn Document::utf16_len(self : Document) -> Int32 raise DocumentError {
   self.ensure_projection_ready()
   ignore(self.indexed_state.ensure(self.tree))
   let locator = self.indexed_state.locator.unwrap()

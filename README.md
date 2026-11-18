@@ -20,6 +20,7 @@ Used as the core CRDT engine in [dowdiness/canopy](https://github.com/dowdiness/
 
 Requires MoonBit 0.10.21 or newer (CI: `0.10.21+06da1ed44`).
 Upgrading from 0.8? See the [v0.9 migration guide](docs/migration/to-v0.9.md).
+This branch also contains [unreleased Editor and causal-view changes](docs/migration/unreleased-editor.md).
 
 Add the dependency to your project using the MoonBit CLI:
 

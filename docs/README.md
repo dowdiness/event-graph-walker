@@ -32,6 +32,7 @@ In-depth conceptual documentation explaining how the CRDT algorithms work:
 Upgrade instructions for breaking protocol changes and major versions:
 
 - **[Migration Index](migration/README.md)**: Version upgrade recommendations and breaking change summaries.
+- **[v0.9 Migration](migration/to-v0.9.md)**: Transactional Editor, UTF-16 changes, Undo ownership, and live causal views.
 - **[Text Schema 2](migration/text-schema-2.md)**: Upgrading to exact causality and domain-separated wire encoding.
 - **[v0.5 Migration](migration/to-v0.5.md)**: Opaque `text.Range` constructors with validation.
 - **[v0.4 Migration](migration/to-v0.4.md)**: Stable identity transition and schema 1 envelopes.

@@ -3,9 +3,9 @@
 pub struct CausalGraph {
   priv runs : Array[CausalRun]
   priv agent_runs : Map[String, IdentityIndex]
-  priv mut next_lv : Int
+  priv mut next_lv : Int32
   priv mut frontier : @core.Frontier
-  priv agent_seqs : Map[String, Int]
+  priv agent_seqs : Map[String, Int32]
   priv mut version_cache : GraphVersionCache
 }
 
@@ -29,7 +29,7 @@ pub fn CausalGraph::new() -> CausalGraph {
 ///|
 pub fn CausalGraph::lv_to_raw(
   self : CausalGraph,
-  lv : Int,
+  lv : Int32,
 ) -> @core.RawVersion? {
   if lv < 0 || lv >= self.next_lv {
     return None
@@ -42,7 +42,7 @@ pub fn CausalGraph::lv_to_raw(
 pub fn CausalGraph::raw_to_lv(
   self : CausalGraph,
   raw : @core.RawVersion,
-) -> Int? {
+) -> Int32? {
   guard raw.seq >= 0 && self.agent_runs.get(raw.agent) is Some(index) else {
     return None
   }
@@ -54,7 +54,7 @@ pub fn CausalGraph::raw_to_lv(
 #alias("_[_]")
 pub fn CausalGraph::get_entry(
   self : CausalGraph,
-  lv : Int,
+  lv : Int32,
 ) -> @core.GraphEntry? {
   if lv < 0 || lv >= self.next_lv {
     return None
@@ -76,10 +76,10 @@ pub fn CausalGraph::get_entry(
 ///|
 fn CausalGraph::add_version_inner(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-  seq : Int,
-) -> Int raise CausalGraphError {
+  seq : Int32,
+) -> Int32 raise CausalGraphError {
   if agent == "" || seq < 0 {
     raise CausalGraphError::InvalidIdentity(raw=@core.RawVersion(agent, seq))
   }
@@ -110,9 +110,9 @@ fn CausalGraph::add_version_inner(
 ///|
 pub fn CausalGraph::add_version(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-) -> Int raise CausalGraphError {
+) -> Int32 raise CausalGraphError {
   let seq = self.agent_seqs.get(agent).unwrap_or(-1) + 1
   let lv = self.add_version_inner(parents, agent, seq)
   self.agent_seqs[agent] = seq
@@ -122,10 +122,10 @@ pub fn CausalGraph::add_version(
 ///|
 pub fn CausalGraph::add_version_with_seq(
   self : CausalGraph,
-  parents : Array[Int],
+  parents : Array[Int32],
   agent : String,
-  seq : Int,
-) -> Int raise CausalGraphError {
+  seq : Int32,
+) -> Int32 raise CausalGraphError {
   let lv = self.add_version_inner(parents, agent, seq)
   let previous = self.agent_seqs.get(agent).unwrap_or(-1)
   self.agent_seqs[agent] = if seq > previous { seq } else { previous }
@@ -138,14 +138,14 @@ pub fn CausalGraph::get_frontier(self : CausalGraph) -> @core.Frontier {
 }
 
 ///|
-pub fn CausalGraph::op_count(self : CausalGraph) -> Int {
+pub fn CausalGraph::op_count(self : CausalGraph) -> Int32 {
   self.next_lv
 }
 
 ///|
 /// Owning diagnostic counts indexed by LV. One O(events + head edges) pass;
 /// no child index or diagnostic cache is retained by the graph.
-pub fn CausalGraph::children_counts(self : CausalGraph) -> Array[Int] {
+pub fn CausalGraph::children_counts(self : CausalGraph) -> Array[Int32] {
   let counts = Array::make(self.next_lv, 1)
   for head in self.runs {
     counts[head.start + head.count - 1] = 0
@@ -161,8 +161,8 @@ pub fn CausalGraph::children_counts(self : CausalGraph) -> Array[Int] {
 ///|
 pub fn CausalGraph::is_ancestor(
   self : CausalGraph,
-  lv1 : Int,
-  lv2 : Int,
+  lv1 : Int32,
+  lv2 : Int32,
 ) -> Bool {
   if lv1 < 0 || lv2 < 0 || lv1 >= self.next_lv || lv2 >= self.next_lv {
     return false
