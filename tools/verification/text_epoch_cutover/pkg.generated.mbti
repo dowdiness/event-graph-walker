@@ -9,17 +9,17 @@ import {
 
 // Errors
 pub(all) suberror ProtocolError {
-  InvalidChunkSize(Int)
+  InvalidChunkSize(Int32)
   InvalidDocumentId
-  InvalidEpoch(Int)
+  InvalidEpoch(Int32)
   InvalidSubmissionIdentity
-  StaleEpoch(expected~ : Int, actual~ : Int)
-  Quiescing(Int)
-  PendingOperations(Int)
-  SubmissionConflict(client_instance_id~ : String, sequence~ : Int)
-  InvalidCursor(requested~ : Int, current~ : Int)
-  CutoverAlreadyStarted(Int)
-  CutoverNotStarted(Int)
+  StaleEpoch(expected~ : Int32, actual~ : Int32)
+  Quiescing(Int32)
+  PendingOperations(Int32)
+  SubmissionConflict(client_instance_id~ : String, sequence~ : Int32)
+  InvalidCursor(requested~ : Int32, current~ : Int32)
+  CutoverAlreadyStarted(Int32)
+  CutoverNotStarted(Int32)
   BaselineSourceMismatch
   TextFailure(@text.TextError)
 }
@@ -29,8 +29,8 @@ pub struct Baseline {
   // private fields
 }
 pub fn Baseline::apply_to(Self, String) -> @text.TextState raise ProtocolError
-pub fn Baseline::build(String, baseline_agent~ : String, chunk_scalars~ : Int) -> Self raise ProtocolError
-pub fn Baseline::page_count(Self) -> Int
+pub fn Baseline::build(String, baseline_agent~ : String, chunk_scalars~ : Int32) -> Self raise ProtocolError
+pub fn Baseline::page_count(Self) -> Int32
 pub fn Baseline::page_json(Self) -> Array[String]
 pub fn Baseline::text(Self) -> String
 pub fn Baseline::version(Self) -> @text.Version
@@ -38,38 +38,38 @@ pub fn Baseline::version(Self) -> @text.Version
 pub struct LogEntry {
   // private fields
 }
-pub fn LogEntry::cursor(Self) -> Int
-pub fn LogEntry::epoch(Self) -> Int
+pub fn LogEntry::cursor(Self) -> Int32
+pub fn LogEntry::epoch(Self) -> Int32
 pub fn LogEntry::request_json(Self) -> String
 
 pub struct Server {
   // private fields
 }
-pub fn Server::Server(String, epoch~ : Int, server_agent~ : String) -> Self raise ProtocolError
-pub fn Server::archived_entry_count(Self, Int) -> Int?
-pub fn Server::archived_text(Self, Int) -> String?
-pub fn Server::begin_cutover(Self, expected_epoch~ : Int) -> Unit raise ProtocolError
-pub fn Server::cancel_cutover(Self, expected_epoch~ : Int) -> Unit raise ProtocolError
-pub fn Server::cursor(Self) -> Int
+pub fn Server::Server(String, epoch~ : Int32, server_agent~ : String) -> Self raise ProtocolError
+pub fn Server::archived_entry_count(Self, Int32) -> Int32?
+pub fn Server::archived_text(Self, Int32) -> String?
+pub fn Server::begin_cutover(Self, expected_epoch~ : Int32) -> Unit raise ProtocolError
+pub fn Server::cancel_cutover(Self, expected_epoch~ : Int32) -> Unit raise ProtocolError
+pub fn Server::cursor(Self) -> Int32
 pub fn Server::document_id(Self) -> String
-pub fn Server::epoch(Self) -> Int
-pub fn Server::has_archived_epoch(Self, Int) -> Bool
+pub fn Server::epoch(Self) -> Int32
+pub fn Server::has_archived_epoch(Self, Int32) -> Bool
 pub fn Server::is_quiescing(Self) -> Bool
-pub fn Server::lookup_receipt(Self, epoch~ : Int, client_instance_id~ : String, submission_sequence~ : Int, request_json~ : String) -> SubmitOutcome? raise ProtocolError
-pub fn Server::publish_cutover(Self, expected_epoch~ : Int, baseline~ : Baseline) -> Unit raise ProtocolError
-pub fn Server::submit(Self, epoch~ : Int, client_instance_id~ : String, submission_sequence~ : Int, request_json~ : String) -> SubmitOutcome raise ProtocolError
-pub fn Server::tail_after(Self, epoch~ : Int, cursor~ : Int) -> Array[LogEntry] raise ProtocolError
+pub fn Server::lookup_receipt(Self, epoch~ : Int32, client_instance_id~ : String, submission_sequence~ : Int32, request_json~ : String) -> SubmitOutcome? raise ProtocolError
+pub fn Server::publish_cutover(Self, expected_epoch~ : Int32, baseline~ : Baseline) -> Unit raise ProtocolError
+pub fn Server::submit(Self, epoch~ : Int32, client_instance_id~ : String, submission_sequence~ : Int32, request_json~ : String) -> SubmitOutcome raise ProtocolError
+pub fn Server::tail_after(Self, epoch~ : Int32, cursor~ : Int32) -> Array[LogEntry] raise ProtocolError
 pub fn Server::text(Self) -> String
 
 pub struct SubmitOutcome {
   // private fields
 }
-pub fn SubmitOutcome::applied_operations(Self) -> Int
-pub fn SubmitOutcome::cursor(Self) -> Int
-pub fn SubmitOutcome::duplicate_operations(Self) -> Int
-pub fn SubmitOutcome::epoch(Self) -> Int
+pub fn SubmitOutcome::applied_operations(Self) -> Int32
+pub fn SubmitOutcome::cursor(Self) -> Int32
+pub fn SubmitOutcome::duplicate_operations(Self) -> Int32
+pub fn SubmitOutcome::epoch(Self) -> Int32
 pub fn SubmitOutcome::is_replay(Self) -> Bool
-pub fn SubmitOutcome::pending_operations(Self) -> Int
+pub fn SubmitOutcome::pending_operations(Self) -> Int32
 
 // Type aliases
 

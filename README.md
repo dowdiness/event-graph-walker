@@ -31,7 +31,7 @@ Or add it directly to your `moon.mod`:
 
 ```moonbit
 import {
-  "dowdiness/event-graph-walker@0.9.0",
+  "dowdiness/event-graph-walker@0.10.0",
 }
 ```
 
