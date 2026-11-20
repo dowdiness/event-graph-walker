@@ -36,7 +36,7 @@ impl @quickcheck.Arbitrary for RealOps with fn arbitrary(size, random_state) {
   let scratch = try! @text.TextState::new("scratch")
   let edits : Array[TextEdit] = []
   for i = 0; i < size; i = i + 1 {
-    let len = scratch.len()
+    let len = try! scratch.len()
     let is_insert = if len == 0 {
       true
     } else {
@@ -121,7 +121,7 @@ fn prop_sync_convergence(ops : RealOps) -> Bool {
   let _ = try! doc2.sync().apply(msg)
 
   // Both documents should have same text
-  doc1.text() == doc2.text()
+  (try! doc1.text()) == (try! doc2.text())
 }
 
 ///|
@@ -139,12 +139,12 @@ fn prop_sync_idempotent(ops : RealOps) -> Bool {
 
   // Apply once
   let _ = try! doc2.sync().apply(msg)
-  let text_after_first = doc2.text()
+  let text_after_first = try! doc2.text()
 
   // Apply again (should be no-op)
   let msg2 = try! doc1.sync().export_all()
   let _ = try! doc2.sync().apply(msg2)
-  let text_after_second = doc2.text()
+  let text_after_second = try! doc2.text()
   text_after_first == text_after_second
 }
 
@@ -174,7 +174,7 @@ fn prop_insert_increases_length(pos : Int32) -> Bool {
   let doc = try! @text.TextState::new("alice")
   // Pre-populate with some content
   try! doc.insert(@text.Pos::at(0), "hello")
-  let len_before = doc.len()
+  let len_before = try! doc.len()
   let clamped_pos = if pos < 0 {
     0
   } else if pos > len_before {
@@ -183,7 +183,7 @@ fn prop_insert_increases_length(pos : Int32) -> Bool {
     pos
   }
   try! doc.insert(@text.Pos::at(clamped_pos), "x")
-  doc.len() == len_before + 1
+  (try! doc.len()) == len_before + 1
 }
 
 ///|
@@ -197,7 +197,7 @@ fn prop_delete_decreases_length(pos : Int32) -> Bool {
   let doc = try! @text.TextState::new("alice")
   // Pre-populate
   try! doc.insert(@text.Pos::at(0), "hello")
-  let len_before = doc.len()
+  let len_before = try! doc.len()
   if len_before == 0 {
     return true
   }
@@ -209,7 +209,7 @@ fn prop_delete_decreases_length(pos : Int32) -> Bool {
     pos
   }
   try! doc.delete(@text.Pos::at(clamped_pos))
-  doc.len() == len_before - 1
+  (try! doc.len()) == len_before - 1
 }
 
 ///|
@@ -228,7 +228,7 @@ fn prop_checkout_preserves_text(ops : RealOps) -> Bool {
 
   // Save version and text
   let saved_version = doc.version()
-  let saved_text = doc.text()
+  let saved_text = try! doc.text()
 
   // Apply remaining edits
   let _ = apply_edits(doc, ops.edits[mid:].to_owned())
@@ -250,7 +250,7 @@ test "property: checkout preserves text" {
 fn prop_empty_doc_length_zero(agent : String) -> Bool {
   let agent_name = if agent.length() == 0 { "default" } else { agent }
   let doc = try! @text.TextState::new(agent_name)
-  doc.len() == 0 && doc.is_empty()
+  (try! doc.len()) == 0 && (try! doc.is_empty())
 }
 
 ///|
@@ -318,7 +318,7 @@ fn prop_bidirectional_sync_converges(pair : RealOpsPair) -> Bool {
   let _ = try! doc2.sync().apply(msg1)
 
   // Should converge
-  doc1.text() == doc2.text()
+  (try! doc1.text()) == (try! doc2.text())
 }
 
 ///|
@@ -353,7 +353,7 @@ fn prop_undo_redo_roundtrip_insert(size : Int32) -> Bool {
     let ch = Int32::unsafe_to_char('a'.to_int() + i % 26).to_string()
     try! doc.insert_and_record(@text.Pos::at(i), ch, mgr, timestamp_ms=i * 1000)
   }
-  let text_before = doc.text()
+  let text_before = try! doc.text()
   // Undo all groups
   let mut undo_count = 0
   while mgr.can_undo() {
@@ -361,7 +361,7 @@ fn prop_undo_redo_roundtrip_insert(size : Int32) -> Bool {
     undo_count = undo_count + 1
   }
   // After full undo, document should be empty
-  if doc.text() != "" {
+  if (try! doc.text()) != "" {
     return false
   }
   // Redo all groups
@@ -371,7 +371,7 @@ fn prop_undo_redo_roundtrip_insert(size : Int32) -> Bool {
     redo_count = redo_count + 1
   }
   // After full redo, text should match original
-  doc.text() == text_before && undo_count == redo_count
+  (try! doc.text()) == text_before && undo_count == redo_count
 }
 
 ///|
@@ -389,15 +389,15 @@ fn prop_undo_redo_roundtrip_mixed(size : Int32) -> Bool {
   // Insert some text first
   try! doc.insert_and_record(@text.Pos::at(0), "hello", mgr, timestamp_ms=0)
   // Delete some characters (each in its own time group)
-  for i = 0; i < clamped && doc.len() > 0; i = i + 1 {
-    let pos = i % doc.len()
+  for i = 0; i < clamped && (try! doc.len()) > 0; i = i + 1 {
+    let pos = i % (try! doc.len())
     try! doc.delete_and_record(
       @text.Pos::at(pos),
       mgr,
       timestamp_ms=(i + 1) * 1000,
     )
   }
-  let text_after_edits = doc.text()
+  let text_after_edits = try! doc.text()
   // Undo the deletes
   let mut undo_count = 0
   while mgr.can_undo() && undo_count < clamped {
@@ -411,7 +411,7 @@ fn prop_undo_redo_roundtrip_mixed(size : Int32) -> Bool {
     redo_count = redo_count + 1
   }
   // Text should match what we had after the edits
-  doc.text() == text_after_edits
+  (try! doc.text()) == text_after_edits
 }
 
 ///|
@@ -440,7 +440,7 @@ fn prop_undo_ops_sync_to_peer(size : Int32) -> Bool {
   // Sync initial state to Bob
   let msg1 = try! doc_a.sync().export_all()
   let _ = try! doc_b.sync().apply(msg1)
-  if doc_a.text() != doc_b.text() {
+  if (try! doc_a.text()) != (try! doc_b.text()) {
     return false
   }
   // Alice undoes
@@ -450,7 +450,7 @@ fn prop_undo_ops_sync_to_peer(size : Int32) -> Bool {
     let msg2 = try! doc_a.sync().export_all()
     let _ = try! doc_b.sync().apply(msg2)
     // Both should converge
-    return doc_a.text() == doc_b.text()
+    return (try! doc_a.text()) == (try! doc_b.text())
   }
   true
 }

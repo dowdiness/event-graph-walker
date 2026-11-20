@@ -1,49 +1,100 @@
 ///|
 test "Editor invalidates rather than publishing or reading after partial internal failure" {
-  let editor = Editor::new("writer")
-  guard editor.edit(editor.version(), { start: 0, end: 0, text: "ab", })
-    is Applied(_) else {
-    fail("seed")
+  for deferred in [false, true] {
+    let editor = Editor::new("writer")
+    guard editor.edit(editor.version(), { start: 0, end: 0, text: "ab", })
+      is Applied(_) else {
+      fail("seed")
+    }
+    let empty = editor.export_since(editor.version())
+    if deferred {
+      assert_true(editor.accept_remote(empty).result is Ok(_))
+    }
+    // Corrupt only the test fixture's local history: reverse replay deletes a
+    // real target first, then encounters a missing target. Assert public behavior.
+    editor.undo_history.clear()
+    editor.undo_history.record_insert(999, "writer", 0)
+    editor.undo_history.record_insert(0, "writer", 0)
+    let before = editor.version()
+    assert_true(editor.undo() is Invalidated(_))
+    assert_true(editor.version() != before)
+    let snapshot = Ok(editor.snapshot()) catch { error => Err(error) }
+    assert_true(snapshot is Err(EditError::Unavailable))
+    assert_true(
+      editor.edit(editor.version(), { start: 0, end: 0, text: "x", })
+      is Invalidated(_),
+    )
+    assert_true(editor.redo() is Invalidated(_))
+    assert_true(editor.receive(empty) is Invalidated(EditError::Unavailable))
+    assert_true(!editor.can_undo())
+    assert_true(!editor.can_redo())
+    // Already-committed operations remain exportable; invalidation is not rollback.
+    let receiver = Editor::new("receiver")
+    assert_true(
+      receiver.receive(editor.export_since(Version::empty())) is Applied(_),
+    )
+    assert_eq(receiver.snapshot().text, "b")
+    assert_true(
+      receiver.edit(receiver.version(), { start: 1, end: 1, text: "遠", })
+      is Applied(_),
+    )
+    let admission = editor.accept_remote(
+      receiver.export_since(editor.history_version()),
+    )
+    assert_true(admission.result is Ok(_))
+    assert_true(admission.after != admission.before)
+    assert_eq(editor.history_version(), admission.after)
+    assert_true(
+      editor.edit(editor.version(), { start: 0, end: 0, text: "x", })
+      is Invalidated(_),
+    )
+    assert_eq(editor.reopen_view().text, "b遠")
+    assert_true(!editor.can_undo())
+    assert_true(
+      editor.edit(editor.version(), { start: 2, end: 2, text: "L", })
+      is Applied(_),
+    )
+    assert_eq(editor.snapshot().text, "b遠L")
   }
-  // Corrupt only the test fixture's local history: reverse replay deletes a
-  // real target first, then encounters a missing target. Assert public behavior.
-  editor.undo_history.clear()
-  editor.undo_history.record_insert(999, "writer", 0)
-  editor.undo_history.record_insert(0, "writer", 0)
-  let before = editor.version()
-  assert_true(editor.undo() is Invalidated(_))
-  assert_true(editor.version() != before)
-  let snapshot = Ok(editor.snapshot()) catch { error => Err(error) }
-  assert_true(snapshot is Err(EditError::Unavailable))
-  assert_true(
-    editor.edit(editor.version(), { start: 0, end: 0, text: "x", })
-    is Invalidated(_),
-  )
-  assert_true(editor.redo() is Invalidated(_))
-  assert_true(!editor.can_undo())
-  assert_true(!editor.can_redo())
-  // Already-committed operations remain exportable; invalidation is not rollback.
-  let receiver = Editor::new("receiver")
-  assert_true(
-    receiver.receive(editor.export_since(Version::empty())) is Applied(_),
-  )
-  assert_eq(receiver.snapshot().text, "b")
 }
 
 ///|
-test "SyncFailed is rejectable only during remote admission" {
+test "failed receive does not infer rejection from an unchanged view version" {
+  let editor = Editor::new("same-author")
+  let imposter = Editor::new("same-author")
+  assert_true(
+    editor.edit(editor.version(), { start: 0, end: 0, text: "a", })
+    is Applied(_),
+  )
+  assert_true(
+    imposter.edit(imposter.version(), { start: 0, end: 0, text: "b", })
+    is Applied(_),
+  )
+  let before = editor.version()
+  let message = imposter.export_since(Version::empty())
+  let admission = editor.accept_remote(message)
+  assert_true(admission.result is Err(_))
+  assert_eq(editor.snapshot().text, "a")
+  assert_true(editor.can_undo())
+  assert_true(editor.receive(message) is Invalidated(_))
+  assert_eq(editor.version(), before)
+  assert_true(!editor.can_undo())
+  assert_true(
+    editor.edit(before, { start: 1, end: 1, text: "!", }) is Invalidated(_),
+  )
+  assert_eq(editor.reopen_view().text, "a")
+  assert_true(!editor.can_undo())
+}
+
+///|
+test "application failures invalidate regardless of error type or origin" {
   for origin in [Local(None), Undo, Redo, Remote] {
     let editor = Editor::new("failure")
     let outcome = editor.change(origin, _ => {
       raise Engine(SyncFailed(@sync.Failure::InvalidContent(detail="injected")))
     })
-    if origin is Remote {
-      assert_true(outcome is Rejected(_))
-      assert_eq(editor.snapshot().text, "")
-    } else {
-      assert_true(outcome is Invalidated(_))
-      assert_true(editor.undo() is Invalidated(_))
-    }
+    assert_true(outcome is Invalidated(_))
+    assert_true(editor.undo() is Invalidated(_))
   }
 }
 

@@ -6,36 +6,36 @@ priv enum Phase {
 
 ///|
 pub struct SubmitOutcome {
-  priv epoch : Int
-  priv cursor : Int
-  priv applied_operations : Int
-  priv duplicate_operations : Int
-  priv pending_operations : Int
+  priv epoch : Int32
+  priv cursor : Int32
+  priv applied_operations : Int32
+  priv duplicate_operations : Int32
+  priv pending_operations : Int32
   priv replay : Bool
 }
 
 ///|
-pub fn SubmitOutcome::epoch(self : SubmitOutcome) -> Int {
+pub fn SubmitOutcome::epoch(self : SubmitOutcome) -> Int32 {
   self.epoch
 }
 
 ///|
-pub fn SubmitOutcome::cursor(self : SubmitOutcome) -> Int {
+pub fn SubmitOutcome::cursor(self : SubmitOutcome) -> Int32 {
   self.cursor
 }
 
 ///|
-pub fn SubmitOutcome::applied_operations(self : SubmitOutcome) -> Int {
+pub fn SubmitOutcome::applied_operations(self : SubmitOutcome) -> Int32 {
   self.applied_operations
 }
 
 ///|
-pub fn SubmitOutcome::duplicate_operations(self : SubmitOutcome) -> Int {
+pub fn SubmitOutcome::duplicate_operations(self : SubmitOutcome) -> Int32 {
   self.duplicate_operations
 }
 
 ///|
-pub fn SubmitOutcome::pending_operations(self : SubmitOutcome) -> Int {
+pub fn SubmitOutcome::pending_operations(self : SubmitOutcome) -> Int32 {
   self.pending_operations
 }
 
@@ -46,27 +46,27 @@ pub fn SubmitOutcome::is_replay(self : SubmitOutcome) -> Bool {
 
 ///|
 priv struct StoredReceipt {
-  epoch : Int
+  epoch : Int32
   client_instance_id : String
-  submission_sequence : Int
+  submission_sequence : Int32
   canonical_request : Bytes
   outcome : SubmitOutcome
 }
 
 ///|
 pub struct LogEntry {
-  priv epoch : Int
-  priv cursor : Int
+  priv epoch : Int32
+  priv cursor : Int32
   priv canonical_request : String
 }
 
 ///|
-pub fn LogEntry::epoch(self : LogEntry) -> Int {
+pub fn LogEntry::epoch(self : LogEntry) -> Int32 {
   self.epoch
 }
 
 ///|
-pub fn LogEntry::cursor(self : LogEntry) -> Int {
+pub fn LogEntry::cursor(self : LogEntry) -> Int32 {
   self.cursor
 }
 
@@ -77,7 +77,7 @@ pub fn LogEntry::request_json(self : LogEntry) -> String {
 
 ///|
 priv struct ArchivedGeneration {
-  epoch : Int
+  epoch : Int32
   document : @text.TextState
   log : Array[LogEntry]
 }
@@ -89,8 +89,8 @@ priv struct ArchivedGeneration {
 /// receipt in one durable transaction before acknowledging the submission.
 pub struct Server {
   priv document_id : String
-  priv mut epoch : Int
-  priv mut cursor : Int
+  priv mut epoch : Int32
+  priv mut cursor : Int32
   priv mut phase : Phase
   priv mut cutover_text : String?
   priv mut document : @text.TextState
@@ -102,7 +102,7 @@ pub struct Server {
 ///|
 pub fn Server::Server(
   document_id : String,
-  epoch~ : Int,
+  epoch~ : Int32,
   server_agent~ : String,
 ) -> Server raise ProtocolError {
   if document_id == "" {
@@ -131,18 +131,18 @@ pub fn Server::document_id(self : Server) -> String {
 }
 
 ///|
-pub fn Server::epoch(self : Server) -> Int {
+pub fn Server::epoch(self : Server) -> Int32 {
   self.epoch
 }
 
 ///|
-pub fn Server::cursor(self : Server) -> Int {
+pub fn Server::cursor(self : Server) -> Int32 {
   self.cursor
 }
 
 ///|
-pub fn Server::text(self : Server) -> String {
-  self.document.text()
+pub fn Server::text(self : Server) -> String raise ProtocolError {
+  map_text(() => self.document.text())
 }
 
 ///|
@@ -152,8 +152,8 @@ pub fn Server::is_quiescing(self : Server) -> Bool {
 
 ///|
 fn require_current_epoch(
-  current_epoch : Int,
-  requested_epoch : Int,
+  current_epoch : Int32,
+  requested_epoch : Int32,
 ) -> Unit raise ProtocolError {
   if requested_epoch != current_epoch {
     raise ProtocolError::StaleEpoch(
@@ -165,10 +165,10 @@ fn require_current_epoch(
 
 ///|
 fn decide_submission_identity(
-  current_epoch : Int,
-  requested_epoch : Int,
+  current_epoch : Int32,
+  requested_epoch : Int32,
   client_instance_id : String,
-  submission_sequence : Int,
+  submission_sequence : Int32,
 ) -> Unit raise ProtocolError {
   require_current_epoch(current_epoch, requested_epoch)
   if client_instance_id == "" || submission_sequence < 0 {
@@ -178,10 +178,10 @@ fn decide_submission_identity(
 
 ///|
 fn decide_begin_cutover(
-  current_epoch : Int,
+  current_epoch : Int32,
   phase : Phase,
-  pending_operations : Int,
-  expected_epoch : Int,
+  pending_operations : Int32,
+  expected_epoch : Int32,
 ) -> Unit raise ProtocolError {
   require_current_epoch(current_epoch, expected_epoch)
   if phase is Quiescing {
@@ -194,9 +194,9 @@ fn decide_begin_cutover(
 
 ///|
 fn decide_finish_cutover(
-  current_epoch : Int,
+  current_epoch : Int32,
   phase : Phase,
-  expected_epoch : Int,
+  expected_epoch : Int32,
 ) -> Unit raise ProtocolError {
   require_current_epoch(current_epoch, expected_epoch)
   if phase is Active {
@@ -207,7 +207,7 @@ fn decide_finish_cutover(
 ///|
 pub fn Server::begin_cutover(
   self : Server,
-  expected_epoch~ : Int,
+  expected_epoch~ : Int32,
 ) -> Unit raise ProtocolError {
   decide_begin_cutover(
     self.epoch,
@@ -215,14 +215,14 @@ pub fn Server::begin_cutover(
     self.document.sync().pending_sync_count(),
     expected_epoch,
   )
-  self.cutover_text = Some(self.document.text())
+  self.cutover_text = Some(self.text())
   self.phase = Quiescing
 }
 
 ///|
 pub fn Server::cancel_cutover(
   self : Server,
-  expected_epoch~ : Int,
+  expected_epoch~ : Int32,
 ) -> Unit raise ProtocolError {
   decide_finish_cutover(self.epoch, self.phase, expected_epoch)
   self.cutover_text = None
@@ -232,7 +232,7 @@ pub fn Server::cancel_cutover(
 ///|
 pub fn Server::publish_cutover(
   self : Server,
-  expected_epoch~ : Int,
+  expected_epoch~ : Int32,
   baseline~ : Baseline,
 ) -> Unit raise ProtocolError {
   decide_finish_cutover(self.epoch, self.phase, expected_epoch)
@@ -249,7 +249,7 @@ pub fn Server::publish_cutover(
   )
   let next_log : Array[LogEntry] = []
   for index, canonical_request in baseline.pages {
-    next_log.push({ epoch: next_epoch, cursor: index + 1, canonical_request })
+    next_log.push({ epoch: next_epoch, cursor: index + 1, canonical_request, })
   }
   let next_archives = self.archives.copy()
   next_archives.push({
@@ -267,20 +267,23 @@ pub fn Server::publish_cutover(
 }
 
 ///|
-pub fn Server::has_archived_epoch(self : Server, epoch : Int) -> Bool {
+pub fn Server::has_archived_epoch(self : Server, epoch : Int32) -> Bool {
   self.archives.any(archive => archive.epoch == epoch)
 }
 
 ///|
-pub fn Server::archived_text(self : Server, epoch : Int) -> String? {
+pub fn Server::archived_text(
+  self : Server,
+  epoch : Int32,
+) -> String? raise ProtocolError {
   match self.archives.search_by(archive => archive.epoch == epoch) {
-    Some(index) => Some(self.archives[index].document.text())
+    Some(index) => Some(map_text(() => self.archives[index].document.text()))
     None => None
   }
 }
 
 ///|
-pub fn Server::archived_entry_count(self : Server, epoch : Int) -> Int? {
+pub fn Server::archived_entry_count(self : Server, epoch : Int32) -> Int32? {
   match self.archives.search_by(archive => archive.epoch == epoch) {
     Some(index) => Some(self.archives[index].log.length())
     None => None
@@ -309,9 +312,9 @@ priv enum ReceiptDecision {
 ///|
 fn decide_receipt(
   receipts : ArrayView[StoredReceipt],
-  epoch : Int,
+  epoch : Int32,
   client_instance_id : String,
-  submission_sequence : Int,
+  submission_sequence : Int32,
   canonical_request : Bytes,
 ) -> ReceiptDecision {
   for receipt in receipts {
@@ -330,7 +333,7 @@ fn decide_receipt(
 ///|
 fn rebuild_document(
   document_id : String,
-  epoch : Int,
+  epoch : Int32,
   log : ArrayView[LogEntry],
 ) -> @text.TextState raise ProtocolError {
   let document = map_text(() => {
@@ -348,9 +351,9 @@ fn rebuild_document(
 ///|
 pub fn Server::submit(
   self : Server,
-  epoch~ : Int,
+  epoch~ : Int32,
   client_instance_id~ : String,
-  submission_sequence~ : Int,
+  submission_sequence~ : Int32,
   request_json~ : String,
 ) -> SubmitOutcome raise ProtocolError {
   decide_submission_identity(
@@ -416,9 +419,9 @@ pub fn Server::submit(
 ///|
 pub fn Server::lookup_receipt(
   self : Server,
-  epoch~ : Int,
+  epoch~ : Int32,
   client_instance_id~ : String,
-  submission_sequence~ : Int,
+  submission_sequence~ : Int32,
   request_json~ : String,
 ) -> SubmitOutcome? raise ProtocolError {
   if client_instance_id == "" || submission_sequence < 0 {
@@ -447,8 +450,8 @@ pub fn Server::lookup_receipt(
 ///|
 pub fn Server::tail_after(
   self : Server,
-  epoch~ : Int,
-  cursor~ : Int,
+  epoch~ : Int32,
+  cursor~ : Int32,
 ) -> Array[LogEntry] raise ProtocolError {
   require_current_epoch(self.epoch, epoch)
   if cursor < 0 || cursor > self.cursor {

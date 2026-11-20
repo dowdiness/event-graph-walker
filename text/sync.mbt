@@ -1004,10 +1004,9 @@ pub fn SyncSession::apply_transition_with_limits(
     error => raise TextError::from_document_error(error, () => self.doc.len())
   }
   let outcome = changes.outcome
-  let projection = changes.projection
-  let effects : Array[TextEffect] = []
-  let availability = match changes.effect_availability {
-    @document.ProjectionEffectAvailability::Exact(projected) => {
+  let publication = match changes.publication {
+    @document.ProjectionPublication::Exact(projected) => {
+      let effects : Array[TextEffect] = []
       for effect in projected {
         match effect {
           @document.ProjectionEffect::Insert(position~, text~) =>
@@ -1016,39 +1015,31 @@ pub fn SyncSession::apply_transition_with_limits(
             effects.push(TextEffect::Delete(Range::from_ints(start, end)))
         }
       }
-      TextEffectAvailability::Exact(effects[:])
+      TextPublication::Exact(effects)
     }
-    @document.ProjectionEffectAvailability::SnapshotRequired =>
-      TextEffectAvailability::SnapshotRequired
-    @document.ProjectionEffectAvailability::Unavailable =>
-      TextEffectAvailability::Unavailable
+    @document.ProjectionPublication::SnapshotRequired =>
+      TextPublication::SnapshotRequired
+    @document.ProjectionPublication::Unavailable(error) =>
+      TextPublication::Unavailable(
+        TextError::from_document_error(error, () => self.doc.len()),
+      )
   }
-  let result : Result[SyncReport, TextError] = match projection {
-    @document.ProjectionStatus::RecoveryRequired(..) =>
-      Err(TextError::ProjectionRecoveryRequired)
-    @document.ProjectionStatus::Skipped
-    | @document.ProjectionStatus::Projected
-    | @document.ProjectionStatus::Recovered =>
-      match outcome {
-        @oplog.ApplyChangesOutcome::Succeeded(report) =>
-          Ok({
-            applied_operations: report.committed().length(),
-            duplicate_operations: report.redelivery_count(),
-            pending_operations: report.pending_after_count(),
-          })
-        @oplog.ApplyChangesOutcome::Failed(error~, ..) =>
-          Err(
-            TextError::from_oplog_error(
-              @oplog.OpLogError::CausalGraphError(error~),
-            ),
-          )
-      }
+  let result : Result[SyncReport, TextError] = match outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(report) =>
+      Ok({
+        applied_operations: report.committed().length(),
+        duplicate_operations: report.redelivery_count(),
+        pending_operations: report.pending_after_count(),
+      })
+    @oplog.ApplyChangesOutcome::Failed(error~, ..) =>
+      Err(
+        TextError::from_oplog_error(@oplog.OpLogError::CausalGraphError(error~)),
+      )
   }
   TextSyncTransition(
     version_before,
     self.doc.transition_version(),
-    effects,
-    availability,
+    publication,
     result,
   )
 }

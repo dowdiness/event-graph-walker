@@ -1,16 +1,16 @@
 ///|
 pub(all) suberror ProtocolError {
-  InvalidChunkSize(Int)
+  InvalidChunkSize(Int32)
   InvalidDocumentId
-  InvalidEpoch(Int)
+  InvalidEpoch(Int32)
   InvalidSubmissionIdentity
-  StaleEpoch(expected~ : Int, actual~ : Int)
-  Quiescing(Int)
-  PendingOperations(Int)
-  SubmissionConflict(client_instance_id~ : String, sequence~ : Int)
-  InvalidCursor(requested~ : Int, current~ : Int)
-  CutoverAlreadyStarted(Int)
-  CutoverNotStarted(Int)
+  StaleEpoch(expected~ : Int32, actual~ : Int32)
+  Quiescing(Int32)
+  PendingOperations(Int32)
+  SubmissionConflict(client_instance_id~ : String, sequence~ : Int32)
+  InvalidCursor(requested~ : Int32, current~ : Int32)
+  CutoverAlreadyStarted(Int32)
+  CutoverNotStarted(Int32)
   BaselineSourceMismatch
   TextFailure(@text.TextError)
 }
@@ -23,7 +23,7 @@ fn[T] map_text(action : () -> T raise @text.TextError) -> T raise ProtocolError 
 }
 
 ///|
-fn chunks_by_scalar(text : String, chunk_scalars : Int) -> Array[String] {
+fn chunks_by_scalar(text : String, chunk_scalars : Int32) -> Array[String] {
   let chunks : Array[String] = []
   let builder = StringBuilder()
   let mut scalar_count = 0
@@ -57,7 +57,7 @@ pub struct Baseline {
 pub fn Baseline::build(
   visible_text : String,
   baseline_agent~ : String,
-  chunk_scalars~ : Int,
+  chunk_scalars~ : Int32,
 ) -> Baseline raise ProtocolError {
   if chunk_scalars <= 0 {
     raise ProtocolError::InvalidChunkSize(chunk_scalars)
@@ -74,11 +74,11 @@ pub fn Baseline::build(
     ignore(map_text(() => validator.sync().apply(message)))
     pages.push(message.to_json_string())
   }
-  { document, pages, version: document.version() }
+  { document, pages, version: document.version(), }
 }
 
 ///|
-pub fn Baseline::page_count(self : Baseline) -> Int {
+pub fn Baseline::page_count(self : Baseline) -> Int32 {
   self.pages.length()
 }
 
@@ -88,8 +88,8 @@ pub fn Baseline::version(self : Baseline) -> @text.Version {
 }
 
 ///|
-pub fn Baseline::text(self : Baseline) -> String {
-  self.document.text()
+pub fn Baseline::text(self : Baseline) -> String raise ProtocolError {
+  map_text(() => self.document.text())
 }
 
 ///|

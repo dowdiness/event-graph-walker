@@ -255,16 +255,16 @@ fn p2_boundary_apply_batch(
     | (_, @oplog.ApplyChangesOutcome::Failed(..)) =>
       abort("apply_changes returned the wrong outcome kind")
   }
-  let projection_status = match (case, change.projection) {
-    (Complete, ProjectionStatus::Projected) => "Projected"
-    (DuplicateOnly, ProjectionStatus::Skipped)
-    | (PendingOnly, ProjectionStatus::Skipped) => "Skipped"
-    (Partial, ProjectionStatus::Skipped) =>
+  let projection_status = match (case, change.publication) {
+    (Complete, Exact(_)) => "Projected"
+    (DuplicateOnly, Exact(edits)) | (PendingOnly, Exact(edits)) if edits.is_empty() =>
+      "Skipped"
+    (Partial, Exact(edits)) if edits.is_empty() =>
       match failure_index {
         Some(0) => "Skipped"
         _ => abort("partial batch skipped an unexpected projection")
       }
-    (Partial, ProjectionStatus::Projected) =>
+    (Partial, Exact(_)) =>
       match failure_index {
         Some(index) if index > 0 => "Projected"
         _ => abort("partial batch projected an empty prefix")
@@ -324,7 +324,9 @@ fn p2_boundary_run(
   let mut prepare_calls = 0
   let mut commit_calls = 0
   let mut projection_attempts = 0
-  let mut recovery_checkouts = 0
+  // Automatic checkout no longer exists in this boundary; retain the output
+  // column for comparison with archived measurements.
+  let recovery_checkouts = 0
   doc.set_apply_changes_hooks({
     on_action: () => prepare_calls = prepare_calls + 1,
     on_apply_changes: () => commit_calls = commit_calls + 1,
@@ -340,10 +342,6 @@ fn p2_boundary_run(
       }
     }),
     projection_failure: None,
-    recovery_checkout: Some(frontier => {
-      recovery_checkouts = recovery_checkouts + 1
-      @branch.Branch::checkout(doc.oplog, frontier)
-    }),
   })
   let start = @bench.monotonic_clock_start()
   let (projection_status, batch_pending_count) = match lane {

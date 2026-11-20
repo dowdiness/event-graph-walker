@@ -15,7 +15,7 @@ To build, test, and verify the project locally, ensure you have the following to
 
 ---
 
-QuickCheck is pinned to `0.15.0`. Custom shrinking implementations use
+QuickCheck is pinned to `0.15.1`. Custom shrinking implementations use
 `moonbitlang/core/quickcheck/shrink`; the removed external QuickCheck `Shrink`
 trait and older toolchains are no longer supported.
 

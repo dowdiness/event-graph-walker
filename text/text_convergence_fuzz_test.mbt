@@ -53,14 +53,14 @@ impl @quickcheck.Arbitrary for MultiAgentTrace with fn arbitrary(size, rs) {
     let action_type = rs.split().next_uint64().to_int().abs() % 10
     if action_type < 4 {
       // 40% insert
-      let len = doc.len()
+      let len = try! doc.len()
       let pos = rs.split().next_uint64().to_int().abs() % (len + 1)
       let ch = chars[rs.split().next_uint64().to_int().abs() % chars.length()]
       try! doc.insert(@text.Pos::at(pos), ch)
       actions.push(FuzzInsert(agent, pos, ch))
     } else if action_type < 7 {
       // 30% delete
-      let len = doc.len()
+      let len = try! doc.len()
       if len == 0 {
         continue
       }
@@ -153,7 +153,7 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
       FuzzInsert(agent, pos, ch) => {
         let doc = docs[agent]
         let mgr = mgrs[agent]
-        let clamped = if pos > doc.len() { doc.len() } else { pos }
+        let clamped = if pos > (try! doc.len()) { try! doc.len() } else { pos }
         try! doc.insert_and_record(
           @text.Pos::at(clamped),
           ch,
@@ -164,10 +164,14 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
       FuzzDelete(agent, pos) => {
         let doc = docs[agent]
         let mgr = mgrs[agent]
-        if doc.len() == 0 {
+        if (try! doc.len()) == 0 {
           continue
         }
-        let clamped = if pos >= doc.len() { doc.len() - 1 } else { pos }
+        let clamped = if pos >= (try! doc.len()) {
+          (try! doc.len()) - 1
+        } else {
+          pos
+        }
         try! doc.delete_and_record(@text.Pos::at(clamped), mgr, timestamp_ms=0)
       }
       FuzzUndo(agent) =>
@@ -202,10 +206,11 @@ fn run_trace_and_check_convergence(trace : MultiAgentTrace) -> Bool {
   }
 
   // Verify all agents converged to the same text
-  let expected = docs[0].text()
+  let expected = try! docs[0].text()
   let expected_version = docs[0].version()
   for i = 1; i < docs.length(); i = i + 1 {
-    if docs[i].text() != expected || docs[i].version() != expected_version {
+    if (try! docs[i].text()) != expected ||
+      docs[i].version() != expected_version {
       return false
     }
   }
@@ -316,7 +321,9 @@ fn prop_sync_order_independence(pair : RealOpsPair) -> Bool {
   let _ = try! b2.sync().apply(msg_a2)
 
   // Both paths must produce same result
-  a1.text() == a2.text() && b1.text() == b2.text() && a1.text() == b1.text()
+  (try! a1.text()) == (try! a2.text()) &&
+  (try! b1.text()) == (try! b2.text()) &&
+  (try! a1.text()) == (try! b1.text())
 }
 
 ///|
@@ -364,7 +371,7 @@ fn prop_undo_concurrent_convergence(pair : RealOpsPair) -> Bool {
   let _ = try! doc_b.sync().apply(msg_a)
 
   // Must converge
-  doc_a.text() == doc_b.text()
+  (try! doc_a.text()) == (try! doc_b.text())
 }
 
 ///|

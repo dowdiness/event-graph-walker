@@ -1,7 +1,9 @@
-# Migrating to the unreleased Editor APIs
+# Migrating to v0.11
 
-These changes are not part of the published v0.9 or v0.10 releases.
-Use the [v0.10 toolchain migration](to-v0.10.md) first.
+This guide describes the **0.11.0 release candidate, not yet published**.
+These changes are not part of v0.9 or v0.10. Use the
+[v0.10 toolchain migration](to-v0.10.md) first, then update the EGW dependency
+to `dowdiness/event-graph-walker@0.11.0` when it is published.
 This is a source-API upgrade. Text SyncMessage and Version continue to use
 schema 2, with the same canonical wire domain as v0.8. No additional persisted
 version conversion is required. Earlier schema 1 data still requires the
@@ -12,15 +14,30 @@ version conversion is required. Earlier schema 1 data still requires the
 | Before | New API |
 | --- | --- |
 | `TextAdmissionTransition` | `TextSyncTransition` |
-| `transition.availability()` | `transition.effect_availability()` |
+| `transition.availability()` / `transition.effect_availability()` | `transition.publication()` |
 | `transition.finish()` | `transition.report()` |
 | `history.CausalSnapshot` | `history.CausalView` |
 | `TextState.causal_snapshot()` / `container.Document.causal_snapshot()` | `causal_view()` |
 | `view.children_count(lv)` | Obtain `let counts = view.children_counts()` once, then use `counts[lv]` |
 
-Reconcile a transition's committed effects before calling the potentially
-throwing `report()`: an admission error does not imply that no operations were
-committed. The rename does not change that ordering requirement.
+Admission and projection publication are independent outcomes. Inspect
+`transition.publication()` and handle every `TextPublication` case:
+
+- `Exact(effects)`: replay the owned sequential effects, including an empty array.
+- `SnapshotRequired`: the projection is valid, but exact effects are unavailable;
+  replace the host's projection from the current text.
+- `Unavailable(error)`: stop using the projection; do not attempt to read it as a
+  recovery fallback. Accepted history may still have advanced.
+
+`transition.admission_result()` returns `Result[SyncReport, TextError]` independently
+of publication. Reconcile available publication before propagating an admission
+error: failure does not imply that no operations were committed. The convenience
+`report()` raises the projection error for `Unavailable`, otherwise returns or
+raises the admission result. This is a failure-contract change, not just a rename.
+
+`TextState.text() -> String`, `len() -> Int32`, and `is_empty() -> Bool` now all
+raise `TextError`. Callers must propagate or handle these errors. Ordinary reads
+do not implicitly repair an invalid projection.
 
 `CausalView` aliases the live document graph. `entry()`, `frontier()`, and
 `children_counts()` return owning values, but separate reads across document
@@ -64,6 +81,14 @@ Handle every result explicitly:
 - `Invalidated(error)`: stop using this session and its projection. History may
   have advanced. Reopening/recovery is explicit; `snapshot()` is not a recovery
   fallback. History export remains available.
+
+`Editor.version()` identifies the displayed cut; `history_version()` identifies
+all accepted history. `accept_remote()` admits history without advancing the
+display and remains available after invalidation. `receive()` also advances the
+display and invalidates the session on failure, even if its displayed version
+did not change. `reopen_view()` rebuilds the full accepted cut on the same Editor
+and clears its Undo history. The host must establish a new native input/Undo
+baseline when publishing the returned snapshot.
 
 See the executable-test-backed [Editor examples](../guides/examples.md#editor-change-stream)
 for request construction, composition, and failure handling.

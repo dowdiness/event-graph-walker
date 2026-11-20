@@ -11,7 +11,7 @@ test "transition exact insert exposes sequential scalar effect and finishes repo
 
   assert_eq(transition.version_before(), before)
   assert_eq(transition.version_after(), receiver.version())
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 1)
       match effects[0] {
@@ -23,7 +23,7 @@ test "transition exact insert exposes sequential scalar effect and finishes repo
       }
     }
     SnapshotRequired => fail("warm one-op insert required a snapshot")
-    Unavailable => fail("warm one-op insert was unavailable")
+    Unavailable(_) => fail("warm one-op insert was unavailable")
   }
   let report = try! transition.report()
   assert_eq(report.applied_operations(), 1)
@@ -42,14 +42,14 @@ test "transition exact batch exposes ordered scalar insert coordinates" {
     .sync()
     .apply_transition(try! source.sync().export_all())
 
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 2)
       assert_eq(effects[0], Insert(Pos::at(0), "A"))
       assert_eq(effects[1], Insert(Pos::at(1), "B"))
     }
     SnapshotRequired => fail("warm two-op insert required a snapshot")
-    Unavailable => fail("warm two-op insert was unavailable")
+    Unavailable(_) => fail("warm two-op insert was unavailable")
   }
   ignore(try! transition.report())
 }
@@ -68,13 +68,13 @@ test "transition exact delete exposes scalar range" {
     .sync()
     .apply_transition(try! source.sync().export_since(receiver_version))
 
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 1)
       assert_eq(effects[0], Delete(try! Range::from_ints(0, 1)))
     }
     SnapshotRequired => fail("warm one-op delete required a snapshot")
-    Unavailable => fail("warm one-op delete was unavailable")
+    Unavailable(_) => fail("warm one-op delete was unavailable")
   }
   ignore(try! transition.report())
 }
@@ -98,7 +98,7 @@ test "transition exact remote undelete exposes visible insert effect" {
     .apply_transition(try! source.sync().export_since(receiver_version))
   assert_eq(transition.version_before(), receiver_version)
   assert_eq(transition.version_after(), receiver.version())
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 1)
       assert_eq(effects[0], Insert(Pos::at(0), "A"))
@@ -108,7 +108,7 @@ test "transition exact remote undelete exposes visible insert effect" {
       )
     }
     SnapshotRequired => fail("remote undelete required a snapshot")
-    Unavailable => fail("remote undelete was unavailable")
+    Unavailable(_) => fail("remote undelete was unavailable")
   }
   let report = try! transition.report()
   assert_eq(report.applied_operations(), 1)
@@ -141,7 +141,7 @@ test "transition exact losing LWW delete reports change application with empty e
   assert_eq(transition.version_before(), before_version)
   assert_true(transition.version_after() != before_version)
   assert_eq(transition.version_after(), receiver.version())
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 0)
       assert_eq(
@@ -150,7 +150,7 @@ test "transition exact losing LWW delete reports change application with empty e
       )
     }
     SnapshotRequired => fail("losing LWW delete required a snapshot")
-    Unavailable => fail("losing LWW delete was unavailable")
+    Unavailable(_) => fail("losing LWW delete was unavailable")
   }
   let report = try! transition.report()
   assert_eq(report.applied_operations(), 1)
@@ -168,7 +168,7 @@ test "transition duplicate-only and pending-only expose exact empty effects" {
   let receiver = try! TextState::new("transition-noop-receiver")
   ignore(try! receiver.sync().apply(message))
   let duplicate = try! receiver.sync().apply_transition(message)
-  match duplicate.effect_availability() {
+  match duplicate.publication() {
     Exact(effects) => assert_eq(effects.length(), 0)
     _ =>
       fail(
@@ -182,7 +182,7 @@ test "transition duplicate-only and pending-only expose exact empty effects" {
     "{\"schema\":2,\"format\":\"event-graph-walker/text-sync\",\"operations\":[{\"id\":{\"replica_id\":\"transition-pending\",\"sequence\":1},\"parents\":[{\"replica_id\":\"transition-pending\",\"sequence\":0}],\"kind\":\"insert\",\"content\":\"B\",\"origin_left\":null,\"origin_right\":null}],\"heads\":[{\"replica_id\":\"transition-pending\",\"sequence\":1}]}",
   )
   let pending = try! receiver.sync().apply_transition(pending_message)
-  match pending.effect_availability() {
+  match pending.publication() {
     Exact(effects) => assert_eq(effects.length(), 0)
     _ =>
       fail("pending-only change application did not expose exact empty effects")
@@ -206,7 +206,7 @@ test "transition dependency drain exposes one sequential effect stream" {
 
   let transition = try! receiver.sync().apply_transition(parent)
 
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 2)
       assert_eq(effects[0], Insert(Pos::at(0), "A"))
@@ -277,7 +277,7 @@ test "property: exact transition effects reproduce authority text" {
       let transition = try! receiver
         .sync()
         .apply_transition(try! source.sync().export_all())
-      match transition.effect_availability() {
+      match transition.publication() {
         Exact(effects) =>
           assert_eq(
             apply_transition_effects_for_test(before, effects),
@@ -287,7 +287,7 @@ test "property: exact transition effects reproduce authority text" {
           fail(
             "one-step warm randomized change application unexpectedly required snapshot",
           )
-        Unavailable =>
+        Unavailable(_) =>
           fail("randomized change application unexpectedly unavailable")
       }
       ignore(try! transition.report())
@@ -304,7 +304,7 @@ test "transition four-operation batch preserves exact effects" {
   let transition = try! receiver
     .sync()
     .apply_transition(try! source.sync().export_all())
-  match transition.effect_availability() {
+  match transition.publication() {
     Exact(effects) => {
       assert_eq(effects.length(), 4)
       assert_eq(apply_transition_effects_for_test("", effects), receiver.text())
@@ -313,4 +313,38 @@ test "transition four-operation batch preserves exact effects" {
   }
   let report = try! transition.report()
   assert_eq(report.applied_operations(), 4)
+}
+
+///|
+test "admission result remains inspectable when publication is unavailable" {
+  let state = TextState::new("independent-publication")
+  let version = state.version()
+  let report : SyncReport = {
+    applied_operations: 1,
+    duplicate_operations: 0,
+    pending_operations: 0,
+  }
+  let transition = TextSyncTransition(
+    version,
+    version,
+    Unavailable(TextError::ProjectionRecoveryRequired),
+    Ok(report),
+  )
+  match transition.admission_result() {
+    Ok(admitted) => assert_eq(admitted.applied_operations(), 1)
+    Err(_) => fail("projection failure must not rewrite admission outcome")
+  }
+  let reported = Ok(transition.report()) catch { error => Err(error) }
+  assert_true(reported is Err(TextError::ProjectionRecoveryRequired))
+  let partial = TextSyncTransition(
+    version,
+    version,
+    Exact([]),
+    Err(TextError::Internal(detail="admission failure")),
+  )
+  assert_true(partial.admission_result() is Err(_))
+  match partial.publication() {
+    Exact(edits) => assert_eq(edits.length(), 0)
+    _ => fail("admission failure must not rewrite exact publication")
+  }
 }

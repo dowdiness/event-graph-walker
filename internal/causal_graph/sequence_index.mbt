@@ -92,36 +92,31 @@ fn SequenceNode::remove_last(self : SequenceNode) -> SequenceNode? {
 }
 
 ///|
-/// The graph has already proved this sequence absent. Join an adjacent interval
-/// where encountered, absorbing its other neighbor when this point closes a gap.
-fn sequence_insert(root : SequenceNode?, sequence : UInt32) -> SequenceNode {
+/// Every identity in the range is absent. Join adjacent intervals, absorbing
+/// the other neighbor when this range closes a gap. Single inserts use the same path.
+fn sequence_insert(root : SequenceNode?, range : SequenceRange) -> SequenceNode {
   guard root is Some(node) else {
-    return {
-      range: { start: sequence, end: sequence + 1U, },
-      height: 1,
-      left: None,
-      right: None,
-    }
+    return { range, height: 1, left: None, right: None, }
   }
-  if sequence + 1U < node.range.start {
-    node.left = Some(sequence_insert(node.left, sequence))
-  } else if sequence > node.range.end {
-    node.right = Some(sequence_insert(node.right, sequence))
-  } else if sequence < node.range.start {
-    let mut start = sequence
+  if range.end < node.range.start {
+    node.left = Some(sequence_insert(node.left, range))
+  } else if range.start > node.range.end {
+    node.right = Some(sequence_insert(node.right, range))
+  } else if range.start < node.range.start {
+    let mut start = range.start
     if node.left is Some(left) {
       let mut last = left
       while last.right is Some(right) {
         last = right
       }
-      if last.range.end == sequence {
+      if last.range.end == range.start {
         start = last.range.start
         node.left = left.remove_last()
       }
     }
     node.range = { start, end: node.range.end, }
   } else {
-    let mut end = sequence + 1U
+    let mut end = range.end
     if node.right is Some(right) {
       let mut first = right
       while first.left is Some(left) {
@@ -139,7 +134,15 @@ fn sequence_insert(root : SequenceNode?, sequence : UInt32) -> SequenceNode {
 
 ///|
 fn SequenceIndex::insert(self : SequenceIndex, sequence : UInt32) -> Unit {
-  self.root = Some(sequence_insert(self.root, sequence))
+  self.insert_range({ start: sequence, end: sequence + 1U, })
+}
+
+///|
+fn SequenceIndex::insert_range(
+  self : SequenceIndex,
+  range : SequenceRange,
+) -> Unit {
+  self.root = Some(sequence_insert(self.root, range))
 }
 
 ///|

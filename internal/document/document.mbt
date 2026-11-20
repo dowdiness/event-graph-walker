@@ -20,6 +20,7 @@ struct InsertCursor {
 pub struct Document {
   priv mut tree : @fugue.FugueTree[String]
   priv oplog : @oplog.OpLog
+  priv mut view : EditingProjection
   agent_id : String
   // Lazy visible projection index. IndexedState owns the position cache and
   // its incremental updates; Fugue remains the lifecycle authority.
@@ -28,8 +29,6 @@ pub struct Document {
   priv mut cursor : InsertCursor?
   // Document-owned health for the Fugue-derived projection.
   priv mut projection_health : ProjectionHealth
-  // Target evidence required to validate a recovered tree before it becomes Ready.
-  priv mut projection_verification : ProjectionRecoveryVerification?
   // Package-local change application hooks used only by white-box boundary tests.
   priv mut apply_changes_hooks : ApplyChangesBoundaryHooks?
   priv mut text_changes : TextChangeCollector?
@@ -43,11 +42,16 @@ pub fn Document::new(agent_id : String) -> Document {
   {
     tree,
     oplog,
+    view: {
+      frontier: oplog.get_frontier(),
+      version: @causal_graph.ViewVersion(
+        oplog.causal_graph().current_graph_version(),
+      ),
+    },
     agent_id,
     indexed_state: IndexedState::new(),
     cursor: None,
     projection_health: ProjectionHealth::Ready,
-    projection_verification: None,
     apply_changes_hooks: None,
     text_changes: None,
   }
@@ -55,7 +59,7 @@ pub fn Document::new(agent_id : String) -> Document {
 
 ///|
 /// Get the current text content
-pub fn Document::to_text(self : Document) -> String {
+pub fn Document::to_text(self : Document) -> String raise DocumentError {
   self.ensure_projection_ready_for_read()
   self.indexed_state.text(self.tree)
 }
@@ -149,7 +153,10 @@ pub fn Document::get_frontier_raw(
 ///|
 /// Get the LV at a specific 0-based visible position.
 /// Uses O(log n) lookup via IndexedState's OrderTree projection.
-fn Document::lv_at_position(self : Document, position : Int32) -> Int32? {
+fn Document::lv_at_position(
+  self : Document,
+  position : Int32,
+) -> Int32? raise DocumentError {
   self.ensure_projection_ready_for_read()
   self.indexed_state.lv_at_position(self.tree, position)
 }
@@ -165,7 +172,10 @@ fn Document::invalidate_cache(self : Document) -> Unit {
 ///
 /// Returns the LV of the item before the cursor position,
 /// or -1 if at the start of the document.
-fn Document::position_to_lv(self : Document, position : Int32) -> Int32 {
+fn Document::position_to_lv(
+  self : Document,
+  position : Int32,
+) -> Int32 raise DocumentError {
   self.ensure_projection_ready_for_read()
   self.indexed_state.position_to_lv(self.tree, position)
 }
@@ -229,15 +239,24 @@ pub fn Document::insert(
         (ol, or)
       }
     }
-    let op = self.oplog.insert(ch_str, origin_left, origin_right) catch {
+    let op = self.oplog.insert(
+      ch_str,
+      origin_left,
+      origin_right,
+      parents=self.local_parents(),
+    ) catch {
       e => raise DocumentError::OpLog(e)
     }
+    self.advance_local_view(op)
     let (timestamp, agent) = match self.oplog.causal_graph()[op.lv()] {
       Some(entry) => (entry.timestamp, entry.agent)
-      None =>
-        raise DocumentError::OpLog(
+      None => {
+        let error = DocumentError::OpLog(
           @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
         )
+        self.invalidate_projection(error)
+        raise error
+      }
     }
     let utf16_position = match self.text_changes {
       Some(changes) if changes.valid =>
@@ -371,19 +390,27 @@ pub fn Document::delete(
     None => raise DocumentError::InvalidPosition(pos=position)
   }
 
-  let op = self.oplog.delete(target_lv) catch {
+  let op = self.oplog.delete(target_lv, parents=self.local_parents()) catch {
     e => raise DocumentError::OpLog(e)
   }
+  self.advance_local_view(op)
   let cg = self.oplog.causal_graph()
   let (del_ts, del_agent) = match cg[op.lv()] {
     Some(entry) => (entry.timestamp, entry.agent)
-    None =>
-      raise DocumentError::OpLog(
+    None => {
+      let error = DocumentError::OpLog(
         @oplog.OpLogError::MissingLocalVersion(lv=op.lv()),
       )
+      self.invalidate_projection(error)
+      raise error
+    }
   }
   self.tree.delete_with_ts(@fugue.Lv(target_lv), del_ts, del_agent) catch {
-    e => raise DocumentError::Fugue(e)
+    e => {
+      let error = DocumentError::Fugue(e)
+      self.invalidate_projection(error)
+      raise error
+    }
   }
 
   match self.text_changes {
@@ -443,9 +470,12 @@ pub fn Document::delete_range(
     _ => 0
   }
   for lv in target_lvs {
-    let op = self.oplog.delete(lv) catch { e => raise DocumentError::OpLog(e) }
+    let op = self.oplog.delete(lv, parents=self.local_parents()) catch {
+      e => raise DocumentError::OpLog(e)
+    }
+    self.advance_local_view(op)
     // The canonical cache stays detached throughout the range. Reuse target
-    // projection so a post-commit failure repairs or fails closed at authority.
+    // projection so a post-commit failure leaves the projection unavailable.
     self.project_local_target(op, record=false)
     match self.text_changes {
       Some(changes) if changes.valid =>
@@ -537,9 +567,10 @@ fn Document::commit_undelete_by_lv(
   target_lv : Int32,
 ) -> @core.Op raise DocumentError {
   self.cursor = None
-  let op = self.oplog.undelete(target_lv) catch {
+  let op = self.oplog.undelete(target_lv, parents=self.local_parents()) catch {
     e => raise DocumentError::OpLog(e)
   }
+  self.advance_local_view(op)
   self.project_local_target(op)
   op
 }
@@ -551,9 +582,10 @@ fn Document::commit_delete_by_lv(
   target_lv : Int32,
 ) -> @core.Op raise DocumentError {
   self.cursor = None
-  let op = self.oplog.delete(target_lv) catch {
+  let op = self.oplog.delete(target_lv, parents=self.local_parents()) catch {
     e => raise DocumentError::OpLog(e)
   }
+  self.advance_local_view(op)
   self.project_local_target(op)
   op
 }
@@ -660,7 +692,7 @@ pub fn Document::merge_remote(
 
 ///|
 /// Get the number of visible characters in the document.
-pub fn Document::visible_count(self : Document) -> Int32 {
+pub fn Document::visible_count(self : Document) -> Int32 raise DocumentError {
   self.ensure_projection_ready_for_read()
   self.tree.visible_count()
 }
@@ -714,7 +746,7 @@ pub fn Document::checkout_branch(
 /// Get visible items from the tree (returns a copy for safety).
 pub fn Document::get_visible_items(
   self : Document,
-) -> Array[(@fugue.Lv, @fugue.Item[String])] {
+) -> Array[(@fugue.Lv, @fugue.Item[String])] raise DocumentError {
   self.ensure_projection_ready_for_read()
   // Delegate to tree traversal — VisibleRun doesn't store enough
   // information to reconstruct full Item structs.
@@ -723,7 +755,10 @@ pub fn Document::get_visible_items(
 
 ///|
 /// Map a local version to its visible position in the document.
-pub fn Document::lv_to_position(self : Document, lv : Int32) -> Int32? {
+pub fn Document::lv_to_position(
+  self : Document,
+  lv : Int32,
+) -> Int32? raise DocumentError {
   self.ensure_projection_ready_for_read()
   self.indexed_state.lv_to_position(self.tree, lv)
 }
@@ -752,19 +787,22 @@ fn Document::target_is_visible(
 /// Project one committed compensating edit while preserving a warm index.
 /// Cache detachment ensures an internal projection failure cannot leave stale
 /// derived state readable. Cold indexes are never rebuilt per undo character.
+#warnings("-fragile_catch_all")
 fn Document::project_local_target(
   self : Document,
   op : @core.Op,
   record~ : Bool = true,
 ) -> Unit raise DocumentError {
   let indexed = IndexedState::from_snapshot(self.indexed_state.take_cache())
-  let change = {
-    errdefer self.recover_projection(self.get_frontier())
-    apply_projection_with_visible_change(
-      self.tree,
-      op,
-      self.oplog.causal_graph(),
-    )
+  let change = apply_projection_with_visible_change(
+    self.tree,
+    op,
+    self.oplog.causal_graph(),
+  ) catch {
+    error => {
+      self.invalidate_projection(error)
+      raise error
+    }
   }
   if !indexed.is_ready() {
     if record {
@@ -825,7 +863,7 @@ fn Document::project_local_target(
 pub fn Document::visible_content_at(
   self : Document,
   position : Int32,
-) -> String? {
+) -> String? raise DocumentError {
   match self.lv_at_position(position) {
     Some(lv) => self.tree.get(@fugue.Lv(lv)).map(item => item.content)
     None => None

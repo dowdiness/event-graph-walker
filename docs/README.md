@@ -32,7 +32,9 @@ In-depth conceptual documentation explaining how the CRDT algorithms work:
 Upgrade instructions for breaking protocol changes and major versions:
 
 - **[Migration Index](migration/README.md)**: Version upgrade recommendations and breaking change summaries.
-- **[v0.9 Migration](migration/to-v0.9.md)**: Transactional Editor, UTF-16 changes, Undo ownership, and live causal views.
+- **[v0.11 Migration](migration/to-v0.11.md)**: Unpublished candidate: Editor, UTF-16 changes, admission/publication, fallible readers, and live causal views.
+- **[v0.10 Migration](migration/to-v0.10.md)**: MoonBit 0.10.21 and typed-error dependencies.
+- **[v0.9 Migration](migration/to-v0.9.md)**: MoonBit 0.10.15 and the text transition API rename.
 - **[Text Schema 2](migration/text-schema-2.md)**: Upgrading to exact causality and domain-separated wire encoding.
 - **[v0.5 Migration](migration/to-v0.5.md)**: Opaque `text.Range` constructors with validation.
 - **[v0.4 Migration](migration/to-v0.4.md)**: Stable identity transition and schema 1 envelopes.
@@ -48,7 +50,7 @@ The generated `.mbti` interface files represent the authoritative public API sur
 - [`tree/pkg.generated.mbti`](../tree/pkg.generated.mbti) - Public movable-tree API.
 - [`undo/pkg.generated.mbti`](../undo/pkg.generated.mbti) - Public undo/redo API.
 - [`container/pkg.generated.mbti`](../container/pkg.generated.mbti) - Unified document API (tree + block text + sync + undo).
-- [`history/pkg.generated.mbti`](../history/pkg.generated.mbti) - Read-only causal history snapshots.
+- [`history/pkg.generated.mbti`](../history/pkg.generated.mbti) - Read-only live causal views with owning diagnostic values.
 - [`sync/pkg.generated.mbti`](../sync/pkg.generated.mbti) - Shared limits and error classifications.
 - [`peer_sync/pkg.generated.mbti`](../peer_sync/pkg.generated.mbti) - Peer-free synchronization policy core.
 - [`peer_sync/text/pkg.generated.mbti`](../peer_sync/text/pkg.generated.mbti) - Text sync adapter.

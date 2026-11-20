@@ -23,11 +23,16 @@ fn Document::from_closed_history_internal(
   {
     tree,
     oplog,
+    view: {
+      frontier: oplog.get_frontier(),
+      version: @causal_graph.ViewVersion(
+        oplog.causal_graph().current_graph_version(),
+      ),
+    },
     agent_id: writer,
     indexed_state: indexed,
     cursor: None,
     projection_health: ProjectionHealth::Ready,
-    projection_verification: None,
     apply_changes_hooks: None,
     text_changes: None,
   }

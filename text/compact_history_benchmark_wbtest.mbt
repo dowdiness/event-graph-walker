@@ -50,7 +50,7 @@ test "compact restore 100k operations direct" (b : @bench.T) {
   let (archive, version) = try! compact_benchmark_archive(false)
   b.bench(fn() {
     b.keep(
-      (try! TextState::restore_compact_direct_experimental(
+      try! (try! TextState::restore_compact_direct_experimental(
         archive, "fresh", version,
       )).text(),
     )
@@ -64,7 +64,7 @@ test "compact restore 100k operations ordinary change application" (
   let (archive, version) = try! compact_benchmark_archive(false)
   b.bench(fn() {
     b.keep(
-      (try! compact_restore_replay_for_test(archive, "fresh", version)).text(),
+      try! (try! compact_restore_replay_for_test(archive, "fresh", version)).text(),
     )
   })
 }
@@ -74,7 +74,7 @@ test "compact restore 95k operations 5k visible direct" (b : @bench.T) {
   let (archive, version) = try! compact_benchmark_archive(true)
   b.bench(fn() {
     b.keep(
-      (try! TextState::restore_compact_direct_experimental(
+      try! (try! TextState::restore_compact_direct_experimental(
         archive, "fresh", version,
       )).text(),
     )
@@ -88,7 +88,7 @@ test "compact restore 95k operations 5k visible ordinary change application" (
   let (archive, version) = try! compact_benchmark_archive(true)
   b.bench(fn() {
     b.keep(
-      (try! compact_restore_replay_for_test(archive, "fresh", version)).text(),
+      try! (try! compact_restore_replay_for_test(archive, "fresh", version)).text(),
     )
   })
 }

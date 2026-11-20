@@ -436,11 +436,11 @@ fn exercise_case(case_id : String) -> (String, String) {
     )
   } else if case_id == "source-equal-advance" {
     let state = try! @text.TextState::new("source-equal")
-    let before_text = state.text()
+    let before_text = try! state.text()
     let before_version = state.version()
     try! state.insert(@text.Pos::at(0), "x")
     try! state.delete(@text.Pos::at(0))
-    if state.text() != before_text || state.version() == before_version {
+    if (try! state.text()) != before_text || state.version() == before_version {
       panic()
     }
     ("strict-forward", "frontier-advanced-with-source-equal-visible-text")
@@ -562,7 +562,7 @@ fn emit_authority_oracle() -> Unit {
   try! source.insert(@text.Pos::at(2), "z")
   let captured_history = try! source.sync().export_all()
   let captured_bytes = captured_history.to_canonical_bytes()
-  let source_text = source.text()
+  let source_text = try! source.text()
   let detector = EvidenceDetector::new(captured_history)
   let controls = positive_control_observations(
     detector,
@@ -589,7 +589,7 @@ fn emit_authority_oracle() -> Unit {
       "known-positive-provider-read",
       evidence(
         "known-positive-provider-read",
-        restored.text(),
+        try! restored.text(),
         detector,
         positive_before,
         "preflight-positive-control",
@@ -598,7 +598,7 @@ fn emit_authority_oracle() -> Unit {
     ),
   )
   let strict_before = detector.snapshot()
-  detector.scan_resident_value(restored.text())
+  detector.scan_resident_value(try! restored.text())
   if @env.get_env_var("GATE_R0_TEST_FORCE_COLD_READ") == Some("strict-forward") {
     ignore(detector.fetch_canonical_history())
   }
@@ -607,7 +607,7 @@ fn emit_authority_oracle() -> Unit {
       "strict-forward",
       evidence(
         "strict-forward",
-        restored.text(),
+        try! restored.text(),
         detector,
         strict_before,
         "strict-forward",
@@ -616,13 +616,13 @@ fn emit_authority_oracle() -> Unit {
     ),
   )
   let concurrent_before = detector.snapshot()
-  detector.scan_resident_value(restored.text())
+  detector.scan_resident_value(try! restored.text())
   println(
     envelope(
       "closed-concurrent",
       evidence(
         "closed-concurrent",
-        restored.text(),
+        try! restored.text(),
         detector,
         concurrent_before,
         "closed-concurrent",
@@ -636,13 +636,13 @@ fn emit_authority_oracle() -> Unit {
     }
     let (classification, transition) = exercise_case(case_id)
     let before = detector.snapshot()
-    detector.scan_resident_value(restored.text())
+    detector.scan_resident_value(try! restored.text())
     println(
       envelope(
         case_id,
         evidence(
           case_id,
-          restored.text(),
+          try! restored.text(),
           detector,
           before,
           classification,
@@ -688,13 +688,13 @@ fn emit_authority_oracle() -> Unit {
     } else {
       "undelete-on-restored-branch"
     }
-    detector.scan_resident_value(restored.text())
+    detector.scan_resident_value(try! restored.text())
     println(
       envelope(
         case_id,
         evidence(
           case_id,
-          restored.text(),
+          try! restored.text(),
           detector,
           before,
           classification,

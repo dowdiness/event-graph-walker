@@ -118,7 +118,7 @@ test "cache coherent: position_to_lv matches get_visible_items after each op" {
   let doc = Document::new("alice")
 
   // Helper: verify position_to_lv(i) == LV at index i-1 in get_visible_items
-  fn check_consistency(d : Document) -> Bool {
+  fn check_consistency(d : Document) -> Bool raise DocumentError {
     let items = d.get_visible_items()
     let mut ok = true
     for i = 1; i <= items.length(); i = i + 1 {

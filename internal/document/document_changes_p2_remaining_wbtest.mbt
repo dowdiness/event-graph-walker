@@ -162,7 +162,6 @@ test "P2 red malformed current input is fully atomic" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
   let malformed = @core.Op::insert(
     -1,
@@ -207,7 +206,6 @@ test "P2 red stale `ApplyChanges` action does not mutate Document" {
     action_override: Some(_ => stale_action),
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
 
   let result : Result[DocumentChanges, DocumentError] = Ok(
@@ -247,7 +245,6 @@ test "P2 red consumed `ApplyChanges` action does not mutate Document" {
     action_override: Some(_ => consumed_action),
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
 
   let result : Result[DocumentChanges, DocumentError] = Ok(
@@ -281,7 +278,6 @@ test "P2 red pending limit rejection is fully atomic" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
   let incoming = p2_pending_batch("p2-limit-peer")
 
@@ -308,7 +304,7 @@ test "P2 red pending limit rejection is fully atomic" {
 }
 
 ///|
-test "P2 red preflight repairs graph-known tree divergence before pending" {
+test "preflight rejects graph-known tree divergence before pending admission" {
   let doc = Document::new("p2-preflight")
   let known = try! doc.insert(0, "Y")
   ignore(doc.to_text())
@@ -324,10 +320,6 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
   // the authority-known Insert is genuinely absent from the projection.
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
-  let mut recovery_calls = 0
-  let mut recovery_saw_no_pending = false
-  let mut recovery_saw_invalid_derived_state = false
-  let mut recovery_frontier : @core.Frontier? = None
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
@@ -338,24 +330,18 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      recovery_frontier = Some(frontier)
-      recovery_saw_no_pending = !doc.oplog.has_pending()
-      recovery_saw_invalid_derived_state = !doc.indexed_state.is_ready() &&
-        doc.cursor is None
-      @branch.Branch::checkout(doc.oplog, frontier)
-    }),
   })
 
+  let rejected = Ok(doc.apply_changes([unready])) catch { error => Err(error) }
+  assert_true(rejected is Err(DocumentError::ProjectionRecoveryRequired(..)))
+  assert_eq(doc.pending_count(), 0)
+  assert_eq(commit_count, 0)
+  assert_true(!doc.indexed_state.is_ready())
+  doc.integrate_projection()
   let change = try! doc.apply_changes([unready])
-  assert_eq(recovery_calls, 1)
-  assert_true(recovery_saw_no_pending)
-  assert_true(recovery_saw_invalid_derived_state)
-  assert_eq(recovery_frontier, Some(before_frontier))
   assert_eq(doc.get_frontier(), before_frontier)
   assert_true(doc.oplog.has_pending())
-  assert_eq(prepare_count, 1)
+  assert_eq(prepare_count, 2)
   assert_eq(commit_count, 1)
   assert_eq(projection_count, 0)
   match change.outcome {
@@ -366,22 +352,20 @@ test "P2 red preflight repairs graph-known tree divergence before pending" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("unready input must remain a complete pending transition")
   }
-  match change.projection {
-    ProjectionStatus::Recovered => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Skipped
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("successful preflight recovery must be reported")
+  match change.publication {
+    Exact(edits) if edits.is_empty() => ()
+    _ =>
+      fail(
+        "pending-only transition after reopening must publish exact empty edits",
+      )
   }
-  assert_true(
-    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
-  )
+  assert_true(change.publication is Exact(_))
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
 }
 
 ///|
-test "P2 green preflight recovery remains sticky for projected batch" {
+test "preflight divergence requires explicit reopening before projected batch" {
   let doc = Document::new("p2-preflight-project")
   let known = try! doc.insert(0, "Y")
   ignore(doc.to_text())
@@ -393,7 +377,6 @@ test "P2 green preflight recovery remains sticky for projected batch" {
     Some(known_raw),
   )
   doc.replace_projection_tree(@fugue.FugueTree::new())
-  let mut recovery_calls = 0
   let mut projection_count = 0
   doc.set_apply_changes_hooks({
     on_action: () => (),
@@ -402,14 +385,13 @@ test "P2 green preflight recovery remains sticky for projected batch" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      @branch.Branch::checkout(doc.oplog, frontier)
-    }),
   })
 
+  let rejected = Ok(doc.apply_changes([incoming])) catch { error => Err(error) }
+  assert_true(rejected is Err(DocumentError::ProjectionRecoveryRequired(..)))
+  assert_eq(projection_count, 0)
+  doc.integrate_projection()
   let change = try! doc.apply_changes([incoming])
-  assert_eq(recovery_calls, 1)
   assert_eq(projection_count, 1)
   match change.outcome {
     @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
@@ -417,16 +399,11 @@ test "P2 green preflight recovery remains sticky for projected batch" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("known-origin batch must complete after recovery")
   }
-  match change.projection {
-    ProjectionStatus::Recovered => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Skipped
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("successful preflight recovery must remain sticky")
+  match change.publication {
+    Exact(_) => ()
+    _ => fail("projected batch after reopening must publish exact edits")
   }
-  assert_true(
-    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
-  )
+  assert_true(change.publication is Exact(_))
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
 }
@@ -450,9 +427,6 @@ test "P2 red preflight recovery then stale rejection keeps authority unchanged" 
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
   let before_ops = doc.get_all_ops()
-  let mut recovery_calls = 0
-  let mut recovery_saw_no_pending = false
-  let mut recovery_saw_invalid_derived_state = false
   let mut prepare_count = 0
   let mut commit_count = 0
   let mut projection_count = 0
@@ -463,13 +437,6 @@ test "P2 red preflight recovery then stale rejection keeps authority unchanged" 
     action_override: Some(_ => stale_action),
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      recovery_saw_no_pending = !doc.oplog.has_pending()
-      recovery_saw_invalid_derived_state = !doc.indexed_state.is_ready() &&
-        doc.cursor is None
-      @branch.Branch::checkout(doc.oplog, frontier)
-    }),
   })
 
   let result : Result[DocumentChanges, DocumentError] = Ok(
@@ -478,36 +445,114 @@ test "P2 red preflight recovery then stale rejection keeps authority unchanged" 
     error => Err(error)
   }
   match result {
-    Err(DocumentError::OpLog(@oplog.OpLogError::StaleApplyChanges)) => ()
+    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("expected stale rejection after preflight recovery")
   }
-  assert_eq(recovery_calls, 1)
-  assert_true(recovery_saw_no_pending)
-  assert_true(recovery_saw_invalid_derived_state)
   assert_eq(prepare_count, 1)
-  assert_eq(commit_count, 1)
+  assert_eq(commit_count, 0)
   assert_eq(projection_count, 0)
   assert_eq(doc.get_frontier(), before_frontier)
   p2_assert_same_operations(doc.get_all_ops(), before_ops)
   assert_true(!doc.oplog.has_pending())
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
-  assert_true(doc.projection_health is ProjectionHealth::Ready)
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
+  doc.integrate_projection()
+  let stale = Ok(doc.apply_changes([unready])) catch { error => Err(error) }
+  assert_true(
+    stale is Err(DocumentError::OpLog(@oplog.OpLogError::StaleApplyChanges)),
+  )
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
   assert_eq(doc.get_frontier(), fresh.get_frontier())
 }
 
 ///|
-test "P2 red post-commit projection failure preserves receipt and recovers" {
+test "history-only admission exposes partial progress without publishing and retries converge" {
+  let doc = Document::new("partial-view")
+  let before = doc.view_graph_version()
+  let incoming = p2_ready_batch("remote-partial", 3)
+  doc.set_apply_changes_hooks({
+    on_action: () => (),
+    on_apply_changes: () => (),
+    on_projection_finalization: _ => (),
+    action_override: None,
+    commit_failure: Some(op => {
+      if op.seq() == 1 {
+        Some(@causal_graph.CausalGraphError::MissingParent(lv=-99))
+      } else {
+        None
+      }
+    }),
+    projection_failure: None,
+  })
+  let structural = incoming.map(op => try! @core.StructuralOp(op))
+  let outcome = try! doc.admit_structural_changes(structural[:], 100)
+  guard outcome is @oplog.ApplyChangesOutcome::Failed(report~, ..) else {
+    fail("expected partial admission")
+  }
+  assert_eq(report.committed().length(), 1)
+  assert_eq(doc.pending_count(), 2)
+  assert_true(doc.current_graph_version() != before)
+  assert_eq(doc.view_graph_version(), before)
+  assert_eq(doc.to_text(), "")
+  doc.apply_changes_hooks = None
+  assert_true(
+    (try! doc.admit_structural_changes(structural[:], 100))
+    is @oplog.ApplyChangesOutcome::Succeeded(_),
+  )
+  try! doc.advance_projection()
+  assert_eq(doc.to_text(), "xxx")
+  assert_eq(doc.view_graph_version(), doc.current_graph_version())
+}
+
+///|
+test "immediate settlement includes hidden history even on duplicate delivery" {
+  for duplicate_only in [false, true] {
+    let doc = Document::new("mixed-view")
+    let incoming = p2_ready_batch("mixed-peer", 3)
+    let structural = incoming.map(op => try! @core.StructuralOp(op))
+    ignore(try! doc.admit_structural_changes(structural[:2], 100))
+    assert_eq(doc.to_text(), "")
+    ignore(try! doc.insert(0, "L"))
+    let before = doc.view_graph_version()
+    let changes = try! doc.apply_changes(
+      if duplicate_only {
+        incoming[:2].to_owned()
+      } else {
+        incoming
+      },
+    )
+    guard changes.publication is Exact(effects) else {
+      fail("expected exact publication")
+    }
+    assert_eq(
+      (try! changes.report()).committed().length(),
+      if duplicate_only {
+        0
+      } else {
+        1
+      },
+    )
+    assert_true(doc.view_graph_version() != before)
+    assert_eq(doc.view_graph_version(), doc.current_graph_version())
+    let canonical = try! doc.checkout_branch(doc.get_frontier())
+    assert_eq(doc.to_text(), canonical.to_text())
+    assert_eq(batch_replay_effects("L", effects[:]), canonical.to_text())
+    assert_eq(doc.visible_count(), if duplicate_only { 3 } else { 4 })
+    let again = try! doc.apply_changes(incoming[:2].to_owned())
+    assert_true(again.publication is Exact(edits) && edits.is_empty())
+    assert_eq(doc.to_text(), canonical.to_text())
+  }
+}
+
+///|
+test "post-commit projection failure preserves receipt until explicit reopening" {
   let doc = Document::new("p2-post-commit")
   ignore(try! doc.insert(0, "base"))
   ignore(doc.to_text())
   let incoming = p2_ready_batch("p2-post-commit-peer", 2)
   let mut projection_count = 0
-  let mut recovery_calls = 0
-  let mut recovery_saw_partial_tree = false
-  let mut recovery_saw_invalid_cache = false
   doc.set_apply_changes_hooks({
     on_action: () => (),
     on_apply_changes: () => (),
@@ -528,20 +573,12 @@ test "P2 red post-commit projection failure preserves receipt and recovers" {
         Err(error) => Some(error)
       }
     }),
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      recovery_saw_partial_tree = doc.tree.to_text() != "base"
-      recovery_saw_invalid_cache = !doc.indexed_state.is_ready() &&
-        doc.cursor is None
-      @branch.Branch::checkout(doc.oplog, frontier)
-    }),
   })
 
   let change = try! doc.apply_changes(incoming)
   assert_eq(projection_count, 1)
-  assert_eq(recovery_calls, 1)
-  assert_true(recovery_saw_partial_tree)
-  assert_true(recovery_saw_invalid_cache)
+  assert_true(doc.tree.to_text() != "base")
+  assert_true(!doc.indexed_state.is_ready())
   match change.outcome {
     @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       p2_assert_operation_prefix(receipt.committed(), incoming, 2)
@@ -550,13 +587,13 @@ test "P2 red post-commit projection failure preserves receipt and recovers" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("projection failure must not erase the change application outcome")
   }
-  match change.projection {
-    ProjectionStatus::Recovered => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Skipped
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("successful recovery must be distinguished from projection")
+  match change.publication {
+    Unavailable(
+      DocumentError::OpLog(@oplog.OpLogError::MissingLocalVersion(lv=999)),
+    ) => ()
+    _ => fail("failed projection must publish its error without recovery")
   }
+  doc.integrate_projection()
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.tree.to_text(), fresh.to_text())
   assert_eq(doc.get_frontier(), fresh.get_frontier())
@@ -564,12 +601,11 @@ test "P2 red post-commit projection failure preserves receipt and recovers" {
 }
 
 ///|
-test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
+test "post-commit projection failure returns unavailable and remains fail-closed" {
   let doc = Document::new("p2-recovery-required")
   ignore(try! doc.insert(0, "base"))
   ignore(doc.to_text())
   let incoming = p2_ready_batch("p2-recovery-required-peer", 2)
-  let mut recovery_calls = 0
   let mut projection_count = 0
   doc.set_apply_changes_hooks({
     on_action: () => (),
@@ -593,15 +629,10 @@ test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
         Err(error) => Some(error)
       }
     }),
-    recovery_checkout: Some(_frontier => {
-      recovery_calls = recovery_calls + 1
-      raise @branch.BranchError::MissingOp(lv=999)
-    }),
   })
 
   let change = try! doc.apply_changes(incoming)
   assert_eq(projection_count, 1)
-  assert_true(recovery_calls >= 1)
   match change.outcome {
     @oplog.ApplyChangesOutcome::Succeeded(receipt) => {
       p2_assert_operation_prefix(receipt.committed(), incoming, 2)
@@ -610,24 +641,19 @@ test "P2 red failed recovery returns RecoveryRequired and remains fail-closed" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("recovery failure must retain the change application receipt")
   }
-  match change.projection {
-    ProjectionStatus::RecoveryRequired(..) => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Recovered
-    | ProjectionStatus::Skipped =>
-      fail("failed checkout must return RecoveryRequired")
+  match change.publication {
+    Unavailable(_) => ()
+    _ => fail("projection failure must publish unavailable without checkout")
   }
-  assert_true(
-    change.effect_availability is ProjectionEffectAvailability::Unavailable,
-  )
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  assert_true(change.publication is Unavailable(_))
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
   let mutation : Result[Unit, DocumentError] = Ok(doc.prepare_for_mutation()) catch {
     error => Err(error)
   }
   match mutation {
-    Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
+    Err(DocumentError::Fugue(_)) => ()
     _ => fail("failed recovery must block later mutation")
   }
 }
@@ -659,13 +685,11 @@ test "P2 red retry drains only core pending suffix" {
       }
     }),
     projection_failure: None,
-    recovery_checkout: None,
   })
 
   let first = try! doc.apply_changes(incoming)
-  match first.effect_availability {
-    ProjectionEffectAvailability::Exact(effects) =>
-      assert_eq(effects.length(), 1)
+  match first.publication {
+    Exact(effects) => assert_eq(effects.length(), 1)
     _ => fail("warm committed partial prefix must publish exact effects")
   }
   match first.outcome {
@@ -719,7 +743,6 @@ test "P2 red apply_remote remains compatible with one-op change application" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
 
   try! legacy.apply_remote(remote)
@@ -754,7 +777,6 @@ test "P2 wrapper apply_remote translates partial change application" {
       Some(@causal_graph.CausalGraphError::MissingParent(lv=-204))
     }),
     projection_failure: None,
-    recovery_checkout: None,
   })
 
   let result : Result[Unit, DocumentError] = Ok(doc.apply_remote(incoming)) catch {
@@ -808,9 +830,6 @@ test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
         DocumentError::Fugue(@fugue.FugueError::MissingItem(id=@fugue.Lv(997))),
       )
     }),
-    recovery_checkout: Some(_frontier => {
-      raise @branch.BranchError::MissingOp(lv=1001)
-    }),
   })
 
   let result : Result[Unit, DocumentError] = Ok(
@@ -819,13 +838,8 @@ test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
     error => Err(error)
   }
   match result {
-    Err(DocumentError::ProjectionRecoveryRequired(frontier~, error~)) => {
-      assert_eq(frontier, doc.get_frontier())
-      match error {
-        @branch.BranchError::MissingOp(lv~) => assert_eq(lv, 1001)
-        _ => fail("recovery failure must retain its branch cause")
-      }
-    }
+    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(id~))) =>
+      assert_eq(id, @fugue.Lv(997))
     Err(DocumentError::OpLog(@oplog.OpLogError::PartialApplyChanges(..))) =>
       fail("recovery failure must take priority over partial legacy error")
     _ => fail("merge wrapper must expose typed recovery failure")
@@ -834,7 +848,7 @@ test "P2 wrapper merge_remote prioritizes recovery over partial legacy error" {
   assert_eq(commit_count, 1)
   assert_eq(projection_count, 1)
   assert_eq(doc.oplog.op_count(), 1)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
 }
@@ -860,7 +874,6 @@ test "P2 red merge_remote keeps closure validation while batch change applicatio
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
   try! merged.merge_remote(remote_ops, remote_frontier)
   assert_eq(merged_prepare_count, 1)
@@ -885,7 +898,6 @@ test "P2 red merge_remote keeps closure validation while batch change applicatio
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
   let closure_result : Result[Unit, DocumentError] = Ok(
     incomplete.merge_remote(second_only, remote_frontier),
@@ -915,12 +927,9 @@ test "P2 red merge_remote keeps closure validation while batch change applicatio
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("incomplete batch should be pending, not partial")
   }
-  match pending.projection {
-    ProjectionStatus::Skipped => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Recovered
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("pending incomplete batch must skip projection")
+  match pending.publication {
+    Exact(edits) if edits.is_empty() => ()
+    _ => fail("pending incomplete batch must skip projection")
   }
 }
 
@@ -961,7 +970,6 @@ test "P2 red partial change application resets cursor before local insert" {
       }
     }),
     projection_failure: None,
-    recovery_checkout: None,
   })
   let change = try! doc.apply_changes(incoming)
   match change.outcome {
@@ -974,7 +982,7 @@ test "P2 red partial change application resets cursor before local insert" {
 }
 
 ///|
-test "P2 red recovered change application resets cursor before local insert" {
+test "explicit reopening after projection failure resets cursor before local insert" {
   let doc = Document::new("p2-cursor-recovery")
   ignore(try! doc.insert(0, "a"))
   let incoming = p2_ready_batch("p2-cursor-recovery-peer", 1)
@@ -989,31 +997,22 @@ test "P2 red recovered change application resets cursor before local insert" {
         DocumentError::Fugue(@fugue.FugueError::MissingItem(id=@fugue.Lv(998))),
       )
     }),
-    recovery_checkout: Some(frontier => {
-      @branch.Branch::checkout(doc.oplog, frontier)
-    }),
   })
   let change = try! doc.apply_changes(incoming)
-  match change.projection {
-    ProjectionStatus::Recovered => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Skipped
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("expected successful recovery")
+  match change.publication {
+    Unavailable(_) => ()
+    _ => fail("expected unavailable projection")
   }
-  assert_true(
-    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
-  )
+  assert_true(change.publication is Unavailable(_))
+  doc.integrate_projection()
   ignore(try! doc.insert(doc.visible_count(), "l"))
   p2_assert_fresh_cursor_convergence(doc)
 }
 
 ///|
-test "P2 green entry recovery is sticky for duplicate-only change application" {
+test "duplicate-only change application stays blocked until explicit reopening" {
   let doc = Document::new("p2-entry-duplicate")
   let incoming = p2_ready_batch("p2-entry-duplicate-peer", 1)
-  let mut recovery_ready = false
-  let mut recovery_calls = 0
   let mut projection_failure = true
   let mut prepare_count = 0
   let mut commit_count = 0
@@ -1035,29 +1034,19 @@ test "P2 green entry recovery is sticky for duplicate-only change application" {
         None
       }
     }),
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      if recovery_ready {
-        @branch.Branch::checkout(doc.oplog, frontier)
-      } else {
-        raise @branch.BranchError::MissingOp(lv=999)
-      }
-    }),
   })
 
   let first = try! doc.apply_changes(incoming)
-  match first.projection {
-    ProjectionStatus::RecoveryRequired(..) => ()
-    ProjectionStatus::Skipped
-    | ProjectionStatus::Projected
-    | ProjectionStatus::Recovered =>
-      fail("fixture must leave entry recovery required")
+  match first.publication {
+    Unavailable(_) => ()
+    _ => fail("fixture must leave entry recovery required")
   }
-  recovery_ready = true
   projection_failure = false
   projection_count = 0
+  let blocked = Ok(doc.apply_changes(incoming)) catch { error => Err(error) }
+  assert_true(blocked is Err(DocumentError::Fugue(_)))
+  doc.integrate_projection()
   let change = try! doc.apply_changes(incoming)
-  assert_eq(recovery_calls, 2)
   assert_eq(prepare_count, 2)
   assert_eq(commit_count, 2)
   assert_eq(projection_count, 0)
@@ -1067,28 +1056,22 @@ test "P2 green entry recovery is sticky for duplicate-only change application" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("duplicate-only change application must be complete")
   }
-  match change.projection {
-    ProjectionStatus::Recovered => ()
-    ProjectionStatus::Skipped
-    | ProjectionStatus::Projected
-    | ProjectionStatus::RecoveryRequired(..) =>
+  match change.publication {
+    Exact(edits) if edits.is_empty() => ()
+    _ =>
       fail(
-        "entry recovery must remain sticky for duplicate-only change application",
+        "duplicate-only change application after reopening must publish exact empty edits",
       )
   }
-  assert_true(
-    change.effect_availability is ProjectionEffectAvailability::SnapshotRequired,
-  )
+  assert_true(change.publication is Exact(_))
   assert_true(doc.projection_health is ProjectionHealth::Ready)
 }
 
 ///|
-test "P2 green entry recovery is sticky for projected change application" {
+test "projected change application stays blocked until explicit reopening" {
   let doc = Document::new("p2-entry-projected")
   let seed = p2_ready_batch("p2-entry-projected-seed", 1)
   let incoming = p2_ready_batch("p2-entry-projected-peer", 1)
-  let mut recovery_ready = false
-  let mut recovery_calls = 0
   let mut projection_failure = true
   let mut projection_count = 0
   doc.set_apply_changes_hooks({
@@ -1108,29 +1091,19 @@ test "P2 green entry recovery is sticky for projected change application" {
         None
       }
     }),
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      if recovery_ready {
-        @branch.Branch::checkout(doc.oplog, frontier)
-      } else {
-        raise @branch.BranchError::MissingOp(lv=999)
-      }
-    }),
   })
 
   let first = try! doc.apply_changes(seed)
-  match first.projection {
-    ProjectionStatus::RecoveryRequired(..) => ()
-    ProjectionStatus::Skipped
-    | ProjectionStatus::Projected
-    | ProjectionStatus::Recovered =>
-      fail("fixture must leave entry recovery required")
+  match first.publication {
+    Unavailable(_) => ()
+    _ => fail("fixture must leave entry recovery required")
   }
-  recovery_ready = true
   projection_failure = false
   projection_count = 0
+  let blocked = Ok(doc.apply_changes(incoming)) catch { error => Err(error) }
+  assert_true(blocked is Err(DocumentError::Fugue(_)))
+  doc.integrate_projection()
   let change = try! doc.apply_changes(incoming)
-  assert_eq(recovery_calls, 2)
   assert_eq(projection_count, 1)
   match change.outcome {
     @oplog.ApplyChangesOutcome::Succeeded(receipt) =>
@@ -1138,12 +1111,9 @@ test "P2 green entry recovery is sticky for projected change application" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("complete change application must not be partial")
   }
-  match change.projection {
-    ProjectionStatus::Recovered => ()
-    ProjectionStatus::Skipped
-    | ProjectionStatus::Projected
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("entry recovery must remain sticky for projected change application")
+  match change.publication {
+    Exact(_) => ()
+    _ => fail("change application after reopening must publish exact edits")
   }
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
@@ -1164,7 +1134,6 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
   )
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
-  let mut recovery_calls = 0
   let mut prepare_count = 0
   let mut commit_count = 0
   doc.set_apply_changes_hooks({
@@ -1174,14 +1143,6 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: Some(_frontier => {
-      recovery_calls = recovery_calls + 1
-      if recovery_calls <= 2 {
-        @branch.Branch::from_tree_and_oplog(@fugue.FugueTree::new(), doc.oplog)
-      } else {
-        @branch.Branch::checkout(doc.oplog, _frontier)
-      }
-    }),
   })
 
   let result : Result[DocumentChanges, DocumentError] = Ok(
@@ -1199,14 +1160,13 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
     }
     _ => fail("second divergence must remain typed recovery-required")
   }
-  assert_eq(recovery_calls, 1)
   assert_eq(prepare_count, 1)
   assert_eq(commit_count, 0)
   assert_true(!doc.oplog.has_pending())
   assert_eq(doc.get_frontier(), before_frontier)
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
   let mutation : Result[Unit, DocumentError] = Ok(doc.prepare_for_mutation()) catch {
     error => Err(error)
   }
@@ -1214,10 +1174,8 @@ test "P2 red divergence after recovery remains RecoveryRequired" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("unresolved divergence must keep later mutations fail-closed")
   }
-  assert_eq(recovery_calls, 2)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
-  try! doc.prepare_for_mutation()
-  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
+  try! doc.integrate_projection()
   assert_true(doc.projection_health is ProjectionHealth::Ready)
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
@@ -1256,16 +1214,10 @@ test "P2 red divergence is repaired before invalid change application rejection"
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
   let before_ops = doc.get_all_ops()
-  let mut recovery_calls = 0
-  let result : Result[Bool, DocumentError] = Ok(
-    doc.ensure_apply_changes_targets(
-      [invalid_noninsert, invalid_dependent],
-      [incoming],
-      frontier => {
-        recovery_calls = recovery_calls + 1
-        doc.recover_projection(frontier)
-      },
-    ),
+  let result : Result[Unit, DocumentError] = Ok(
+    doc.ensure_apply_changes_targets([invalid_noninsert, invalid_dependent], [
+      incoming,
+    ]),
   ) catch {
     error => Err(error)
   }
@@ -1274,10 +1226,11 @@ test "P2 red divergence is repaired before invalid change application rejection"
       assert_eq(raw, invalid_noninsert_raw)
     _ => fail("invalid change application must remain the returned error")
   }
-  assert_eq(recovery_calls, 1)
   assert_eq(doc.get_frontier(), before_frontier)
   p2_assert_same_operations(doc.get_all_ops(), before_ops)
   assert_true(doc.projection_health is ProjectionHealth::Ready)
+  assert_eq(doc.tree.to_text(), "")
+  doc.integrate_projection()
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
   assert_eq(doc.get_frontier(), fresh.get_frontier())
@@ -1302,38 +1255,10 @@ test "P2 red recovery retains all missing target verification" {
   )
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
-  let mut recovery_calls = 0
   let partial_tree : @fugue.FugueTree[String] = @fugue.FugueTree::new()
   try! apply_projection(partial_tree, first, doc.oplog.causal_graph())
-  let partial_branch = @branch.Branch::from_tree_and_oplog(
-    partial_tree,
-    doc.oplog,
-  )
   let result : Result[DocumentChanges, DocumentError] = Ok(
-    {
-      doc.set_apply_changes_hooks({
-        on_action: () => (),
-        on_apply_changes: () => (),
-        on_projection_finalization: _ => (),
-        action_override: None,
-        commit_failure: None,
-        projection_failure: None,
-        recovery_checkout: Some(frontier => {
-          recovery_calls = recovery_calls + 1
-          if recovery_calls == 1 {
-            @branch.Branch::from_tree_and_oplog(
-              @fugue.FugueTree::new(),
-              doc.oplog,
-            )
-          } else if recovery_calls == 2 {
-            partial_branch
-          } else {
-            @branch.Branch::checkout(doc.oplog, frontier)
-          }
-        }),
-      })
-      doc.apply_changes([incoming])
-    },
+    doc.apply_changes([incoming]),
   ) catch {
     error => Err(error)
   }
@@ -1341,7 +1266,7 @@ test "P2 red recovery retains all missing target verification" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("initial incomplete recovery must remain fail-closed")
   }
-  assert_eq(recovery_calls, 1)
+  doc.replace_projection_tree(partial_tree)
   let second_retry : Result[Unit, DocumentError] = Ok(
     doc.prepare_for_mutation(),
   ) catch {
@@ -1351,10 +1276,8 @@ test "P2 red recovery retains all missing target verification" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("one-target recovery must not hide the second divergence")
   }
-  assert_eq(recovery_calls, 2)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
-  try! doc.prepare_for_mutation()
-  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
+  try! doc.integrate_projection()
   assert_true(doc.projection_health is ProjectionHealth::Ready)
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
@@ -1375,32 +1298,8 @@ test "P2 red recovery retains verification after checkout failure" {
   )
   doc.replace_projection_tree(@fugue.FugueTree::new())
   let before_frontier = doc.get_frontier()
-  let mut recovery_calls = 0
   let result : Result[DocumentChanges, DocumentError] = Ok(
-    {
-      doc.set_apply_changes_hooks({
-        on_action: () => (),
-        on_apply_changes: () => (),
-        on_projection_finalization: _ => (),
-        action_override: None,
-        commit_failure: None,
-        projection_failure: None,
-        recovery_checkout: Some(frontier => {
-          recovery_calls = recovery_calls + 1
-          if recovery_calls == 1 {
-            raise @branch.BranchError::MissingOp(lv=777)
-          } else if recovery_calls == 2 {
-            @branch.Branch::from_tree_and_oplog(
-              @fugue.FugueTree::new(),
-              doc.oplog,
-            )
-          } else {
-            @branch.Branch::checkout(doc.oplog, frontier)
-          }
-        }),
-      })
-      doc.apply_changes([incoming])
-    },
+    doc.apply_changes([incoming]),
   ) catch {
     error => Err(error)
   }
@@ -1408,7 +1307,16 @@ test "P2 red recovery retains verification after checkout failure" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("checkout failure must preserve recovery-required state")
   }
-  assert_eq(recovery_calls, 1)
+  let failed_reopen = Ok(
+    doc.recover_projection_with((_, _) => {
+      raise @branch.BranchError::MissingOp(lv=777)
+    }),
+  ) catch {
+    error => Err(error)
+  }
+  assert_true(
+    failed_reopen is Err(DocumentError::ProjectionRecoveryRequired(..)),
+  )
   assert_eq(doc.get_frontier(), before_frontier)
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
@@ -1421,13 +1329,11 @@ test "P2 red recovery retains verification after checkout failure" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("failed recovery must retain target verification")
   }
-  assert_eq(recovery_calls, 2)
   assert_eq(doc.get_frontier(), before_frontier)
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
-  try! doc.prepare_for_mutation()
-  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
+  try! doc.integrate_projection()
   assert_true(doc.projection_health is ProjectionHealth::Ready)
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())
@@ -1465,27 +1371,6 @@ test "P2 red recovery retains present origins across swapped missing targets" {
   try! apply_projection(partial_tree, first, doc.oplog.causal_graph())
   assert_true(partial_tree.get(@fugue.Lv(first.lv())) is Some(_))
   assert_true(partial_tree.get(@fugue.Lv(second.lv())) is None)
-  let partial_branch = @branch.Branch::from_tree_and_oplog(
-    partial_tree,
-    doc.oplog,
-  )
-  let mut recovery_calls = 0
-  doc.set_apply_changes_hooks({
-    on_action: () => (),
-    on_apply_changes: () => (),
-    on_projection_finalization: _ => (),
-    action_override: None,
-    commit_failure: None,
-    projection_failure: None,
-    recovery_checkout: Some(frontier => {
-      recovery_calls = recovery_calls + 1
-      if recovery_calls <= 2 {
-        partial_branch
-      } else {
-        @branch.Branch::checkout(doc.oplog, frontier)
-      }
-    }),
-  })
   let initial_result : Result[DocumentChanges, DocumentError] = Ok(
     doc.apply_changes([incoming]),
   ) catch {
@@ -1495,8 +1380,8 @@ test "P2 red recovery retains present origins across swapped missing targets" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("initial swapped recovery must remain fail-closed")
   }
-  assert_eq(recovery_calls, 1)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  doc.replace_projection_tree(partial_tree)
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
   let second_retry : Result[Unit, DocumentError] = Ok(
     doc.prepare_for_mutation(),
   ) catch {
@@ -1506,13 +1391,11 @@ test "P2 red recovery retains present origins across swapped missing targets" {
     Err(DocumentError::ProjectionRecoveryRequired(..)) => ()
     _ => fail("present origin must remain part of recovery verification")
   }
-  assert_eq(recovery_calls, 2)
   assert_eq(doc.get_frontier(), before_frontier)
   assert_true(!doc.indexed_state.is_ready())
   assert_true(doc.cursor is None)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
-  try! doc.prepare_for_mutation()
-  assert_eq(recovery_calls, 3)
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
+  try! doc.integrate_projection()
   assert_true(doc.projection_health is ProjectionHealth::Ready)
   let fresh = try! @branch.Branch::checkout(doc.oplog, before_frontier)
   assert_eq(doc.tree.to_text(), fresh.to_text())

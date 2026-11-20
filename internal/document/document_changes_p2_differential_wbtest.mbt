@@ -26,7 +26,6 @@ fn p2_diff_hooks(
   doc : Document,
   failed_index : Int32?,
   projection_error : DocumentError?,
-  recovery_error : @branch.BranchError?,
 ) -> Unit {
   doc.set_apply_changes_hooks({
     on_action: () => (),
@@ -41,10 +40,6 @@ fn p2_diff_hooks(
       }
     }),
     projection_failure: Some(_ => projection_error),
-    recovery_checkout: match recovery_error {
-      Some(error) => Some(_frontier => raise error)
-      None => None
-    },
   })
 }
 
@@ -65,8 +60,8 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     }
     @oplog.ApplyChangesOutcome::Failed(..) => fail("complete differential case")
   }
-  match typed.projection {
-    ProjectionStatus::Projected => ()
+  match typed.publication {
+    Exact(_) => ()
     _ => fail("complete differential projection status")
   }
   p2_diff_assert_state(typed_complete, legacy_complete)
@@ -90,8 +85,8 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("duplicate differential case")
   }
-  match typed_duplicate.projection {
-    ProjectionStatus::Skipped => ()
+  match typed_duplicate.publication {
+    Exact(edits) if edits.is_empty() => ()
     _ => fail("duplicate differential projection status")
   }
   p2_diff_assert_state(typed_complete, legacy_complete)
@@ -115,8 +110,8 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
       p2_assert_identity_prefix(receipt.pending_from_transition(), pending, 1)
     @oplog.ApplyChangesOutcome::Failed(..) => fail("pending differential case")
   }
-  match typed_pending.projection {
-    ProjectionStatus::Skipped => ()
+  match typed_pending.publication {
+    Exact(edits) if edits.is_empty() => ()
     _ => fail("pending differential projection status")
   }
   p2_diff_assert_state(typed_pending_doc, legacy_pending_doc)
@@ -135,8 +130,8 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
     let legacy_doc = Document::new(
       "p2-diff-legacy-prefix-" + failed_index.to_string(),
     )
-    p2_diff_hooks(typed_doc, Some(failed_index), None, None)
-    p2_diff_hooks(legacy_doc, Some(failed_index), None, None)
+    p2_diff_hooks(typed_doc, Some(failed_index), None)
+    p2_diff_hooks(legacy_doc, Some(failed_index), None)
     let typed_result = try! typed_doc.apply_changes(incoming)
     let legacy_result : Result[Unit, DocumentError] = Ok(
       legacy_doc.merge_remote(incoming, remote_frontier),
@@ -154,9 +149,8 @@ test "P2.3 differential gate covers complete duplicate pending and prefixes" {
       }
       @oplog.ApplyChangesOutcome::Succeeded(_) => fail("prefix must be partial")
     }
-    match typed_result.projection {
-      ProjectionStatus::Skipped if failed_index == 0 => ()
-      ProjectionStatus::Projected if failed_index > 0 => ()
+    match typed_result.publication {
+      Exact(edits) if edits.length() == failed_index => ()
       _ => fail("prefix projection status changed")
     }
     match legacy_result {
@@ -194,12 +188,26 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
   ]
   typed_doc.replace_projection_tree(@fugue.FugueTree::new())
   legacy_doc.replace_projection_tree(@fugue.FugueTree::new())
-  p2_diff_hooks(typed_doc, None, None, None)
-  p2_diff_hooks(legacy_doc, None, None, None)
+  p2_diff_hooks(typed_doc, None, None)
+  p2_diff_hooks(legacy_doc, None, None)
+  let rejected = Ok(typed_doc.apply_changes(incoming)) catch {
+    error => Err(error)
+  }
+  assert_true(rejected is Err(DocumentError::ProjectionRecoveryRequired(..)))
+  let legacy_rejected = Ok(legacy_doc.apply_remote(incoming[0])) catch {
+    error => Err(error)
+  }
+  assert_true(
+    legacy_rejected is Err(DocumentError::ProjectionRecoveryRequired(..)),
+  )
+  assert_eq(typed_doc.pending_count(), 0)
+  assert_eq(legacy_doc.pending_count(), 0)
+  typed_doc.integrate_projection()
+  legacy_doc.integrate_projection()
   let typed = try! typed_doc.apply_changes(incoming)
   try! legacy_doc.apply_remote(incoming[0])
-  match typed.projection {
-    ProjectionStatus::Recovered => ()
+  match typed.publication {
+    Exact(edits) if edits.is_empty() => ()
     _ => fail("preflight recovery status changed")
   }
   assert_true(typed_doc.oplog.has_pending())
@@ -211,38 +219,30 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
   let projection_error = DocumentError::Fugue(
     @fugue.FugueError::MissingItem(id=@fugue.Lv(991)),
   )
-  p2_diff_hooks(recovery_t, None, Some(projection_error), None)
-  p2_diff_hooks(recovery_l, None, Some(projection_error), None)
+  p2_diff_hooks(recovery_t, None, Some(projection_error))
+  p2_diff_hooks(recovery_l, None, Some(projection_error))
   let recovered = try! recovery_t.apply_changes(batch)
   let legacy_recovery : Result[Unit, DocumentError] = Ok(
     recovery_l.merge_remote(batch, [@core.RawVersion("p2-diff-recovery", 1)]),
   ) catch {
     error => Err(error)
   }
-  match recovered.projection {
-    ProjectionStatus::Recovered => ()
+  match recovered.publication {
+    Unavailable(DocumentError::Fugue(_)) => ()
     _ => fail("post-commit recovery status changed")
   }
   match legacy_recovery {
-    Ok(_) => ()
-    Err(_) => fail("successful recovery must remain transparent to wrapper")
+    Err(DocumentError::Fugue(_)) => ()
+    _ => fail("projection failure must reach wrapper")
   }
+  recovery_t.integrate_projection()
+  recovery_l.integrate_projection()
   p2_diff_assert_state(recovery_t, recovery_l)
 
   let required = Document::new("p2-diff-required")
   let required_legacy = Document::new("p2-diff-required")
-  p2_diff_hooks(
-    required,
-    None,
-    Some(projection_error),
-    Some(@branch.BranchError::MissingOp(lv=992)),
-  )
-  p2_diff_hooks(
-    required_legacy,
-    None,
-    Some(projection_error),
-    Some(@branch.BranchError::MissingOp(lv=992)),
-  )
+  p2_diff_hooks(required, None, Some(projection_error))
+  p2_diff_hooks(required_legacy, None, Some(projection_error))
   let required_change = try! required.apply_changes(batch)
   let required_error : Result[Unit, DocumentError] = Ok(
     required_legacy.merge_remote(batch, [
@@ -258,13 +258,8 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
       fail("recovery control must retain receipt")
   }
   match required_error {
-    Err(DocumentError::ProjectionRecoveryRequired(frontier~, error~)) => {
-      assert_eq(frontier, required.get_frontier())
-      match error {
-        @branch.BranchError::MissingOp(lv~) => assert_eq(lv, 992)
-        _ => fail("legacy recovery cause changed")
-      }
-    }
+    Err(DocumentError::Fugue(@fugue.FugueError::MissingItem(id~))) =>
+      assert_eq(id, @fugue.Lv(991))
     _ => fail("wrapper must prioritize recovery failure")
   }
   assert_eq(required.get_frontier(), required_legacy.get_frontier())
@@ -272,12 +267,9 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     required.get_all_ops(),
     required_legacy.get_all_ops(),
   )
-  match required_change.projection {
-    ProjectionStatus::RecoveryRequired(error~) =>
-      match error {
-        @branch.BranchError::MissingOp(lv~) => assert_eq(lv, 992)
-        _ => fail("unexpected recovery cause")
-      }
+  match required_change.publication {
+    Unavailable(DocumentError::Fugue(@fugue.FugueError::MissingItem(id~))) =>
+      assert_eq(id, @fugue.Lv(991))
     _ => fail("RecoveryRequired evidence was lost")
   }
   assert_eq(required.tree.to_text(), required_legacy.tree.to_text())
@@ -313,10 +305,7 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
     error => Err(error)
   }
   match (typed_mutation, legacy_mutation) {
-    (
-      Err(DocumentError::ProjectionRecoveryRequired(..)),
-      Err(DocumentError::ProjectionRecoveryRequired(..)),
-    ) => ()
+    (Err(DocumentError::Fugue(_)), Err(DocumentError::Fugue(_))) => ()
     _ => fail("RecoveryRequired must keep both wrappers fail-closed")
   }
 
@@ -338,7 +327,6 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
       }
     }),
     projection_failure: None,
-    recovery_checkout: None,
   })
   retry_l.set_apply_changes_hooks({
     on_action: () => (),
@@ -353,7 +341,6 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
       }
     }),
     projection_failure: None,
-    recovery_checkout: None,
   })
   let first = try! retry_t.apply_changes(retry_batch)
   let legacy_first : Result[Unit, DocumentError] = Ok(
@@ -368,8 +355,8 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
       p2_assert_operation_prefix(receipt.committed(), retry_batch, 1)
     _ => fail("retry first typed transition changed")
   }
-  match first.projection {
-    ProjectionStatus::Projected => ()
+  match first.publication {
+    Exact(_) => ()
     _ => fail("retry first projection status changed")
   }
   match legacy_first {
@@ -390,8 +377,8 @@ test "P2.3 differential gate covers divergence recovery required and retry" {
       )
     _ => fail("typed retry must drain only core suffix")
   }
-  match retry.projection {
-    ProjectionStatus::Projected => ()
+  match retry.publication {
+    Exact(_) => ()
     _ => fail("typed retry projection status changed")
   }
   p2_diff_assert_state(retry_t, retry_l)
@@ -402,14 +389,14 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   let op = p2_ready_batch("p2-diff-wrapper", 1)[0]
   let typed_doc = Document::new("p2-diff-wrapper-typed")
   let legacy_doc = Document::new("p2-diff-wrapper-legacy")
-  p2_diff_hooks(typed_doc, Some(0), None, None)
-  p2_diff_hooks(legacy_doc, Some(0), None, None)
+  p2_diff_hooks(typed_doc, Some(0), None)
+  p2_diff_hooks(legacy_doc, Some(0), None)
   let typed = try! typed_doc.apply_changes([op])
   let legacy : Result[Unit, DocumentError] = Ok(legacy_doc.apply_remote(op)) catch {
     error => Err(error)
   }
-  match typed.projection {
-    ProjectionStatus::Skipped => ()
+  match typed.publication {
+    Exact(edits) if edits.is_empty() => ()
     _ => fail("wrapper partial projection status changed")
   }
   match legacy {
@@ -437,8 +424,8 @@ test "P2.3 differential gate covers wrapper errors and merge closure" {
   ) catch {
     error => Err(error)
   }
-  match control.projection {
-    ProjectionStatus::Projected => ()
+  match control.publication {
+    Exact(_) => ()
     _ => fail("merge control projection status changed")
   }
   match closure {
@@ -462,7 +449,6 @@ fn p2_diff_rejection_hooks(
     action_override,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
 }
 
@@ -489,8 +475,8 @@ fn p2_diff_assert_valid_apply_changes(
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("valid rejection follow-up must not be partial")
   }
-  match change.projection {
-    ProjectionStatus::Projected => ()
+  match change.publication {
+    Exact(_) => ()
     _ => fail("valid rejection follow-up must project")
   }
 }

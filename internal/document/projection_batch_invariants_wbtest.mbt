@@ -50,18 +50,15 @@ fn batch_assert_exact(
   expected : Array[ProjectionEffect],
   after : String,
 ) -> Unit raise {
-  assert_true(change.projection is Projected)
-  match change.effect_availability {
+  match change.publication {
     Exact(effects) => {
       assert_eq(effects.length(), expected.length())
-      assert_eq(change.effects.length(), expected.length())
       for index = 0; index < effects.length(); index = index + 1 {
         batch_assert_effect(effects[index], expected[index])
-        batch_assert_effect(change.effects[index], expected[index])
       }
       assert_eq(batch_replay_effects(before, effects), after)
     }
-    SnapshotRequired | Unavailable =>
+    SnapshotRequired | Unavailable(_) =>
       fail("warm valid batch must publish complete exact effects")
   }
 }
@@ -98,7 +95,7 @@ fn batch_assert_canonical(doc : Document, expected : String) -> Unit raise {
 fn batch_assert_later_edits(doc : Document) -> Unit raise {
   let replay = Document::new(doc.agent_id())
   ignore(try! replay.apply_changes(doc.get_all_ops()))
-  try! replay.recover_projection(replay.get_frontier())
+  try! replay.recover_projection()
   assert_eq(replay.to_text(), doc.to_text())
   let middle = doc.visible_count() / 2
   ignore(try! doc.insert(middle, "🧭!"))
@@ -240,7 +237,7 @@ test "batch projection consumes a pending drain larger than its incoming packet"
   let operations = source.get_all_ops()
   let doc = Document::new("batch-pending-destination")
   let pending = try! doc.apply_changes(operations[1:].to_owned())
-  assert_true(pending.projection is Skipped)
+  assert_true(pending.publication is Exact(edits) && edits.is_empty())
   assert_eq(doc.pending_count(), 4)
   assert_true(doc.indexed_state.is_ready())
   let before = doc.to_text()
@@ -287,12 +284,10 @@ test "batch projection drops buffered effects after locator invariant failure" {
   // delete cannot prove its rank. All earlier effects and the detached cache
   // must be discarded, while z must still reach the authoritative tree.
   try! doc.begin_text_change()
-  doc.indexed_state.locator.unwrap().items.remove(0)
+  doc.indexed_state.ready.unwrap().locator.items.remove(0)
   let operations = source.get_all_ops()
   let change = try! doc.apply_changes(operations[baseline_count:].to_owned())
-  assert_true(change.projection is Projected)
-  assert_true(change.effect_availability is SnapshotRequired)
-  assert_eq(change.effects.length(), 0)
+  assert_true(change.publication is SnapshotRequired)
   assert_true(doc.finish_text_change() is None)
   assert_true(!doc.indexed_state.is_ready())
   assert_eq(doc.tree.to_text(), "Bxyz")
@@ -361,6 +356,64 @@ test "text publication replays Unicode chains deletions and visibility changes" 
 }
 
 ///|
+test "advance prunes displayed branches without losing shared ancestors or origin-only dependencies" {
+  let doc = Document::new("local")
+  ignore(doc.insert(0, "R"))
+  let root = @core.RawVersion("local", 0)
+  let ancestor = @core.RawVersion("a", 0)
+  let left = @core.RawVersion("a", 4)
+  let right = @core.RawVersion("b", 9)
+  let hidden = [
+    // Both branches share a causal ancestor. Y also needs X as an origin,
+    // although X is outside Y's parent ancestry and remains a separate head.
+    @core.Op::insert(-1, [ancestor], "b", 9, "Y", Some(left), None),
+    @core.Op::insert(-1, [ancestor], "a", 4, "X", Some(ancestor), None),
+    @core.Op::insert(-1, [root], "a", 0, "A", Some(root), None),
+  ].map(op => @core.StructuralOp(op))
+  ignore(doc.admit_structural_changes(hidden[:], 100))
+  assert_true(!doc.oplog.has_pending())
+  assert_eq(doc.to_text(), "R")
+  // This displayed branch is newer than the hidden branches. Encountering it
+  // must prune only its ancestors, not stop traversal of the other heads.
+  ignore(doc.insert(1, "L"))
+  let displayed = doc.view_graph_version()
+  assert_eq(displayed.ranges(), [("local", [(0U, 2U)])])
+  assert_eq(doc.to_text(), "RL")
+  let expected_version = @causal_graph.GraphVersion::from_parts(
+    [left, right, @core.RawVersion("local", 1)],
+    [("a", [(0U, 1U), (4U, 5U)]), ("b", [(9U, 10U)]), ("local", [(0U, 2U)])],
+  )
+  assert_eq(doc.current_graph_version(), expected_version)
+  let expected = doc.checkout_branch(doc.get_frontier()).to_text()
+  assert_eq(expected.length(), 5)
+
+  doc.begin_text_change()
+  doc.advance_projection()
+  guard doc.finish_text_change() is Some(edits) else {
+    fail("valid advancement must not fall back to recovery")
+  }
+  let mut mirror = "RL"
+  for edit in edits {
+    mirror = mirror[:edit.start].to_owned() +
+      edit.text +
+      mirror[edit.end:].to_owned()
+  }
+  assert_eq(mirror, expected)
+  batch_assert_canonical(doc, expected)
+  assert_eq(doc.view_graph_version(), expected_version)
+  assert_eq(displayed.ranges(), [("local", [(0U, 2U)])])
+
+  doc.begin_text_change()
+  doc.advance_projection()
+  guard doc.finish_text_change() is Some(repeated) else {
+    fail("repeated advancement must remain valid")
+  }
+  assert_eq(repeated.length(), 0)
+  assert_eq(doc.to_text(), expected)
+  assert_eq(doc.view_graph_version(), expected_version)
+}
+
+///|
 test "text publication distinguishes cold entry from index loss and recovery during collection" {
   for scenario in ["cold", "lost-index", "recovered"] {
     let source = Document::new("publication-source")
@@ -372,11 +425,7 @@ test "text publication distinguishes cold entry from index loss and recovery dur
     try! doc.begin_text_change()
     match scenario {
       "lost-index" => doc.indexed_state.invalidate()
-      "recovered" =>
-        try! doc.recover_projection_with(
-          doc.get_frontier(),
-          @branch.Branch::checkout,
-        )
+      "recovered" => try! doc.recover_projection_with(@branch.Branch::checkout)
       _ => ()
     }
     ignore(try! source.insert(1, "x"))

@@ -42,8 +42,11 @@ pub fn OpLog::insert(
   text : String,
   origin_left : Int32,
   origin_right : Int32,
+  parents? : @core.Frontier,
 ) -> @core.Op raise OpLogError {
-  let parents = self.graph.get_frontier().to_array()
+  let parents = parents
+    .unwrap_or_else(() => self.graph.get_frontier())
+    .to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
     match self.graph.lv_to_raw(lv) {
@@ -90,9 +93,12 @@ pub fn OpLog::insert(
 pub fn OpLog::delete(
   self : OpLog,
   origin_left : Int32,
+  parents? : @core.Frontier,
 ) -> @core.Op raise OpLogError {
   let origin_left_raw = self.raw_target_from_lv(origin_left)
-  let parents = self.graph.get_frontier().to_array()
+  let parents = parents
+    .unwrap_or_else(() => self.graph.get_frontier())
+    .to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
     match self.graph.lv_to_raw(lv) {
@@ -133,9 +139,12 @@ pub fn OpLog::delete(
 pub fn OpLog::undelete(
   self : OpLog,
   origin_left : Int32,
+  parents? : @core.Frontier,
 ) -> @core.Op raise OpLogError {
   let origin_left_raw = self.raw_target_from_lv(origin_left)
-  let parents = self.graph.get_frontier().to_array()
+  let parents = parents
+    .unwrap_or_else(() => self.graph.get_frontier())
+    .to_array()
   let parents_raw : Array[@core.RawVersion] = []
   for lv in parents {
     match self.graph.lv_to_raw(lv) {

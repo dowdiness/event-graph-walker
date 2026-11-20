@@ -22,11 +22,11 @@ fn prop_insert_position_roundtrip(ops : RealOps) -> Bool {
   for edit in ops.edits {
     match edit {
       Insert(pos, ch) => {
-        let before_len = doc.len()
+        let before_len = try! doc.len()
         doc.insert(@text.Pos::at(pos), ch) catch {
           _ => continue
         }
-        let text = doc.text()
+        let text = try! doc.text()
         // Core invariant: character is at the requested position
         if text[pos:pos + 1].to_owned() != ch {
           return false

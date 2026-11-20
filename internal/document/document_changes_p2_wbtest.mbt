@@ -73,7 +73,7 @@ test "structural changes commit their identities and project the complete text" 
   let report = try! changes.report()
   p2_assert_operation_prefix(report.committed(), incoming, 3)
   assert_eq(report.pending_from_transition().length(), 0)
-  assert_true(changes.projection is ProjectionStatus::Projected)
+  assert_true(changes.publication is Exact(_))
   assert_eq(doc.to_text(), "xxx")
   let fresh = try! @branch.Branch::checkout(doc.oplog, doc.get_frontier())
   assert_eq(doc.to_text(), fresh.to_text())
@@ -92,7 +92,6 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
   let incoming = p2_ready_batch("p2-duplicate-peer", 2)
   ignore(try! duplicate_doc.apply_changes(incoming))
@@ -109,12 +108,9 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("duplicate-only batch must be complete")
   }
-  match duplicate.projection {
-    ProjectionStatus::Skipped => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Recovered
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("duplicate-only batch must skip projection")
+  match duplicate.publication {
+    Exact(edits) if edits.is_empty() => ()
+    _ => fail("duplicate-only batch must skip projection")
   }
 
   let mut pending_prepare_count = 0
@@ -130,7 +126,6 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
     action_override: None,
     commit_failure: None,
     projection_failure: None,
-    recovery_checkout: None,
   })
   let pending_incoming = p2_pending_batch("p2-pending-peer")
   let pending = try! pending_doc.apply_changes(pending_incoming)
@@ -150,12 +145,9 @@ test "P2 red duplicate-only and pending-only batches skip projection" {
     @oplog.ApplyChangesOutcome::Failed(..) =>
       fail("pending-only batch must be complete")
   }
-  match pending.projection {
-    ProjectionStatus::Skipped => ()
-    ProjectionStatus::Projected
-    | ProjectionStatus::Recovered
-    | ProjectionStatus::RecoveryRequired(..) =>
-      fail("pending-only batch must skip projection")
+  match pending.publication {
+    Exact(edits) if edits.is_empty() => ()
+    _ => fail("pending-only batch must skip projection")
   }
 }
 
@@ -186,7 +178,6 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
         }
       }),
       projection_failure: None,
-      recovery_checkout: None,
     })
     assert_true(doc.apply_changes_commit_failure() is Some(_))
 
@@ -209,14 +200,9 @@ test "P2 red partial prefixes project only the committed receipt prefix" {
       @oplog.ApplyChangesOutcome::Succeeded(_) =>
         fail("injected partial boundary must remain partial")
     }
-    match change.projection {
-      ProjectionStatus::Skipped if failed_index == 0 => ()
-      ProjectionStatus::Projected if failed_index > 0 => ()
-      ProjectionStatus::Skipped
-      | ProjectionStatus::Projected
-      | ProjectionStatus::Recovered
-      | ProjectionStatus::RecoveryRequired(..) =>
-        fail("partial projection status must follow committed prefix")
+    match change.publication {
+      Exact(edits) if edits.length() == failed_index => ()
+      _ => fail("partial projection status must follow committed prefix")
     }
   }
 }

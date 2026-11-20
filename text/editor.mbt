@@ -125,8 +125,9 @@ pub struct Editor {
 
 ///|
 pub fn Editor::new(writer : String) -> Editor raise TextError {
+  let state = TextState::new(writer)
   {
-    state: TextState::new(writer),
+    state,
     undo_history: @undo.UndoManager::new(writer),
     available: true,
     can_join: false,
@@ -138,11 +139,18 @@ pub fn Editor::snapshot(self : Editor) -> TextSnapshot raise EditError {
   if !self.available {
     raise Unavailable
   }
-  { version: self.state.version(), text: self.state.text(), }
+  let text = self.state.text() catch { error => raise Engine(error) }
+  { version: self.version(), text, }
 }
 
 ///|
+/// The displayed editing cut, not necessarily all accepted history.
 pub fn Editor::version(self : Editor) -> Version {
+  Version::from_graph_version(self.state.inner.view_graph_version())
+}
+
+///|
+pub fn Editor::history_version(self : Editor) -> Version {
   self.state.version()
 }
 
@@ -167,6 +175,19 @@ pub fn Editor::export_since(
 }
 
 ///|
+fn Editor::reset_session(self : Editor, available : Bool) -> Unit {
+  self.undo_history.clear()
+  self.can_join = false
+  self.available = available
+}
+
+///|
+fn Editor::invalidate_session(self : Editor, error : EditError) -> Edit {
+  self.reset_session(false)
+  Invalidated(error)
+}
+
+///|
 fn Editor::change(
   self : Editor,
   origin : UpdateOrigin,
@@ -175,22 +196,20 @@ fn Editor::change(
   if !self.available {
     return Invalidated(Unavailable)
   }
-  let before = self.state.version()
+  let before = self.version()
   let before_len = try {
     let length = self.state.inner.utf16_len()
     self.state.inner.begin_text_change()
     length
   } catch {
-    error => {
-      self.available = false
-      return Invalidated(
+    error =>
+      return self.invalidate_session(
         Engine(TextError::from_document_error(error, () => self.state.len())),
       )
-    }
   }
   let result = Ok(action(before_len)) catch { error => Err(error) }
   let changes = self.state.inner.finish_text_change()
-  let after = self.state.version()
+  let after = self.version()
   match (changes, result) {
     (Some(changes), Ok(sync_report)) => {
       if origin is Remote && !changes.is_empty() {
@@ -210,19 +229,12 @@ fn Editor::change(
         }),
       })
     }
-    (Some(_), Err(error)) if before == after &&
-      (
-        error is (ReversedRange | InvalidText | InvalidChange(_) | StaleVersion) ||
-        (origin is Remote && error is Engine(SyncFailed(_)))
-      ) => Rejected(error)
     _ => {
-      self.available = false
-      self.undo_history.clear()
       let error = match result {
         Ok(_) => EditError::Unavailable
         Err(error) => error
       }
-      Invalidated(error)
+      self.invalidate_session(error)
     }
   }
 }
@@ -240,37 +252,44 @@ pub fn Editor::edit(
     expected,
     length => {
       if edit.end < edit.start {
-        raise ReversedRange
+        return Err(Rejected(ReversedRange))
       }
       if !is_well_formed_utf16(edit.text) {
-        raise InvalidText
+        return Err(Rejected(InvalidText))
       }
       if edit.start < 0 || edit.start > length {
-        raise InvalidChange(InvalidBoundary(offset=edit.start))
+        return Err(Rejected(InvalidChange(InvalidBoundary(offset=edit.start))))
       }
       if edit.end > length {
-        raise InvalidChange(InvalidBoundary(offset=edit.end))
+        return Err(Rejected(InvalidChange(InvalidBoundary(offset=edit.end))))
       }
       // Normalization removes empty replacements, but the single-edit API still
       // validates their supplied coordinate before discarding them.
       if edit.start == edit.end && edit.text == "" {
         let boundary = self.state.inner.scalar_at_utf16(edit.start) catch {
           error =>
-            raise Engine(
-              TextError::from_document_error(error, () => self.state.len()),
+            return Err(
+              self.invalidate_session(
+                Engine(
+                  TextError::from_document_error(error, () => self.state.len()),
+                ),
+              ),
             )
         }
         if boundary is None {
-          raise InvalidChange(InvalidBoundary(offset=edit.start))
+          return Err(
+            Rejected(InvalidChange(InvalidBoundary(offset=edit.start))),
+          )
         }
       }
-      ChangeSet::new([
+      let changes = ChangeSet::new([
         Keep(edit.start),
         Replace(edit.end - edit.start, edit.text),
         Keep(length - edit.end),
       ]) catch {
-        error => raise InvalidChange(error)
+        error => return Err(Rejected(InvalidChange(error)))
       }
+      Ok(changes)
     },
     undo,
     label,
@@ -287,54 +306,58 @@ pub fn Editor::edit_many(
   undo~ : UndoPolicy = NewGroup,
   label? : String,
 ) -> Edit {
-  self.edit_with(base, _ => changes, undo, label)
+  self.edit_with(base, _ => Ok(changes), undo, label)
 }
 
 ///|
 fn Editor::edit_with(
   self : Editor,
   expected : Version,
-  build : (Int32) -> ChangeSet raise EditError,
+  build : (Int32) -> Result[ChangeSet, Edit],
   undo : UndoPolicy,
   label : String?,
 ) -> Edit {
-  self.change(Local(label), length => {
-    if expected != self.state.version() {
-      raise StaleVersion
+  if !self.available {
+    return Invalidated(Unavailable)
+  }
+  if expected != self.version() {
+    return Rejected(StaleVersion)
+  }
+  let plans : Array[(Int32, Int32, String)] = []
+  try {
+    let length = self.state.inner.utf16_len()
+    let changes = match build(length) {
+      Ok(changes) => changes
+      Err(outcome) => return outcome
     }
-    let changes = build(length)
     if changes.length() != length {
-      raise InvalidChange(LengthMismatch)
+      return Rejected(InvalidChange(LengthMismatch))
     }
-    let plans : Array[(Int32, Int32, String)] = []
     let mut position = 0
     for section in changes.sections() {
       match section {
         Keep(n) => position += n
         Replace(n, text) => {
-          let start = self.state.inner.scalar_at_utf16(position) catch {
-            error =>
-              raise Engine(
-                TextError::from_document_error(error, () => self.state.len()),
-              )
-          }
-          let end = self.state.inner.scalar_at_utf16(position + n) catch {
-            error =>
-              raise Engine(
-                TextError::from_document_error(error, () => self.state.len()),
-              )
-          }
+          let start = self.state.inner.scalar_at_utf16(position)
+          let end = self.state.inner.scalar_at_utf16(position + n)
           guard start is Some(start) else {
-            raise InvalidChange(InvalidBoundary(offset=position))
+            return Rejected(InvalidChange(InvalidBoundary(offset=position)))
           }
           guard end is Some(end) else {
-            raise InvalidChange(InvalidBoundary(offset=position + n))
+            return Rejected(InvalidChange(InvalidBoundary(offset=position + n)))
           }
           plans.push((start, end, text))
           position += n
         }
       }
     }
+  } catch {
+    error =>
+      return self.invalidate_session(
+        Engine(TextError::from_document_error(error, () => self.state.len())),
+      )
+  }
+  self.change(Local(label), _ => {
     let items : Array[@undo.UndoItem] = []
     for i = plans.length() - 1; i >= 0; i = i - 1 {
       let (start, end, text) = plans[i]
@@ -386,13 +409,110 @@ pub fn Editor::redo(self : Editor) -> Edit {
 }
 
 ///|
+/// Accept history and explicitly advance the view, including earlier hidden edits.
+/// Never use this convenience operation for receipt-only native textarea input.
 pub fn Editor::receive(self : Editor, message : SyncMessage) -> Edit {
+  if !self.available {
+    return Invalidated(Unavailable)
+  }
+  let admission = self.accept_remote(message)
   self.change(Remote, _ => {
-    let report = self.state.sync().apply(message) catch {
-        error => raise Engine(error)
-      }
-    Some(report)
+    self.state.inner.advance_projection() catch {
+      error =>
+        raise Engine(
+          TextError::from_document_error(error, () => self.state.len()),
+        )
+    }
+    match admission.result {
+      Ok(report) => Some(report)
+      Err(error) => raise Engine(error)
+    }
   })
+}
+
+///|
+/// Explicitly publish accepted history, preserving EGW selective undo.
+/// A native textarea host must not call this during its editing session.
+pub fn Editor::advance_view(self : Editor) -> Edit {
+  self.change(Remote, _ => {
+    self.state.inner.advance_projection() catch {
+      error =>
+        raise Engine(
+          TextError::from_document_error(error, () => self.state.len()),
+        )
+    }
+    None
+  })
+}
+
+///|
+/// In-memory progress, including partial acceptance on failure; never durability.
+pub struct Admission {
+  before : Version
+  after : Version
+  pending_operations : Int32
+  result : Result[SyncReport, TextError]
+}
+
+///|
+/// Always history-only, including after a projection failure.
+pub fn Editor::accept_remote(self : Editor, message : SyncMessage) -> Admission {
+  let before = self.history_version()
+  let result = Ok(self.accept_remote_report(message)) catch {
+    error => Err(error)
+  }
+  {
+    before,
+    after: self.history_version(),
+    pending_operations: self.state.inner.pending_count(),
+    result,
+  }
+}
+
+///|
+fn Editor::accept_remote_report(
+  self : Editor,
+  message : SyncMessage,
+) -> SyncReport raise TextError {
+  let limits = self.state.sync_limits
+  map_sync_failure(fn() raise @sync.Failure {
+    validate_message_limits(message, limits)
+  })
+  let outcome = self.state.inner.admit_structural_changes(
+    message.structural_operations[:],
+    limits.max_pending_operations(),
+  ) catch {
+    error => raise TextError::from_document_error(error, () => self.state.len())
+  }
+  match outcome {
+    @oplog.ApplyChangesOutcome::Succeeded(report) =>
+      {
+        applied_operations: report.committed().length(),
+        duplicate_operations: report.redelivery_count(),
+        pending_operations: report.pending_after_count(),
+      }
+    @oplog.ApplyChangesOutcome::Failed(error~, ..) =>
+      raise TextError::from_oplog_error(
+        @oplog.OpLogError::CausalGraphError(error~),
+      )
+  }
+}
+
+///|
+/// End the editing session's undo history and publish the complete accepted cut.
+/// Hosts must explicitly establish a new native input baseline for this snapshot.
+/// Also recovers an invalidated projection; accepted history is never rolled back.
+pub fn Editor::reopen_view(self : Editor) -> TextSnapshot raise EditError {
+  self.state.inner.integrate_projection() catch {
+    error => {
+      self.reset_session(false)
+      raise Engine(
+        TextError::from_document_error(error, () => self.state.len()),
+      )
+    }
+  }
+  self.reset_session(true)
+  self.snapshot()
 }
 
 ///|

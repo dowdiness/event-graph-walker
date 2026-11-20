@@ -7,18 +7,17 @@ pub(all) enum TextEffect {
 }
 
 ///|
-pub(all) enum TextEffectAvailability {
-  Exact(ArrayView[TextEffect])
+pub(all) enum TextPublication {
+  Exact(Array[TextEffect])
   SnapshotRequired
-  Unavailable
+  Unavailable(TextError)
 }
 
 ///|
 pub struct TextSyncTransition {
   priv version_before : Version
   priv version_after : Version
-  priv effects : Array[TextEffect]
-  priv availability : TextEffectAvailability
+  priv publication : TextPublication
   priv result : Result[SyncReport, TextError]
 }
 
@@ -26,11 +25,10 @@ pub struct TextSyncTransition {
 fn TextSyncTransition::TextSyncTransition(
   version_before : Version,
   version_after : Version,
-  effects : Array[TextEffect],
-  availability : TextEffectAvailability,
+  publication : TextPublication,
   result : Result[SyncReport, TextError],
 ) -> TextSyncTransition {
-  { version_before, version_after, effects, availability, result, }
+  { version_before, version_after, publication, result, }
 }
 
 ///|
@@ -44,12 +42,20 @@ pub fn TextSyncTransition::version_after(self : TextSyncTransition) -> Version {
 }
 
 ///|
-pub fn TextSyncTransition::effect_availability(
+pub fn TextSyncTransition::publication(
   self : TextSyncTransition,
-) -> TextEffectAvailability {
-  // Keep the transition-owned backing storage live for the returned view.
-  ignore(self.effects)
-  self.availability
+) -> TextPublication {
+  self.publication
+}
+
+///|
+/// Admission is independent of whether the editing projection can be published.
+/// Return data so callers can inspect admission and publication independently.
+#warnings("-result_error_return")
+pub fn TextSyncTransition::admission_result(
+  self : TextSyncTransition,
+) -> Result[SyncReport, TextError] {
+  self.result
 }
 
 ///|
@@ -57,6 +63,9 @@ pub fn TextSyncTransition::effect_availability(
 pub fn TextSyncTransition::report(
   self : TextSyncTransition,
 ) -> SyncReport raise TextError {
+  if self.publication is Unavailable(error) {
+    raise error
+  }
   match self.result {
     Ok(report) => report
     Err(error) => raise error

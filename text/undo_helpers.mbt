@@ -47,7 +47,9 @@ pub fn TextState::delete_and_record(
   if pos_val >= doc_len {
     raise TextError::InvalidPosition(pos=pos_val, len=doc_len)
   }
-  let content = self.inner.visible_content_at(pos_val)
+  let content = self.inner.visible_content_at(pos_val) catch {
+    err => raise TextError::from_document_error(err, () => doc_len)
+  }
   let op = self.inner.delete(pos_val) catch {
     err => raise TextError::from_document_error(err, () => doc_len)
   }

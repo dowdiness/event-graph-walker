@@ -81,7 +81,6 @@ test "P3 clear remains projection-independent during recovery required" {
   ignore(try! doc.insert(0, "base"))
   ignore(doc.to_text())
   let incoming = p2_ready_batch("p3-clear-recovery-required-peer", 2)
-  let mut recovery_calls = 0
   doc.set_apply_changes_hooks({
     on_action: () => (),
     on_apply_changes: () => (),
@@ -104,22 +103,14 @@ test "P3 clear remains projection-independent during recovery required" {
         Err(error) => Some(error)
       }
     }),
-    recovery_checkout: Some(_frontier => {
-      recovery_calls = recovery_calls + 1
-      raise @branch.BranchError::MissingOp(lv=999)
-    }),
   })
 
   let change = try! doc.apply_changes(incoming)
-  match change.projection {
-    ProjectionStatus::RecoveryRequired(..) => ()
-    ProjectionStatus::Skipped
-    | ProjectionStatus::Projected
-    | ProjectionStatus::Recovered =>
-      fail("seeded projection failure must require recovery")
+  match change.publication {
+    Unavailable(_) => ()
+    _ => fail("seeded projection failure must require recovery")
   }
-  assert_true(recovery_calls >= 1)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
   let frontier_before = doc.get_frontier()
   let tree_before = doc.tree.to_text()
   let cache_ready_before = doc.indexed_state.is_ready()
@@ -130,5 +121,5 @@ test "P3 clear remains projection-independent during recovery required" {
   assert_eq(doc.get_frontier(), frontier_before)
   assert_eq(doc.tree.to_text(), tree_before)
   assert_eq(doc.indexed_state.is_ready(), cache_ready_before)
-  assert_true(doc.projection_health is ProjectionHealth::RecoveryRequired(_))
+  assert_true(doc.projection_health is ProjectionHealth::Unavailable(_))
 }

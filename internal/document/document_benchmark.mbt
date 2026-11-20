@@ -63,7 +63,7 @@ test "bench: merge reverse branching dependencies (4 x 250 ops)" (b : @bench.T) 
     fn() {
       let doc = Document::new("local")
       merge_remote_chain(doc, ops)
-      b.keep(doc.visible_count())
+      b.keep(try! doc.visible_count())
     },
     count=1,
   )
@@ -76,7 +76,7 @@ test "bench: merge reverse dependency chain (100 ops)" (b : @bench.T) {
     fn() {
       let doc = Document::new("local")
       merge_remote_chain(doc, ops)
-      b.keep(doc.visible_count())
+      b.keep(try! doc.visible_count())
     },
     count=1,
   )
@@ -89,7 +89,7 @@ test "bench: merge reverse dependency chain (1000 ops)" (b : @bench.T) {
     fn() {
       let doc = Document::new("local")
       merge_remote_chain(doc, ops)
-      b.keep(doc.visible_count())
+      b.keep(try! doc.visible_count())
     },
     count=1,
   )
@@ -102,7 +102,7 @@ test "bench: merge reverse dependency chain (10000 ops)" (b : @bench.T) {
     fn() {
       let doc = Document::new("local")
       merge_remote_chain(doc, ops)
-      b.keep(doc.visible_count())
+      b.keep(try! doc.visible_count())
     },
     count=1,
   )
@@ -120,7 +120,7 @@ test "bench: cache invalidate + position query (1000 chars)" (b : @bench.T) {
   ignore(doc.lv_at_position(0))
   b.bench(fn() {
     doc.invalidate_cache()
-    b.keep(doc.lv_at_position(500))
+    b.keep(try! doc.lv_at_position(500))
   })
 }
 
@@ -130,7 +130,7 @@ test "bench: cache invalidate + position query (5000 chars)" (b : @bench.T) {
   ignore(doc.lv_at_position(0))
   b.bench(fn() {
     doc.invalidate_cache()
-    b.keep(doc.lv_at_position(2500))
+    b.keep(try! doc.lv_at_position(2500))
   })
 }
 
@@ -140,7 +140,7 @@ test "bench: cache invalidate + position query (10000 chars)" (b : @bench.T) {
   ignore(doc.lv_at_position(0))
   b.bench(fn() {
     doc.invalidate_cache()
-    b.keep(doc.lv_at_position(5000))
+    b.keep(try! doc.lv_at_position(5000))
   })
 }
 
@@ -160,7 +160,7 @@ test "bench: 10 remote inserts + queries (1000-char doc)" (b : @bench.T) {
         _ => abort("unreachable")
       }
     }
-    ignore(bob.lv_at_position(0))
+    ignore(try! bob.lv_at_position(0))
     // Alice types 10 more chars
     for i in 0..<10 {
       let _ = alice.insert(500 + i, "y") catch { _ => abort("unreachable") }
@@ -171,9 +171,9 @@ test "bench: 10 remote inserts + queries (1000-char doc)" (b : @bench.T) {
       bob.apply_remote(ops[i]) catch {
         _ => abort("remote apply failed in benchmark")
       }
-      ignore(bob.lv_at_position(500))
+      ignore(try! bob.lv_at_position(500))
     }
-    b.keep(bob.visible_count())
+    b.keep(try! bob.visible_count())
   })
 }
 
@@ -187,7 +187,7 @@ test "bench: 10 remote inserts + queries (5000-char doc)" (b : @bench.T) {
         _ => abort("unreachable")
       }
     }
-    ignore(bob.lv_at_position(0))
+    ignore(try! bob.lv_at_position(0))
     for i in 0..<10 {
       let _ = alice.insert(2500 + i, "y") catch { _ => abort("unreachable") }
     }
@@ -196,9 +196,9 @@ test "bench: 10 remote inserts + queries (5000-char doc)" (b : @bench.T) {
       bob.apply_remote(ops[i]) catch {
         _ => abort("remote apply failed in benchmark")
       }
-      ignore(bob.lv_at_position(2500))
+      ignore(try! bob.lv_at_position(2500))
     }
-    b.keep(bob.visible_count())
+    b.keep(try! bob.visible_count())
   })
 }
 
@@ -210,14 +210,14 @@ test "bench: 10 remote inserts + queries (5000-char doc)" (b : @bench.T) {
 test "bench: warm cache position query (1000 chars)" (b : @bench.T) {
   let doc = build_doc(1000)
   ignore(doc.lv_at_position(0))
-  b.bench(fn() { b.keep(doc.lv_at_position(500)) })
+  b.bench(fn() { b.keep(try! doc.lv_at_position(500)) })
 }
 
 ///|
 test "bench: warm cache position query (10000 chars)" (b : @bench.T) {
   let doc = build_doc(10000)
   ignore(doc.lv_at_position(0))
-  b.bench(fn() { b.keep(doc.lv_at_position(5000)) })
+  b.bench(fn() { b.keep(try! doc.lv_at_position(5000)) })
 }
 
 // =============================================================================

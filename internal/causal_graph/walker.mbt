@@ -38,6 +38,49 @@ pub fn CausalGraph::walk_from_frontier(
 }
 
 ///|
+/// Walk only the suffixes absent from a causally closed editing view. Within a
+/// causal run, displayed identities form a prefix, so locate its boundary by
+/// binary search rather than visiting each operation. Descending LV order makes
+/// shared ancestors safe to skip without retaining a per-operation visited set.
+pub fn CausalGraph::unprojected_ranges(
+  self : CausalGraph,
+  view : ViewVersion,
+) -> RangeSet {
+  let pending = @priority_queue.PriorityQueue::from_iter(self.frontier.iter())
+  let descending : Array[@core.LvRange] = []
+  let mut visited_from = self.next_lv
+  while pending.pop() is Some(lv) {
+    if lv >= visited_from {
+      continue
+    }
+    let run = self.run_at(lv)
+    if view.contains(@core.RawVersion(run.agent, run.seq + lv - run.start)) {
+      continue
+    }
+    let mut low = run.start
+    let mut high = lv
+    while low < high {
+      let middle = low + (high - low) / 2
+      if view.contains(
+          @core.RawVersion(run.agent, run.seq + middle - run.start),
+        ) {
+        low = middle + 1
+      } else {
+        high = middle
+      }
+    }
+    descending.push({ start: low, count: lv - low + 1, })
+    visited_from = low
+    if low == run.start {
+      for parent in run.parents {
+        pending.push(parent)
+      }
+    }
+  }
+  RangeSet::from_array(descending)
+}
+
+///|
 /// Both sets are canonical ascending intervals, not execution sequences.
 /// Execute retreat backward and advance forward, including within each interval.
 pub fn CausalGraph::diff_frontiers_lvs(

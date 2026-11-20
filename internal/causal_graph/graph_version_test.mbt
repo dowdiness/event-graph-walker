@@ -223,3 +223,84 @@ test "generation buffer resize does not hide an old ancestor" {
   assert_eq(grown_walk.length(), 20)
   assert_true(grown_walk.contains(0))
 }
+
+///|
+test "view advancement preserves sparse snapshots and checkpoint ownership" {
+  let graph = @causal_graph.CausalGraph::new()
+  ignore(try! graph.add_version_with_seq([], "a", 0))
+  ignore(try! graph.add_version_with_seq([0], "a", 2))
+  let before = graph.current_graph_version()
+  let view = @causal_graph.ViewVersion(before)
+  assert_true(view.contains(@core.RawVersion("a", 2)))
+  assert_true(!view.contains(@core.RawVersion("a", 1)))
+  assert_true(!view.contains(@core.RawVersion("missing", 0)))
+  assert_eq(view.snapshot(), before)
+  ignore(try! graph.add_version_with_seq([1], "a", 1))
+  ignore(try! graph.add_version_with_seq([2], "b", 7))
+  view.advance(
+    graph,
+    @causal_graph.RangeSet::from_array([{ start: 2, count: 2, }]),
+  )
+  let after = view.snapshot()
+  assert_eq(after, graph.current_graph_version())
+  assert_eq(view.snapshot(), after)
+  assert_true(view.contains(@core.RawVersion("a", 1)))
+  assert_true(view.contains(@core.RawVersion("b", 7)))
+  assert_eq(before.ranges(), [("a", [(0U, 1U), (2U, 3U)])])
+  view.append(@core.RawVersion("b", 8))
+  assert_true(!after.contains(@core.RawVersion("b", 8)))
+  assert_true(view.snapshot().contains(@core.RawVersion("b", 8)))
+}
+
+///|
+test "run advancement clips every displayed prefix and preserves the saved cut" {
+  for prefix in 0..<=32 {
+    let graph = @causal_graph.CausalGraph::new()
+    for i in 0..<prefix {
+      ignore(
+        graph.add_version_with_seq(if i == 0 { [] } else { [i - 1] }, "a", i),
+      )
+    }
+    let before = graph.current_graph_version()
+    let view = @causal_graph.ViewVersion(before)
+    for i in prefix..<32 {
+      ignore(
+        graph.add_version_with_seq(if i == 0 { [] } else { [i - 1] }, "a", i),
+      )
+    }
+    let missing = graph.unprojected_ranges(view)
+    assert_eq(
+      missing.iter_units().collect(),
+      Array::makei(32 - prefix, i => prefix + i),
+    )
+    view.advance(graph, missing)
+    assert_eq(view.snapshot(), graph.current_graph_version())
+    assert_eq(graph.unprojected_ranges(view), @causal_graph.RangeSet::new())
+    for i in 0..<32 {
+      assert_eq(before.contains(@core.RawVersion("a", i)), i < prefix)
+    }
+  }
+}
+
+///|
+test "run advancement bridges a sequence gap without changing old snapshots" {
+  for start in [0, 2147483614] {
+    let graph = @causal_graph.CausalGraph::new()
+    ignore(graph.add_version_with_seq([], "a", start))
+    ignore(graph.add_version_with_seq([0], "a", start + 33))
+    let before = graph.current_graph_version()
+    let view = @causal_graph.ViewVersion(before)
+    for i in 1..<=32 {
+      ignore(graph.add_version_with_seq([i], "a", start + i))
+    }
+    let missing = graph.unprojected_ranges(view)
+    assert_eq(missing.iter_units().collect(), Array::makei(32, i => i + 2))
+    view.advance(graph, missing)
+    assert_eq(view.snapshot(), graph.current_graph_version())
+    let first = start.reinterpret_as_uint()
+    assert_eq(view.snapshot().ranges(), [("a", [(first, first + 34U)])])
+    assert_eq(before.ranges(), [
+      ("a", [(first, first + 1U), (first + 33U, first + 34U)]),
+    ])
+  }
+}

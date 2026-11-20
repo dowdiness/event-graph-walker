@@ -7,21 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**0.11.0 release candidate — not yet published.** The release date and final
+tag comparison will be set when publishing; this section describes the candidate.
+
 ### Breaking changes
 
+- `TextState.text()`, `len()`, and `is_empty()` now raise `TextError` when the
+  projection is unavailable. Ordinary reads and mutations do not implicitly
+  rebuild a failed projection.
+- `TextSyncTransition.effect_availability()` is replaced by `publication()`,
+  returning `TextPublication::Exact(effects)`, `SnapshotRequired`, or
+  `Unavailable(error)`. `admission_result()` exposes acceptance independently
+  of publication; `report()` raises an unavailable projection's error first.
+  Admission failure does not imply rollback of committed operations.
 - `history.CausalSnapshot` and `causal_snapshot()` become `CausalView` and
   `causal_view()`. The view is live, not a frozen graph. Replace per-LV
   `children_count(lv)` calls with one owning `children_counts()` array per
   diagnostic refresh. Custom view constructors now supply that bulk callback.
-- See [the unreleased API migration guide](docs/migration/unreleased-editor.md)
+- See [the v0.11 migration guide](docs/migration/to-v0.11.md)
   for coordinate contracts and Undo ownership. Text schema 2 is unchanged.
 
 ### Added
 
 - `text.Editor` provides version-checked UTF-16 edits, atomic multi-range
   requests, receive, and selective Undo/Redo with exact `TextUpdate` results.
-  Outcomes distinguish `Applied`, unchanged `Rejected`, and terminal
-  `Invalidated` sessions whose history may have advanced.
+  Outcomes distinguish `Applied`, unchanged `Rejected`, and
+  `Invalidated` sessions whose history may have advanced. Invalidated sessions
+  require explicit reopening; the Editor instance itself can be reused.
+- One history and one editing projection support history-only `accept_remote()`
+  without changing the displayed text, expected edit version, or Undo history.
+  `version()` identifies the displayed cut; `history_version()` identifies
+  accepted history, excluding operations still waiting for dependencies.
+- `advance_view()` explicitly projects accepted history while preserving EGW
+  selective Undo. `reopen_view()` rebuilds the complete accepted cut and clears
+  Undo, including after projection failure. Hosts must establish a new native
+  input/Undo baseline when publishing that snapshot. History admission and export
+  remain available after session invalidation. `receive()` both admits and
+  advances, and invalidates the session on failure even if its version is unchanged.
 - Normalized UTF-16 `ChangeSet` values and composition. Updates expose sequential
   edits or a lazily derived base-coordinate change set, without a snapshot diff.
 - Explicit caller-defined Undo groups, plus Editor policies `NewGroup`,
@@ -43,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The experimental run-wire decoder and Loomark investigation tools are not
   included. Existing experimental archive/restore APIs retain their experimental
   status. Loom parser changes and Canopy/Loomark integration ship separately.
+- History-only admission is in-memory, not a durable receipt acknowledgement.
+  No new persistence codec, crash-recovery protocol, or preservation of native
+  Undo across reopening is promised by this release.
 
 ## [0.10.0] - 2026-11-18
 
@@ -444,7 +469,8 @@ changelog was maintained. Public surface was a flat set of packages (`text`,
 removed entirely, the rest are sealed under `internal/` and superseded by
 the new public facades described above.
 
-[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/dowdiness/event-graph-walker/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/dowdiness/event-graph-walker/compare/v0.7.0...v0.7.1

@@ -10,7 +10,6 @@ priv struct ApplyChangesBoundaryHooks {
   action_override : ((Array[@core.Op]) -> @oplog.ApplyChanges raise @oplog.OpLogError)?
   commit_failure : ((@core.Op) -> @causal_graph.CausalGraphError?)?
   projection_failure : ((ArrayView[@core.Op]) -> DocumentError?)?
-  recovery_checkout : ((@core.Frontier) -> @branch.Branch raise @branch.BranchError)?
 }
 
 ///|
@@ -75,16 +74,6 @@ fn Document::apply_changes_projection_failure(
 ) -> ((ArrayView[@core.Op]) -> DocumentError?)? {
   match self.apply_changes_hooks {
     Some(hooks) => hooks.projection_failure
-    None => None
-  }
-}
-
-///|
-fn Document::apply_changes_recovery_checkout(
-  self : Document,
-) -> ((@core.Frontier) -> @branch.Branch raise @branch.BranchError)? {
-  match self.apply_changes_hooks {
-    Some(hooks) => hooks.recovery_checkout
     None => None
   }
 }

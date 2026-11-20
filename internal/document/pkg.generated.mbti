@@ -38,6 +38,8 @@ pub struct Document {
   agent_id : String
   // private fields
 }
+pub fn Document::admit_structural_changes(Self, ArrayView[@core.StructuralOp], Int32) -> @oplog.ApplyChangesOutcome raise DocumentError
+pub fn Document::advance_projection(Self) -> Unit raise DocumentError
 pub fn Document::agent_id(Self) -> String
 pub fn Document::apply_changes(Self, Array[@core.Op], max_pending? : Int32, max_pending_after_complete? : Int32) -> DocumentChanges raise DocumentError
 pub fn Document::apply_remote(Self, @core.Op) -> Unit raise DocumentError
@@ -60,9 +62,10 @@ pub fn Document::get_all_runs(Self) -> Array[@core.OpRun]
 pub fn Document::get_frontier(Self) -> @core.Frontier
 pub fn Document::get_frontier_array(Self) -> Array[Int32]
 pub fn Document::get_frontier_raw(Self) -> Array[@core.RawVersion] raise DocumentError
-pub fn Document::get_visible_items(Self) -> Array[(@fugue.Lv, @fugue.Item[String])]
+pub fn Document::get_visible_items(Self) -> Array[(@fugue.Lv, @fugue.Item[String])] raise DocumentError
 pub fn Document::insert(Self, Int32, String) -> @core.Op raise DocumentError
-pub fn Document::lv_to_position(Self, Int32) -> Int32?
+pub fn Document::integrate_projection(Self) -> Unit raise DocumentError
+pub fn Document::lv_to_position(Self, Int32) -> Int32? raise DocumentError
 pub fn Document::merge_remote(Self, Array[@core.Op], Array[@core.RawVersion]) -> Unit raise DocumentError
 pub fn Document::new(String) -> Self
 pub fn Document::pending_count(Self) -> Int32
@@ -70,20 +73,19 @@ pub fn Document::prepare_for_mutation(Self) -> Unit raise DocumentError
 pub fn Document::replace_range(Self, Int32, Int32, String) -> Unit raise DocumentError
 pub fn Document::resolve_graph_version(Self, @causal_graph.GraphVersion) -> @core.Frontier?
 pub fn Document::scalar_at_utf16(Self, Int32) -> Int32? raise DocumentError
-pub fn Document::to_text(Self) -> String
+pub fn Document::to_text(Self) -> String raise DocumentError
 pub fn Document::undelete(Self, Int32) -> @core.Op raise DocumentError
 pub fn Document::undelete_if_deleted(Self, Int32) -> TargetEditResult raise DocumentError
 pub fn Document::utf16_len(Self) -> Int32 raise DocumentError
-pub fn Document::visible_content_at(Self, Int32) -> String?
-pub fn Document::visible_count(Self) -> Int32
+pub fn Document::view_graph_version(Self) -> @causal_graph.GraphVersion
+pub fn Document::visible_content_at(Self, Int32) -> String? raise DocumentError
+pub fn Document::visible_count(Self) -> Int32 raise DocumentError
 pub fn Document::visible_entries_between(Self, Int32, Int32) -> Array[(Int32, String)] raise DocumentError
 pub impl @core.RawToLv for Document
 
 pub struct DocumentChanges {
   outcome : @oplog.ApplyChangesOutcome
-  projection : ProjectionStatus
-  effects : Array[ProjectionEffect]
-  effect_availability : ProjectionEffectAvailability
+  publication : ProjectionPublication
 }
 pub fn DocumentChanges::report(Self) -> @oplog.ApplyChangesReport raise DocumentError
 
@@ -106,17 +108,10 @@ pub(all) enum ProjectionEffect {
   Delete(start~ : Int32, end~ : Int32)
 }
 
-pub(all) enum ProjectionEffectAvailability {
-  Exact(ArrayView[ProjectionEffect])
+pub(all) enum ProjectionPublication {
+  Exact(Array[ProjectionEffect])
   SnapshotRequired
-  Unavailable
-}
-
-pub enum ProjectionStatus {
-  Skipped
-  Projected
-  Recovered
-  RecoveryRequired(error~ : @branch.BranchError)
+  Unavailable(DocumentError)
 }
 
 pub enum TargetEditResult {

@@ -88,7 +88,7 @@ test "text - text() (100-char doc)" (b : @bench.T) {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
   b.bench(fn() {
-    let result = doc.text()
+    let result = try! doc.text()
     b.keep(result)
   })
 }
@@ -101,7 +101,7 @@ test "text - text() (1000-char doc)" (b : @bench.T) {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
   b.bench(fn() {
-    let result = doc.text()
+    let result = try! doc.text()
     b.keep(result)
   })
 }
@@ -114,7 +114,7 @@ test "text - len() (1000-char doc)" (b : @bench.T) {
     ignore(try! doc.insert(Pos::at(i), "x"))
   }
   b.bench(fn() {
-    let result = doc.len()
+    let result = try! doc.len()
     b.keep(result)
   })
 }

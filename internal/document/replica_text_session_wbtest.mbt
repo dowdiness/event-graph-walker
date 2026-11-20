@@ -95,7 +95,9 @@ fn ReplicaTextSession::attach(
 }
 
 ///|
-fn ReplicaTextSession::text(self : ReplicaTextSession) -> String {
+fn ReplicaTextSession::text(
+  self : ReplicaTextSession,
+) -> String raise DocumentError {
   self.session.to_text()
 }
 

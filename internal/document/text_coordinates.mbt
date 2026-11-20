@@ -67,7 +67,7 @@ fn LvLocator::convert_boundary(
 
 ///|
 fn IndexedState::utf16_at(self : IndexedState, position : Int32) -> Int32 {
-  self.locator.unwrap().convert_boundary(position, false).unwrap()
+  self.ready.unwrap().locator.convert_boundary(position, false).unwrap()
 }
 
 ///|
@@ -77,7 +77,7 @@ pub fn Document::scalar_at_utf16(
 ) -> Int32? raise DocumentError {
   self.ensure_projection_ready()
   ignore(self.indexed_state.ensure(self.tree))
-  self.indexed_state.locator.unwrap().convert_boundary(offset, true)
+  self.indexed_state.ready.unwrap().locator.convert_boundary(offset, true)
 }
 
 ///|
@@ -85,6 +85,6 @@ pub fn Document::scalar_at_utf16(
 pub fn Document::utf16_len(self : Document) -> Int32 raise DocumentError {
   self.ensure_projection_ready()
   ignore(self.indexed_state.ensure(self.tree))
-  let locator = self.indexed_state.locator.unwrap()
+  let locator = self.indexed_state.ready.unwrap().locator
   locator.rank_utf16_span(locator.rank_root)
 }

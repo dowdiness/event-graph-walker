@@ -53,8 +53,8 @@ fn bulk_assert_siblings(
 fn bulk_assert_same_index(doc : Document) -> Unit raise {
   let reference = IndexedState::from_tree(doc.tree)
   let actual = IndexedState::from_tree_bulk_experimental(doc.tree).unwrap()
-  let a = actual.locator.unwrap()
-  let r = reference.locator.unwrap()
+  let a = actual.ready.unwrap().locator
+  let r = reference.ready.unwrap().locator
   splice_assert_rank_nodes_equal(a, r)
   for (at, rt) in [(a.root_left, r.root_left), (a.root_right, r.root_right)] {
     let aa : Array[Int32] = []

@@ -71,8 +71,8 @@ fn prop_sync_message_roundtrip_apply_equivalence(ops : RealOps) -> Bool {
   let _ = peer_direct.sync().apply(message) catch { _ => return false }
   let _ = peer_roundtrip.sync().apply(roundtrip) catch { _ => return false }
 
-  peer_direct.text() == peer_roundtrip.text() &&
-  peer_direct.text() == origin.text()
+  (try! peer_direct.text()) == (try! peer_roundtrip.text()) &&
+  (try! peer_direct.text()) == (try! origin.text())
 }
 
 ///|

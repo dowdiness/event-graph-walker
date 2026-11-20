@@ -45,6 +45,7 @@ pub fn CausalGraph::new() -> Self
 pub fn CausalGraph::op_count(Self) -> Int32
 pub fn CausalGraph::raw_to_lv(Self, @core.RawVersion) -> Int32?
 pub fn CausalGraph::resolve_graph_version(Self, GraphVersion) -> @core.Frontier?
+pub fn CausalGraph::unprojected_ranges(Self, ViewVersion) -> RangeSet
 pub fn CausalGraph::walk_from_frontier(Self, @core.Frontier) -> RangeSet
 pub impl Show for CausalGraph
 pub impl @debug.Debug for CausalGraph
@@ -100,6 +101,15 @@ pub impl Compare for VersionVector
 pub impl Show for VersionVector
 pub impl @quickcheck.Arbitrary for VersionVector
 pub impl @shrink.Shrink for VersionVector
+
+pub struct ViewVersion {
+  // private fields
+}
+pub fn ViewVersion::ViewVersion(GraphVersion) -> Self
+pub fn ViewVersion::advance(Self, CausalGraph, RangeSet) -> Unit
+pub fn ViewVersion::append(Self, @core.RawVersion) -> Unit
+pub fn ViewVersion::contains(Self, @core.RawVersion) -> Bool
+pub fn ViewVersion::snapshot(Self) -> GraphVersion
 
 // Type aliases
 

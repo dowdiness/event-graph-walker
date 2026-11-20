@@ -89,7 +89,8 @@ test "packaged transition and live causal view expose owning diagnostic values" 
   let transition : @text.TextSyncTransition = target
     .sync()
     .apply_transition(source.sync().export_all())
-  assert_true(transition.effect_availability() is Exact(_))
+  assert_true(transition.publication() is Exact(_))
+  assert_true(transition.admission_result() is Ok(_))
   ignore(transition.report())
   assert_eq(target.text(), "abc")
   let view : @history.CausalView = target.causal_view()

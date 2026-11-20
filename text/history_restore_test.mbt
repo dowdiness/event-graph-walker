@@ -350,7 +350,7 @@ test "property: restore at a generated cut preserves future change application a
           (try! restored.sync().apply(message)) {
           return false
         }
-        if live.text() != restored.text() ||
+        if (try! live.text()) != (try! restored.text()) ||
           live.version() != restored.version() ||
           live.sync().pending_sync_count() !=
           restored.sync().pending_sync_count() ||
@@ -360,7 +360,7 @@ test "property: restore at a generated cut preserves future change application a
         }
       }
     }
-    live.text() == source.text() &&
+    (try! live.text()) == (try! source.text()) &&
     restored.version() == source.version() &&
     restored.sync().pending_sync_count() == 0 &&
     (try! restored.sync().export_all()).to_canonical_bytes() ==

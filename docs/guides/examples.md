@@ -146,16 +146,22 @@ The optional `label` is application metadata, not a grouping rule or a network
 field. Consumers can suppress automatic correction for `Remote` without tracing
 the call site. Transport and causal authority remain `SyncMessage`, not ChangeSet.
 
-`Invalidated` is terminal for that editor instance. An internal failure may have
-committed some operations, or rebuilt the projection without an exact change
-sequence. Neither case is reported as a rejected/rolled-back edit. Reads and
-further mutations are refused; `version()` and `export_since()` remain available
-for inspecting/recovering accepted history. Reopening and replacing a view are
-explicit application actions. Rejected conflicting packets preserve previously
-accepted pending operations; they do not replace those operations. A newly
-rejected packet leaving new pending operations has only been demonstrated at
-the lower-level commit-failure injection seam, not with healthy-state wire
-inputs. This API does not promise rollback of internal commit failures.
+`Invalidated` ends the current editing session, not the Editor instance's
+lifetime. A failure may follow committed operations or leave no exact change
+sequence. Neither case promises rollback. Snapshot reads, edits, Undo/Redo,
+`receive()` and `advance_view()` are refused until explicit reopening.
+`history_version()` and `export_since()` remain available for inspecting and
+exporting accepted history; `version()` identifies the displayed cut instead.
+History-only `accept_remote()` also remains available after invalidation and
+reports admission independently of the projection.
+
+Call `reopen_view()` to rebuild the complete accepted cut on the same Editor.
+Successful reopening clears EGW Undo history and returns a new snapshot; the
+host must explicitly establish a new native input/Undo baseline. Failure leaves
+the session unavailable. `receive()` failures invalidate even when the displayed
+version is unchanged. Conflicting incoming operations do not replace previously
+accepted pending operations, but admission failures can retain committed progress;
+they are not a promise that the entire request left history unchanged.
 
 `SnapshotRequired` at the lower-level transition is not itself an Editor result.
 Editor warms projection indexes before collecting edits. Losing exact indexes

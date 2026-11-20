@@ -59,7 +59,8 @@ pub fn TextError::help(self : TextError) -> String {
     SyncFailed(@sync.Failure::LimitExceeded(_)) =>
       "Reject the message or construct the state with appropriate sync limits"
     VersionNotFound => "The version may not be synced yet. Try syncing first."
-    ProjectionRecoveryRequired => "Retry after document projection recovery"
+    ProjectionRecoveryRequired =>
+      "Explicitly reopen the editing view before retrying; ordinary reads and edits do not recover it"
     Internal(_) => "Please report this bug with the debug output"
   }
 }
@@ -104,10 +105,13 @@ pub fn TextError::is_retryable(self : TextError) -> Bool {
 /// Convert from DocumentError to TextError
 fn TextError::from_document_error(
   err : @document.DocumentError,
-  doc_len : () -> Int32,
+  doc_len : () -> Int32 raise TextError,
 ) -> TextError {
   match err {
-    InvalidPosition(pos~) => TextError::InvalidPosition(pos~, len=doc_len())
+    InvalidPosition(pos~) => {
+      let len = doc_len() catch { error => return error }
+      TextError::InvalidPosition(pos~, len~)
+    }
     MissingOrigin(raw~) =>
       TextError::SyncFailed(
         @sync.Failure::MissingDependency(replica_id=raw.agent, sequence=raw.seq),

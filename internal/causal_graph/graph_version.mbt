@@ -54,6 +54,87 @@ priv enum GraphVersionCache {
 ///|
 priv struct HaveIndex {
   agents : @sorted_map.SortedMap[String, SequenceIndex]
+  mut snapshot : HaveSummary?
+}
+
+///|
+/// Membership of a retained editing projection. It starts at a complete cut;
+/// every appended local operation must name its current frontier as parents.
+pub struct ViewVersion {
+  priv index : HaveIndex
+  priv mut checkpoint : CausalCheckpoint
+}
+
+///|
+pub fn ViewVersion::ViewVersion(version : GraphVersion) -> ViewVersion {
+  {
+    index: HaveIndex::from_summary(version.have),
+    checkpoint: version.checkpoint,
+  }
+}
+
+///|
+pub fn ViewVersion::append(self : ViewVersion, raw : @core.RawVersion) -> Unit {
+  self.index.insert(raw)
+  self.checkpoint = { frontier: [raw], }
+}
+
+///|
+pub fn ViewVersion::snapshot(self : ViewVersion) -> GraphVersion {
+  { checkpoint: self.checkpoint, have: self.index.snapshot(), }
+}
+
+///|
+pub fn ViewVersion::contains(
+  self : ViewVersion,
+  raw : @core.RawVersion,
+) -> Bool {
+  guard raw.seq >= 0 && self.index.agents.get(raw.agent) is Some(index) else {
+    return false
+  }
+  let sequence = raw.seq.reinterpret_as_uint()
+  let mut node = index.root
+  while node is Some(current) {
+    if sequence < current.range.start {
+      node = current.left
+    } else if sequence >= current.range.end {
+      node = current.right
+    } else {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Publish newly projected identities, preserving the existing membership index.
+/// The caller supplies the previously absent LV ranges from this graph.
+pub fn ViewVersion::advance(
+  self : ViewVersion,
+  graph : CausalGraph,
+  added : RangeSet,
+) -> Unit {
+  self.index.snapshot = None
+  for range in added.iter() {
+    let mut lv = range.start
+    while lv < range.end() {
+      let run = graph.run_at(lv)
+      let end = Int32::min(range.end(), run.start + run.count)
+      let start = run.seq.reinterpret_as_uint() +
+        (lv - run.start).reinterpret_as_uint()
+      let index = self.index.agents.get_or_init(run.agent, () => { root: None, })
+      index.insert_range({
+        start,
+        end: start + (end - lv).reinterpret_as_uint(),
+      })
+      lv = end
+    }
+  }
+  let frontier = graph.frontier
+    .to_array()
+    .map(lv => graph.lv_to_raw(lv).unwrap())
+  frontier.sort_by(compare_graph_raw)
+  self.checkpoint = { frontier, }
 }
 
 ///|
@@ -76,13 +157,14 @@ fn HaveIndex::from_summary(summary : HaveSummary) -> HaveIndex {
   for entry in summary.entries {
     agents[entry.agent] = SequenceIndex::from_ranges(entry.ranges)
   }
-  { agents, }
+  { agents, snapshot: Some(summary), }
 }
 
 ///|
 /// Admission has proved this identity absent. Insert into its canonical interval
 /// tree, independently of arrival order.
 fn HaveIndex::insert(self : HaveIndex, raw : @core.RawVersion) -> Unit {
+  self.snapshot = None
   let entry = self.agents.get_or_init(raw.agent, () => { root: None, })
   entry.insert(raw.seq.reinterpret_as_uint())
 }
@@ -90,11 +172,16 @@ fn HaveIndex::insert(self : HaveIndex, raw : @core.RawVersion) -> Unit {
 ///|
 /// Materialize a canonical, owning version value in agent/sequence order.
 fn HaveIndex::snapshot(self : HaveIndex) -> HaveSummary {
+  if self.snapshot is Some(snapshot) {
+    return snapshot
+  }
   let entries : Array[HaveEntry] = []
   self.agents.each((agent, index) => {
     entries.push({ agent, ranges: index.snapshot(), })
   })
-  { entries, }
+  let summary = HaveSummary::{ entries, }
+  self.snapshot = Some(summary)
+  summary
 }
 
 ///|

@@ -281,7 +281,7 @@ fn generate_legacy_oracle_history(case_id : String) -> String {
       None
     }
   }
-  if document.to_text() != fixture.final_text {
+  if (try! document.to_text()) != fixture.final_text {
     panic()
   }
   let operations : Array[Json] = []

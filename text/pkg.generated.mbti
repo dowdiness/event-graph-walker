@@ -47,6 +47,13 @@ pub fn TextError::is_retryable(Self) -> Bool
 pub fn TextError::message(Self) -> String
 
 // Types and methods
+pub struct Admission {
+  before : Version
+  after : Version
+  pending_operations : Int32
+  result : Result[SyncReport, TextError]
+}
+
 #derive(Eq, @debug.Debug)
 pub(all) enum ChangeSection {
   Keep(Int32)
@@ -78,14 +85,18 @@ pub(all) enum Edit {
 pub struct Editor {
   // private fields
 }
+pub fn Editor::accept_remote(Self, SyncMessage) -> Admission
+pub fn Editor::advance_view(Self) -> Edit
 pub fn Editor::can_redo(Self) -> Bool
 pub fn Editor::can_undo(Self) -> Bool
 pub fn Editor::edit(Self, Version, Utf16Edit, undo? : UndoPolicy, label? : String) -> Edit
 pub fn Editor::edit_many(Self, Version, ChangeSet, undo? : UndoPolicy, label? : String) -> Edit
 pub fn Editor::export_since(Self, Version) -> SyncMessage raise TextError
+pub fn Editor::history_version(Self) -> Version
 pub fn Editor::new(String) -> Self raise TextError
 pub fn Editor::receive(Self, SyncMessage) -> Edit
 pub fn Editor::redo(Self) -> Edit
+pub fn Editor::reopen_view(Self) -> TextSnapshot raise EditError
 pub fn Editor::snapshot(Self) -> TextSnapshot raise EditError
 pub fn Editor::undo(Self) -> Edit
 pub fn Editor::version(Self) -> Version
@@ -143,10 +154,10 @@ pub(all) enum TextEffect {
   Delete(Range)
 }
 
-pub(all) enum TextEffectAvailability {
-  Exact(ArrayView[TextEffect])
+pub(all) enum TextPublication {
+  Exact(Array[TextEffect])
   SnapshotRequired
-  Unavailable
+  Unavailable(TextError)
 }
 
 pub struct TextSnapshot {
@@ -166,15 +177,15 @@ pub fn TextState::delete_range_and_record(Self, Range, @undo.UndoManager, timest
 pub fn TextState::export_compact_experimental(Self) -> String raise TextError
 pub fn TextState::insert(Self, Pos, String) -> Unit raise TextError
 pub fn TextState::insert_and_record(Self, Pos, String, @undo.UndoManager, timestamp_ms~ : Int32) -> Unit raise TextError
-pub fn TextState::is_empty(Self) -> Bool
-pub fn TextState::len(Self) -> Int32
+pub fn TextState::is_empty(Self) -> Bool raise TextError
+pub fn TextState::len(Self) -> Int32 raise TextError
 pub fn TextState::new(String) -> Self raise TextError
 pub fn TextState::new_with_sync_limits(String, @sync.Limits) -> Self raise TextError
 pub fn TextState::replace_range(Self, Range, String) -> Unit raise TextError
 pub fn TextState::replace_range_and_record(Self, Range, String, @undo.UndoManager, timestamp_ms~ : Int32) -> Unit raise TextError
 pub fn TextState::restore_compact_direct_experimental(String, String, String) -> Self raise TextError
 pub fn TextState::sync(Self) -> SyncSession
-pub fn TextState::text(Self) -> String
+pub fn TextState::text(Self) -> String raise TextError
 pub fn TextState::version(Self) -> Version
 pub impl @undo.Undoable for TextState
 pub impl Show for TextState
@@ -183,7 +194,8 @@ pub impl @debug.Debug for TextState
 pub struct TextSyncTransition {
   // private fields
 }
-pub fn TextSyncTransition::effect_availability(Self) -> TextEffectAvailability
+pub fn TextSyncTransition::admission_result(Self) -> Result[SyncReport, TextError]
+pub fn TextSyncTransition::publication(Self) -> TextPublication
 pub fn TextSyncTransition::report(Self) -> SyncReport raise TextError
 pub fn TextSyncTransition::version_after(Self) -> Version
 pub fn TextSyncTransition::version_before(Self) -> Version

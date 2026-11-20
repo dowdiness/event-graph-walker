@@ -105,11 +105,11 @@ test "remote snapshot fallback discards an earlier exact effect and stale index"
   // Damage only the rebuildable locator. The first delete still yields an
   // exact effect, but the second must discard that effect and the stale index.
   // The third operation must still be projected within the same batch.
-  doc.indexed_state.locator.unwrap().items.remove(operations[1].lv())
+  doc.indexed_state.ready.unwrap().locator.items.remove(operations[1].lv())
   let change = try! doc.apply_changes([
     first_delete, second_delete, third_insert,
   ])
-  assert_true(change.effect_availability is SnapshotRequired)
+  assert_true(change.publication is SnapshotRequired)
   assert_eq(doc.to_text(), "C")
   assert_eq(doc.visible_count(), 1)
   ignore(try! doc.insert(1, "D"))

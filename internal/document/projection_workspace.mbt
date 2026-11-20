@@ -12,10 +12,10 @@ priv struct ProjectionWorkspace {
 
 ///|
 fn ProjectionWorkspace::ProjectionWorkspace(
-  snapshot : (@order_tree.OrderTree[VisibleRun]?, LvLocator?),
+  snapshot : ProjectionIndex?,
 ) -> ProjectionWorkspace {
   let candidate = match snapshot {
-    (Some(_), Some(_)) =>
+    Some(_) =>
       ProjectionCandidate::Exact(IndexedState::from_snapshot(snapshot), [])
     _ => ProjectionCandidate::SnapshotRequired
   }
@@ -94,7 +94,7 @@ fn ProjectionWorkspace::project_all(
               Some((position, position + 1))
             }
           }
-          if indexed.locator.unwrap().hide(lv.0) {
+          if indexed.ready.unwrap().locator.hide(lv.0) {
             deleted = next_deleted
             effects.push(Delete(start=position, end=position + 1))
           } else {
@@ -111,7 +111,7 @@ fn ProjectionWorkspace::project_all(
       deleted = None
       let lv = @fugue_projection.visibility_identity(change)
       let item = tree.get(lv)
-      let fresh = !indexed.locator.unwrap().contains(lv.0)
+      let fresh = !indexed.ready.unwrap().locator.contains(lv.0)
       match (pending, item) {
         (Some(run), Some(item)) if run.can_chain &&
           fresh &&
@@ -136,7 +136,7 @@ fn ProjectionWorkspace::project_all(
       }
       match pending {
         Some(run) => {
-          indexed.locator.unwrap().add_right_chain(run.chain)
+          indexed.ready.unwrap().locator.add_right_chain(run.chain)
           run.chain.clear()
         }
         None => ()
@@ -230,7 +230,7 @@ fn IndexedState::flush_projection_deletes(
   match deleted {
     None => true
     Some((start, end)) => {
-      let cache = self.cache.unwrap()
+      let cache = self.ready.unwrap().cache
       let before = cache.span()
       cache.delete_range(start, end)
       cache.span() == before - (end - start)
@@ -243,10 +243,10 @@ fn IndexedState::flush_projection_run(
   self : IndexedState,
   run : ProjectionInsertRun,
 ) -> Unit {
-  self.locator.unwrap().add_right_chain(run.chain)
-  match self.cache {
-    Some(cache) =>
-      cache.insert_at(run.position, {
+  self.ready.unwrap().locator.add_right_chain(run.chain)
+  match self.ready {
+    Some(index) =>
+      index.cache.insert_at(run.position, {
         start_lv: run.start_lv,
         text: run.text.to_string(),
         count: run.count,
@@ -261,7 +261,6 @@ fn IndexedState::flush_projection_run(
 fn ProjectionWorkspace::commit_and_project(
   doc : Document,
   action : @oplog.ApplyChanges,
-  recovered : Bool,
 ) -> DocumentChanges raise DocumentError {
   let detached = doc.indexed_state.take_cache()
   doc.observe_apply_changes()
@@ -271,76 +270,60 @@ fn ProjectionWorkspace::commit_and_project(
       raise DocumentError::OpLog(error)
     }
   }
-  let report = match outcome {
-    Succeeded(report) => report
-    Failed(report~, ..) => report
+  doc.indexed_state.restore_cache(detached)
+  let publication = doc.project_accepted()
+  { outcome, publication, }
+}
+
+///|
+/// One settlement path for both explicit advancement and immediate receive.
+fn Document::project_accepted(
+  doc : Document,
+) -> ProjectionPublication raise DocumentError {
+  doc.ensure_projection_ready()
+  let graph = doc.oplog.causal_graph()
+  let missing = graph.unprojected_ranges(doc.view.version)
+  let committed : Array[@core.Op] = []
+  for lv in missing.iter_units() {
+    match doc.oplog.get_op(lv) {
+      Some(op) => committed.push(op)
+      None => {
+        let error = DocumentError::OpLog(
+          @oplog.OpLogError::MissingLocalVersion(lv~),
+        )
+        doc.invalidate_projection(error)
+        return Unavailable(error)
+      }
+    }
   }
-  let committed = report.committed()
+  let detached = doc.indexed_state.take_cache()
   if committed.is_empty() {
     doc.indexed_state.restore_cache(detached)
     doc.cursor = None
-    let effects : Array[ProjectionEffect] = []
-    let (status, availability) = if recovered {
-      (
-        ProjectionStatus::Recovered,
-        ProjectionEffectAvailability::SnapshotRequired,
-      )
-    } else {
-      (
-        ProjectionStatus::Skipped,
-        ProjectionEffectAvailability::Exact(effects[:]),
-      )
-    }
-    return DocumentChanges::DocumentChanges(
-      outcome, status, effects, availability,
-    )
+    return Exact([])
   }
   // Authority has advanced: the old derived state must never become readable.
   doc.invalidate_cache()
   doc.cursor = None
   let workspace = ProjectionWorkspace(detached)
-  try doc.project_remote_ops(committed, workspace) catch {
-    _ => {
-      doc.invalidate_cache()
-      doc.cursor = None
-      let (status, availability) = try
-        doc.recover_projection_for_apply_changes(report.frontier_after())
-      catch {
-        DocumentError::ProjectionRecoveryRequired(error~, ..) =>
-          (
-            ProjectionStatus::RecoveryRequired(error~),
-            ProjectionEffectAvailability::Unavailable,
-          )
-        error => raise error
-      } noraise {
-        _ =>
-          (
-            ProjectionStatus::Recovered,
-            ProjectionEffectAvailability::SnapshotRequired,
-          )
-      }
-      DocumentChanges::DocumentChanges(outcome, status, [], availability)
+  try doc.project_remote_ops(committed[:], workspace) catch {
+    error => {
+      doc.invalidate_projection(error)
+      Unavailable(error)
     }
   } noraise {
     _ => {
-      let status = if recovered {
-        ProjectionStatus::Recovered
-      } else {
-        ProjectionStatus::Projected
-      }
-      let (effects, availability) = match workspace.candidate {
+      let publication = match workspace.candidate {
         Exact(indexed, effects) => {
           doc.indexed_state.restore_cache(indexed.take_cache())
-          let availability = if recovered {
-            ProjectionEffectAvailability::SnapshotRequired
-          } else {
-            ProjectionEffectAvailability::Exact(effects[:])
-          }
-          (effects, availability)
+          ProjectionPublication::Exact(effects)
         }
-        SnapshotRequired => ([], ProjectionEffectAvailability::SnapshotRequired)
+        SnapshotRequired => ProjectionPublication::SnapshotRequired
       }
-      DocumentChanges::DocumentChanges(outcome, status, effects, availability)
+      let frontier = doc.get_frontier()
+      doc.view.version.advance(graph, missing)
+      doc.view.frontier = frontier
+      publication
     }
   }
 }

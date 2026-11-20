@@ -247,7 +247,6 @@ fn IndexedState::from_tree_bulk_experimental(
     runs.push({ start_lv, count, text: builder.to_string(), })
   }
   Some({
-    cache: Some(@order_tree.OrderTree::from_array(runs)),
-    locator: Some(locator),
+    ready: Some({ cache: @order_tree.OrderTree::from_array(runs), locator, }),
   })
 }

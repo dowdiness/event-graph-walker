@@ -369,6 +369,22 @@ test "Editor batch validates all boundaries before mutation and preserves redo o
   assert_true(
     editor.edit(version, { start: 2, end: 2, text: "", }) is Rejected(_),
   )
+  // Forward application must not mutate the first range before validating a
+  // later boundary inside the emoji either.
+  let later_bad_boundary = @text.ChangeSet::new([
+    Replace(1, "Q"),
+    Keep(1),
+    Replace(0, "R"),
+    Keep(3),
+  ])
+  assert_true(
+    editor.edit_many(version, later_bad_boundary)
+    is Rejected(
+      @text.EditError::InvalidChange(
+        @text.ChangeError::InvalidBoundary(offset=2),
+      ),
+    ),
+  )
   assert_eq(editor.snapshot().text, "a🙂bc")
   assert_eq(editor.version(), version)
   assert_true(!editor.can_undo())
@@ -590,4 +606,222 @@ test "Editor empty updates and NoHistory preserve redo without recording groups"
     ),
   )
   assert_true(!editor.can_redo())
+}
+
+///|
+test "deferred admission preserves the editing cut and converges after local edits" {
+  let a = @text.Editor::new("a")
+  let b = @text.Editor::new("b")
+  ignore(
+    apply_editor_update(
+      "",
+      a.edit(
+        a.version(),
+        { start: 0, end: 0, text: "日🙂本", },
+        undo=NoHistory,
+      ),
+    ),
+  )
+  ignore(
+    apply_editor_update("", b.receive(a.export_since(@text.Version::empty()))),
+  )
+  let base = a.version()
+  ignore(
+    apply_editor_update(
+      "日🙂本",
+      b.edit(b.version(), { start: 1, end: 3, text: "遠", }, undo=NoHistory),
+    ),
+  )
+  let packet = b.export_since(base)
+  assert_true(a.accept_remote(packet).result is Ok(_))
+  assert_eq(a.version(), base)
+  assert_true(a.history_version() != base)
+  assert_eq(a.snapshot().text, "日🙂本")
+  let (local_text, _) = apply_editor_update(
+    "日🙂本",
+    a.edit(base, { start: 3, end: 3, text: "近", }, undo=NoHistory),
+  )
+  assert_eq(local_text, "日🙂近本")
+  assert_true(a.accept_remote(packet).result is Ok(_))
+  assert_eq(a.snapshot().text, local_text)
+  ignore(
+    apply_editor_update(
+      "日遠本",
+      b.receive(a.export_since(b.history_version())),
+    ),
+  )
+  assert_eq(a.reopen_view().text, b.snapshot().text)
+  assert_eq(a.snapshot().text, "日近遠本")
+  assert_eq(a.version(), a.history_version())
+  assert_eq(a.version(), b.version())
+}
+
+///|
+test "pinned edits match an independent writer that receives nothing until integration" {
+  for trial in 0..<12 {
+    let pinned = @text.Editor::new("writer")
+    let independent = @text.Editor::new("writer")
+    let peer = @text.Editor::new("peer")
+    let seed = "abc\n日本"
+    for editor in [pinned, independent] {
+      assert_true(
+        editor.edit(
+          editor.version(),
+          { start: 0, end: 0, text: seed, },
+          undo=NoHistory,
+        )
+        is Applied(_),
+      )
+    }
+    assert_true(
+      peer.receive(pinned.export_since(@text.Version::empty())) is Applied(_),
+    )
+    let base = peer.version()
+    for step in 0..<40 {
+      let remote_text = peer.snapshot().text
+      let pos = (step * 7 + trial) % remote_text.length()
+      assert_true(
+        peer.edit(
+          peer.version(),
+          { start: pos, end: pos + 1, text: "遠", },
+          undo=NoHistory,
+        )
+        is Applied(_),
+      )
+      assert_true(pinned.accept_remote(peer.export_since(base)).result is Ok(_))
+      let text = independent.snapshot().text
+      let pos = (step * 3 + trial) % text.length()
+      let change : @text.Utf16Edit = { start: pos, end: pos + 1, text: "近", }
+      for editor in [pinned, independent] {
+        assert_true(
+          editor.edit(editor.version(), change, undo=NoHistory) is Applied(_),
+        )
+      }
+      assert_eq(pinned.snapshot().text, independent.snapshot().text)
+      assert_eq(pinned.version(), independent.version())
+    }
+    assert_true(independent.receive(peer.export_since(base)) is Applied(_))
+    assert_eq(pinned.reopen_view().text, independent.snapshot().text)
+    assert_eq(pinned.version(), independent.version())
+  }
+}
+
+///|
+test "undo and redo stay on the displayed branch during hidden admission" {
+  let a = @text.Editor::new("a")
+  let b = @text.Editor::new("b")
+  assert_true(
+    a.edit(a.version(), { start: 0, end: 0, text: "abc", }, undo=NoHistory)
+    is Applied(_),
+  )
+  assert_true(b.receive(a.export_since(@text.Version::empty())) is Applied(_))
+  let base = a.version()
+  assert_true(b.edit(base, { start: 1, end: 2, text: "R", }) is Applied(_))
+  assert_true(a.accept_remote(b.export_since(base)).result is Ok(_))
+  assert_true(a.edit(base, { start: 2, end: 2, text: "L", }) is Applied(_))
+  assert_eq(a.snapshot().text, "abLc")
+  assert_true(a.undo() is Applied(_))
+  assert_eq(a.snapshot().text, "abc")
+  assert_true(a.redo() is Applied(_))
+  assert_eq(a.snapshot().text, "abLc")
+  assert_true(b.receive(a.export_since(b.version())) is Applied(_))
+  assert_eq(a.reopen_view().text, b.snapshot().text)
+  assert_true(!a.can_undo())
+  assert_true(!a.can_redo())
+}
+
+///|
+test "deferred admission retains missing dependencies without changing input version" {
+  let a = @text.Editor::new("a")
+  let b = @text.Editor::new("b")
+  assert_true(
+    b.edit(b.version(), { start: 0, end: 0, text: "x", }, undo=NoHistory)
+    is Applied(_),
+  )
+  let prefix = b.export_since(@text.Version::empty())
+  let cut = b.version()
+  assert_true(
+    b.edit(cut, { start: 1, end: 1, text: "y", }, undo=NoHistory) is Applied(_),
+  )
+  let admission = a.accept_remote(b.export_since(cut))
+  assert_true(admission.result is Ok(_))
+  assert_eq(admission.pending_operations, 1)
+  assert_eq(a.version(), @text.Version::empty())
+  assert_true(
+    a.edit(a.version(), { start: 0, end: 0, text: "L", }, undo=NoHistory)
+    is Applied(_),
+  )
+  let displayed = a.version()
+  let admission = a.accept_remote(prefix)
+  assert_true(admission.result is Ok(_))
+  assert_eq(admission.pending_operations, 0)
+  assert_eq(a.version(), displayed)
+  assert_eq(a.snapshot().text, "L")
+  assert_true(b.receive(a.export_since(b.version())) is Applied(_))
+  assert_eq(a.reopen_view().text, b.snapshot().text)
+}
+
+///|
+test "explicit advance preserves selective undo and receive works after hidden admission" {
+  let a = @text.Editor::new("a")
+  let b = @text.Editor::new("b")
+  assert_true(
+    a.edit(a.version(), { start: 0, end: 0, text: "ab", }, undo=NoHistory)
+    is Applied(_),
+  )
+  assert_true(b.receive(a.export_since(@text.Version::empty())) is Applied(_))
+  let base = a.version()
+  assert_true(b.edit(base, { start: 0, end: 0, text: "R", }) is Applied(_))
+  let packet = b.export_since(base)
+  assert_true(a.accept_remote(packet).result is Ok(_))
+  assert_true(a.edit(base, { start: 1, end: 1, text: "L", }) is Applied(_))
+  guard a.advance_view() is Applied(update) else { fail("advance failed") }
+  assert_eq(update.origin, @text.UpdateOrigin::Remote)
+  assert_true(update.sync_report is None)
+  assert_eq(apply_change_set("aLb", update.change_set()), "RaLb")
+  assert_eq(a.snapshot().text, "RaLb")
+  assert_eq(a.version(), a.history_version())
+  assert_true(a.undo() is Applied(_))
+  assert_eq(a.snapshot().text, "Rab")
+  assert_true(a.redo() is Applied(_))
+  assert_eq(a.snapshot().text, "RaLb")
+  assert_true(
+    b.edit(b.version(), { start: 3, end: 3, text: "X", }) is Applied(_),
+  )
+  let later = b.export_since(base)
+  assert_true(a.accept_remote(later).result is Ok(_))
+  assert_eq(a.snapshot().text, "RaLb")
+  let (text, _) = apply_editor_update("RaLb", a.receive(later))
+  assert_eq(text, "RaLbX")
+  assert_eq(a.snapshot().text, text)
+}
+
+///|
+test "same text with different accepted history still advances the view version" {
+  let a = @text.Editor::new("a")
+  let b = @text.Editor::new("z-parent")
+  let child = @text.Editor::new("a-child")
+  let initial = a.version()
+  assert_true(
+    b.edit(b.version(), { start: 0, end: 0, text: "x", }) is Applied(_),
+  )
+  assert_true(child.receive(b.export_since(initial)) is Applied(_))
+  assert_true(
+    child.edit(child.version(), { start: 0, end: 1, text: "", }) is Applied(_),
+  )
+  // Actor-sorted export places the deletion before its insertion dependency.
+  let admission = a.accept_remote(child.export_since(initial))
+  assert_true(admission.result is Ok(_))
+  assert_eq(admission.before, initial)
+  assert_true(admission.after != initial)
+  assert_eq(a.version(), initial)
+  assert_eq(a.snapshot().text, "")
+  assert_true(a.advance_view() is Applied(_))
+  assert_eq(a.snapshot().text, "")
+  assert_eq(a.version(), admission.after)
+  assert_eq(a.version(), child.version())
+  assert_true(
+    a.edit(initial, { start: 0, end: 0, text: "stale", })
+    is Rejected(StaleVersion),
+  )
 }

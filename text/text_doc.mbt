@@ -40,7 +40,8 @@ pub(all) struct TextState {
 
 ///|
 pub impl @debug.Debug for TextState with fn to_repr(self) {
-  @debug.Repr::literal("TextState(len=" + self.len().to_string() + ")")
+  let length = self.len().to_string() catch { _ => "unavailable" }
+  @debug.Repr::literal("TextState(len=" + length + ")")
 }
 
 ///|
@@ -65,29 +66,33 @@ pub fn TextState::new_with_sync_limits(
 /// Recover the Document projection before reading it for mutation validation.
 fn TextState::prepare_for_mutation(self : TextState) -> Unit raise TextError {
   self.inner.prepare_for_mutation() catch {
-    error =>
-      raise TextError::from_document_error(error, () => {
-        self.inner.visible_count()
-      })
+    error => raise TextError::from_document_error(error, () => self.len())
   }
 }
 
 ///|
 /// Get the current text content
-pub fn TextState::text(self : TextState) -> String {
-  self.inner.to_text()
+pub fn TextState::text(self : TextState) -> String raise TextError {
+  self.inner.to_text() catch {
+    error => raise TextError::from_document_error(error, () => self.len())
+  }
 }
 
 ///|
 /// Get the current text length (number of visible characters).
 /// This is O(1) as it uses cached count, not string reconstruction.
-pub fn TextState::len(self : TextState) -> Int32 {
-  self.inner.visible_count()
+pub fn TextState::len(self : TextState) -> Int32 raise TextError {
+  self.inner.visible_count() catch {
+    error =>
+      raise TextError::from_document_error(error, () => {
+        raise TextError::ProjectionRecoveryRequired
+      })
+  }
 }
 
 ///|
 /// Check if document is empty
-pub fn TextState::is_empty(self : TextState) -> Bool {
+pub fn TextState::is_empty(self : TextState) -> Bool raise TextError {
   self.len() == 0
 }
 
@@ -208,7 +213,8 @@ pub fn TextState::checkout(
 ///|
 pub impl Show for TextState with fn output(self, logger) {
   logger.write_string("TextState { text: \"")
-  logger.write_string(truncate_display(self.text()))
+  let text = truncate_display(self.text()) catch { _ => "<unavailable>" }
+  logger.write_string(text)
   logger.write_string("\", version: ")
   Show::output(self.version(), logger)
   logger.write_string(" }")
