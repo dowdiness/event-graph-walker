@@ -1,9 +1,9 @@
 # Migrating to v0.11
 
-This guide describes the **0.11.0 release candidate, not yet published**.
+This guide describes the API changes in **0.11.0**.
 These changes are not part of v0.9 or v0.10. Use the
 [v0.10 toolchain migration](to-v0.10.md) first, then update the EGW dependency
-to `dowdiness/event-graph-walker@0.11.0` when it is published.
+to `dowdiness/event-graph-walker@0.11.0`.
 This is a source-API upgrade. Text SyncMessage and Version continue to use
 schema 2, with the same canonical wire domain as v0.8. No additional persisted
 version conversion is required. Earlier schema 1 data still requires the

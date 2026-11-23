@@ -20,11 +20,11 @@ Used as the core CRDT engine in [dowdiness/canopy](https://github.com/dowdiness/
 
 Requires MoonBit 0.10.21 or newer (CI: `0.10.21+06da1ed44`).
 Upgrading from 0.8? See the [v0.9 migration guide](docs/migration/to-v0.9.md).
-This branch prepares **0.11.0; it has not been published yet**. See the
+Upgrading to 0.11.0? See the
 [v0.11 migration guide](docs/migration/to-v0.11.md) for Editor, causal-view,
 publication, and fallible-reader changes. Text schema 2 is unchanged.
 
-After 0.11.0 is published, add the dependency using the MoonBit CLI:
+Add the dependency using the MoonBit CLI:
 
 ```bash
 moon add dowdiness/event-graph-walker@0.11.0

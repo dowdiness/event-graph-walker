@@ -1,7 +1,7 @@
 # Pinned editing view design notes
 
-The editing-view model described here is included in the unpublished 0.11.0
-release candidate. See the [v0.11 migration guide](../migration/to-v0.11.md)
+The editing-view model described here is included in 0.11.0.
+See the [v0.11 migration guide](../migration/to-v0.11.md)
 for the public contract. These design and verification notes do not define a
 persistence API; durable storage and Loomark integration remain separate work.
 
