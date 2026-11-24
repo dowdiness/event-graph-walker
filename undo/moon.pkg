@@ -4,6 +4,9 @@ import {
 
 import {
   "dowdiness/event-graph-walker/text",
+  "moonbitlang/core/quickcheck",
+  "moonbitlang/quickcheck" @qc,
+  "moonbitlang/core/quickcheck/shrink",
 } for "test"
 
 options(
