@@ -321,6 +321,26 @@ test "stop capturing isolates an atomic batch from adjacent input" {
 }
 
 ///|
+test "edit right after undo or redo starts a new group" {
+  let manager = @undo.UndoManager::new("alice", capture_timeout_ms=500)
+  let doc = FailureProbeDoc::FailureProbeDoc(99, None)
+  manager.record_insert(1, "alice", 0)
+  manager.record_insert(2, "alice", 1000)
+  inspect(manager.undo(doc), content="true")
+  // Within the timeout of the last edit, but must not join the group of 1.
+  manager.record_insert(3, "alice", 1100)
+  doc.applied = []
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:3")
+  inspect(manager.redo(doc), content="true")
+  // Must not join the group of 3 that redo just restored.
+  manager.record_insert(4, "alice", 1200)
+  doc.applied = []
+  inspect(manager.undo(doc), content="true")
+  inspect(doc.applied.join(","), content="delete:4")
+}
+
+///|
 test "per-agent filtering" {
   let doc = try! @text.TextState::new("alice")
   let mgr = @undo.UndoManager::new("alice")

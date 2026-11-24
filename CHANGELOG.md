@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `UndoManager.undo()` and `redo()` now close time-based capture, so an edit
+  made within `capture_timeout_ms` after an undo no longer joins the older
+  undo group below it.
+
 ## [0.11.0] - 2026-11-23
 
 ### Breaking changes

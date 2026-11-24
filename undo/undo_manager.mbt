@@ -145,6 +145,7 @@ pub fn UndoManager::stop_capturing(self : UndoManager) -> Unit {
 /// change. Mirrors `Document::undo`'s contract so a
 /// `try { mgr.undo(doc) } catch { _ => false }` wrapper can use the return
 /// value directly as "did undo happen?" without prechecking `can_undo()`.
+/// Every call closes time-based capture, so the next edit starts a new group.
 /// For peer sync after undo: capture version before calling, then export_since.
 /// An internal failure restores tracking, clears both history stacks, and
 /// propagates the error; the CRDT document is not rolled back.
@@ -152,6 +153,8 @@ pub fn[D : Undoable] UndoManager::undo(
   self : UndoManager,
   doc : D,
 ) -> Bool raise UndoError {
+  // A later edit must not join the group below the one undone.
+  self.stop_capturing()
   guard self.undo_stack.length() > 0 else { return false }
   let group = self.undo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
@@ -196,13 +199,16 @@ pub fn[D : Undoable] UndoManager::undo(
 /// Pop redo group and reapply. Push inverse group back to undo stack.
 /// Returns `true` only if at least one item in the popped group was
 /// actually reapplied; `false` if the redo stack was empty OR every item
-/// was a no-op (see `undo` for the rationale). An internal failure restores
+/// was a no-op (see `undo` for the rationale). Every call closes time-based
+/// capture, like `undo`. An internal failure restores
 /// tracking, clears both history stacks, and propagates the error; the CRDT
 /// document is not rolled back.
 pub fn[D : Undoable] UndoManager::redo(
   self : UndoManager,
   doc : D,
 ) -> Bool raise UndoError {
+  // A later edit must not join the group that was just redone.
+  self.stop_capturing()
   guard self.redo_stack.length() > 0 else { return false }
   let group = self.redo_stack.unsafe_pop()
   let was_tracking = self.tracking_enabled
