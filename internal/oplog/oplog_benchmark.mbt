@@ -14,9 +14,9 @@ fn benchmark_raw_versions(n : Int32) -> Array[@core.RawVersion] {
 test "oplog - immutable hashset build (1000 raw versions)" (b : @bench.T) {
   let raws = benchmark_raw_versions(1000)
   b.bench(fn() {
-    let mut set : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.new()
+    let mut set : @immut/hashset.HashSet[@core.RawVersion] = @immut/hashset.empty()
     for raw in raws {
-      set = set.add(raw)
+      set = set.insert(raw)
     }
     b.keep(set.length())
   })
@@ -28,7 +28,7 @@ test "oplog - mutable hashset build (1000 raw versions)" (b : @bench.T) {
   b.bench(fn() {
     let set : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
     for raw in raws {
-      set.add(raw)
+      set.insert(raw)
     }
     b.keep(set.length())
   })
@@ -518,7 +518,7 @@ fn benchmark_fixed_point_oracle(
       }
       if ready {
         planned.push(op)
-        planned_raws.add(raw)
+        planned_raws.insert(raw)
         progress = true
       } else {
         remaining.push(op)

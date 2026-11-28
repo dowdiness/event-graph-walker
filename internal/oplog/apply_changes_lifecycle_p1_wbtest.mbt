@@ -191,7 +191,7 @@ test "P1 typed begin rejects an absent pending discard identity" {
   )
   let ready = p0_insert("p1-absent-discard-ready", 0, [], "R", None)
   let plan = try! ApplyChanges(receiver, [ready])
-  plan.discarded_pending.add(@core.RawVersion("absent-discard", 0))
+  plan.discarded_pending.insert(@core.RawVersion("absent-discard", 0))
   let pending_before = receiver.pending_changes.pending_operations()
   let result : Result[ApplyChangesOutcome, OpLogError] = Ok(
     receiver.apply_changes(plan),

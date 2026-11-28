@@ -9,10 +9,10 @@ test "allocation-free readiness preserves every repeated dependency check" {
     let applied : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
     for index, raw in [a, b, c] {
       if mask.land(1 << index) != 0 {
-        planned.add(raw)
+        planned.insert(raw)
       }
       if mask.land(1 << (index + 3)) != 0 {
-        applied.add(raw)
+        applied.insert(raw)
       }
     }
     let expected = apply_changes_dependencies_for(op, None)

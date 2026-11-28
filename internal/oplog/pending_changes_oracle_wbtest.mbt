@@ -52,7 +52,7 @@ fn oracle_plan_remote_candidates(
       }
       if ready {
         planned.push(op)
-        planned_raws.add(raw)
+        planned_raws.insert(raw)
         progress = true
       } else {
         remaining.push(op)

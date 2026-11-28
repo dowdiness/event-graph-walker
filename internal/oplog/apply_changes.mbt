@@ -144,23 +144,23 @@ fn ApplyChanges::transition_pending_candidates(
   let result : Array[@core.RawVersion] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for raw in self.retained_pending {
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       result.push(raw)
     }
   }
   for op in self.planned {
     let raw = apply_changes_raw(op)
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       result.push(raw)
     }
   }
   for raw in self.staged_raws() {
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       result.push(raw)
     }
   }
   for raw in self.duplicate_of_pending {
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       result.push(raw)
     }
   }

@@ -23,7 +23,3 @@ import {
 import {
   "moonbitlang/core/quickcheck",
 } for "wbtest"
-
-options(
-  is_main: false,
-)

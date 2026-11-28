@@ -8,7 +8,7 @@ Thank you for your interest in contributing to Event Graph Walker! This document
 
 To build, test, and verify the project locally, ensure you have the following tools installed:
 
-- **[MoonBit CLI](https://www.moonbitlang.com/)** (`moon`): Use `0.10.21+06da1ed44`, matching `.agents/setup` and CI.
+- **[MoonBit CLI](https://www.moonbitlang.com/)** (`moon`): Use compiler/core `1.0.0-rc1+3c0520448`, matching `.agents/setup` and CI.
 - **[just](https://github.com/casey/just)**: The command runner used for project recipes.
 - **[Nushell](https://www.nushell.sh/)** (`nu`): Required by the verification and pipeline scripts.
 - **Python 3**: Required for benchmark verification tooling tests.

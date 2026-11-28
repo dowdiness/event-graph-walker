@@ -20,7 +20,3 @@ import {
   "moonbitlang/quickcheck" @qc,
   "moonbitlang/core/quickcheck/shrink",
 } for "wbtest"
-
-options(
-  is_main: false,
-)

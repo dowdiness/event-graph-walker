@@ -428,7 +428,7 @@ fn PendingChangesLifecycleModel::prepare(
     if self.is_applied(raw) || self.has_pending_raw(raw) || seen.contains(raw) {
       continue
     }
-    seen.add(raw)
+    seen.insert(raw)
     staged.push(op)
   }
   let candidates = self.pending_ops()
@@ -471,7 +471,7 @@ fn PendingChangesLifecycleModel::acknowledge(
   self : PendingChangesLifecycleModel,
   raw : @core.RawVersion,
 ) -> Unit {
-  if self.applied.add_and_check(raw) {
+  if self.applied.insert_and_check(raw) {
     self.applied_order.push(raw)
   }
   self.pending = self.pending.filter(entry => oracle_raw(entry.op) != raw)
@@ -512,7 +512,7 @@ fn PendingChangesLifecycleModel::reject(
       let raw = oracle_raw(entry.op)
       if !rejected.contains(raw) &&
         pending_changes_lifecycle_depends_on_any(entry.op, rejected) {
-        rejected.add(raw)
+        rejected.insert(raw)
         changed = true
       }
     }

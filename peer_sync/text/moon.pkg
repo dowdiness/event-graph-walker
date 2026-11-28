@@ -6,7 +6,3 @@ import {
 import {
   "dowdiness/event-graph-walker/sync",
 } for "wbtest"
-
-options(
-  is_main: false,
-)

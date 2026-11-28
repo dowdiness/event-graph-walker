@@ -49,8 +49,8 @@ fn meta_node_hash(height : Int32, left : Bytes, right : Bytes) -> Bytes {
   let buffer = Buffer()
   try! write_domain(buffer, "loomark-r0-meta-node:v2")
   try! write_uvarint(buffer, height)
-  buffer.write_bytes(left)
-  buffer.write_bytes(right)
+  buffer.write_bytesview(left)
+  buffer.write_bytesview(right)
   sha256(buffer.to_bytes())
 }
 
@@ -122,7 +122,7 @@ fn writer_root_from_peaks(
   try! write_uvarint(buffer, peaks.length())
   for peak in peaks {
     try! write_uvarint(buffer, peak.height)
-    buffer.write_bytes(peak.digest)
+    buffer.write_bytesview(peak.digest)
   }
   sha256(buffer.to_bytes())
 }

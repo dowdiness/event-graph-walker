@@ -14,7 +14,3 @@ import {
   "moonbitlang/core/quickcheck/shrink",
   "moonbitlang/core/quickcheck/splitmix",
 } for "test"
-
-options(
-  is_main: false,
-)

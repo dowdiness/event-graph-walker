@@ -12,7 +12,7 @@ fn PendingChanges::required_pending_set_oracle(
     pending.remove(raw)
   }
   for raw in plan.staged_raws() {
-    pending.add(raw)
+    pending.insert(raw)
   }
   pending.length()
 }

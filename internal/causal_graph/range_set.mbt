@@ -82,7 +82,7 @@ pub fn RangeSet::iter_units(
     } else {
       range.end() - 1
     }
-    Iter::new(fn() {
+    Iter(fn() {
       if lv < range.start || lv >= range.end() {
         return None
       }
