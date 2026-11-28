@@ -2,7 +2,3 @@ import {
   "dowdiness/event-graph-walker/text",
   "moonbitlang/core/debug",
 } for "test"
-
-options(
-  is_main: false,
-)

@@ -8,7 +8,3 @@ import {
   "moonbitlang/quickcheck" @qc,
   "moonbitlang/core/quickcheck/shrink",
 } for "test"
-
-options(
-  is_main: false,
-)

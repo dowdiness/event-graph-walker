@@ -585,7 +585,7 @@ fn PendingChangesView::pending_rejection_closure(
   let rejected : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   let work : Array[@core.RawVersion] = []
   for root in roots {
-    if rejected.add_and_check(root) {
+    if rejected.insert_and_check(root) {
       work.push(root)
     }
   }
@@ -599,7 +599,7 @@ fn PendingChangesView::pending_rejection_closure(
           match self.pending.get(waiter.raw) {
             Some(node) =>
               if node.arrival == waiter.arrival &&
-                rejected.add_and_check(waiter.raw) {
+                rejected.insert_and_check(waiter.raw) {
                 work.push(waiter.raw)
               }
             None => ()
@@ -698,7 +698,7 @@ fn ChangeOverlay::rejection_closure(
           match pending_changes.pending.get(waiter.raw) {
             Some(node) =>
               if node.arrival == waiter.arrival &&
-                rejected.add_and_check(waiter.raw) {
+                rejected.insert_and_check(waiter.raw) {
                 work.push(waiter.raw)
               }
             None => ()
@@ -712,7 +712,7 @@ fn ChangeOverlay::rejection_closure(
           match self.staged.get(waiter.raw) {
             Some(node) =>
               if node.arrival == waiter.arrival &&
-                rejected.add_and_check(waiter.raw) {
+                rejected.insert_and_check(waiter.raw) {
                 work.push(waiter.raw)
               }
             None => ()
@@ -726,10 +726,10 @@ fn ChangeOverlay::rejection_closure(
   let discarded_staged : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for raw in work {
     if pending_changes.pending.contains(raw) {
-      discarded_pending.add(raw)
+      discarded_pending.insert(raw)
     }
     if self.staged.contains(raw) {
-      discarded_staged.add(raw)
+      discarded_staged.insert(raw)
     }
   }
   { discarded_pending, discarded_staged, }
@@ -897,7 +897,7 @@ fn PendingChangesView::prepare_fast(
       None => ()
     }
     planned.push(op)
-    planned_raws.add(raw)
+    planned_raws.insert(raw)
     next_arrival += 1
   }
   Some({
@@ -1081,7 +1081,7 @@ fn PendingChangesView::prepare_with_semantics(
       Valid => ()
       Origin(operation~, target~) =>
         if self.pending.contains(entry.raw) {
-          overlay.planned.add(entry.raw)
+          overlay.planned.insert(entry.raw)
           overlay.discard_roots.push(entry.raw)
           continue
         } else {
@@ -1089,7 +1089,7 @@ fn PendingChangesView::prepare_with_semantics(
         }
       Invalid => raise OpLogError::InvalidApplyChanges
     }
-    overlay.planned.add(entry.raw)
+    overlay.planned.insert(entry.raw)
     if !is_applied(entry.raw) {
       overlay.planned_operations.push(node.op)
     }
@@ -1126,7 +1126,7 @@ fn PendingChangesView::prepare_with_semantics(
       Some(_) =>
         if delta != 0 &&
           !rejection.discarded_pending.contains(raw) &&
-          touched_seen.add_and_check(raw) {
+          touched_seen.insert_and_check(raw) {
           touched_retained_pending.push(raw)
         }
       None => ()
@@ -1144,7 +1144,7 @@ fn PendingChangesView::prepare_with_semantics(
             Some(node) =>
               if node.arrival == waiter.arrival &&
                 !rejection.discarded_pending.contains(waiter.raw) &&
-                touched_seen.add_and_check(waiter.raw) {
+                touched_seen.insert_and_check(waiter.raw) {
                 touched_retained_pending.push(waiter.raw)
               }
             None => ()
@@ -1298,7 +1298,7 @@ fn PendingChangesView::registration_for(
           waiting_dependencies,
           unresolved_count: waiting_dependencies.length(),
         })
-        seen_raws.add(raw)
+        seen_raws.insert(raw)
       }
       nodes
     }
@@ -1373,7 +1373,7 @@ fn PendingChangesView::registration_for(
         let raw = apply_changes_raw(node.op)
         if node.raw != raw ||
           is_applied(raw) ||
-          !seen_raws.add_and_check(raw) ||
+          !seen_raws.insert_and_check(raw) ||
           self.pending.contains(raw) ||
           node.arrival != self.next_arrival + index ||
           !apply_changes_origin_shape_is_valid(node.op) ||
@@ -1625,14 +1625,14 @@ fn ApplyChanges::with_pending_evidence(
   let retained_pending : Array[@core.RawVersion] = []
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for raw in self.touched_retained_pending {
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       retained_pending.push(raw)
     }
   }
   if !pending_changes.pending.is_empty() {
     for op in self.planned {
       let raw = apply_changes_raw(op)
-      if pending_changes.pending.contains(raw) && seen.add_and_check(raw) {
+      if pending_changes.pending.contains(raw) && seen.insert_and_check(raw) {
         retained_pending.push(raw)
       }
     }
@@ -1687,7 +1687,7 @@ fn ApplyChanges::with_prospective(
     retained_pending,
   )
   for raw in duplicate_of_pending {
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       retained_pending.push(raw)
     }
   }
@@ -1729,7 +1729,7 @@ fn ApplyChanges::remaining_raws_from_view(
   let remaining : Array[@core.RawVersion] = []
   let planned_raws : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for op in self.planned {
-    planned_raws.add(apply_changes_raw(op))
+    planned_raws.insert(apply_changes_raw(op))
   }
   for entry in pending_changes.pending_order {
     if !apply_changes_order_entry_is_live(pending_changes.pending, entry) {

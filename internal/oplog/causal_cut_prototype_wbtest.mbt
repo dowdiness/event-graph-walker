@@ -55,7 +55,7 @@ fn CausalCut::append(self : CausalCut, operation : @core.Op) -> Unit {
   for parent in parents {
     self.frontier.remove(parent)
   }
-  self.frontier.add(raw)
+  self.frontier.insert(raw)
 }
 
 ///|

@@ -427,11 +427,11 @@ fn OpLog::apply_changes_duplicate_evidence(
   for op in incoming {
     let raw = apply_changes_raw(op)
     if self.graph.raw_to_lv(raw) is Some(_) {
-      if applied_seen.add_and_check(raw) {
+      if applied_seen.insert_and_check(raw) {
         already_applied.push(raw)
       }
     } else if self.pending_changes.pending.contains(raw) {
-      if pending_seen.add_and_check(raw) {
+      if pending_seen.insert_and_check(raw) {
         duplicate_of_pending.push(raw)
       }
     }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly MOON_VERSION='0.10.21+06da1ed44'
+readonly MOON_VERSION='1.0.0-rc1+3c0520448'
 readonly NU_VERSION='0.112.2'
 readonly JUST_VERSION='1.48.1'
 readonly LOCAL_BIN="$HOME/.local/bin"

@@ -86,13 +86,13 @@ fn encode_uvarint(value : Int32) -> Bytes raise R0CodecError {
 
 ///|
 fn write_uvarint(buffer : Buffer, value : Int32) -> Unit raise R0CodecError {
-  buffer.write_bytes(encode_uvarint(value))
+  buffer.write_bytesview(encode_uvarint(value))
 }
 
 ///|
 fn write_lp_bytes(buffer : Buffer, value : Bytes) -> Unit raise R0CodecError {
   write_uvarint(buffer, value.length())
-  buffer.write_bytes(value)
+  buffer.write_bytesview(value)
 }
 
 ///|
@@ -204,7 +204,7 @@ fn sha256(value : Bytes) -> Bytes {
 fn _canonical_body_digest(body : CanonicalBody) -> Bytes raise R0CodecError {
   let buffer = Buffer()
   write_domain(buffer, "loomark-r0-event-body:v1")
-  buffer.write_bytes(encode_canonical_body(body))
+  buffer.write_bytesview(encode_canonical_body(body))
   sha256(buffer.to_bytes())
 }
 

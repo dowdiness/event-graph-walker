@@ -40,8 +40,8 @@ fn Document::ensure_apply_changes_targets(
     for op in operations {
       let raw = @core.RawVersion(op.agent(), op.seq())
       match op.content() {
-        @core.Insert(_) => inserts.add(raw)
-        _ => noninserts.add(raw)
+        @core.Insert(_) => inserts.insert(raw)
+        _ => noninserts.insert(raw)
       }
     }
     for op in operations {

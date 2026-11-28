@@ -44,7 +44,7 @@ pub fn Frontier::from_array(values : Array[Int32]) -> Frontier {
   )
   let deduped : Array[Int32] = []
   for value in values {
-    if seen.add_and_check(value) {
+    if seen.insert_and_check(value) {
       deduped.push(value)
     }
   }

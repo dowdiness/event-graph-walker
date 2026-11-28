@@ -1558,7 +1558,7 @@ fn write_container_uvarint(buffer : Buffer, value : Int32) -> Unit {
 fn write_container_string(buffer : Buffer, value : String) -> Unit {
   let bytes = @utf8.encode(value)
   write_container_uvarint(buffer, bytes.length())
-  buffer.write_bytes(bytes)
+  buffer.write_bytesview(bytes)
 }
 
 ///|
@@ -1658,7 +1658,7 @@ fn write_container_record(buffer : Buffer, record : SyncOpRecord) -> Unit {
 ///|
 pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   let buffer = Buffer()
-  buffer.write_bytes(b"event-graph-walker:container-sync:v1")
+  buffer.write_bytesview(b"event-graph-walker:container-sync:v1")
   let records = canonical_sync_order(container_message_records(self)) catch {
     _ => container_message_records(self)
   }

@@ -5,7 +5,3 @@ import {
   "dowdiness/event-graph-walker/undo",
   "dowdiness/event-graph-walker/sync",
 } for "test"
-
-options(
-  is_main: false,
-)

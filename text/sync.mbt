@@ -1102,7 +1102,7 @@ fn write_uvarint(buf : Buffer, value : Int32) -> Unit {
 fn write_string_utf8(buf : Buffer, value : String) -> Unit {
   let bytes = @utf8.encode(value)
   write_uvarint(buf, bytes.length())
-  buf.write_bytes(bytes)
+  buf.write_bytesview(bytes)
 }
 
 ///|
@@ -1126,7 +1126,7 @@ fn write_optional_raw(buf : Buffer, raw : @core.RawVersion?) -> Unit {
 /// Domain-separated canonical logical bytes for hashing and signing.
 pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   let buffer = Buffer()
-  buffer.write_bytes(text_sync_canonical_domain)
+  buffer.write_bytesview(text_sync_canonical_domain)
   write_uvarint(buffer, self.operations.length())
   for structural in self.structural_operations {
     let op = structural.raw()

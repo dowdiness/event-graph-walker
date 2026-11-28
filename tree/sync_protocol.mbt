@@ -252,9 +252,9 @@ fn write_tree_uvarint(buffer : Buffer, value : Int32) -> Unit {
 ///|
 pub fn SyncMessage::to_canonical_bytes(self : SyncMessage) -> Bytes {
   let buffer = Buffer()
-  buffer.write_bytes(b"event-graph-walker:tree-sync:v1")
+  buffer.write_bytesview(b"event-graph-walker:tree-sync:v1")
   let inner = self.inner.to_canonical_bytes()
   write_tree_uvarint(buffer, inner.length())
-  buffer.write_bytes(inner)
+  buffer.write_bytesview(inner)
   buffer.to_bytes()
 }

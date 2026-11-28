@@ -549,7 +549,7 @@ test "remote change application acknowledgement wakes a child after external par
   let known : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   let pending_changes = PendingChanges()
   pending_changes.register_pending(child, raw => known.contains(raw))
-  known.add(parent)
+  known.insert(parent)
   pending_changes.acknowledge_applied(parent)
   let plan = pending_changes.prepare([], raw => known.contains(raw))
   let (expected_planned, expected_remaining) = oracle_plan_remote_candidates(
@@ -591,7 +591,7 @@ test "remote change application acknowledgement removes an recorded pending dupl
   let pending_changes = PendingChanges()
   pending_changes.register_pending(parent, raw => known.contains(raw))
   pending_changes.register_pending(child, raw => known.contains(raw))
-  known.add(parent_raw)
+  known.insert(parent_raw)
   pending_changes.acknowledge_applied(parent_raw)
   pending_changes_assert_raws(pending_changes.pending_raws(), [
     apply_changes_raw(child),
@@ -629,7 +629,7 @@ test "remote change application acknowledgement invalidates an earlier plan gene
   let old_plan = pending_changes.prepare([], raw => known.contains(raw))
   let old_generation = old_plan.generation()
   assert_eq(old_generation, pending_changes.generation())
-  known.add(parent)
+  known.insert(parent)
   pending_changes.acknowledge_applied(parent)
   assert_true(old_generation != pending_changes.generation())
   assert_true(old_plan.generation() != pending_changes.generation())
@@ -697,13 +697,13 @@ test "remote change application pending-changes owner retry acknowledgement tomb
   assert_true(pending_changes.stale_count() >= 0)
 
   let known : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
-  known.add(root_raw)
+  known.insert(root_raw)
   pending_changes.acknowledge_applied(root_raw)
   assert_true(pending_changes.stale_count() >= 0)
-  known.add(child_raw)
+  known.insert(child_raw)
   pending_changes.acknowledge_applied(child_raw)
   assert_true(pending_changes.stale_count() >= 0)
-  known.add(grandchild_raw)
+  known.insert(grandchild_raw)
   pending_changes.acknowledge_applied(grandchild_raw)
   assert_true(pending_changes.stale_count() >= 0)
   pending_changes.compact(raw => known.contains(raw))
@@ -986,7 +986,7 @@ test "remote change application pending-changes owner begins staged nodes exactl
   assert_eq(pending_changes.pending_raws().length(), 3)
   for op in plan.planned_operations() {
     let raw = apply_changes_raw(op)
-    known.add(raw)
+    known.insert(raw)
     pending_changes.acknowledge_applied(raw)
   }
   assert_eq(pending_changes.pending_raws().length(), 0)
@@ -1080,7 +1080,7 @@ test "remote change application pending-changes owner preserves an unacknowledge
   let prefix_length = 3
   for i in 0..<prefix_length {
     let raw = apply_changes_raw(planned[i])
-    known.add(raw)
+    known.insert(raw)
     pending_changes.acknowledge_applied(raw)
   }
   let expected_remaining : Array[@core.RawVersion] = [
@@ -1445,7 +1445,7 @@ test "remote change application pending-changes owner rejects newly recorded sta
   let plan = pending_changes.prepare([staged], dependency => {
     known.contains(dependency)
   })
-  known.add(raw)
+  known.insert(raw)
   let generation_before = pending_changes.generation()
   let next_arrival_before = pending_changes.next_arrival
   match pending_changes.begin(plan, dependency => known.contains(dependency)) {
@@ -1659,8 +1659,8 @@ test "remote change application pending-changes owner filters graph-known nodes 
   pending_changes.register_pending(waiting, _ => false)
   pending_changes.register_pending(known_node, _ => false)
   let waiting_arrival = pending_changes.arrival_of(apply_changes_raw(waiting))
-  known.add(apply_changes_raw(known_node))
-  known.add(dependency)
+  known.insert(apply_changes_raw(known_node))
+  known.insert(dependency)
   pending_changes.compact(raw => known.contains(raw))
   assert_eq(pending_changes.arrival_of(apply_changes_raw(known_node)), None)
   assert_eq(

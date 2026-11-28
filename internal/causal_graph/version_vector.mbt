@@ -85,7 +85,7 @@ pub impl Compare for VersionVector with fn compare(self, other) {
 /// inspect(vv1 <= vv4, content="false") // vv1 has bob but vv4 doesn't
 /// ```
 ///
-pub impl Compare for VersionVector with fn op_le(self, other) {
+pub impl Compare for VersionVector with fn le(self, other) {
   // For self <= other, every agent in self must have seq <= seq in other
   let mut is_le = true
   self.0.each(fn(agent, seq) {

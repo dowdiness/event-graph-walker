@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Target MoonBit compiler/core `1.0.0-rc1+3c0520448` in CI and migrate
+  deprecated iterator and set APIs without changing text schema 2.
+
 ### Fixed
 
 - `UndoManager.undo()` and `redo()` now close time-based capture, so an edit

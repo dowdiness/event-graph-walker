@@ -39,7 +39,7 @@ fn typed_ownership_unique_raws(
   let seen : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for operation in operations {
     let raw = apply_changes_raw(operation)
-    if seen.add_and_check(raw) {
+    if seen.insert_and_check(raw) {
       raws.push(raw)
     }
   }

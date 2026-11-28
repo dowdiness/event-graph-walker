@@ -298,7 +298,7 @@ fn remote_delivery_build_scenario(
   let parented : @hashset.HashSet[@core.RawVersion] = @hashset.HashSet([])
   for op in ops {
     for parent in op.parents_iter() {
-      parented.add(parent)
+      parented.insert(parent)
     }
   }
   let expected_frontier = [
@@ -349,7 +349,7 @@ fn RemoteDeliveryModel::oracle_step(
     guard !self.applied.contains(raw) else {
       abort("fixed-point oracle recorded one identity twice")
     }
-    self.applied.add(raw)
+    self.applied.insert(raw)
     self.known.push(raw)
   }
   planned
